@@ -10,6 +10,7 @@ import argparse
 import contextlib
 import errno
 import fcntl
+import json
 import os
 from pathlib import Path
 import re
@@ -21,10 +22,13 @@ import tempfile
 import time
 
 
-GROUP = re.compile(r"(main|pr)-(uta|checks|packages)")
+GROUP = re.compile(r"(main|pr)-(uta|checks|packages|build-clients)")
 GENERATION = re.compile(r"[0-9]+-[a-z0-9_]+")
 STORE_PATH = re.compile(r"/nix/store/[0-9a-z]{32}-[^/\s]+")
 DAY = 86400
+# Covers queued and running clients; finalizers release promptly. Abandoned
+# workflow attempts cannot pin their closures indefinitely.
+CONSUMER_LEASE_SECONDS = 3 * DAY
 # Successful and failed generations each group keeps, newest first.
 KEEP = {"main": (2, 1), "pr": (4, 2)}
 # Below this much free store space, keep only each group's newest successful
@@ -68,13 +72,57 @@ def building(generation):
         os.close(fd)
 
 
+def consumer_key():
+    values = [os.environ.get(name, "") for name in ("GITHUB_RUN_ID", "GITHUB_RUN_ATTEMPT")]
+    if not all(re.fullmatch(r"[1-9][0-9]*", value) for value in values):
+        raise ValueError("consumer leases require a GitHub run ID and attempt")
+    return "-".join(values)
+
+
+def consumer_lease(generation):
+    path = generation / ".consumer.json"
+    if path.is_symlink():
+        raise ValueError("consumer lease must not be a symlink")
+    try:
+        return json.loads(path.read_text())
+    except FileNotFoundError:
+        return None
+    except ValueError:
+        # Only a writer killed before the atomic rename below leaves this, and
+        # its run is gone: an unreadable lease must not stop all retention.
+        return None
+
+
+def lease_consumers(generation, key, now=None):
+    now = time.time() if now is None else now
+    temporary = generation / f".consumer.json.{os.getpid()}"
+    temporary.write_text(json.dumps({
+        "run": key, "expires": now + CONSUMER_LEASE_SECONDS,
+    }) + "\n")
+    os.replace(temporary, generation / ".consumer.json")
+
+
+def release_consumers(root, key):
+    group = root / "pr-build-clients"
+    if group.is_symlink():
+        raise ValueError("retention group must not be a symlink")
+    if not group.exists():
+        return
+    for generation in group.iterdir():
+        if generation.is_symlink() or not generation.is_dir() or not GENERATION.fullmatch(generation.name):
+            continue
+        lease = consumer_lease(generation)
+        if lease and lease["run"] == key:
+            (generation / ".consumer.json").unlink()
+
+
 def prune(root, now=None, free=None):
     """Bound each group's generations by count, age and free space.
 
     Successful generations expire after seven days, except the newest
     successful main one. Failed ones, which root the checks that passed, last
-    a day. A generation still being built is never touched. Never follow a
-    symlink in this tree.
+    a day. Generations being built or leased to queued/running build clients
+    are never touched. Never follow a symlink in this tree.
     """
     now = time.time() if now is None else now
     free = shutil.disk_usage("/nix/store").free if free is None else free
@@ -92,6 +140,9 @@ def prune(root, now=None, free=None):
         successful = failed = 0
         for generation in generations:
             if building(generation):
+                continue
+            lease = consumer_lease(generation)
+            if lease and lease["expires"] > now:
                 continue
             age = now - int(generation.name.split("-", 1)[0])
             if (generation / "success").is_file():
@@ -136,20 +187,28 @@ def exit_status(code):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("scope", choices=("main", "pr", "prune"))
-    parser.add_argument("label", nargs="?", choices=("uta", "checks", "packages"))
+    parser.add_argument("scope", choices=("main", "pr", "prune", "release-consumers"))
+    parser.add_argument("label", nargs="?", choices=("uta", "checks", "packages", "build-clients"))
     parser.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
     command = args.command[1:] if args.command[:1] == ["--"] else args.command
-    if args.scope != "prune":
+    if args.scope not in ("prune", "release-consumers"):
         if not args.label or not (command[:1] == ["build"] or command[:2] == ["flake", "check"]):
             parser.error("expected LABEL followed by build or flake check arguments")
         if any(a in ("--no-link", "--out-link", "-o") or a.startswith("--out-link=") for a in command):
             parser.error("ci-retain manages the out-link")
+    key = None
+    if args.label == "build-clients" or args.scope == "release-consumers":
+        try:
+            key = consumer_key()
+        except ValueError as error:
+            parser.error(str(error))
     root_env = os.environ.get("SEKKA_CI_ROOTS")
     if not root_env:
         if args.scope == "prune":
             return 0
+        if key:
+            parser.error("cross-pool build inputs require mounted persistent CI roots")
         # A runner without the roots mount, or a maintainer's machine: the same
         # build and status as plain Nix, kept by nothing after the job.
         print("::warning::No persistent CI roots mounted; results are not retained between jobs.", file=sys.stderr)
@@ -161,6 +220,10 @@ def main(argv=None):
     # The tree's lock covers only pruning and creating a generation; each build
     # holds its own generation's lock, so concurrent jobs never wait on another.
     with locked(root / ".lock"):
+        if args.scope == "release-consumers":
+            release_consumers(root, key)
+            prune(root)
+            return 0
         prune(root)
         if args.scope == "prune":
             return 0
@@ -181,6 +244,10 @@ def main(argv=None):
             print(f"::warning::Results stay rooted, but not all of their build inputs: {error}", file=sys.stderr)
         if result.returncode == 0:
             (generation / "success").touch()
+            if key:
+                # Protect the handoff before releasing the build lock, including
+                # the low-space prune immediately following this preparation.
+                lease_consumers(generation, key)
     finally:
         os.close(build_lock)
     with locked(root / ".lock"):

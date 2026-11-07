@@ -1,0 +1,322 @@
+#!/usr/bin/env python3
+"""Live REAPI v2 wire-contract qualification (requires Python grpcio).
+
+Uses the public REAPI field numbers, without vendoring generated bindings.
+This tests real CAS/AC integrity and authorization, not build-system integration.
+--compiler additionally compiles a Rust source on the remote worker, returning
+its real rlib artifact and executed-action metadata. No local fallback exists.
+"""
+import argparse
+from concurrent.futures import ThreadPoolExecutor
+import hashlib
+import json
+import os
+from pathlib import Path
+import socket
+import time
+import grpc
+
+PREFIX = "/build.bazel.remote.execution.v2."
+
+
+def varint(value):
+    out = bytearray()
+    while value > 127:
+        out.append((value & 127) | 128)
+        value >>= 7
+    out.append(value)
+    return bytes(out)
+
+
+def field(number, value):
+    if isinstance(value, int):
+        return varint(number << 3) + varint(value)
+    if isinstance(value, str):
+        value = value.encode()
+    return varint((number << 3) | 2) + varint(len(value)) + value
+
+
+def fields(data):
+    pos = 0
+    def integer():
+        nonlocal pos
+        value, shift = 0, 0
+        while True:
+            b = data[pos]
+            pos += 1
+            value |= (b & 127) << shift
+            if b < 128:
+                return value
+            shift += 7
+    result = {}
+    while pos < len(data):
+        tag = integer()
+        wire = tag & 7
+        if wire == 0:
+            value = integer()
+        elif wire == 2:
+            size = integer()
+            value = data[pos:pos + size]
+            pos += size
+        elif wire in (1, 5):
+            size = 8 if wire == 1 else 4
+            value = data[pos:pos + size]
+            pos += size
+        else:
+            raise ValueError("Invalid protobuf wire type")
+        result.setdefault(tag >> 3, []).append(value)
+    return result
+
+
+def first(data, number, default=b""):
+    return fields(data).get(number, [default])[0]
+
+
+def digest(data):
+    return field(1, hashlib.sha256(data).hexdigest()) + field(2, len(data))
+
+
+class Client:
+    def __init__(self, port, token, host="127.0.0.1"):
+        self.channel = grpc.insecure_channel(f"{host}:{port}", options=[("grpc.max_receive_message_length", 32 * 1024**2)])
+        self.metadata = [("authorization", "Bearer " + token)] if token else []
+
+    def call(self, service, method, request, stream=False):
+        method = PREFIX + service + "/" + method
+        rpc = self.channel.unary_stream(method) if stream else self.channel.unary_unary(method)
+        return rpc(request, metadata=self.metadata, timeout=120)
+
+    def upload(self, data, claimed=None):
+        request = field(1, "sekka") + field(2, field(1, claimed or digest(data)) + field(2, data))
+        response = self.call("ContentAddressableStorage", "BatchUpdateBlobs", request)
+        status = first(first(response, 1), 2)
+        return first(status, 1, 0)
+
+    def download(self, dgst):
+        response = self.call("ContentAddressableStorage", "BatchReadBlobs", field(1, "sekka") + field(2, dgst))
+        item = first(response, 1)
+        status = first(first(item, 3), 1, 0)
+        assert status == 0, ("read failed", status)
+        return first(item, 2)
+
+    def missing(self, dgst):
+        response = self.call("ContentAddressableStorage", "FindMissingBlobs", field(1, "sekka") + field(2, dgst))
+        return bool(first(response, 2))
+
+    def action(self, dgst, result=None):
+        request = field(1, "sekka") + field(2, dgst)
+        if result is not None:
+            return self.call("ActionCache", "UpdateActionResult", request + field(3, result))
+        return self.call("ActionCache", "GetActionResult", request)
+
+
+def denied(fn):
+    try:
+        fn()
+    except grpc.RpcError as error:
+        assert error.code() in (grpc.StatusCode.UNAUTHENTICATED, grpc.StatusCode.PERMISSION_DENIED), error
+        return error.code().name
+    raise AssertionError("Unauthorized operation succeeded")
+
+
+def compile_remote(client, compiler, shell, worker_runtime, evidence):
+    source = b'pub fn qualification_sum(values: &[u64]) -> u64 { values.iter().sum() }\n'
+    invocation = 'exec "$1" "--remap-path-prefix=$PWD=/build" --crate-type=rlib --edition=2024 qualification.rs -o qualification.rlib'
+    wrapper = ("#!" + shell + "\n" + invocation + "\n").encode()
+    directory = field(1, field(1, "compile.sh") + field(2, digest(wrapper)) + field(4, 1))
+    directory += field(1, field(1, "qualification.rs") + field(2, digest(source)))
+    command = field(1, "./compile.sh") + field(1, compiler)
+    command += field(7, "qualification.rlib")
+    platform = b"".join(field(1, field(1, key) + field(2, value)) for key, value in [
+        ("ISA", "x86-64"), ("OSFamily", "linux"), ("cpu_count", "1"), ("sekka.worker-runtime", worker_runtime)])
+    action = field(1, digest(command)) + field(2, digest(directory)) + field(6, field(1, 60)) + field(10, platform)
+    for data in (source, wrapper, directory, command, action):
+        assert client.upload(data) == 0
+    request = field(1, "sekka") + field(3, 1) + field(6, digest(action))
+    operations = list(client.call("Execution", "Execute", request, stream=True))
+    completed = next(op for op in reversed(operations) if first(op, 3, 0))
+    response = first(first(completed, 5), 2)
+    status = first(first(response, 3), 1, 0)
+    assert status == 0, ("execution failed", fields(response))
+    result = first(response, 1)
+    stderr_digest = first(result, 8)
+    stderr = client.download(stderr_digest).decode(errors="replace") if stderr_digest else ""
+    assert first(result, 4, 0) == 0, ("compiler failed", stderr)
+    output = first(result, 2)
+    data = client.download(first(output, 2))
+    assert data.startswith(b"!<arch>\n"), "Compiler did not produce an rlib archive"
+    (evidence / "qualification.rlib").write_bytes(data)
+    metadata = fields(first(result, 9))
+    assert metadata.get(1), "Missing remote worker identity"
+    return {"artifact_bytes": len(data), "sha256": hashlib.sha256(data).hexdigest(),
+            "worker": metadata[1][0].decode(), "action_hash": hashlib.sha256(action).hexdigest(),
+            "operation": first(completed, 1).decode(), "cached": bool(first(response, 2, 0))}
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--manifest", type=Path, required=True)
+    parser.add_argument("--evidence", type=Path, required=True)
+    parser.add_argument("--job-manifest", type=Path, help="A separate init --domains ci deployment, for cross-job isolation")
+    parser.add_argument("--job-restarted-from", type=Path, help="Earlier per-job evidence; assert ephemeral CAS/AC become clean misses after restart")
+    parser.add_argument("--exhaust-job", action="store_true", help="Exercise the hard tmpfs limit of a disposable job capped at <=64MiB")
+    parser.add_argument("--compiler")
+    parser.add_argument("--shell", help="Immutable Bash executable; required with --compiler for deterministic cwd remapping")
+    parser.add_argument("--restore-evidence", type=Path, help="Verify earlier CAS and AC still restore after service restart")
+    parser.add_argument("--eviction-bytes", type=int, default=0, help="Churn this many bytes in CI CAS only; use a disposable low-cap deployment")
+    args = parser.parse_args()
+    if args.compiler and not args.shell:
+        parser.error("--compiler requires --shell")
+    if args.job_manifest and args.eviction_bytes:
+        parser.error("--job-manifest and --eviction-bytes are separate qualification cases")
+    if args.exhaust_job and not args.job_manifest:
+        parser.error("--exhaust-job requires --job-manifest")
+    if args.job_restarted_from and not args.job_manifest:
+        parser.error("--job-restarted-from requires --job-manifest")
+    manifest = json.loads(args.manifest.read_text())
+    args.evidence.mkdir(parents=True, exist_ok=False)
+    trusted_cfg, ci_cfg = manifest["domains"]["trusted"], manifest["domains"]["ci"]
+    trusted = Client(trusted_cfg["port"], trusted_cfg["token"])
+    ci = Client(ci_cfg["port"], ci_cfg["token"])
+    reader = Client(trusted_cfg["port"], trusted_cfg["reader_token"])
+    report = {"host": socket.gethostname(), "started_unix": time.time(), "deployment": manifest["name"]}
+    if args.restore_evidence:
+        old_blob = (args.restore_evidence / "marker.bin").read_bytes()
+        old_action = (args.restore_evidence / "action.pb").read_bytes()
+        assert trusted.download(digest(old_blob)) == old_blob
+        assert first(first(trusted.action(digest(old_action)), 2), 2) == digest(old_blob)
+        report["restart_cas_ac_restored"] = True
+    blob = os.urandom(65536)
+    dgst = digest(blob)
+    report["anonymous_write"] = denied(lambda: Client(trusted_cfg["port"], "").upload(blob))
+    report["ci_token_trusted_write"] = denied(lambda: Client(trusted_cfg["port"], ci_cfg["token"]).upload(blob))
+    assert trusted.upload(blob) == 0
+    assert trusted.download(dgst) == blob
+    assert reader.download(dgst) == blob
+    report["reader_cas_write"] = denied(lambda: reader.upload(blob))
+    report["reader_bytestream_write"] = denied(lambda: reader.channel.stream_unary(
+        "/google.bytestream.ByteStream/Write")(iter([b""]), metadata=reader.metadata, timeout=10))
+    report["reader_execute"] = denied(lambda: list(reader.call("Execution", "Execute", field(1, "sekka"), stream=True)))
+    assert ci.missing(dgst), "Trusted CAS visible to CI"
+    assert ci.upload(blob) == 0
+    assert ci.upload(b"corrupted" + blob[9:], dgst) != 0, "Wrong CAS hash was accepted"
+    assert ci.download(dgst) == blob, "Failed upload poisoned existing CAS"
+    report["cas_integrity_and_domain_isolation"] = True
+    # Action/command are uploaded before their results, per the REAPI contract.
+    command = field(1, "/qualification-only")
+    action = field(1, digest(command)) + field(2, digest(b"")) + field(9, os.urandom(16))
+    (args.evidence / "marker.bin").write_bytes(blob)
+    (args.evidence / "action.pb").write_bytes(action)
+    for client in (trusted, ci):
+        for data in (b"", command, action):
+            assert client.upload(data) == 0
+    key = digest(action)
+    trusted_result = field(2, field(1, "artifact") + field(2, dgst))
+    poison = b"CI-only artifact"
+    assert ci.upload(poison) == 0
+    ci_result = field(2, field(1, "artifact") + field(2, digest(poison)))
+    trusted.action(key, trusted_result)
+    ci.action(key, ci_result)
+    assert first(first(trusted.action(key), 2), 2) == dgst
+    assert first(first(ci.action(key), 2), 2) == digest(poison)
+    report["same_action_key_separate_domains"] = True
+    assert first(first(reader.action(key), 2), 2) == dgst
+    report["reader_action_write"] = denied(lambda: reader.action(key, ci_result))
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        assert list(pool.map(lambda _: trusted.upload(blob), range(32))) == [0] * 32
+    report["concurrent_identical_uploads"] = 32
+    if args.compiler:
+        report["remote_compile"] = compile_remote(trusted, args.compiler, args.shell, manifest["worker_runtime"], args.evidence)
+        repeated = compile_remote(trusted, args.compiler, args.shell, manifest["worker_runtime"], args.evidence)
+        assert repeated["action_hash"] == report["remote_compile"]["action_hash"]
+        assert repeated["sha256"] == report["remote_compile"]["sha256"], "Remote compiler output was not reproducible"
+        report["remote_compile"]["repeat_operation"] = repeated["operation"]
+        report["remote_compile"]["reproducible_repeat"] = True
+    if args.eviction_bytes:
+        sentinel = os.urandom(1024**2)
+        assert ci.upload(sentinel) == 0
+        for _ in range((args.eviction_bytes + 1024**2 - 1) // 1024**2):
+            assert ci.upload(os.urandom(1024**2)) == 0
+        assert ci.missing(digest(sentinel)), "Low-cap eviction did not evict the old object"
+        try:
+            ci.action(key)
+        except grpc.RpcError as error:
+            assert error.code() == grpc.StatusCode.NOT_FOUND, error
+        else:
+            raise AssertionError("AC returned an action whose output CAS was evicted")
+        report["evicted_output_invalidates_action_result"] = True
+        assert ci.upload(sentinel) == 0
+        assert ci.download(digest(sentinel)) == sentinel
+        report["eviction_repopulation"] = args.eviction_bytes
+    if args.job_manifest:
+        job_manifest = json.loads(args.job_manifest.read_text())
+        assert set(job_manifest["domains"]) == {"ci"}, "CI job manifest contains trusted developer credentials"
+        job_cfg = job_manifest["domains"]["ci"]
+        job = Client(job_cfg["port"], job_cfg["token"])
+        if args.job_restarted_from:
+            assert job_manifest.get("ephemeral_cache")
+            old_blob = (args.job_restarted_from / "marker.bin").read_bytes()
+            old_action = (args.job_restarted_from / "action.pb").read_bytes()
+            assert job.missing(digest(old_blob))
+            try:
+                job.action(digest(old_action))
+            except grpc.RpcError as error:
+                assert error.code() == grpc.StatusCode.NOT_FOUND, error
+            else:
+                raise AssertionError("Restarted ephemeral job retained an old action result")
+            report["job_restart_clean_cache_miss"] = True
+        report["other_ci_job_write"] = denied(lambda: Client(job_cfg["port"], ci_cfg["token"]).upload(blob))
+        report["ci_job_trusted_write"] = denied(lambda: Client(trusted_cfg["port"], job_cfg["token"]).upload(blob))
+        assert job.missing(dgst)
+        for data in (b"", command, action, blob):
+            assert job.upload(data) == 0
+        job.action(key, trusted_result)
+        assert first(first(job.action(key), 2), 2) == dgst
+        assert first(first(ci.action(key), 2), 2) == digest(poison)
+        report["per_job_same_action_key_isolated"] = True
+        if args.compiler:
+            job_evidence = args.evidence / "job"
+            job_evidence.mkdir()
+            report["ci_job_remote_compile"] = compile_remote(job, args.compiler, args.shell, job_manifest["worker_runtime"], job_evidence)
+        if args.exhaust_job:
+            assert job_manifest.get("ephemeral_cache")
+            cap = job_manifest["backend_data_bytes"]
+            assert cap <= 64 * 1024**2, "Exhaustion qualification requires a small disposable job"
+            chunk = os.urandom(1024**2)
+            count = cap // len(chunk) + 2
+            hasher = hashlib.sha256()
+            for _ in range(count):
+                hasher.update(chunk)
+            size = count * len(chunk)
+            oversized_digest = field(1, hasher.hexdigest()) + field(2, size)
+            resource = f"sekka/uploads/{os.urandom(16).hex()}/blobs/{hasher.hexdigest()}/{size}"
+            def requests():
+                for index in range(count):
+                    yield field(1, resource) + field(2, index * len(chunk)) + field(3, int(index == count - 1)) + field(10, chunk)
+            try:
+                job.channel.stream_unary("/google.bytestream.ByteStream/Write")(
+                    requests(), metadata=job.metadata, timeout=30)
+            except grpc.RpcError as error:
+                # NativeLink 1.8.3 currently reports filesystem ENOSPC as
+                # UNKNOWN, not RESOURCE_EXHAUSTED. Require the actual quota
+                # failure rather than treating arbitrary RPC errors as proof.
+                assert error.code() == grpc.StatusCode.RESOURCE_EXHAUSTED or (
+                    error.code() == grpc.StatusCode.UNKNOWN
+                    and "No space left on device (os error 28)" in error.details()
+                ), error
+                report["job_hard_cap_rejection"] = error.code().name
+                report["job_hard_cap_error"] = error.details()
+            else:
+                raise AssertionError("Oversized in-flight upload escaped the job storage bound")
+            assert job.missing(oversized_digest)
+            recovery = os.urandom(1024)
+            assert job.upload(recovery) == 0
+            assert job.download(digest(recovery)) == recovery
+            report["job_upload_recovered_after_exhaustion"] = True
+    report["finished_unix"] = time.time()
+    (args.evidence / "report.json").write_text(json.dumps(report, indent=2) + "\n")
+    print(json.dumps(report, indent=2))
+
+
+if __name__ == "__main__":
+    main()

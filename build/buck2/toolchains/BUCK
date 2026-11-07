@@ -1,0 +1,2 @@
+# Cargo unit actions use the explicit Nix environment from --config-file.
+# This cell names the prelude's unused toolchain defaults during rule loading.

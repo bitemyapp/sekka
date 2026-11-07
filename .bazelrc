@@ -1,0 +1,64 @@
+# Sekka's Bazel settings (docs/bazel-build-plan.md). Run Bazel in
+# `nix develop .#bazel`, whose `bazel` reads only this file (no system or
+# home rc files).
+
+build --incompatible_strict_action_env
+build --host_platform=//build/bazel/platforms:x86_64-linux-nix
+build --platforms=//build/bazel/platforms:x86_64-linux-nix
+build --sandbox_default_allow_network=false
+# The build plan's starting point on the shared workstation.
+build --jobs=4
+test --test_output=errors
+
+# Compilation profiles: Cargo's, from desktop/aizome/Cargo.toml. Compare
+# like with like (desktop/aizome/nix/package.nix builds the compositor with
+# `release` and everything else with `release-lto`).
+#
+# `dev`: workspace members at opt-level 0 with line tables (the toolchain's
+# fastbuild, nix/bazel/toolchains.nix); every other crate, crates.io's and
+# the path dependencies outside the workspace, as [profile.dev.package."*"]
+# says: opt-level 2, no debug information, debug assertions and overflow
+# checks still on. tiny-skia without overflow checks. Linked with mold, as
+# `nix develop .#aizome` links (its RUSTFLAGS); the package uses GNU ld.
+# Neither Cargo's incremental compilation nor its pipelining (dependents
+# compiling from metadata) is used: rules_rust 0.75 has no incremental
+# mode, and its pipelining fails here (docs/bazel-build-plan.md).
+build:dev -c fastbuild
+build:dev --@rules_rust//rust/settings:extra_rustc_flag=-Clink-arg=-fuse-ld=mold
+build:dev --@rules_rust//rust/settings:per_crate_rustc_flag=external/@-Copt-level=2
+build:dev --@rules_rust//rust/settings:per_crate_rustc_flag=external/@-Cdebuginfo=0
+build:dev --@rules_rust//rust/settings:per_crate_rustc_flag=external/@-Cdebug-assertions=on
+build:dev --@rules_rust//rust/settings:per_crate_rustc_flag=external/@-Coverflow-checks=on
+build:dev --@rules_rust//rust/settings:per_crate_rustc_flag=desktop/aizome/sukumo/@-Copt-level=2
+build:dev --@rules_rust//rust/settings:per_crate_rustc_flag=desktop/aizome/sukumo/@-Cdebuginfo=0
+build:dev --@rules_rust//rust/settings:per_crate_rustc_flag=desktop/aizome/sukumo/@-Cdebug-assertions=on
+build:dev --@rules_rust//rust/settings:per_crate_rustc_flag=desktop/aizome/sukumo/@-Coverflow-checks=on
+build:dev --@rules_rust//rust/settings:per_crate_rustc_flag=apps/@-Copt-level=2
+build:dev --@rules_rust//rust/settings:per_crate_rustc_flag=apps/@-Cdebuginfo=0
+build:dev --@rules_rust//rust/settings:per_crate_rustc_flag=apps/@-Cdebug-assertions=on
+build:dev --@rules_rust//rust/settings:per_crate_rustc_flag=apps/@-Coverflow-checks=on
+build:dev --@rules_rust//rust/settings:per_crate_rustc_flag=external/rules_rust++crate+aizome_crates__tiny-skia-0@-Coverflow-checks=off
+
+# `release`: opt-level 3, line tables, four codegen units, no LTO.
+build:release -c opt
+build:release --@rules_rust//rust/settings:codegen_units=4
+
+# `release-lto`: thin LTO for apps, ordinary release for the dynamically
+# loaded compositor. Rust cannot perform LTO when linking its Rust dylibs.
+build:release-lto --config=release
+build:release-lto --@rules_rust//rust/settings:lto=thin
+# Retain both native objects and embedded bitcode in rlibs: the compositor
+# links without LTO, while apps consume the same libraries with thin LTO.
+# rules_rust otherwise emits bitcode-only rlibs for this configuration.
+build:release-lto --@rules_rust//rust/settings:extra_rustc_flag=-Clinker-plugin-lto=no
+build:release-lto --@rules_rust//rust/settings:extra_rustc_flag=-Cembed-bitcode=yes
+build:release-lto --@rules_rust//rust/settings:per_crate_rustc_flag=desktop/aizome/crates/aizome-comp@-Clto=off
+
+# Where actions run and what they reuse (the build plan's configuration
+# contract; the others follow with their services).
+#
+# `wx-local`: local sandboxed actions, no disk or remote cache.
+build:wx-local --spawn_strategy=linux-sandbox
+build:wx-local --disk_cache=
+build:wx-local --noremote_accept_cached
+build:wx-local --noremote_upload_local_results

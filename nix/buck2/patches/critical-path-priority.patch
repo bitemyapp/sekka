@@ -1,0 +1,820 @@
+diff --git a/app/buck2_action_impl/src/actions/impls/run.rs b/app/buck2_action_impl/src/actions/impls/run.rs
+index 39cae26..22cda87 100644
+--- a/app/buck2_action_impl/src/actions/impls/run.rs
++++ b/app/buck2_action_impl/src/actions/impls/run.rs
+@@ -286,6 +286,7 @@ pub(crate) struct UnregisteredRunAction {
+     pub(crate) executor_preference: ExecutorPreference,
+     pub(crate) always_print_stderr: bool,
+     pub(crate) weight: WeightClass,
++    pub(crate) priority: i32,
+     pub(crate) low_pass_filter: bool,
+     pub(crate) dep_files: RunActionDepFiles,
+     // Since this is usually None, use a Box to reduce memory.
+@@ -1404,6 +1405,7 @@ impl RunAction {
+             .with_prefetch_lossy_stderr(true)
+             .with_executor_preference(self.inner.executor_preference)
+             .with_host_sharing_requirements(host_sharing_requirements.into())
++            .with_priority(self.inner.priority)
+             .with_low_pass_filter(self.inner.low_pass_filter)
+             .with_outputs_cleanup(!self.inner.no_outputs_cleanup)
+             .with_local_environment_inheritance(EnvironmentInheritance::local_command_exclusions())
+diff --git a/app/buck2_action_impl/src/context/run.rs b/app/buck2_action_impl/src/context/run.rs
+index df037f2..808dcf5 100644
+--- a/app/buck2_action_impl/src/context/run.rs
++++ b/app/buck2_action_impl/src/context/run.rs
+@@ -134,6 +134,9 @@ pub(crate) fn analysis_actions_methods_run(methods: &mut MethodsBuilder) {
+     ///   event stream, and must be unique for a given target
+     /// * `weight`: used to note how heavy the command is and will typically be set to a higher
+     ///   value to indicate that less such commands should be run in parallel (if running locally)
++    /// * `priority`: local admission priority (signed integer, default 0). Higher
++    ///   values run before queued lower-priority actions without preempting work
++    ///   or changing resource `weight`. This does not affect action cache keys.
+     /// * `no_outputs_cleanup`: if this flag is set then Buck2 won't clean the outputs of a previous
+     ///   build that might be present on a disk; in which case, command from arguments should be
+     ///   responsible for the cleanup (that is useful, for example, when an action is supporting
+@@ -267,6 +270,7 @@ pub(crate) fn analysis_actions_methods_run(methods: &mut MethodsBuilder) {
+         #[starlark(require = named, default = false)] always_print_stderr: bool,
+         #[starlark(require = named)] weight: Option<u32>,
+         #[starlark(require = named)] weight_percentage: Option<u32>,
++        #[starlark(require = named, default = 0)] priority: i32,
+         #[starlark(require = named)] dep_files: Option<SmallMap<&'v str, &'v ArtifactTag>>,
+         #[starlark(require = named, default = UnpackListOrTuple::default())]
+         dep_file_fingerprints: UnpackListOrTuple<ValueTyped<'v, StarlarkDepFileFingerprint<'v>>>,
+@@ -624,6 +628,7 @@ pub(crate) fn analysis_actions_methods_run(methods: &mut MethodsBuilder) {
+             executor_preference,
+             always_print_stderr,
+             weight,
++            priority,
+             low_pass_filter,
+             dep_files: dep_files_configuration,
+             metadata_param,
+diff --git a/app/buck2_execute/src/execute/request.rs b/app/buck2_execute/src/execute/request.rs
+index 198d7f8..9dfa8c8 100644
+--- a/app/buck2_execute/src/execute/request.rs
++++ b/app/buck2_execute/src/execute/request.rs
+@@ -373,6 +373,8 @@ pub struct CommandExecutionRequest {
+     timeout: Option<Duration>,
+     pub executor_preference: ExecutorPreference,
+     host_sharing_requirements: Arc<HostSharingRequirements>,
++    /// Local admission order only; never serialized into the remote action.
++    priority: i32,
+     // Used to disable the low pass filter for concurrent local actions. Enabled by default
+     low_pass_filter: bool,
+     /// Working directory, relative to the project root.
+@@ -447,6 +449,7 @@ impl CommandExecutionRequest {
+             timeout: None,
+             executor_preference: ExecutorPreference::Default,
+             host_sharing_requirements: Arc::new(HostSharingRequirements::default()),
++            priority: 0,
+             low_pass_filter: true,
+             working_directory: ProjectRelativePathBuf::default(),
+             prefetch_lossy_stderr: false,
+@@ -512,6 +515,11 @@ impl CommandExecutionRequest {
+         self
+     }
+ 
++    pub fn with_priority(mut self, priority: i32) -> Self {
++        self.priority = priority;
++        self
++    }
++
+     pub fn with_low_pass_filter(mut self, low_pass_filter: bool) -> Self {
+         self.low_pass_filter = low_pass_filter;
+         self
+@@ -611,6 +619,10 @@ impl CommandExecutionRequest {
+         &self.host_sharing_requirements
+     }
+ 
++    pub fn priority(&self) -> i32 {
++        self.priority
++    }
++
+     pub fn low_pass_filter(&self) -> bool {
+         self.low_pass_filter
+     }
+diff --git a/app/buck2_execute_impl/src/executors/local.rs b/app/buck2_execute_impl/src/executors/local.rs
+index 6cb8822..03945f4 100644
+--- a/app/buck2_execute_impl/src/executors/local.rs
++++ b/app/buck2_execute_impl/src/executors/local.rs
+@@ -1008,7 +1008,7 @@ impl LocalExecutor {
+                         buck2_data::LocalStage {
+                             stage: Some(buck2_data::WorkerQueued {}.into()),
+                         },
+-                        broker.acquire(&HostSharingRequirements::default()),
++                        broker.acquire(&HostSharingRequirements::default(), 0),
+                     )
+                     .await,
+                 )
+@@ -1239,7 +1239,7 @@ impl PreparedCommandExecutor for LocalExecutor {
+                 stage: Some(buck2_data::LocalQueued {}.into()),
+             },
+             self.host_sharing_broker
+-                .acquire(request.host_sharing_requirements()),
++                .acquire(request.host_sharing_requirements(), request.priority()),
+         )
+         .await;
+         manager.start_waiting_category(WaitingCategory::Unknown);
+diff --git a/host_sharing/BUCK b/host_sharing/BUCK
+index 0a82df2..68c10f8 100644
+--- a/host_sharing/BUCK
++++ b/host_sharing/BUCK
+@@ -10,6 +10,7 @@ rust_library(
+         "fbsource//third-party/rust:anyhow",
+         "fbsource//third-party/rust:dashmap",
+         "fbsource//third-party/rust:futures-intrusive",
++        "fbsource//third-party/rust:parking_lot",
+         "//buck2/allocative/allocative:allocative",
+         "//buck2/pagable:pagable",
+         "//buck2/starlark-rust/starlark_map:starlark_map",
+diff --git a/host_sharing/src/host_sharing.rs b/host_sharing/src/host_sharing.rs
+index 977a966..a90c687 100644
+--- a/host_sharing/src/host_sharing.rs
++++ b/host_sharing/src/host_sharing.rs
+@@ -14,12 +14,13 @@ use std::sync::Arc;
+ 
+ use allocative::Allocative;
+ use anyhow::Context;
+-use futures_intrusive::sync::SharedSemaphore;
+ use futures_intrusive::sync::SharedSemaphoreReleaser;
+ use pagable::Pagable;
+ use starlark_map::sorted_vec::SortedVec;
+ 
+ use crate::NamedSemaphores;
++use crate::priority_semaphore::PrioritySemaphore;
++use crate::priority_semaphore::PrioritySemaphoreGuard;
+ 
+ const SINGLE_RUN: usize = 1;
+ 
+@@ -121,13 +122,13 @@ impl Default for HostSharingRequirements {
+ /// Keeps the data structures received from semaphores after acquiring.
+ /// Semaphores are held until this struct is dropped.
+ pub struct HostSharingGuard {
+-    _run_guard: SharedSemaphoreReleaser,
++    _run_guard: PrioritySemaphoreGuard,
+     _name_guards: Vec<SharedSemaphoreReleaser>,
+ }
+ 
+ /// Used to ensure that host resources are properly reserved before executing a command spec.
+ pub struct HostSharingBroker {
+-    permits: SharedSemaphore,
++    permits: PrioritySemaphore,
+     num_machine_permits: usize,
+     named_semaphores: Arc<NamedSemaphores>,
+ }
+@@ -170,12 +171,10 @@ impl HostSharingBroker {
+         num_machine_permits: usize,
+         named_semaphores: Arc<NamedSemaphores>,
+     ) -> Self {
+-        let permits = match host_sharing_strategy {
+-            HostSharingStrategy::Fifo => SharedSemaphore::new(true, num_machine_permits),
+-            HostSharingStrategy::SmallerTasksFirst => {
+-                SharedSemaphore::new(false, num_machine_permits)
+-            }
+-        };
++        let permits = PrioritySemaphore::new(
++            matches!(host_sharing_strategy, HostSharingStrategy::Fifo),
++            num_machine_permits,
++        );
+ 
+         Self {
+             permits,
+@@ -199,25 +198,30 @@ impl HostSharingBroker {
+     pub async fn acquire(
+         &self,
+         host_sharing_requirements: &HostSharingRequirements,
++        priority: i32,
+     ) -> HostSharingGuard {
+         match host_sharing_requirements {
+             HostSharingRequirements::Shared(weight_class) => {
+                 let permits = self.requested_permits(weight_class).into_count();
+-                self.acquire_from_permits_and_identifiers(permits, iter::empty())
++                self.acquire_from_permits_and_identifiers(permits, iter::empty(), priority)
+                     .await
+             }
+             HostSharingRequirements::ExclusiveAccess => {
+-                self.acquire_from_permits_and_identifiers(self.num_machine_permits, iter::empty())
+-                    .await
++                self.acquire_from_permits_and_identifiers(
++                    self.num_machine_permits,
++                    iter::empty(),
++                    priority,
++                )
++                .await
+             }
+             HostSharingRequirements::OnePerToken(identifier, weight_class) => {
+                 let permits = self.requested_permits(weight_class).into_count();
+-                self.acquire_from_permits_and_identifiers(permits, iter::once(identifier))
++                self.acquire_from_permits_and_identifiers(permits, iter::once(identifier), priority)
+                     .await
+             }
+             HostSharingRequirements::OnePerTokens(sorted_identifiers, weight_class) => {
+                 let permits = self.requested_permits(weight_class).into_count();
+-                self.acquire_from_permits_and_identifiers(permits, sorted_identifiers.iter())
++                self.acquire_from_permits_and_identifiers(permits, sorted_identifiers.iter(), priority)
+                     .await
+             }
+         }
+@@ -227,6 +231,7 @@ impl HostSharingBroker {
+         &self,
+         num_requested_permits: usize,
+         sorted_identifiers: impl Iterator<Item = &'a String>,
++        priority: i32,
+     ) -> HostSharingGuard {
+         // Ensure that there is only one active run per identifier. The identifiers must be sorted
+         // to avoid a potential deadlock. A repeated identifier is skipped: its semaphore has a
+@@ -246,7 +251,7 @@ impl HostSharingBroker {
+             let name_guard = run_semaphore.acquire(SINGLE_RUN).await;
+             name_guards.push(name_guard);
+         }
+-        let run_guard = self.permits.acquire(num_requested_permits).await;
++        let run_guard = self.permits.acquire(num_requested_permits, priority).await;
+ 
+         HostSharingGuard {
+             _run_guard: run_guard,
+@@ -255,7 +260,7 @@ impl HostSharingBroker {
+     }
+ }
+ 
+-/// Determines whether a fair or unfair semaphore is used to manage host sharing
++/// Determines the admission policy among waiters with equal scheduling priority.
+ pub enum HostSharingStrategy {
+     SmallerTasksFirst,
+     Fifo,
+@@ -300,7 +305,7 @@ mod tests {
+         // Nothing is held, so distinct tokens are acquired on the first poll.
+         let distinct = requirements(&["a", "b"]);
+         assert!(
+-            std::pin::pin!(broker.acquire(&distinct))
++            std::pin::pin!(broker.acquire(&distinct, 0))
+                 .as_mut()
+                 .poll(&mut cx)
+                 .is_ready()
+@@ -308,7 +313,7 @@ mod tests {
+ 
+         // A repeated token is acquired once, so the acquire completes on the first poll.
+         let repeated = requirements(&["a", "b", "a"]);
+-        let guard = match std::pin::pin!(broker.acquire(&repeated))
++        let guard = match std::pin::pin!(broker.acquire(&repeated, 0))
+             .as_mut()
+             .poll(&mut cx)
+         {
+@@ -318,7 +323,7 @@ mod tests {
+ 
+         // The token is held exactly once: another acquire waits until the guard is dropped.
+         let other = requirements(&["a"]);
+-        let mut other_acquire = std::pin::pin!(broker.acquire(&other));
++        let mut other_acquire = std::pin::pin!(broker.acquire(&other, 0));
+         assert!(other_acquire.as_mut().poll(&mut cx).is_pending());
+         drop(guard);
+         assert!(other_acquire.as_mut().poll(&mut cx).is_ready());
+@@ -364,4 +369,34 @@ mod tests {
+             10,
+         );
+     }
++
++    #[test]
++    fn test_priority_with_oversized_weight_and_exclusive_access() {
++        use std::task::Context;
++        use std::task::Poll;
++        use std::task::Waker;
++
++        let broker = HostSharingBroker::new(HostSharingStrategy::Fifo, 2);
++        let mut cx = Context::from_waker(Waker::noop());
++        let one = HostSharingRequirements::Shared(WeightClass::Permits(1));
++        let heavy = HostSharingRequirements::Shared(WeightClass::Permits(8));
++        let exclusive = HostSharingRequirements::ExclusiveAccess;
++        let active = match std::pin::pin!(broker.acquire(&one, 0)).as_mut().poll(&mut cx) {
++            Poll::Ready(guard) => guard,
++            Poll::Pending => panic!("uncontended work must run"),
++        };
++        let mut queued = Box::pin(broker.acquire(&exclusive, 0));
++        let mut critical = Box::pin(broker.acquire(&heavy, 1));
++        assert!(queued.as_mut().poll(&mut cx).is_pending());
++        assert!(critical.as_mut().poll(&mut cx).is_pending());
++        drop(active);
++        assert!(queued.as_mut().poll(&mut cx).is_pending());
++        let critical = match critical.as_mut().poll(&mut cx) {
++            Poll::Ready(guard) => guard,
++            Poll::Pending => panic!("oversized weight must be capped and admitted first"),
++        };
++        assert!(queued.as_mut().poll(&mut cx).is_pending());
++        drop(critical);
++        assert!(queued.as_mut().poll(&mut cx).is_ready());
++    }
+ }
+diff --git a/host_sharing/src/lib.rs b/host_sharing/src/lib.rs
+index 42a0be2..6d84201 100644
+--- a/host_sharing/src/lib.rs
++++ b/host_sharing/src/lib.rs
+@@ -10,6 +10,7 @@
+ 
+ #![deny(unused_crate_dependencies)]
+ mod named_semaphores;
++mod priority_semaphore;
+ pub use named_semaphores::NamedSemaphores;
+ 
+ pub mod host_sharing;
+diff --git a/host_sharing/src/priority_semaphore.rs b/host_sharing/src/priority_semaphore.rs
+new file mode 100644
+index 0000000..1f56266
+--- /dev/null
++++ b/host_sharing/src/priority_semaphore.rs
+@@ -0,0 +1,295 @@
++/*
++ * Copyright (c) Meta Platforms, Inc. and affiliates.
++ *
++ * This source code is dual-licensed under either the MIT license found in the
++ * LICENSE-MIT file in the root directory of this source tree or the Apache
++ * License, Version 2.0 found in the LICENSE-APACHE file in the root directory
++ * of this source tree. You may select, at your option, one of the
++ * above-listed licenses.
++ */
++
++//! Weighted local admission, ordered by priority before the configured tie policy.
++//! Priority never preempts running work or changes the number of permits charged.
++
++use std::cmp::Reverse;
++use std::collections::BTreeMap;
++use std::future::Future;
++use std::pin::Pin;
++use std::sync::Arc;
++use parking_lot::Mutex;
++use std::task::Context;
++use std::task::Poll;
++use std::task::Waker;
++
++type Key = (Reverse<i32>, u64);
++
++struct Waiter {
++    permits: usize,
++    granted: bool,
++    waker: Option<Waker>,
++}
++
++struct State {
++    available: usize,
++    next: u64,
++    fifo: bool,
++    waiters: BTreeMap<Key, Waiter>,
++}
++
++impl State {
++    // Callers wake the returned tasks only after releasing the mutex.
++    fn dispatch(&mut self) -> Vec<Waker> {
++        let mut wake = Vec::new();
++        let mut blocked_priority = None;
++        for ((priority, _), waiter) in &mut self.waiters {
++            if waiter.granted {
++                continue;
++            }
++            if blocked_priority.is_some_and(|blocked| blocked != *priority) {
++                break;
++            }
++            if waiter.permits > self.available {
++                if self.fifo {
++                    break;
++                }
++                blocked_priority = Some(*priority);
++                continue;
++            }
++            self.available -= waiter.permits;
++            waiter.granted = true;
++            if let Some(waker) = waiter.waker.take() {
++                wake.push(waker);
++            }
++        }
++        wake
++    }
++}
++
++fn wake_all(wakers: Vec<Waker>) {
++    for waker in wakers {
++        waker.wake();
++    }
++}
++
++pub(crate) struct PrioritySemaphore {
++    state: Arc<Mutex<State>>,
++}
++
++impl PrioritySemaphore {
++    pub(crate) fn new(fifo: bool, permits: usize) -> Self {
++        Self {
++            state: Arc::new(Mutex::new(State {
++                available: permits,
++                next: 0,
++                fifo,
++                waiters: BTreeMap::new(),
++            })),
++        }
++    }
++
++    pub(crate) fn acquire(&self, permits: usize, priority: i32) -> Acquire<'_> {
++        Acquire {
++            semaphore: self,
++            permits,
++            priority,
++            key: None,
++            complete: false,
++        }
++    }
++}
++
++pub(crate) struct Acquire<'a> {
++    semaphore: &'a PrioritySemaphore,
++    permits: usize,
++    priority: i32,
++    key: Option<Key>,
++    complete: bool,
++}
++
++impl Future for Acquire<'_> {
++    type Output = PrioritySemaphoreGuard;
++
++    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
++        let this = self.get_mut();
++        assert!(!this.complete, "acquisition polled after completion");
++        let mut state = this.semaphore.state.lock();
++        // Uncontended actions need no queue node allocation.
++        if this.key.is_none() && state.waiters.is_empty() && this.permits <= state.available {
++            state.available -= this.permits;
++            this.complete = true;
++            return Poll::Ready(PrioritySemaphoreGuard {
++                state: Arc::clone(&this.semaphore.state),
++                permits: this.permits,
++            });
++        }
++        let key = *this.key.get_or_insert_with(|| {
++            let key = (Reverse(this.priority), state.next);
++            state.next = state.next.checked_add(1).expect("host-sharing sequence exhausted");
++            state.waiters.insert(key, Waiter {
++                permits: this.permits,
++                granted: false,
++                waker: None,
++            });
++            key
++        });
++        let wake = state.dispatch();
++        let waiter = state.waiters.get_mut(&key).unwrap();
++        let result = if waiter.granted {
++            state.waiters.remove(&key);
++            this.key = None;
++            this.complete = true;
++            Poll::Ready(PrioritySemaphoreGuard {
++                state: Arc::clone(&this.semaphore.state),
++                permits: this.permits,
++            })
++        } else {
++            match &mut waiter.waker {
++                Some(waker) => waker.clone_from(cx.waker()),
++                slot @ None => *slot = Some(cx.waker().clone()),
++            }
++            Poll::Pending
++        };
++        drop(state);
++        wake_all(wake);
++        result
++    }
++}
++
++impl Drop for Acquire<'_> {
++    fn drop(&mut self) {
++        let Some(key) = self.key else { return };
++        let mut state = self.semaphore.state.lock();
++        let waiter = state.waiters.remove(&key).unwrap();
++        // A canceled pending waiter owns nothing. A granted but not yet polled
++        // waiter owns a reservation, which must be returned exactly once.
++        if waiter.granted {
++            state.available += waiter.permits;
++        }
++        let wake = state.dispatch();
++        drop(state);
++        wake_all(wake);
++    }
++}
++
++pub(crate) struct PrioritySemaphoreGuard {
++    state: Arc<Mutex<State>>,
++    permits: usize,
++}
++
++impl Drop for PrioritySemaphoreGuard {
++    fn drop(&mut self) {
++        let mut state = self.state.lock();
++        state.available += self.permits;
++        let wake = state.dispatch();
++        drop(state);
++        wake_all(wake);
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    fn poll(acquire: &mut Acquire<'_>) -> Poll<PrioritySemaphoreGuard> {
++        Pin::new(acquire).poll(&mut Context::from_waker(Waker::noop()))
++    }
++
++    fn ready(acquire: &mut Acquire<'_>) -> PrioritySemaphoreGuard {
++        match poll(acquire) {
++            Poll::Ready(guard) => guard,
++            Poll::Pending => panic!("expected admission"),
++        }
++    }
++
++    #[test]
++    fn priority_passes_queued_work_without_preemption_and_ties_are_fifo() {
++        let semaphore = PrioritySemaphore::new(true, 2);
++        let active = ready(&mut semaphore.acquire(2, 0));
++        let mut first = semaphore.acquire(2, 0);
++        let mut second = semaphore.acquire(2, 0);
++        let mut critical = semaphore.acquire(2, 8);
++        assert!(poll(&mut first).is_pending());
++        assert!(poll(&mut second).is_pending());
++        assert!(poll(&mut critical).is_pending());
++        assert_eq!(semaphore.state.lock().available, 0);
++        drop(active);
++        assert!(poll(&mut first).is_pending());
++        let critical = ready(&mut critical);
++        assert!(poll(&mut second).is_pending());
++        drop(critical);
++        assert!(poll(&mut second).is_pending());
++        drop(ready(&mut first));
++        drop(ready(&mut second));
++        assert_eq!(semaphore.state.lock().available, 2);
++    }
++
++    #[test]
++    fn cancellation_returns_only_owned_permits_including_unpolled_grants() {
++        let semaphore = PrioritySemaphore::new(true, 3);
++        let active = ready(&mut semaphore.acquire(2, 0));
++        let mut canceled = semaphore.acquire(3, 9);
++        let mut next = semaphore.acquire(1, 0);
++        assert!(poll(&mut canceled).is_pending());
++        assert!(poll(&mut next).is_pending());
++        drop(canceled);
++        // Removing an ungranted waiter must not release its requested weight.
++        let next = ready(&mut next);
++        assert_eq!(semaphore.state.lock().available, 0);
++        let mut unpolled = semaphore.acquire(3, 0);
++        let mut survivor = semaphore.acquire(3, 0);
++        assert!(poll(&mut unpolled).is_pending());
++        assert!(poll(&mut survivor).is_pending());
++        drop(active);
++        drop(next);
++        drop(unpolled);
++        drop(ready(&mut survivor));
++        assert_eq!(semaphore.state.lock().available, 3);
++    }
++
++    #[test]
++    fn fitting_ties_preserve_weight_bounds_but_do_not_bypass_higher_priority() {
++        let semaphore = PrioritySemaphore::new(false, 3);
++        let active = ready(&mut semaphore.acquire(2, 0));
++        let mut large = semaphore.acquire(2, 5);
++        let mut lower = semaphore.acquire(1, 4);
++        let mut small = semaphore.acquire(1, 5);
++        assert!(poll(&mut large).is_pending());
++        assert!(poll(&mut lower).is_pending());
++        let small = ready(&mut small);
++        assert_eq!(semaphore.state.lock().available, 0);
++        drop(active);
++        let large = ready(&mut large);
++        assert!(poll(&mut lower).is_pending());
++        drop(small);
++        drop(ready(&mut lower));
++        drop(large);
++        assert_eq!(semaphore.state.lock().available, 3);
++    }
++
++    #[test]
++    fn granting_wakes_after_unlocking_and_unpolled_cancellation_releases() {
++        struct CheckUnlocked {
++            state: Arc<Mutex<State>>,
++            wakes: std::sync::atomic::AtomicUsize,
++        }
++        impl std::task::Wake for CheckUnlocked {
++            fn wake(self: Arc<Self>) {
++                assert!(self.state.try_lock().is_some(), "wake called under scheduler lock");
++                self.wakes.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
++            }
++        }
++        let semaphore = PrioritySemaphore::new(true, 1);
++        let active = ready(&mut semaphore.acquire(1, 0));
++        let check = Arc::new(CheckUnlocked {
++            state: Arc::clone(&semaphore.state),
++            wakes: std::sync::atomic::AtomicUsize::new(0),
++        });
++        let waker = Waker::from(Arc::clone(&check));
++        let mut pending = semaphore.acquire(1, -1);
++        assert!(Pin::new(&mut pending).poll(&mut Context::from_waker(&waker)).is_pending());
++        drop(active);
++        assert_eq!(check.wakes.load(std::sync::atomic::Ordering::SeqCst), 1);
++        drop(pending);
++        assert_eq!(semaphore.state.lock().available, 1);
++    }
++}
+diff --git a/tests/core/executor/test_cancellation.py b/tests/core/executor/test_cancellation.py
+index 6ce9b50..f0a01bd 100644
+--- a/tests/core/executor/test_cancellation.py
++++ b/tests/core/executor/test_cancellation.py
+@@ -10,6 +10,7 @@
+ 
+ 
+ import asyncio
++import json
+ import os
+ import signal
+ from collections.abc import Callable
+@@ -91,3 +92,69 @@ async def test_cancellation_bxl(buck: Buck, tmp_path: Path) -> None:
+     await _test_cancellation_helper(
+         buck, tmp_path, lambda buck, opts: buck.bxl(*opts, "//build.bxl:build")
+     )
++
++
++def _priority_queued(log: str, trace_id: str) -> list[str]:
++    parents = {}
++    actions = {}
++    queued = []
++    # A writer may be halfway through the final JSON line.
++    for line in log[:log.rfind("\n") + 1].splitlines():
++        event = json.loads(line).get("Event", {})
++        if not event:
++            continue
++        assert event["trace_id"] == trace_id
++        start = event.get("data", {}).get("SpanStart", {}).get("data", {})
++        span = event.get("span_id")
++        if start:
++            parents[span] = event.get("parent_id")
++        action = start.get("ActionExecution", {}).get("name", {})
++        if action.get("category") == "priority_smoke":
++            actions[span] = action["identifier"]
++        local = start.get("ExecutorStage", {}).get("stage", {}).get("Local", {}).get("stage", {})
++        if "Queued" not in local:
++            continue
++        current = span
++        while current is not None and current not in actions:
++            current = parents.get(current)
++        if current in actions:
++            queued.append(actions[current])
++    return queued
++
++
++@buck_test()
++async def test_local_priority_passes_queued_actions(buck: Buck, tmp_path: Path) -> None:
++    state = tmp_path / "priority"
++    state.mkdir(mode=0o700)
++    event_log = state / "events.json-lines"
++    build_id = state / "build-id"
++    command = await buck.build(
++        ":priority", "--local-only", "--num-threads", "2",
++        "-c", f"test.state={state}",
++        "--event-log", str(event_log), "--write-build-id", str(build_id),
++    ).start()
++
++    async def wait_queued(expected: set[str]) -> list[str]:
++        for _ in range(300):
++            queued = []
++            if event_log.exists() and build_id.exists():
++                queued = _priority_queued(event_log.read_text(), build_id.read_text().strip())
++            if expected.issubset(queued):
++                return queued
++            await asyncio.sleep(0.1)
++        raise AssertionError(f"actions never queued: {expected}")
++
++    try:
++        # The active action holds both permits throughout both queue barriers.
++        low_order = await wait_queued({"low_a", "low_b"})
++        assert not (state / "active-end").exists()
++        (state / "release-high").touch()
++        await wait_queued({"critical"})
++        assert not (state / "active-end").exists()
++    finally:
++        (state / "release-high").touch()
++        (state / "release-active").touch()
++        await command.communicate()
++    order = (state / "order").read_text().splitlines()
++    expected_lows = [name for name in low_order if name in {"low_a", "low_b"}]
++    assert order == ["active-start", "active-end", "critical", *expected_lows]
+diff --git a/tests/core/executor/test_cancellation_data/TARGETS.fixture b/tests/core/executor/test_cancellation_data/TARGETS.fixture
+index 045d0b0..b4e1543 100644
+--- a/tests/core/executor/test_cancellation_data/TARGETS.fixture
++++ b/tests/core/executor/test_cancellation_data/TARGETS.fixture
+@@ -1,9 +1,16 @@
+-load(":defs.bzl", "slow_actions")
++load(":defs.bzl", "priority_actions", "slow_actions")
+ 
+ slow_actions(
+     name = "slow",
+-    pids = read_config("test", "pids"),
+-    duration = read_config("test", "duration"),
++    pids = read_config("test", "pids", ""),
++    duration = read_config("test", "duration", "60"),
+     count = 10,
+     src = "slow.py",
+ )
++
++priority_actions(
++    name = "priority",
++    python = read_config("test", "python", "fbpython"),
++    state = read_config("test", "state", ""),
++    src = "priority.py",
++)
+diff --git a/tests/core/executor/test_cancellation_data/defs.bzl b/tests/core/executor/test_cancellation_data/defs.bzl
+index c1b2dba..cdf3d3a 100644
+--- a/tests/core/executor/test_cancellation_data/defs.bzl
++++ b/tests/core/executor/test_cancellation_data/defs.bzl
+@@ -29,3 +29,34 @@ slow_actions = rule(
+         "src": attrs.source(),
+     },
+ )
++
++def _priority_impl(ctx):
++    outputs = {}
++    for name in ["active", "low_gate", "high_gate", "low_a", "low_b", "critical"]:
++        output = ctx.actions.declare_output(name)
++        dependencies = []
++        if name in ["low_a", "low_b", "high_gate"]:
++            dependencies = [outputs["low_gate"]]
++        elif name == "critical":
++            dependencies = [outputs["high_gate"]]
++        kwargs = {"weight_percentage": 0} if name.endswith("_gate") else {"weight": 2}
++        ctx.actions.run(
++            cmd_args(ctx.attrs.python, ctx.attrs.src, ctx.attrs.state, name, output.as_output(), hidden = dependencies),
++            category = "priority_smoke",
++            identifier = name,
++            priority = 10 if name == "critical" else 0,
++            local_only = True,
++            low_pass_filter = False,
++            **kwargs
++        )
++        outputs[name] = output
++    return [DefaultInfo(default_outputs = outputs.values())]
++
++priority_actions = rule(
++    impl = _priority_impl,
++    attrs = {
++        "python": attrs.string(),
++        "src": attrs.source(),
++        "state": attrs.string(),
++    },
++)
+diff --git a/tests/core/executor/test_cancellation_data/priority.py b/tests/core/executor/test_cancellation_data/priority.py
+new file mode 100644
+index 0000000..e3d6e0a
+--- /dev/null
++++ b/tests/core/executor/test_cancellation_data/priority.py
+@@ -0,0 +1,52 @@
++# Copyright (c) Meta Platforms, Inc. and affiliates.
++#
++# This source code is dual-licensed under either the MIT license found in the
++# LICENSE-MIT file in the root directory of this source tree or the Apache
++# License, Version 2.0 found in the LICENSE-APACHE file in the root directory
++# of this source tree. You may select, at your option, one of the
++# above-listed licenses.
++
++"""Real local processes for the host-sharing admission-order regression test."""
++
++import os
++from pathlib import Path
++import sys
++import time
++
++
++def main():
++    state = Path(sys.argv[1])
++    name = sys.argv[2]
++    output = Path(sys.argv[3])
++
++    def wait(marker):
++        deadline = time.monotonic() + 90
++        while not (state / marker).exists():
++            if time.monotonic() > deadline:
++                raise TimeoutError(marker)
++            time.sleep(0.01)
++
++    def record(event):
++        descriptor = os.open(state / "order", os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
++        try:
++            os.write(descriptor, (event + "\n").encode())
++        finally:
++            os.close(descriptor)
++
++    if name == "active":
++        record("active-start")
++        (state / "active-start").touch(mode=0o600)
++        wait("release-active")
++        record("active-end")
++        (state / "active-end").touch(mode=0o600)
++    elif name == "low_gate":
++        wait("active-start")
++    elif name == "high_gate":
++        wait("release-high")
++    else:
++        record(name)
++    output.write_text(name)
++
++
++if __name__ == "__main__":
++    main()

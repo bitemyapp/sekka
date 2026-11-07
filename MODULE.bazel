@@ -1,0 +1,255 @@
+"""Sekka's Bazel module (docs/bazel-build-plan.md).
+
+Nix provides the tools and C libraries, from the root flake's lock
+(build/bazel/nix.bzl); Bazel builds and tests the components that migrate.
+Cargo's manifests and locks stay the dependency inputs: crate_universe reads
+them for crates.io's crates, and build/bazel/generate.py writes the BUILD
+files of Sekka's own crates from `cargo metadata`.
+"""
+
+module(name = "sekka")
+
+bazel_dep(name = "platforms", version = "1.1.0")
+bazel_dep(name = "bazel_skylib", version = "1.8.2")
+bazel_dep(name = "rules_cc", version = "0.2.17")
+bazel_dep(name = "rules_rust", version = "0.75.0")
+bazel_dep(name = "rules_nixpkgs_core", version = "0.14.1")
+bazel_dep(name = "rules_nixpkgs_cc", version = "0.14.1")
+bazel_dep(name = "rules_nixpkgs_rust", version = "0.14.1")
+
+# rules_nixpkgs at one commit of 2026-10-30 (after v0.14.1), which the
+# 2026-11-03 probe used with Bazel 9. Only its core is in the Bazel Central
+# Registry.
+archive_override(
+    module_name = "rules_nixpkgs_core",
+    integrity = "sha256-3JptKk3jhvvXA/0sDC61XbR5GJruSVH4qdXz9hluUOQ=",
+    strip_prefix = "rules_nixpkgs-58151f3745a1abe09277a6a8d0c58449018d2baa/core",
+    urls = ["https://github.com/tweag/rules_nixpkgs/archive/58151f3745a1abe09277a6a8d0c58449018d2baa.tar.gz"],
+)
+
+archive_override(
+    module_name = "rules_nixpkgs_cc",
+    integrity = "sha256-3JptKk3jhvvXA/0sDC61XbR5GJruSVH4qdXz9hluUOQ=",
+    strip_prefix = "rules_nixpkgs-58151f3745a1abe09277a6a8d0c58449018d2baa/toolchains/cc",
+    urls = ["https://github.com/tweag/rules_nixpkgs/archive/58151f3745a1abe09277a6a8d0c58449018d2baa.tar.gz"],
+)
+
+archive_override(
+    module_name = "rules_nixpkgs_rust",
+    integrity = "sha256-3JptKk3jhvvXA/0sDC61XbR5GJruSVH4qdXz9hluUOQ=",
+    strip_prefix = "rules_nixpkgs-58151f3745a1abe09277a6a8d0c58449018d2baa/toolchains/rust",
+    urls = ["https://github.com/tweag/rules_nixpkgs/archive/58151f3745a1abe09277a6a8d0c58449018d2baa.tar.gz"],
+)
+
+nix = use_extension("//build/bazel:nix.bzl", "nix")
+use_repo(nix, "nix_cc_info", "nix_cc_toolchains", "nix_native", "nix_rust", "nix_rust_toolchain", "nix_test_env", "nixpkgs")
+
+register_toolchains(
+    "@nix_rust_toolchain//:all",
+    "@nix_cc_toolchains//:all",
+)
+
+# Aizome's crates.io and Git dependencies, as its Cargo.lock pins them.
+# crate_universe resolves them from generate.py's mirror of the workspace
+# (build/bazel/aizome-cargo), and only on a repin (build/bazel/repin.py), into
+# build/bazel/aizome-crates.lock.json; builds read that lock.
+crate = use_extension("@rules_rust//crate_universe:extensions.bzl", "crate")
+crate.from_cargo(
+    name = "aizome_crates",
+    cargo_lockfile = "//desktop/aizome:Cargo.lock",
+    # Repository evaluation must use the same Nix-pinned Cargo/rustc as actions;
+    # upstream downloaded host tools require an ambient non-Nix ELF loader.
+    host_tools = "@nix_rust//:BUILD.bazel",
+    lockfile = "//build/bazel:aizome-crates.lock.json",
+    manifests = ["//build/bazel/aizome-cargo:Cargo.toml"],
+    supported_platform_triples = ["x86_64-unknown-linux-gnu"],
+)
+use_repo(crate, "aizome_crates")
+
+# Build scripts that find C libraries with pkg-config, generate bindings or
+# run tools by name get the package's native environment, declared here
+# rather than found on the host (build/bazel/native.bzl,
+# nix/bazel/toolchains.nix).
+
+crate.annotation(
+    build_script_env = {
+        "PATH": "$(BUILD_PATH)",
+        "PKG_CONFIG": "$(PKG_CONFIG)",
+        "PKG_CONFIG_PATH": "$(PKG_CONFIG_PATH)",
+    },
+    build_script_toolchains = ["@@//build/bazel:native"],
+    crate = "drm-sys",
+)
+crate.annotation(
+    build_script_env = {
+        "PATH": "$(BUILD_PATH)",
+        "PKG_CONFIG": "$(PKG_CONFIG)",
+        "PKG_CONFIG_PATH": "$(PKG_CONFIG_PATH)",
+    },
+    build_script_toolchains = ["@@//build/bazel:native"],
+    crate = "gbm-sys",
+)
+crate.annotation(
+    build_script_env = {
+        "PATH": "$(BUILD_PATH)",
+        "PKG_CONFIG": "$(PKG_CONFIG)",
+        "PKG_CONFIG_PATH": "$(PKG_CONFIG_PATH)",
+    },
+    build_script_toolchains = ["@@//build/bazel:native"],
+    crate = "input-sys",
+)
+crate.annotation(
+    build_script_env = {
+        "PATH": "$(BUILD_PATH)",
+        "PKG_CONFIG": "$(PKG_CONFIG)",
+        "PKG_CONFIG_PATH": "$(PKG_CONFIG_PATH)",
+    },
+    build_script_toolchains = ["@@//build/bazel:native"],
+    crate = "libpulse-sys",
+)
+crate.annotation(
+    build_script_env = {
+        "PATH": "$(BUILD_PATH)",
+        "PKG_CONFIG": "$(PKG_CONFIG)",
+        "PKG_CONFIG_PATH": "$(PKG_CONFIG_PATH)",
+    },
+    build_script_toolchains = ["@@//build/bazel:native"],
+    crate = "libseat-sys",
+)
+crate.annotation(
+    build_script_env = {
+        "PATH": "$(BUILD_PATH)",
+        "PKG_CONFIG": "$(PKG_CONFIG)",
+        "PKG_CONFIG_PATH": "$(PKG_CONFIG_PATH)",
+    },
+    build_script_toolchains = ["@@//build/bazel:native"],
+    crate = "pixman-sys",
+)
+crate.annotation(
+    build_script_env = {
+        "PATH": "$(BUILD_PATH)",
+        "PKG_CONFIG": "$(PKG_CONFIG)",
+        "PKG_CONFIG_PATH": "$(PKG_CONFIG_PATH)",
+    },
+    build_script_toolchains = ["@@//build/bazel:native"],
+    crate = "wayland-sys",
+)
+crate.annotation(
+    build_script_env = {
+        "PATH": "$(BUILD_PATH)",
+        "PKG_CONFIG": "$(PKG_CONFIG)",
+        "PKG_CONFIG_PATH": "$(PKG_CONFIG_PATH)",
+    },
+    build_script_toolchains = ["@@//build/bazel:native"],
+    crate = "x11-dl",
+)
+crate.annotation(
+    build_script_env = {
+        "PATH": "$(BUILD_PATH)",
+        "PKG_CONFIG": "$(PKG_CONFIG)",
+        "PKG_CONFIG_PATH": "$(PKG_CONFIG_PATH)",
+    },
+    build_script_toolchains = ["@@//build/bazel:native"],
+    crate = "yeslogic-fontconfig-sys",
+)
+crate.annotation(
+    build_script_env = {
+        "PATH": "$(BUILD_PATH)",
+        "PKG_CONFIG": "$(PKG_CONFIG)",
+        "PKG_CONFIG_PATH": "$(PKG_CONFIG_PATH)",
+    },
+    build_script_toolchains = ["@@//build/bazel:native"],
+    crate = "libspa",
+)
+crate.annotation(
+    build_script_env = {
+        "PATH": "$(BUILD_PATH)",
+        "PKG_CONFIG": "$(PKG_CONFIG)",
+        "PKG_CONFIG_PATH": "$(PKG_CONFIG_PATH)",
+    },
+    build_script_toolchains = ["@@//build/bazel:native"],
+    crate = "pipewire",
+)
+crate.annotation(
+    build_script_env = {
+        "BINDGEN_EXTRA_CLANG_ARGS": "$(BINDGEN_EXTRA_CLANG_ARGS)",
+        "LIBCLANG_PATH": "$(LIBCLANG_PATH)",
+        "PATH": "$(BUILD_PATH)",
+        "PKG_CONFIG": "$(PKG_CONFIG)",
+        "PKG_CONFIG_PATH": "$(PKG_CONFIG_PATH)",
+    },
+    build_script_toolchains = ["@@//build/bazel:native"],
+    crate = "ffmpeg-sys-next",
+)
+crate.annotation(
+    build_script_env = {
+        "BINDGEN_EXTRA_CLANG_ARGS": "$(BINDGEN_EXTRA_CLANG_ARGS)",
+        "LIBCLANG_PATH": "$(LIBCLANG_PATH)",
+        "PATH": "$(BUILD_PATH)",
+        "PKG_CONFIG": "$(PKG_CONFIG)",
+        "PKG_CONFIG_PATH": "$(PKG_CONFIG_PATH)",
+    },
+    # It compiles bindgen's wrappers with its manifest directory, taken when
+    # the script was compiled (env!): under Bazel, a sandbox long gone. Its
+    # working directory when it runs is that directory.
+    build_script_rustc_env = {"CARGO_MANIFEST_DIR": "."},
+    build_script_toolchains = ["@@//build/bazel:native"],
+    crate = "libspa-sys",
+)
+crate.annotation(
+    build_script_env = {
+        "BINDGEN_EXTRA_CLANG_ARGS": "$(BINDGEN_EXTRA_CLANG_ARGS)",
+        "LIBCLANG_PATH": "$(LIBCLANG_PATH)",
+        "PATH": "$(BUILD_PATH)",
+        "PKG_CONFIG": "$(PKG_CONFIG)",
+        "PKG_CONFIG_PATH": "$(PKG_CONFIG_PATH)",
+    },
+    build_script_toolchains = ["@@//build/bazel:native"],
+    crate = "pipewire-sys",
+)
+
+# libudev-sys links a test program with rustc to see whether udev has hwdb.
+crate.annotation(
+    build_script_env = {
+        "LIBRARY_PATH": "$(LIBRARY_PATH)",
+        "PATH": "$(BUILD_PATH)",
+        "PKG_CONFIG": "$(PKG_CONFIG)",
+        "PKG_CONFIG_PATH": "$(PKG_CONFIG_PATH)",
+    },
+    build_script_toolchains = ["@@//build/bazel:native"],
+    crate = "libudev-sys",
+)
+
+# whisper.cpp for Koe, through CMake, with the package's settings
+# (desktop/aizome/nix/package.nix): portable code, no -march. rules_rust
+# gives build scripts the C++ toolchain's `-x c++` in CXXFLAGS, with which
+# CMake would link objects as C++ source; `-x none` (appended) ends it.
+crate.annotation(
+    build_script_env = {
+        "CXXFLAGS": "-x none",
+        "CMAKE_PREFIX_PATH": "$(CMAKE_PREFIX_PATH)",
+        "NIXPKGS_CMAKE_PREFIX_PATH": "$(NIXPKGS_CMAKE_PREFIX_PATH)",
+        "BINDGEN_EXTRA_CLANG_ARGS": "$(BINDGEN_EXTRA_CLANG_ARGS)",
+        "LIBCLANG_PATH": "$(LIBCLANG_PATH)",
+        "BLAS_INCLUDE_DIRS": "$(BLAS_INCLUDE_DIRS)",
+        "GGML_AVX": "$(GGML_AVX)",
+        "GGML_AVX2": "$(GGML_AVX2)",
+        "GGML_F16C": "$(GGML_F16C)",
+        "GGML_FMA": "$(GGML_FMA)",
+        "GGML_NATIVE": "$(GGML_NATIVE)",
+        "OPENBLAS_PATH": "$(OPENBLAS_PATH)",
+        "PATH": "$(BUILD_PATH)",
+        "PKG_CONFIG": "$(PKG_CONFIG)",
+        "PKG_CONFIG_PATH": "$(PKG_CONFIG_PATH)",
+    },
+    build_script_toolchains = ["@@//build/bazel:native"],
+    crate = "whisper-rs-sys",
+)
+
+# The WebGL extensions' XML, which khronos_api's build script names by its
+# own working directory: under Bazel, runfiles its library never sees.
+crate.annotation(
+    crate = "khronos_api",
+    patch_args = ["-p1"],
+    patches = ["@@//build/bazel/patches:khronos_api-manifest-dir.patch"],
+)

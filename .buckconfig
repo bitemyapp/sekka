@@ -1,0 +1,37 @@
+[cells]
+  root = .
+  prelude = prelude
+  none = none
+  toolchains = build/buck2/toolchains
+
+[cell_aliases]
+  config = prelude
+  ovr_config = prelude
+  fbcode = none
+  fbsource = none
+  fbcode_macros = none
+  buck = none
+
+[external_cells]
+  prelude = bundled
+
+[parser]
+  target_platform_detector_spec = target:root//...->prelude//platforms:default target:prelude//...->prelude//platforms:default
+
+[build]
+  execution_platforms = root//build/buck2:execution
+
+[buck2]
+  restarter = true
+  # Each day, delete buck-out artifacts unused for a week (Buck2's default, also
+  # the CAS's age limit), or for 12 hours once under 10% of the disk is free
+  # (autosize's floor). An edit leaves each changed content-based output's old
+  # copy in place, and once the CAS evicts its blob that copy owns its bytes.
+  clean_stale_enabled = true
+  clean_stale_low_disk_threshold = 10
+  clean_stale_low_disk_artifact_ttl_hours = 12
+  # Stale cleaning is skipped without it.
+  defer_write_actions = true
+
+[project]
+  ignore = .git .work .direnv .buckal buck-out target desktop/aizome/target desktop/aizome/sukumo/target

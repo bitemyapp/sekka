@@ -1,0 +1,76 @@
+{
+ "source": {
+  "commit": "6a6b9e0e3ab75372712f1c59e56aaa0b98409dc3",
+  "patch_sha256": "87d68f4129743661cfff4a3d5392173e419c75e8c12b14fa1238380f4ea1e544"
+ },
+ "host": {
+  "hostname": "callen",
+  "nproc": 128,
+  "loadavg_before": [
+   12.96,
+   15.24,
+   12.17
+  ],
+  "loadavg_after": [
+   12.97,
+   15.13,
+   12.18
+  ]
+ },
+ "scenario": "build-script",
+ "rep": 3,
+ "tool": "bazel",
+ "profile": "dev",
+ "jobs": 16,
+ "toolchain": {
+  "SEKKA_BAZEL_RUST_TOOLCHAIN": "/nix/store/w6rh05llxkdc8pljap560h1zyivh5px5-sekka-bazel-rust-toolchain",
+  "SEKKA_BAZEL_NATIVE_ENV": "/nix/store/9nwmybw8g9hj5drznwrghida4dqcq04x-sekka-bazel-native-env",
+  "rustc": "rustc 1.99.0 (b940084d7 2026-09-28) (built from a source tarball)\nbinary: rustc\ncommit-hash: b940084d7eb6a299eb4bfeb8e34901bc051e7ac4\ncommit-date: 2026-09-28\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.0\nLLVM version: 21.1.8\n"
+ },
+ "argv": [
+  "bazel",
+  "--output_user_root=/dev/shm/sekka-bazel-lab/phase1-6a6b9e0e-bazel/bazel",
+  "build",
+  "--config=dev",
+  "--config=wx-local",
+  "--jobs=16",
+  "--repository_cache=/dev/shm/sekka-bazel-lab/phase1-6a6b9e0e-bazel/repos",
+  "--build_event_json_file=/home/callen/sekka-work/bazel-lab/results/phase1-6a6b9e0e/bazel/logs/bazel-build-script-03.bep.json",
+  "--profile=/home/callen/sekka-work/bazel-lab/results/phase1-6a6b9e0e/bazel/logs/bazel-build-script-03.profile.gz",
+  "--target_pattern_file=/home/callen/sekka-work/bazel-lab/results/phase1-6a6b9e0e/bazel/targets.txt"
+ ],
+ "exit_status": 0,
+ "wall_seconds": 13.134,
+ "executed_actions": {
+  "Rustc": 52,
+  "RunfilesTree": 24,
+  "SolibSymlink": 2,
+  "CargoBuildScriptRun": 1,
+  "BazelWorkspaceStatusAction": 1
+ },
+ "runners": {
+  "total": 80,
+  "internal": 27,
+  "linux-sandbox": 53
+ },
+ "cache_hits": 89,
+ "cache_misses": 80,
+ "action_cpu_seconds": 9.59,
+ "action_cpu_reason": "Bazel's timingMetrics.cpuTimeInMs: the build's CPU time, server included",
+ "analysis_seconds": 0.109,
+ "execution_seconds": 12.779,
+ "actions_created": 201,
+ "download_bytes": null,
+ "download_bytes_reason": "local trial: nothing downloaded during the build",
+ "storage_peak_bytes": null,
+ "storage_peak_reason": "not sampled during the build in this run",
+ "correctness": {
+  "check": "\"sekka-bench-build-script-0003\" in aizome-kit's generated icons.rs",
+  "passed": true
+ },
+ "raw_logs": {
+  "bazel-build-script-03.log": "9368997d86d001fc406c9b79ee44fa35189f0092ee3b24f80ff459d37e3bed55",
+  "bazel-build-script-03.bep.json": "8f74703a2ec7d3365ae1c7b4f8033bd3c6354bfcb59bc94f1ac14fb5c5e2a6ac",
+  "bazel-build-script-03.profile.gz": "ce0022846acfe1c88f487a9ca55bba7223237f4a6bc4484f0a1d38890493dc84"
+ }
+}

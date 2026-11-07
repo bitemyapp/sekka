@@ -12,6 +12,17 @@ spec = importlib.util.spec_from_file_location("pr_trust", ROOT / "scripts/check-
 gate = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(gate)
 HEAD, BASE, MERGE = "a" * 40, "b" * 40, "c" * 40
+spec = importlib.util.spec_from_file_location("shared_builds", ROOT / "scripts/ci-shared-builds.py")
+shared_builds = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(shared_builds)
+
+
+class ConsumerAttempt(unittest.TestCase):
+    def test_partial_rerun_cannot_use_released_inputs(self):
+        for prepared, current in (("1", "2"), ("1", None), ("", ""), ("", "1")):
+            with self.subTest(prepared=prepared, current=current):
+                with self.assertRaises(RuntimeError):
+                    shared_builds.require_prepared_attempt(prepared, current)
 
 
 class TrustGate(unittest.TestCase):
@@ -143,9 +154,10 @@ class TrustGate(unittest.TestCase):
 
 class RunnerAdmission(unittest.TestCase):
     def admitted(self, event, ref="refs/heads/main", repository=gate.REPOSITORY,
-                 workflow="bitemyapp/sekka/.github/workflows/pr.yml@refs/heads/main"):
+                 workflow="bitemyapp/sekka/.github/workflows/pr.yml@refs/heads/main", role="nix"):
         env = {**os.environ, "GITHUB_REPOSITORY": repository, "GITHUB_REF": ref,
-               "GITHUB_EVENT_NAME": event, "GITHUB_WORKFLOW_REF": workflow}
+               "GITHUB_EVENT_NAME": event, "GITHUB_WORKFLOW_REF": workflow,
+               "SEKKA_RUNNER_ROLE": role}
         return subprocess.run(["bash", "-c", 'source "$1"; sekka_runner_admitted',
                                "admission-test", str(ROOT / "scripts/runner-admission.sh")],
                               env=env, check=False).returncode == 0
@@ -164,6 +176,15 @@ class RunnerAdmission(unittest.TestCase):
             self.assertFalse(self.admitted("pull_request_target", workflow=workflow))
         self.assertFalse(self.admitted("pull_request_target", ref="refs/pull/233/merge"))
         self.assertFalse(self.admitted("pull_request_target", repository="other/sekka"))
+
+    def test_compute_pool_only_admits_main_gated_pr_workflow(self):
+        for event in ("pull_request_target", "workflow_dispatch"):
+            self.assertTrue(self.admitted(event, role="build-client"))
+            for workflow in ("bitemyapp/sekka/.github/workflows/cache.yml@refs/heads/main",
+                             "bitemyapp/sekka/.github/workflows/pr.yml@refs/heads/topic", ""):
+                self.assertFalse(self.admitted(event, workflow=workflow, role="build-client"))
+        for event in ("push", "schedule", "pull_request", "workflow_run", ""):
+            self.assertFalse(self.admitted(event, role="build-client"))
 
 
 if __name__ == "__main__":
