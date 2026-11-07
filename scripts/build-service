@@ -183,6 +183,22 @@ def autosize_target(current, configured, free, floor, minimum, maximum):
     return target if target < 0.95 * configured or target > 1.25 * configured else None
 
 
+def defer_resize(recent_requests, free, floor):
+    """Whether autosize waits for an idle service: a resize restarts the backend
+    under builds in flight. Free space under half the floor cannot wait."""
+    return recent_requests > 0 and free >= floor // 2
+
+
+def recent_requests(m, seconds):
+    """Requests the deployment's gateways logged in the last `seconds`."""
+    total = 0
+    for domain in m["domains"]:
+        container = name(m, domain, "gateway")
+        assert_owned(m, container)
+        total += docker(m, "logs", "--since", f"{seconds}s", container, capture=True).count('"POST /')
+    return total
+
+
 def resize_cache(m, manifest, cas_bytes, ac_bytes):
     if min(cas_bytes, ac_bytes) < 1:
         raise SystemExit("Cache bounds must be positive")
@@ -626,6 +642,8 @@ def main():
     autosize.add_argument("--min-cas-bytes", type=int, default=4 * 1024**3)
     autosize.add_argument("--max-cas-bytes", type=int, default=256 * 1024**3)
     autosize.add_argument("--dry-run", action="store_true", help="Report the decision without resizing")
+    autosize.add_argument("--idle-seconds", type=int, default=300,
+                          help="Resize only after this long without requests, unless free space is under half the floor")
     resize = sub.add_parser("resize")
     resize.add_argument("--cas-bytes", type=int, required=True)
     resize.add_argument("--ac-bytes", type=int, required=True)
@@ -712,10 +730,13 @@ def main():
                       for folder in os.scandir(content) if folder.is_dir(follow_symlinks=False)
                       for entry in os.scandir(folder.path) if entry.is_file(follow_symlinks=False))
         target = autosize_target(current, m["cas_bytes"], free, floor, args.min_cas_bytes, args.max_cas_bytes)
+        busy = recent_requests(m, args.idle_seconds) if target else 0
+        deferred = bool(target) and defer_resize(busy, free, floor)
         decision = {"deployment": m["name"], "free_bytes": free, "floor_bytes": floor,
                     "cas_logical_bytes": current, "configured_cas_bytes": m["cas_bytes"],
-                    "target_cas_bytes": target, "resized": bool(target and not args.dry_run)}
-        if target and not args.dry_run:
+                    "target_cas_bytes": target, "recent_requests": busy, "deferred": deferred,
+                    "resized": bool(target and not deferred and not args.dry_run)}
+        if decision["resized"]:
             resize_cache(m, args.manifest, target, m["ac_bytes"])
         print(json.dumps(decision))
         return
