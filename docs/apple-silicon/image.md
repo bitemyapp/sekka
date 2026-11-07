@@ -266,7 +266,9 @@ settings, and all generations share it. NixOS's `extraFiles` deleted it and
 then copied the new one in place on every switch, so an interruption could
 leave no second stage, and the replaced copy was lost. `boot-bin/boot_bin.py`
 now replaces it on every boot loader installation (`module.nix`, for every
-`calamares.appleSilicon` system).
+`calamares.appleSilicon` system). Those systems have it as the
+`sekka-boot-bin` command, which the boot loader installation and
+`sekka-boot-bin.service` run too, and which its messages name.
 
 **What FAT leaves after a power cut.** A FAT file is a directory entry
 (name, first cluster, size), a chain in the FAT and data clusters, and
@@ -350,7 +352,7 @@ On every boot loader installation:
 4. The copy being replaced becomes `boot.bin.previous` only if it has
    booted, or if there is no previous copy: `sekka-boot-bin.service` records
    at every start that the copy at `m1n1/boot.bin` booted
-   (`boot_bin.py mark-booted`). Two installations without a restart in
+   (`sekka-boot-bin mark-booted`). Two installations without a restart in
    between keep the copy that booted. It records only at a start: a switch
    installs the boot loader before it restarts changed units and starts new
    ones, so the unit isn't restarted when it changes, and `mark-booted`
@@ -387,7 +389,7 @@ Generations and boot.bin:
   `boot.bin` in place with `extraFiles`, keeps no previous copy and leaves
   the record stale; the next installation of a newer generation notices the
   active copy and keeps it.
-- `boot_bin.py restore-previous --esp /boot` swaps the two copies,
+- `sekka-boot-bin restore-previous --esp /boot` swaps the two copies,
   refusing if `boot.bin.previous` doesn't match the record. It stages both,
   records the swap, commits the restored copy as `boot.bin` first (so it is
   never only in memory), then the replaced one as `boot.bin.previous`; a
@@ -397,10 +399,10 @@ Generations and boot.bin:
   copy that was restored away, and its next installation (a no-change
   `nixos-rebuild`, a Yukimi update) would put it back. The record keeps a
   hold: installations leave the held copy and warn, until a different copy
-  comes (a later update) or `boot_bin.py release --esp /boot`. To stay with
+  comes (a later update) or `sekka-boot-bin release --esp /boot`. To stay with
   the older system as a whole, make an older generation the default
   (`nixos-rebuild boot --rollback`).
-- `boot_bin.py status --esp /boot` compares the files with the record.
+- `sekka-boot-bin status --esp /boot` compares the files with the record.
 
 Recovery when a new `boot.bin` doesn't start Linux at all: start macOS
 (hold the power button, choose macOS), mount the Sekka ESP
@@ -414,9 +416,9 @@ the record's current one and holds it, as `restore-previous` does.
 markers under `EFI/nixos/.extra-files` list, and syncs that, before
 `extraInstallCommands` run. A system that installed `boot.bin` with
 `extraFiles` (the original J514S installation) still has the marker. So
-`module.nix` wraps `system.build.installBootLoader`: `boot_bin.py
+`module.nix` wraps `system.build.installBootLoader`: `sekka-boot-bin
 forget-extra-files` removes `boot.bin`'s marker, then NixOS's installer
-runs, leaving `boot.bin` in place for `boot_bin.py install` to replace with
+runs, leaving `boot.bin` in place for `sekka-boot-bin install` to replace with
 the steps above, the running copy kept as the previous one. It runs at every
 installation, so a rollback to an `extraFiles` generation, which writes the
 marker again, doesn't reopen the gap at the next forward one.

@@ -36,8 +36,13 @@ let
   esp = config.boot.loader.efi.efiSysMountPoint;
   switches = lib.optionals cfg.t6030Handoff m1n1.t6030Switches;
   # Replaces m1n1/boot.bin verified, keeping the copy it replaces
-  # (boot-bin/boot_bin.py).
-  bootBinTool = ./boot-bin/boot_bin.py;
+  # (boot-bin/boot_bin.py): the boot loader installation and
+  # sekka-boot-bin.service run it, and its owner, to restore the previous
+  # copy, release a held one or see its status.
+  bootBinTool = pkgs.writeShellScriptBin "sekka-boot-bin" ''
+    exec ${pkgs.python3.interpreter} ${./boot-bin/boot_bin.py} "$@"
+  '';
+  sekkaBootBin = "${bootBinTool}/bin/sekka-boot-bin";
 
   # m1n1's second stage: m1n1, every Apple device tree (m1n1 picks the Mac's),
   # U-Boot, then m1n1's settings, one per line.
@@ -160,7 +165,7 @@ in
           ${lib.optionalString cfg.identity.handoff ''
             PATH=${pkgs.util-linux}/bin:$PATH ${pkgs.python3.interpreter} ${./identity/install_identity.py} unique --esp ${esp}
           ''}
-          ${pkgs.python3.interpreter} ${bootBinTool} forget-extra-files --esp ${esp}
+          ${sekkaBootBin} forget-extra-files --esp ${esp}
           exec ${install} "$@"
         ''
       else
@@ -216,10 +221,11 @@ in
               fi
             done
           fi
-          PATH=${config.nix.package.out}/bin:$PATH ${pkgs.python3.interpreter} ${bootBinTool} install \
+          PATH=${config.nix.package.out}/bin:$PATH ${sekkaBootBin} install \
             --esp ${esp} --source ${bootBin} --system "$1" --recover-from /run/current-system
         '';
         system.build.appleSiliconBootBin = bootBin;
+        environment.systemPackages = [ bootBinTool ];
         # Which copy of boot.bin started this Mac: an installation keeps that
         # one as boot.bin.previous, and a copy put back from macOS is held.
         # Then it finishes a replacement a power cut interrupted, where
@@ -238,7 +244,7 @@ in
           serviceConfig = {
             Type = "oneshot";
             RemainAfterExit = true;
-            ExecStart = "${pkgs.python3.interpreter} ${bootBinTool} mark-booted --esp ${esp}";
+            ExecStart = "${sekkaBootBin} mark-booted --esp ${esp}";
           };
         };
 

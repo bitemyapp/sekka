@@ -69,14 +69,17 @@ On every boot loader installation:
    boot.bin, each as above; the record then names the new current and
    previous copies.
 
-  boot_bin.py install --esp /boot --source BOOT.BIN [--system TOPLEVEL]
-  boot_bin.py restore-previous --esp /boot   swap the two copies, and hold
-  boot_bin.py release --esp /boot            let installations replace a held copy
-  boot_bin.py mark-booted --esp /boot        at every start: this copy booted;
+Installed as the sekka-boot-bin command on every calamares.appleSilicon system
+(module.nix):
+
+  sekka-boot-bin install --esp /boot --source BOOT.BIN [--system TOPLEVEL]
+  sekka-boot-bin restore-previous --esp /boot  swap the two copies, and hold
+  sekka-boot-bin release --esp /boot           let installations replace a held copy
+  sekka-boot-bin mark-booted --esp /boot       at every start: this copy booted;
       then finish an interrupted replacement. Nothing when /run/current-system
       isn't /run/booted-system (a switch, not a start)
-  boot_bin.py status --esp /boot
-  boot_bin.py forget-extra-files --esp /boot before NixOS's systemd-boot
+  sekka-boot-bin status --esp /boot
+  sekka-boot-bin forget-extra-files --esp /boot  before NixOS's systemd-boot
       installer: stop it deleting boot.bin, which a generation from before
       this script installed with extraFiles
 """
@@ -545,7 +548,7 @@ def install(esp, new: bytes, source=None, system=None, recover_from=(), say=prin
             warn(
                 f"{ACTIVE} stays {held['kept']}, which was put back over this system's {new_digest} "
                 f"({held['how']}, {held['since']}). Make an older generation the default "
-                f"(nixos-rebuild boot --rollback), or run `boot_bin.py release --esp {esp}` to let the "
+                f"(nixos-rebuild boot --rollback), or run `sekka-boot-bin release --esp {esp}` to let the "
                 f"next installation put {new_digest} back."
             )
             return f"{ACTIVE} is held at {held['kept']}"
@@ -596,7 +599,7 @@ def restore_previous(esp, say=print, warn=None, disk=None) -> str:
         # Done already (a retry that can't tell): swapping again would undo it.
         return (
             f"{ACTIVE} is already the restored {held['kept']}; {PREVIOUS} keeps {held['replaced']}. "
-            f"`boot_bin.py release`, then an installation, puts that back."
+            f"`sekka-boot-bin release --esp {esp}`, then an installation, puts that back."
         )
     if not disk.exists(PREVIOUS):
         raise Failed(f"there is no {PREVIOUS} to restore")
@@ -615,7 +618,7 @@ def restore_previous(esp, say=print, warn=None, disk=None) -> str:
     transition(disk, record, "restore", old, old_entry, active, active_entry)
     return (
         f"{ACTIVE} is now {digest(old)} again; {PREVIOUS} keeps {digest(active) if active else 'what it had'}. "
-        f"Boot loader installations keep it until a different copy comes or `boot_bin.py release`; "
+        f"Boot loader installations keep it until a different copy comes or `sekka-boot-bin release --esp {esp}`; "
         f"make an older generation the default (nixos-rebuild boot --rollback) to stay with its system."
     )
 
@@ -645,7 +648,7 @@ def mark_booted(esp, say=print, warn=None, disk=None) -> str:
         return f"{ACTIVE} is missing"
     # What m1n1 started, before settling changes anything.
     d = file_digest(disk, ACTIVE)
-    result = _mark(disk, record, d, warn)
+    result = _mark(esp, disk, record, d, warn)
     settle(disk, record, say, warn)
     return result
 
@@ -659,7 +662,7 @@ def at_start(booted: str, current: str) -> bool:
     return os.path.exists(booted) and os.path.realpath(booted) == os.path.realpath(current)
 
 
-def _mark(disk, record, d, warn) -> str:
+def _mark(esp, disk, record, d, warn) -> str:
     p = record.get("pending") or {}
     changed = False
     for e in (record.get("current"), record.get("previous"), p.get("active"), p.get("previous")):
@@ -678,7 +681,7 @@ def _mark(disk, record, d, warn) -> str:
         # own copy is the one that didn't start, so hold this one.
         record["held"] = {"kept": d, "replaced": current["digest"], "how": "copied from boot.bin.previous", "since": now()}
         record["current"] = dict(previous)
-        warn(f"{ACTIVE} is {PREVIOUS}'s copy; boot loader installations keep it until `boot_bin.py release`")
+        warn(f"{ACTIVE} is {PREVIOUS}'s copy; boot loader installations keep it until `sekka-boot-bin release --esp {esp}`")
         changed = True
     if not changed:
         return f"{ACTIVE} ({d}) is recorded"
@@ -711,7 +714,7 @@ def forget_extra_files(esp, say=print, disk=None) -> str:
 
 
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(prog="sekka-boot-bin", description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
     i = sub.add_parser("install")
     i.add_argument("--esp", type=Path, required=True)
