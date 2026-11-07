@@ -224,6 +224,10 @@ def main():
         raise SystemExit("Select exactly one binary target to run")
     configure_startup(root, args.config_file)
     configure_content_store(root, args)
+    content_dirs = local_cas_dirs(args.config_file)
+    if content_dirs:
+        # The daemon clones cache hits from this CAS instead of downloading them.
+        os.environ["BUCK2_LOCAL_CAS_DIR"] = str(content_dirs[0])
     command = [os.environ["SEKKA_BUCK2_BIN"], "--isolation-dir", args.isolation_dir, "build" if args.command in ["outputs", "runtime"] else args.command, "--config-file", os.environ["SEKKA_BUCK2_CONFIG"], "--config", "sekka.execution=" + args.cache, "--config", "sekka.cache_write=" + str(args.cache_write).lower()]
     if os.environ.get("SEKKA_BUCK2_RUNTIME"):
         command += ["--config", "sekka.runtime=" + os.environ["SEKKA_BUCK2_RUNTIME"]]
@@ -236,8 +240,7 @@ def main():
         command += ["--show-full-json-output"]
     command += args.buck_arg + extra + passthrough
     os.chdir(root)
-    content_dirs = local_cas_dirs(args.config_file) if args.command in ["build", "test"] else []
-    if content_dirs and os.environ.get("BUCK2_LOCAL_CONTENT_STORE"):
+    if args.command in ["build", "test"] and content_dirs and os.environ.get("BUCK2_LOCAL_CONTENT_STORE"):
         # New objects are renamed into the store directory; lookups only
         # write worktree views. An unchanged directory has nothing to share.
         store = Path(os.environ["BUCK2_LOCAL_CONTENT_STORE"])
