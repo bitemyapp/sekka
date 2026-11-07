@@ -98,6 +98,24 @@ journal pass shared 10.0 GB in 15.8 s, one pair at a time. On up to 8 threads
 shared 6.6 GB in 3.5 s. The worktree then kept 0.03 GB of its 19.96 GB
 `buck-out` to itself.
 
+## Stale outputs in a worktree
+
+An edit gives each changed content-based output a new content-path
+directory and leaves the old one. Buck2's stale cleaning was off, and it
+needs deferred write actions, without which `clean --stale` printed
+"Skipping clean". With both on (`.buckconfig`), on a fresh service:
+
+| Step | Result | buck-out (exclusive) |
+| --- | --- | --- |
+| Release cold build | 742 actions in 110.7 s | 10.06 GB (0.01 GB) |
+| Shared-crate edit | 55 actions in 56.5 s | 13.35 GB (0.01 GB) |
+| `buck2 clean --stale=1m` | 4,457 paths, 12.4 GiB, in 0.9 s | 0.01 GB |
+| Release build again | 742 cached, 5.0 s | 5.02 GB (0.01 GB) |
+
+The configured policy is a daily pass for artifacts unused for 7 days, or
+12 hours under 10% free. Soroban's tests passed with deferred write actions
+(242 actions, local execution).
+
 ## Free-space sizing
 
 `build-service --local … autosize --dry-run` on the qualification service

@@ -697,7 +697,12 @@ storage run, a fresh worktree of an already-built source reused all 706
 actions and kept 8 MiB of its own build state beside 3.47 GB reflinked from
 the store; deduplicating the CAS against the store then cut the physical
 union by 15%. New build generations, not worktrees, are what grow: each one
-lands in the CAS until its LRU bound. Use `--cache remote` to offload
+lands in the CAS until its LRU bound. An edit's superseded content-based
+outputs stay in the worktree (3.3 GB for a release shared-crate edit),
+sharing their CAS blobs' extents until NativeLink evicts them. The stale
+cleaning described with the content store removes them. On the CAS host, a
+later build clones what it needs back: 742 release actions in 5.0 s after
+`clean --stale=1m`. Use `--cache remote` to offload
 execution, from another machine for example; its action-cache entries are
 separate from local execution's. [Results](docs/test-results/buck2/2026-11-06-storage-plan/README.md)
 

@@ -28,7 +28,11 @@ over long benchmark matrices. Builds, tests and measurements go to
     published content path) share the CAS blob's extents (`54ff881a`). One
     had kept its own: 1.1 GB of a cold dev worktree;
   - the engine's index of the CAS directory rescans outside its lock, and
-    misses wait for a scan in progress (`4f41ec88`).
+    misses wait for a scan in progress (`4f41ec88`);
+  - Buck2's daily stale cleaning is on in `.buckconfig` (7 days, or 12
+    hours under 10% free), with the deferred write actions it requires. An
+    edit's superseded content-based outputs otherwise stayed in buck-out
+    for good.
 - `build-service autosize` sizes the CAS to free disk space above a floor,
   and `dedupe` shares the CAS with a content store. `autosize` waits for an
   idle service before resizing, unless the disk is under half its floor.
