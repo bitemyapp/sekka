@@ -6,8 +6,11 @@ preceding Sekka patches.
 On the CAS host every blob the remote cache serves is already a file in
 NativeLink's filesystem store. With BUCK2_LOCAL_CAS_DIR naming its content
 directory, a missing artifact file is cloned from that file into its
-staged download instead of being fetched over gRPC, then finished and
-verified like any download. Names carry a generation, so an index maps
+staged download instead of being fetched over gRPC. The clone is verified
+by hash like any download, but is not ingested as a second content-store
+object: the CAS file holds the bytes, and the store records only a
+buffered view hint, so it can still recover the bytes from this worktree
+if NativeLink evicts them. Names carry a generation, so an index maps
 SHA-256 digest and size to the newest file and is rescanned at most once
 a second on a miss. An evicted or unopenable blob, another digest
 algorithm, or an injected test miss falls back to the network. The
@@ -43,9 +46,18 @@ index 089e121..f85cad4 100644
              daemon_buster: None,
              digest_algorithms: None,
 diff --git a/app/buck2_execute_impl/src/materializers/deferred/io_handler.rs b/app/buck2_execute_impl/src/materializers/deferred/io_handler.rs
-index db56c16..a41f0ca 100644
+index db56c16..afa6ba8 100644
 --- a/app/buck2_execute_impl/src/materializers/deferred/io_handler.rs
 +++ b/app/buck2_execute_impl/src/materializers/deferred/io_handler.rs
+@@ -216,7 +216,7 @@ impl DefaultIoHandler {
+                             if let DirectoryEntry::Leaf(ActionDirectoryMember::File(f)) = entry {
+                                 let name = path.join(entry_path.get());
+                                 let absolute = self.fs.resolve(&name);
+-                                let Some(download) =
++                                let Some(mut download) =
+                                     crate::materializers::local_content_store::Download::prepare(
+                                         absolute,
+                                         f.dupe(),
 @@ -225,7 +225,16 @@ impl DefaultIoHandler {
                                  else {
                                      continue;
@@ -65,7 +77,7 @@ index db56c16..a41f0ca 100644
                                  missing.push(download);
                                  files.push(NamedDigestWithPermissions {
 diff --git a/app/buck2_execute_impl/src/materializers/local_content_store.rs b/app/buck2_execute_impl/src/materializers/local_content_store.rs
-index fc397e2..35e6eef 100644
+index fc397e2..6ef2d53 100644
 --- a/app/buck2_execute_impl/src/materializers/local_content_store.rs
 +++ b/app/buck2_execute_impl/src/materializers/local_content_store.rs
 @@ -1255,6 +1255,85 @@ mod linux {
@@ -182,13 +194,27 @@ index fc397e2..35e6eef 100644
          #[test]
          fn reflink_store_buffers_advisory_writes_until_eviction() -> buck2_error::Result<()> {
              let temp = tempfile::tempdir()?;
-@@ -2203,6 +2303,25 @@ impl Download {
+@@ -2169,6 +2269,9 @@ pub(crate) struct Download {
+     destination: buck2_fs::paths::abs_norm_path::AbsNormPathBuf,
+     temporary: tempfile::TempPath,
+     metadata: buck2_common::file_ops::metadata::FileMetadata,
++    // Cloned from the local CAS: its file already holds the bytes, so the
++    // content store records only a view hint instead of a second object.
++    local: bool,
+ }
+ 
+ impl Download {
+@@ -2200,9 +2303,30 @@ impl Download {
+             destination,
+             temporary,
+             metadata,
++            local: false,
          }))
      }
  
 +    /// On the CAS host, fills the staged download from the local CAS instead of
 +    /// the network. `finish` verifies it like any download.
-+    pub(crate) fn clone_from_local_cas(&self) -> bool {
++    pub(crate) fn clone_from_local_cas(&mut self) -> bool {
 +        #[cfg(target_os = "linux")]
 +        {
 +            let digest = self.metadata.digest.data();
@@ -199,7 +225,8 @@ index fc397e2..35e6eef 100644
 +            let Some((hash, _)) = rendered.split_once(':') else {
 +                return false;
 +            };
-+            linux::clone_from_local_cas(hash, digest.size(), self.temporary.as_ref())
++            self.local = linux::clone_from_local_cas(hash, digest.size(), self.temporary.as_ref());
++            self.local
 +        }
 +        #[cfg(not(target_os = "linux"))]
 +        false
@@ -208,3 +235,26 @@ index fc397e2..35e6eef 100644
      pub(crate) fn name(&self) -> buck2_error::Result<String> {
          Ok(
              buck2_fs::paths::abs_norm_path::AbsNormPathBuf::new(self.temporary.to_path_buf())?
+@@ -2214,13 +2338,15 @@ impl Download {
+     pub(crate) fn finish(self, config: DigestConfig) -> buck2_error::Result<()> {
+         let path =
+             buck2_fs::paths::abs_norm_path::AbsNormPathBuf::new(self.temporary.to_path_buf())?;
+-        if !file(
+-            &path,
+-            self.metadata.digest.data(),
+-            self.metadata.is_executable,
+-            config,
+-            true,
+-        )? {
++        if self.local
++            || !file(
++                &path,
++                self.metadata.digest.data(),
++                self.metadata.is_executable,
++                config,
++                true,
++            )?
++        {
+             // Remote transport is not an integrity authority, even with the
+             // optional shared store disabled.
+             let expected = self.metadata.digest.data();
