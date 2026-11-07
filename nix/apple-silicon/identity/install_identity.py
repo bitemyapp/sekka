@@ -16,6 +16,13 @@ in /etc/nixos/identity.nix, and the boot entries NixOS rewrites.
       The UUIDs come from identity.nix's configuration when given, else from
       the running system, whose initrd checked them.
 
+  install_identity.py unique --esp /boot
+      Before NixOS's systemd-boot installer (module.nix, installBootLoader):
+      refuse when another partition carries the GPT UUID of the root or ESP
+      mounted now. The initrd counts once, as soon as its partitions appear;
+      a copy of this disk on USB usually appears later, and /boot could then
+      be the copy's.
+
 Nothing is written when any check fails. Every value here is a GPT partition
 UUID, lowercase, as the installer (installer/genkan/macos, handoff.rs) and
 udev write them; labels and filesystem UUIDs are never used, as every Sekka
@@ -248,6 +255,22 @@ def entry_identity(cmdline: str, configured: dict | None) -> dict:
     return configured
 
 
+def check_unique(listing: str, mounted: dict) -> None:
+    """Refuse when another partition carries the GPT UUID of the root or ESP
+    mounted now: a block-level copy of this disk. `listing` is lsblk's
+    PARTUUID column for every block device."""
+    found = [line.strip().lower() for line in listing.splitlines() if line.strip()]
+    for role, uuid in mounted.items():
+        if not uuid:
+            raise Refused(f"the {role} partition mounted now has no GPT partition UUID")
+        if found.count(uuid) > 1:
+            raise Refused(
+                f"{found.count(uuid)} partitions carry the GPT UUID {uuid} of the {role} mounted now, so the "
+                "boot entries and m1n1/boot.bin could be written to a copy of this disk. Detach the copied "
+                "disk, restart, and try again."
+            )
+
+
 def partuuid_of_mount(mountpoint: str) -> str | None:
     source = subprocess.run(
         ["findmnt", "-n", "-o", "SOURCE", "--target", mountpoint], capture_output=True, text=True, check=True
@@ -270,10 +293,16 @@ def main(argv=None) -> int:
     f.add_argument("--esp", type=Path, default=Path("/boot"))
     f.add_argument("--root")
     f.add_argument("--esp-partuuid")
+    u = sub.add_parser("unique")
+    u.add_argument("--esp", type=Path, default=Path("/boot"))
     args = parser.parse_args(argv)
     cmdline = Path("/proc/cmdline").read_text()
     try:
-        if args.command == "record":
+        if args.command == "unique":
+            mounted = {"root": partuuid_of_mount("/"), "ESP": partuuid_of_mount(str(args.esp))}
+            listing = subprocess.run(["lsblk", "-rno", "PARTUUID"], capture_output=True, text=True, check=True).stdout
+            check_unique(listing, mounted)
+        elif args.command == "record":
             handoff = args.esp / HANDOFF_PATH
             if not handoff.exists():
                 raise Refused(f"{handoff} is missing: this system wasn't installed by Sekka's Mac installer")

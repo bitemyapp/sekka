@@ -138,5 +138,24 @@ class Entries(unittest.TestCase):
             ii.fill_entries(self.esp, MOUNTED)
 
 
+class Unique(unittest.TestCase):
+    # lsblk -rno PARTUUID: a disk (no PARTUUID), its stub, ESP and root,
+    # another disk and its partition.
+    LISTING = f"\n4c0e7c1a-6c11-4b4a-9d55-8c5b6f0a1e22\n{ESP}\n{ROOT}\n\n0b8a6d1e-2f61-4c55-8f7e-3a3c2c1d9e01\n"
+
+    def test_one_copy_of_each_passes(self):
+        ii.check_unique(self.LISTING, MOUNTED)
+
+    def test_a_copy_of_the_disk_attached_later_is_refused(self):
+        # A block-level copy on USB, enumerated after the initrd counted.
+        for copy in (ESP, ROOT, ESP.upper()):
+            with self.subTest(copy=copy), self.assertRaisesRegex(ii.Refused, "Detach the copied disk"):
+                ii.check_unique(self.LISTING + copy + "\n", MOUNTED)
+
+    def test_an_unidentified_mount_is_refused(self):
+        with self.assertRaises(ii.Refused):
+            ii.check_unique(self.LISTING, {"root": ROOT, "esp": None})
+
+
 if __name__ == "__main__":
     unittest.main()

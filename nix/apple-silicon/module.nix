@@ -140,11 +140,16 @@ in
     };
   };
 
-  # NixOS's systemd-boot builder deletes every file its extraFiles markers
-  # list, and syncs that, before extraInstallCommands run. A generation from
-  # before boot_bin.py installed m1n1/boot.bin that way (the original J514S
-  # installation's, or one rolled back to): its marker is removed first, so
-  # boot.bin stays in place until boot_bin.py replaces it.
+  # Before NixOS's systemd-boot installer writes anything:
+  # - with the installer's handoff (identity.nix), no other partition may
+  #   carry the GPT UUID of the root or ESP mounted now: the initrd counts
+  #   them once, as soon as they appear, and a copy of this disk on USB
+  #   usually appears later, when /boot may have been mounted from it;
+  # - NixOS's builder deletes every file its extraFiles markers list, and
+  #   syncs that, before extraInstallCommands run. A generation from before
+  #   boot_bin.py installed m1n1/boot.bin that way (the original J514S
+  #   installation's, or one rolled back to): its marker is removed first,
+  #   so boot.bin stays in place until boot_bin.py replaces it.
   options.system.build.installBootLoader = lib.mkOption {
     apply =
       install:
@@ -152,6 +157,9 @@ in
         pkgs.writeScript "install-systemd-boot-sekka.sh" ''
           #!${pkgs.runtimeShell}
           set -euo pipefail
+          ${lib.optionalString cfg.identity.handoff ''
+            PATH=${pkgs.util-linux}/bin:$PATH ${pkgs.python3.interpreter} ${./identity/install_identity.py} unique --esp ${esp}
+          ''}
           ${pkgs.python3.interpreter} ${bootBinTool} forget-extra-files --esp ${esp}
           exec ${install} "$@"
         ''

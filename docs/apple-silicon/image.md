@@ -204,6 +204,15 @@ Nixpkgs). With `calamares.appleSilicon.identity.handoff` (`identity.nix`):
     (20), listing the partitions present;
   - two partitions carry the same GPT UUID (a cloned disk);
   - udev's `by-sekka` link is missing or points elsewhere.
+
+  It counts once, as soon as the partitions appear. A block-level copy of
+  this disk on USB (dd, or a tool that keeps the GPT's UUIDs) usually
+  appears later, after USB comes up, and can then take the `by-partuuid`
+  and `by-sekka` links, so `/boot` could be mounted from it. Every boot
+  loader installation therefore counts again before NixOS's installer
+  writes anything (`install_identity.py unique`, from `module.nix`'s
+  `installBootLoader`) and refuses while another partition carries the
+  GPT UUID of the root or ESP mounted then.
 - **`sekka-install-identity.service`** (first start, before the display
   manager; only while the configuration names no identity) checks
   `/boot/sekka/install.json` (canonical form, schema, fields, size), checks
