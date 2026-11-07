@@ -533,6 +533,16 @@ the root image's size there. On Linux the guest gets a 32-bit physical
 address space (`highmem=off`, so 3 GiB): on this 16 KiB-page host, with
 memory fragmented by the page cache, KVM couldn't allocate the stage-2 table
 of the default 40-bit space (`KVM_CREATE_VM: Cannot allocate memory`).
+Its virtio devices use virtio 1.0 transports: Linux's virtio-gpu driver
+refuses QEMU's legacy virtio-mmio default without a message, leaving no
+`/dev/dri`. Both images start Aizome's compositor on the Mac GPU's render
+node by name (`AIZOME_DRM_DEVICE`, `module.nix`), which a VM hasn't, so
+each boot first gives that name to the VM's own render node, the one
+VM-only stand-in, then starts the login screen afresh and requires greetd
+and `aizome-greeter` to stay up 15 s without a restart
+(`vm/login-screen.sh`). Without the stand-in the compositor stops at once
+and greetd gives up after five tries; an earlier product run passed only
+because its checks ran before greetd had started.
 Given the developer bundle (`mac-installer-j514s`) it lays the disk out as
 the unmodified Asahi installer does and checks two boots as before; the first
 has a stand-in for a product install attached (a FAT ESP with another serial
@@ -567,7 +577,7 @@ The checks in each boot (`vm/guest-checks.sh`):
 
 | Boot | Checks |
 | --- | --- |
-| first (A, B and D) | systemd `running`, no failed units, graphical target and display manager active; the command line names A; `/` and `/boot` are A's partitions by GPT UUID; `by-sekka` links are A's; B's partitions present and unmounted; the product label and UUID on A and B only; the developer label, UUID and serial on D's partitions only, which their `by-label` and `by-uuid` links name, and D unmounted; store registered (path count equals the registration); root grew; stand-in firmware on its tmpfs; `identity.nix` written; shipped lock unchanged; the shipped flake evaluates offline to the image's toplevel; `nixos-rebuild build` offline gives it; the flake with `identity.nix` evaluates; no account with a login shell, root locked; setup waiting, the flake with setup's sample `setup.nix` evaluating under its host name, and, with that `setup.nix` changed to `de_DE` and `de`, `nixos-rebuild build` offline (when setup is in the image); a garbage collection would keep every seeded source; `boot.bin` matches its record and `sekka-boot-bin.service` marked it booted |
+| first (A, B and D) | the login screen up and staying up; systemd `running`, no failed units, graphical target and display manager active; the command line names A; `/` and `/boot` are A's partitions by GPT UUID; `by-sekka` links are A's; B's partitions present and unmounted; the product label and UUID on A and B only; the developer label, UUID and serial on D's partitions only, which their `by-label` and `by-uuid` links name, and D unmounted; store registered (path count equals the registration); root grew; stand-in firmware on its tmpfs; `identity.nix` written; shipped lock unchanged; the shipped flake evaluates offline to the image's toplevel; `nixos-rebuild build` offline gives it; the flake with `identity.nix` evaluates; no account with a login shell, root locked; setup waiting, the flake with setup's sample `setup.nix` evaluating under its host name, and, with that `setup.nix` changed to `de_DE` and `de`, `nixos-rebuild build` offline (when setup is in the image); a garbage collection would keep every seeded source; `boot.bin` matches its record and `sekka-boot-bin.service` marked it booted |
 | second (A) | registration not repeated; `identity.nix` checked, not rewritten; `boot_bin.py` replace, no-op and restore on the VM's FAT filesystem (a scratch directory, not the real `boot.bin`); an update (a module imported from `configuration.nix`) built offline with `nixos-rebuild boot`; every entry filled, naming A, firmware first |
 | updated (A) | generation 2 booted; the update applied; mounts by partition UUID; no first-start identity service; `nixos-rebuild boot --rollback` |
 | rolled-back (A) | generation 1 booted again, the update gone, `by-sekka` mounts |
@@ -586,75 +596,76 @@ Sekka from its internal disk. Every VM disk was a file in a scratch
 directory; nothing touched the computer's own disks. Logs are kept outside
 the repository with the run; this records what they show.
 
-**Candidate.** `mac-release-j514s` built from `c22238c5` (phase 1 with
-first-boot setup cherry-picked from `feat/apple-silicon-installer`
-`1f913f65`), clean:
+**Candidate.** `mac-release-j514s` built from `3d43a5c4` on
+`feat/apple-silicon-installer` (the image and first-boot setup after their
+second review: separate product identities, the FAT-safe `boot.bin`
+replacement, the engine's manifest shape; and the harness's login-screen
+check), clean:
 
 | Artifact | Size | SHA-256 |
 | --- | --- | --- |
-| `os/sekka-j514s-c22238c.zip` | 14,285,936,786 | `b3ee1ca9…1161c0` |
-| `root.img` (in the zip) | 14,206,087,168 | `3ba0585d…b1912f` |
-| `manifest.json` | 4,365 | `34854486…7a01b3` |
-| `installer_data.json` | 470 | `a5e36410…b9c00f` |
-| `nixos/flake.lock` | 17,459 | `40b35c13…194cc4` |
+| `os/sekka-j514s-3d43a5c.zip` | 14,151,363,339 | `2e10e5de…5897d43ba` |
+| `root.img` (in the zip) | 14,071,513,088 | `b4a451b9…96d4d8e85` |
+| `manifest.json` | 4,580 | `a74fb941…b67f151e` |
+| `installer_data.json` | 445 | `d7c736c6…818bdf52` |
+| `nixos/flake.lock` | 17,459 | `3d38e080…ed21245f4` |
 
-Toplevel `sb4wxrxr…-nixos-system-unnamed-26.11.20261103.1d06008`, 1,938
-registered paths, 11.09 GB of NAR data, of which 13 are seeded sources.
-Minimum allocation 31,985,762,304 bytes, recommended 114,911,346,688.
+2,117 registered paths, 11.12 GB of NAR data, of which 13 are seeded
+sources. Root filesystem label `sekka-system`, UUID
+`5ecca000-0000-4000-8000-000000000002`. Minimum allocation 31,717,326,848
+bytes, recommended 114,508,693,504. ESP inventory
+`sha256:15e47f5d…db966143`.
 
 **Build-time checks** (all passed):
 
-- `check_image.py`: registration byte-identical, 1,938 paths registered,
+- `check_image.py`: registration byte-identical, 2,117 paths registered,
   in the closure and in `/nix/store`, each with its NAR hash and size read
-  from the image's bytes (66 s on an earlier candidate of the same size);
-  `/etc/nixos` as shipped; label and UUID.
+  from the image's bytes; `/etc/nixos` as shipped; label and UUID.
 - `manifest.py`: the zip against the ESP inventory and root image,
-  `installer_data.json`, ESP room for 5 generations of 67.4 MB, the
-  catalog's rules. The contract crate's own canonicalizer
-  (`examples/canonicalize`) gives the manifest's exact bytes and digest, and
-  accepts a handoff written as the harness writes it.
-- `mac-image-tests`: Genkan's `Template::parse` accepts the Mac template
-  and lock and refuses one with an extra root input; the parser's output
-  equals the renderer's; 22 Python unit tests (boot.bin interruptions at
-  each step, bad read-back, full ESP, damaged record, restore; handoff
-  parsing and refusals, identity record, entry filling); the initrd check
-  and udev helper against fake roots (20 cases).
-- The shipped flake and lock, evaluated on the host, gave the image's own
-  toplevel derivation; evaluated in an empty chroot store with no network
-  and only the seeded sources, it did too (this found the seed set:
-  without bdwgc, crane, fenix or Determinate's Nixpkgs it fails).
-- The x86_64 derivations of `genkan`, `tools`, `yukimi`, `aizome`,
-  `installed-systems` and `t6030-backlight` are unchanged from the base
-  commit, and the PC installed lock is byte for byte the same.
-- Read-only on this J514S: `identity/check.sh` read the real
-  `/proc/device-tree/chosen/asahi,efi-system-partition`
-  (`910de5ca-…-8028916e4d78`, its ESP), accepted this installation's own
-  identity and refused an entry naming another ESP.
+  `installer_data.json`, ESP room for 5 generations, the catalog's rules.
+- The engine's own reader (`sekka_engine.assets`: `load_manifest`,
+  `check_payload`, `load_template`, `esp_inventory_digest`), run over this
+  release's files as they are, accepted the manifest, payload and installer
+  data, and computed the same ESP inventory.
+- `mac-image-tests`: the template check through Genkan's parser, the
+  scripts' unit tests (boot.bin against the vfat model at every power cut,
+  restore, hold, the one-time transition; the identity check and record),
+  the manifest against the engine, Yukimi's edits, and the post-setup
+  systems for Aizome/de_DE and Tatami/ja_JP.
 
-**VM run** (`boot-image-in-vm.sh`, KVM, 4 vCPUs, 3 GiB, no network):
+**VM run** (`boot-image-in-vm.sh`, KVM, 4 vCPUs, 3 GiB, no network), 77
+checks, all passed:
 
 | Step | Result |
 | --- | --- |
 | payload and `root.img` against the manifest | pass |
 | entry with unfilled placeholders | stopped in the initrd with the placeholder message, 10 s after QEMU started |
-| entry naming a missing partition | stopped with the message listing the partitions present, 31 s after QEMU started (20 s wait) |
+| entry naming a missing partition | stopped with the message listing the partitions present, 30 s after QEMU started (20 s wait) |
 | disk B | differs from A only in its two GPT copies |
-| first boot, A and B attached | pass: login prompt at 23 s; systemd-boot came from **disk B's** ESP (byte-identical, naming A), yet `/` and `/boot` were A's partitions by GPT UUID; `by-label/sekka-root` pointed at B's root; B unmounted; 1,938 paths registered; root grew from 14.2 to 18.0 GB; stand-in firmware on tmpfs; `identity.nix` written; shipped flake evaluated offline to the image's toplevel in 16 s; no-change `nixos-rebuild build` offline in 8 s; flake with `identity.nix`, and with setup's sample `setup.nix` under host `analytical`, evaluated offline; no account, root locked; setup's socket active |
-| second boot | pass: registration not repeated; `identity.nix` kept; `boot_bin.py` replace, no-op and restore on FAT; update built offline in 22 s (15 derivations, the initrd among them); every entry filled with A's UUIDs, firmware first; `boot.bin` unchanged |
+| every boot | the login screen (setup, as no one has an account) up for 15 s with no restart, greetd and `aizome-greeter` running, on the VM's render node standing for the Mac GPU's; systemd `running`, no failed units |
+| first boot, A, B and developer disk D attached | pass: login prompt at 23 s; `/` and `/boot` were A's partitions by GPT UUID; B present and unmounted; the product label and UUID only on A and B; the developer serial, label and UUID only on D's partitions, D unmounted; 2,117 paths registered once; root grew from 14.07 to 17.90 GB; stand-in firmware on tmpfs; `identity.nix` written; shipped flake evaluated offline to the image's toplevel in 17 s; no-change `nixos-rebuild build` offline in 8 s; no account, root locked; setup's socket active; with setup's sample `setup.nix` (host `analytical`) the flake evaluated offline, and with it changed to `de_DE` and `de` `nixos-rebuild build` ran offline in 18 s; a collection would keep all 13 seeded sources; `boot.bin` matched its record and was marked booted |
+| second boot | pass: registration not repeated; `identity.nix` checked, not rewritten; `boot_bin.py` replace, no-op and restore on the VM's FAT filesystem; update built offline in 19 s; every entry filled with A's UUIDs, firmware first |
 | updated generation | pass: generation 2 with the update, mounted by partition UUID, no identity service; `nixos-rebuild boot --rollback` |
 | rolled back | pass: generation 1 again, update gone, `by-sekka` mounts |
 
-First-boot setup's own VM test (`first-boot.vm-test`, a generic NixOS
-guest, not this image) passed all ten subtests on the same tree, with the
-Aizome built from it and `userspaceIrqchip = true`; with KVM's in-kernel
-interrupt controller its guest stalled at boot ("Shell did not start in
-time"), as its documentation says it does on this host.
+The developer image (`mac-installer-j514s` from `cffe16bc`, the same
+image sources) passed both of its boots: the login screen up for 15 s with
+no restart (it has the developer account, so the people), systemd
+`running`, no failed units, the store registered, the firmware on tmpfs,
+and `by-label/sekka-root` and `by-uuid/5ECC-A5E1` the only such names,
+leading to its own root and ESP, which were the ones mounted, with a
+product stand-in attached in the first.
 
-Earlier runs found and fixed: the debug shell's PATH; build users counted
-as accounts; the placeholder message written before the virtio console
-existed; KVM's stage-2 allocation failing under fragmented memory; and the
-flake's pre-setup name (`nixos-rebuild --rollback` looked up `nixos`). The
-phase-1 image without first-boot setup (`6f963208`) passed the same boots.
+Earlier candidates (`b7efec23`, `c22238c5`, `c0b99f13`, `6f963208`)
+passed the boots of their time, but their "display manager active" was
+read before greetd had started: on the Mac GPU's render node, which a VM
+hasn't, the login screen stopped at once. Runs found and fixed: the debug
+shell's PATH; build users counted as accounts; the placeholder message
+written before the virtio console existed; KVM's stage-2 allocation
+failing under fragmented memory; the flake's pre-setup name
+(`nixos-rebuild --rollback` looked up `nixos`); two inputs with the same
+contents linked twice among the seeded sources; and the login screen's
+GPU in the VM.
 
 **Not shown by any of this:** m1n1 loading this `boot.bin`, U-Boot,
 systemd-boot on the Mac, the T6030 display and GPU handoff, Apple's
