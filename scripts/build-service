@@ -172,6 +172,33 @@ def cas_content_dirs(m):
         Path(m["directory"]) / domain / "data/cas/content" for domain in m["domains"]]
 
 
+def autosize_target(current, configured, free, floor, minimum, maximum):
+    """The CAS byte bound that keeps `floor` bytes of the filesystem free.
+
+    The cache may grow into free space above the floor and shrinks below its
+    current size when free space falls under it. None keeps the configured
+    bound: shrinking waits for a 5% change and growing for 25%, so a resize
+    (which restarts the backend) stays rare."""
+    target = max(minimum, min(maximum, current + free - floor))
+    return target if target < 0.95 * configured or target > 1.25 * configured else None
+
+
+def resize(m, manifest, cas_bytes, ac_bytes):
+    if min(cas_bytes, ac_bytes) < 1:
+        raise SystemExit("Cache bounds must be positive")
+    if m.get("ephemeral_cache") and cas_bytes + ac_bytes > m["backend_data_bytes"]:
+        raise SystemExit("New cache budget exceeds the job's immutable tmpfs quota; provision a larger job instead")
+    m.update(cas_bytes=cas_bytes, ac_bytes=ac_bytes)
+    for domain in m["domains"]:
+        for role in ("worker", "backend"):
+            assert_owned(m, name(m, domain, role))
+            docker(m, "stop", "--timeout", "3600", name(m, domain, role))
+        put(m, domain + "/backend.json", json.dumps(backend_config(m)), 0o644)
+        put(m, domain + "/worker.json", json.dumps(worker_config(m)), 0o644)
+    up(m)
+    manifest.write_text(json.dumps(m, indent=2) + "\n")
+
+
 def dedupe(m, stores):
     """Share extents between persistent CAS blobs and identical content-store objects.
 
@@ -594,6 +621,11 @@ def main():
                              help="Content store directory (repeatable; default: the per-user Buck2 store)")
     retain = sub.add_parser("retain")
     retain.add_argument("store_paths", nargs="+", help="Already-provisioned immutable toolchain/native store roots")
+    autosize = sub.add_parser("autosize", help="Fit the CAS bound to free disk space above a floor (deployment host)")
+    autosize.add_argument("--min-free-bytes", type=int, help="Free space to keep (default: 10%% of the filesystem)")
+    autosize.add_argument("--min-cas-bytes", type=int, default=4 * 1024**3)
+    autosize.add_argument("--max-cas-bytes", type=int, default=256 * 1024**3)
+    autosize.add_argument("--dry-run", action="store_true", help="Report the decision without resizing")
     resize = sub.add_parser("resize")
     resize.add_argument("--cas-bytes", type=int, required=True)
     resize.add_argument("--ac-bytes", type=int, required=True)
@@ -662,22 +694,30 @@ def main():
         up(m)
         return
     if args.command == "resize":
-        if min(args.cas_bytes, args.ac_bytes) < 1:
-            raise SystemExit("Cache bounds must be positive")
-        if m.get("ephemeral_cache") and args.cas_bytes + args.ac_bytes > m["backend_data_bytes"]:
-            raise SystemExit("New cache budget exceeds the job's immutable tmpfs quota; provision a larger job instead")
-        m.update(cas_bytes=args.cas_bytes, ac_bytes=args.ac_bytes)
-        for domain in m["domains"]:
-            assert_owned(m, name(m, domain, "worker"))
-            docker(m, "stop", "--timeout", "3600", name(m, domain, "worker"))
-
-        def reconfigure(domain):
-            put(m, domain + "/backend.json", json.dumps(backend_config(m)), 0o644)
-            put(m, domain + "/worker.json", json.dumps(worker_config(m)), 0o644)
-        restart_backends(m, 300, reconfigure)
-        up(m)
-        args.manifest.write_text(json.dumps(m, indent=2) + "\n")
+        resize(m, args.manifest, args.cas_bytes, args.ac_bytes)
         print(json.dumps({"deployment": m["name"], "cas_bytes": m["cas_bytes"], "ac_bytes": m["ac_bytes"]}))
+        return
+    if args.command == "autosize":
+        if not LOCAL:
+            raise SystemExit("autosize measures the deployment host's filesystem; run it there with --local")
+        if m.get("ephemeral_cache"):
+            raise SystemExit("An ephemeral CI cache keeps its fixed tmpfs quota")
+        stats = os.statvfs(m["directory"])
+        free = stats.f_bavail * stats.f_frsize
+        floor = (args.min_free_bytes if args.min_free_bytes is not None
+                 else stats.f_blocks * stats.f_frsize // 10)
+        # Logical bytes, as NativeLink counts them; compression and shared
+        # extents make the physical cost smaller, so the floor errs safe.
+        current = sum(entry.stat().st_size for content in cas_content_dirs(m) if content.is_dir()
+                      for folder in os.scandir(content) if folder.is_dir(follow_symlinks=False)
+                      for entry in os.scandir(folder.path) if entry.is_file(follow_symlinks=False))
+        target = autosize_target(current, m["cas_bytes"], free, floor, args.min_cas_bytes, args.max_cas_bytes)
+        decision = {"deployment": m["name"], "free_bytes": free, "floor_bytes": floor,
+                    "cas_logical_bytes": current, "configured_cas_bytes": m["cas_bytes"],
+                    "target_cas_bytes": target, "resized": bool(target and not args.dry_run)}
+        if target and not args.dry_run:
+            resize(m, args.manifest, target, m["ac_bytes"])
+        print(json.dumps(decision))
         return
     if args.command == "metrics":
         containers = [name(m, d, role) for d in m["domains"] for role in ("network", "gateway", "backend", "worker")]
