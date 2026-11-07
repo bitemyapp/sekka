@@ -25,30 +25,30 @@ algorithm, or an injected test miss falls back to the network. The
 directory joins the daemon startup identity.
 
 diff --git a/app/buck2_common/src/init.rs b/app/buck2_common/src/init.rs
-index 089e121..f85cad4 100644
+index 8e159ff..b126442 100644
 --- a/app/buck2_common/src/init.rs
 +++ b/app/buck2_common/src/init.rs
-@@ -628,6 +628,8 @@ pub struct DaemonStartupConfig {
-     pub local_content_store: Option<String>,
-     pub local_content_store_max_bytes: Option<String>,
-     pub local_content_store_max_entries: Option<String>,
+@@ -631,6 +631,8 @@ pub struct DaemonStartupConfig {
+     /// The private layer `BUCK2_EXTRA_EXTERNAL_CONFIG` names. The daemon reads it from its
+     /// own environment, so a client naming another layer needs another daemon.
+     pub extra_external_config: Option<String>,
 +    /// A NativeLink CAS content directory on this host, cloned instead of downloaded.
 +    pub local_cas_dir: Option<String>,
      pub num_tokio_workers: Option<usize>,
      pub daemon_buster: Option<String>,
      pub digest_algorithms: Option<String>,
-@@ -733,6 +735,7 @@ impl DaemonStartupConfig {
-                 .map(str::to_owned),
+@@ -752,6 +754,7 @@ impl DaemonStartupConfig {
              local_content_store_max_entries: buck2_env!("BUCK2_LOCAL_CONTENT_STORE_MAX_ENTRIES")?
                  .map(str::to_owned),
+             extra_external_config: buck2_env!("BUCK2_EXTRA_EXTERNAL_CONFIG")?.map(str::to_owned),
 +            local_cas_dir: buck2_env!("BUCK2_LOCAL_CAS_DIR")?.map(str::to_owned),
              num_tokio_workers: config
                  .parse(BuckconfigKeyRef {
                      section: "build",
-@@ -839,6 +842,7 @@ impl DaemonStartupConfig {
-             local_content_store: None,
+@@ -859,6 +862,7 @@ impl DaemonStartupConfig {
              local_content_store_max_bytes: None,
              local_content_store_max_entries: None,
+             extra_external_config: None,
 +            local_cas_dir: None,
              num_tokio_workers: None,
              daemon_buster: None,
