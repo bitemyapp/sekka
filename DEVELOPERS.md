@@ -782,17 +782,25 @@ systemd-run --user --unit sekka-cas-autosize --on-calendar '*:0/15' \
 The out-link keeps the controller from garbage collection. `systemd-run`
 makes a transient timer that ends with the user's service manager; for a
 lasting one, install the same command as a user service and timer. Either
-way the user's service manager must hold the `docker` group, and one started
-before the user joined it does not until it restarts.
+way the user's service manager must hold the `docker` group. One started
+before the user joined it lacks the group until it restarts; until then,
+run the command through `/run/wrappers/bin/sg docker -c '…'`, which takes
+the group from `/etc/group`. On wx-workstation, that form of the timer ran
+`autosize` and exited cleanly.
 
-While the backend restarts (`resize`, `restart`, `runtime`), the gateway
-answers `UNAVAILABLE`, which Buck2 retries for about 1.5 s. On
-wx-workstation, a resize 4 s into a build kept its 706 actions succeeding,
-with a 1.2 s restart on a 24 GB CAS. Before this, the gateway's HTML 502 failed
-a fresh worktree's blob reads. A slower restart, for example of a much
-larger CAS, can outlast the retries, so run these by hand only when the
-service is idle. `up` reloads a running gateway's configuration without
-dropping its connections.
+While `resize` and `runtime` restart a backend, its gateway is paused:
+clients wait rather than fail, and resume once the backend accepts
+connections. A NativeLink backend loads its whole CAS index before listening:
+0.5 s at 42,000 entries (24 GB) and 1.7–2.6 s at 500,000 (about the 256 GiB
+maximum) on wx-workstation. The longer case outlasts Buck2's 1.5 s of
+retries. Requests in flight to the old backend get `UNAVAILABLE`, which
+clients retry; the gateway used to answer with an HTML 502 that failed a
+fresh worktree's blob reads. With the pause, eight probe loops through two
+resizes at 500,000 entries saw no errors, at most a 1.7 s stall. Fresh
+worktrees built through resizes 3 s and 7 s in, with no failures. `up`
+reloads a running gateway's configuration without dropping its connections.
+`restart` still restarts the gateways too, so run it when the service is
+idle.
 
 For eviction/restart evidence, `cache-inventory --timeout SECONDS` snapshots
 persistent cache names and sizes with the owned backends temporarily paused.

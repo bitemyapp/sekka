@@ -25,9 +25,11 @@ over long benchmark matrices. Builds, tests and measurements go to
 - `build-service autosize` sizes the CAS to free disk space above a floor,
   and `dedupe` shares the CAS with a content store. `autosize` waits for an
   idle service before resizing, unless the disk is under half its floor.
-- A backend restart (resize, restart, runtime) no longer fails builds in
-  flight. The gateway answers `UNAVAILABLE`, which Buck2 retries for about
-  1.5 s; a restart took 1.0–1.2 s on wx.
+- A backend restart by `resize` or `runtime` no longer fails builds in
+  flight: the gateway is paused until the backend listens, so clients wait.
+  That takes up to 2.6 s at 500,000 CAS entries, beyond Buck2's 1.5 s of
+  retries. In-flight requests get a retryable `UNAVAILABLE` instead of an
+  HTML 502. PR #291 carries the same fix (`251253d7`).
 - [The single-CAS evidence](test-results/buck2/2026-11-06-single-cas/README.md)
   holds the targeted repros and a full storage-plan run.
 - On wx, at these commits: the engine's check phase, `checks.buck2-backend`
@@ -68,19 +70,17 @@ it. Incremental state is private per worktree (~0.7 GB after a dev build).
 
 1. **Review and land.** Land PR #291 first. Then open a PR for
    `feat/buck2-single-cas` or fold it in; the user decides.
-   - If #291 lands alone, take the gateway hunk of `9bd7a3ef` with it.
-     #291's `restart`, `resize` and `runtime` otherwise fail blob reads in
-     running builds with an HTML 502.
    - Its storage-plan run passed every gate except eviction recovery. That
      failure was a controller bug, fixed in `84954a1a`, and a targeted
      eviction repro passed.
    - Rerun the plan once if a full eviction-stage record is wanted.
 2. **Make `autosize` routine** on the deployment host: DEVELOPERS.md has the
-   timer recipe, tried on wx. It resizes only on a 5% shrink or a 25%
-   growth, and only when idle. On wx, the user's service manager has run
-   since 2026-11-03, before callen joined `docker`, so its units cannot
-   reach Docker. Logging out of every session or rebooting fixes that; it
-   is the user's call.
+   timer recipe. It resizes only on a 5% shrink or a 25% growth, and only
+   when idle. On wx, the user's service manager has run since 2026-11-03,
+   before callen joined `docker`, so the recipe needs its `sg docker -c`
+   form there; that form ran `autosize` cleanly. No timer is installed:
+   the only long-lived services on wx are 2026-11-05's, which are not this
+   work's to manage.
 3. **NativeLink fork**, only if needed: stable digest paths (dropping the
    client's index) and casita-style retention (roots, and action-cache-first
    eviction). Cloned blobs are already kept recent: `has()` touches each key
