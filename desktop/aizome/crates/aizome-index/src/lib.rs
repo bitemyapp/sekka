@@ -141,6 +141,8 @@ pub struct Report {
     /// Folders looked at, and those listed (the others hadn't changed).
     pub folders: usize,
     pub listed: usize,
+    /// Files seen in them, known or new.
+    pub files: usize,
     /// Things found that weren't known, and known ones gone or changed.
     pub added: usize,
     pub removed: usize,
@@ -525,6 +527,9 @@ fn walk_known(
         .collect::<std::result::Result<_, _>>()?;
     for (cid, name, (_, kind, size, mtime)) in children {
         let child = path.join(OsStr::from_bytes(&name));
+        if kind == Kind::File as i64 {
+            report.files += 1;
+        }
         if kind == Kind::Folder as i64 {
             stack.push((child, cid));
         } else if stat
@@ -577,6 +582,9 @@ fn list(
         let kind = Kind::of(t);
         if cache || (kind == Kind::Folder && skipped(&name)) {
             continue;
+        }
+        if kind == Kind::File {
+            report.files += 1;
         }
         let child = path.join(&name);
         let (size, mtime) = match (stat, kind) {

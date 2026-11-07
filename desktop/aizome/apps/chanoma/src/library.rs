@@ -409,14 +409,57 @@ pub struct Read {
     pub pictures: HashSet<PathBuf>,
 }
 
-/// Hears how a look goes: the folder being read (as `folders` has it), and
-/// how many of the folders in it so far.
-pub type Progress<'a> = &'a dyn Fn(&Path, usize);
+/// How a look at the folders goes, for the screens that show it.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub struct Look {
+    /// The folder being read, as the settings have it; none once they're
+    /// all read and the games are being recognised.
+    pub folder: Option<PathBuf>,
+    /// Folders and files read in it so far.
+    pub folders: usize,
+    pub files: usize,
+    /// Its own folders read, of how many: how far through it is. The index
+    /// reads them one whole at a time, so this only grows. None where it
+    /// has none.
+    pub parts: Option<(usize, usize)>,
+    /// Its read is over.
+    pub over: bool,
+}
 
-/// `progress` hears how many folders have been looked at so far.
-pub fn read(index: &mut Index, root: &Path, refresh: bool, progress: &dyn Fn(usize)) -> Read {
+/// Hears how a look goes.
+pub type Progress<'a> = &'a dyn Fn(&Look);
+
+/// `progress` hears how far the look at `root` has got.
+pub fn read(index: &mut Index, root: &Path, refresh: bool, progress: Progress) -> Read {
+    let given = root.to_path_buf();
     let root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
-    let tell = |r: &aizome_index::Report| progress(r.folders);
+    // Its own folders, as the index will read them (not hidden ones).
+    let parts = std::fs::read_dir(&root)
+        .map(|rd| {
+            rd.flatten()
+                .filter(|e| {
+                    e.file_type().is_ok_and(|t| t.is_dir()) && !e.file_name().as_encoded_bytes().starts_with(b".")
+                })
+                .count()
+        })
+        .unwrap_or(0);
+    let seen = std::cell::RefCell::new(HashSet::new());
+    let tell = |r: &aizome_index::Report| {
+        let over = r.took > std::time::Duration::ZERO;
+        let mut seen = seen.borrow_mut();
+        if let Some(part) = r.at.strip_prefix(&root).ok().and_then(|p| p.components().next()) {
+            seen.insert(part.as_os_str().to_owned());
+        }
+        // The one being read isn't done yet.
+        let done = if over { parts } else { seen.len().saturating_sub(1).min(parts) };
+        progress(&Look {
+            folder: Some(given.clone()),
+            folders: r.folders,
+            files: r.files,
+            parts: (parts > 0).then_some((done, parts)),
+            over,
+        });
+    };
     let how = Refresh { progress: Some(&tell), ..Refresh::default() };
     if refresh && let Err(e) = index.refresh(&root, &how) {
         log::warn!("chanoma: reading {}: {e}", root.display());
@@ -481,7 +524,7 @@ pub fn read_all(index: &mut Index, folders: &[PathBuf], refresh: bool, progress:
     order
         .into_iter()
         .map(|i| {
-            let mut r = read(index, &folders[i], refresh, &|n| progress(&folders[i], n));
+            let mut r = read(index, &folders[i], refresh, progress);
             r.files.retain(|f| seen.insert(f.clone()));
             (i, r)
         })
@@ -575,7 +618,7 @@ fn held_of(folders: &[PathBuf], reads: &[(usize, Read)]) -> Vec<Held> {
 /// The games under `folders`, as the index has them (refreshed first
 /// when `refresh`).
 pub fn scan_games(index: &mut Index, folders: &[PathBuf], cores: &Cores, refresh: bool) -> (Vec<Game>, usize) {
-    let reads = read_all(index, folders, refresh, &|_, _| {});
+    let reads = read_all(index, folders, refresh, &|_| {});
     games_of(&reads, cores, &mut held_of(folders, &reads))
 }
 
@@ -775,14 +818,14 @@ fn shelves_of(reads: &[(usize, Read)], held: &mut [Held]) -> Vec<Shelf> {
 /// a lone video (or a folder of one) a film. As the index has them
 /// (refreshed first when `refresh`).
 pub fn scan_videos(index: &mut Index, folders: &[PathBuf], refresh: bool) -> Vec<Shelf> {
-    let reads = read_all(index, folders, refresh, &|_, _| {});
+    let reads = read_all(index, folders, refresh, &|_| {});
     shelves_of(&reads, &mut held_of(folders, &reads))
 }
 
 /// What each of `folders` holds, counted as [`scan`] counts (refreshed
 /// first when `refresh`).
 pub fn held_in(index: &mut Index, folders: &[PathBuf], cores: &Cores, refresh: bool) -> Vec<Held> {
-    let reads = read_all(index, folders, refresh, &|_, _| {});
+    let reads = read_all(index, folders, refresh, &|_| {});
     let mut held = held_of(folders, &reads);
     games_of(&reads, cores, &mut held);
     shelves_of(&reads, &mut held);
@@ -869,9 +912,19 @@ pub fn scan(
     progress: Progress,
 ) -> Library {
     let cores = Cores::scan(core_dirs);
-    let reads = read_all(index, folders, refresh, progress);
+    // Whether a read took long enough to be shown going (an unfinished
+    // folder was told of): then recognising the games is shown too.
+    let shown = std::cell::Cell::new(false);
+    let tell = |l: &Look| {
+        shown.set(shown.get() || !l.over);
+        progress(l);
+    };
+    let reads = read_all(index, folders, refresh, &tell);
     let mut held = held_of(folders, &reads);
     let (mut games, unplayable) = games_of(&reads, &cores, &mut held);
+    if shown.get() {
+        progress(&Look::default());
+    }
     if let Some(dir) = metadata {
         let began = std::time::Instant::now();
         let (by_name, by_content) = crate::metadata::describe(&mut games, index, dir, refresh);
@@ -968,7 +1021,7 @@ mod tests {
         }
         std::fs::write(games.join("PS1/Disc.cue"), "FILE \"Disc (Track 1).bin\" BINARY\n  TRACK 01 MODE2/2352\n")
             .unwrap();
-        let lib = scan(&mut index(&d), std::slice::from_ref(&games), &[cores_dir], None, true, &|_, _| {});
+        let lib = scan(&mut index(&d), std::slice::from_ref(&games), &[cores_dir], None, true, &|_| {});
         let keys: Vec<&str> = lib.games.iter().map(|g| g.key.as_str()).collect();
         assert_eq!(keys, ["psx/PS1/Disc.cue", "snes/SNES/Kirby (USA).sfc", "gb/GB/Tetris.gb"]);
         assert_eq!(lib.games[1].title, "Kirby");

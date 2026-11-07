@@ -15,7 +15,7 @@ use aizome_kit::sidestep_ui::Canvas;
 use aizome_kit::theme::{Role, Theme};
 
 use super::look::*;
-use super::{Fit, Focus, H, HEAD_Y, MARGIN, TOP, Target, W};
+use super::{Fit, Focus, H, MARGIN, TOP, Target, W};
 
 /// What's in the list under the choice.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -157,11 +157,7 @@ impl Picker {
     pub fn paint(&self, c: &mut Canvas, theme: &Theme, focus: Focus) {
         let head = Rect::new(0.0, 30.0, W, LIST_TOP - 4.0);
         if c.needs(head) {
-            let w = text_mid(c, theme, &self.title, MARGIN, HEAD_Y, font(HEADLINE - 4.0, BOLD), theme.text());
-            if !self.note.is_empty() {
-                let spec = font(SMALL + 2.0, REGULAR);
-                text_mid(c, theme, &self.note, MARGIN + w + 24.0, HEAD_Y + 3.0, spec, theme.text3());
-            }
+            super::head_title(c, theme, &self.title, &self.note);
             self.paint_crumbs(c, theme);
         }
         let side = self.side_first(focus);

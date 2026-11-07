@@ -18,17 +18,19 @@ use aizome_chanoma::app::state::{Item, Recent, Subtitles as StateSubtitles};
 use aizome_chanoma::app::{Input, MenuKind, Modal, Screen};
 use aizome_chanoma::clock::ManualClock;
 use aizome_chanoma::devtools::{Field, Focused};
+use aizome_chanoma::library::{Look, SYSTEMS};
 use aizome_chanoma::pad::{Button, Dir, Family, PadEvent, PadInfo};
 use aizome_chanoma::retro::ffi::*;
 use aizome_chanoma::rules::{PinHash, Settings};
 use aizome_chanoma::store::Dirs;
 use aizome_chanoma::ui::keyboard::{Key, Shift};
 use aizome_chanoma::ui::pinpad::button_of;
+use aizome_chanoma::ui::{MARGIN, W};
 use aizome_chanoma::{Chanoma, Config, Msg};
 use aizome_kit::layout::Point;
 use aizome_kit::sidestep_ui::{Modifiers, NamedKey};
 use aizome_kit::testing::Harness;
-use aizome_kit::theme::{Appearance, ThemeChoice};
+use aizome_kit::theme::{Appearance, Theme, ThemeChoice};
 use aizome_kit::{Size, WindowKey};
 use aizome_media::CueBody;
 
@@ -1041,6 +1043,92 @@ fn a_service_that_protects_its_shows_needs_google_chrome() {
     choose(&mut h, "Netflix");
     assert_eq!(h.program().screen, Screen::Watching);
     go_home(&mut h);
+}
+
+#[test]
+fn every_system_tab_stays_in_sight_and_all_games_comes_first() {
+    // A game for each system Chanoma plays, each with its core: more tabs
+    // than fit across the screen.
+    let (dirs, cores) = household("tabs", |s| {
+        for sys in SYSTEMS {
+            let file = format!("{} Quest (USA).{}", sys.short, sys.extensions[0]);
+            s.games_allowed.insert(format!("{}/{}/{file}", sys.id, sys.folders[0]));
+        }
+    });
+    let games = cores.parent().unwrap().join("Games");
+    for sys in SYSTEMS {
+        std::fs::create_dir_all(games.join(sys.folders[0])).unwrap();
+        let file = format!("{} Quest (USA).{}", sys.short, sys.extensions[0]);
+        std::fs::write(games.join(sys.folders[0]).join(file), b"CHANOMA").unwrap();
+        std::fs::write(cores.join(format!("{}_libretro.so", sys.cores[0])), b"").unwrap();
+    }
+    let clock = ManualClock::at(2026, 10, 31, 17, 0);
+    let mut h = harness(config(dirs, cores, clock));
+
+    // On Home, the way to all of them leads the games' shelf.
+    let home = h.program().home_view();
+    let shelf = home.shelves.iter().find(|s| s.title == "Games").expect("the games' shelf");
+    assert_eq!(shelf.tiles[0].label, "All games");
+    choose(&mut h, "All games");
+    assert_eq!(h.program().screen, Screen::Games);
+
+    // Along every tab with RB: the chosen one whole on the screen, and
+    // named beside the title.
+    let theme = Theme::night();
+    let n = h.program().games_view().tabs.len();
+    assert!(n > 12, "more systems than fit across: {n}");
+    for i in 0..n {
+        let g = h.program().games_view();
+        assert_eq!(g.tab, i);
+        let r = g.tab_rects(&theme)[i];
+        assert!(r.x0 >= MARGIN - 0.5 && r.x1 <= W - MARGIN + 0.5, "{} at {r:?}", g.tabs[i]);
+        if i > 0 {
+            assert!(g.subtitle.starts_with(&g.tabs[i]), "{}", g.subtitle);
+        }
+        if g.tabs[i] == "PlayStation" {
+            shot(&mut h, "14-games-playstation");
+        }
+        input(&mut h, Input::Next);
+    }
+    // Round to the first again; LB from there is the last, in sight too.
+    assert_eq!(h.program().games_view().tab, 0);
+    input(&mut h, Input::Prev);
+    assert_eq!(h.program().games_view().tab, n - 1);
+    shot(&mut h, "14-games-last-system");
+    // A click on a tab chooses it.
+    let rects = h.program().games_view().tab_rects(&theme);
+    let w = h.window();
+    h.click(w, rects[n - 2].center());
+    assert_eq!(h.program().games_view().tab, n - 2);
+}
+
+#[test]
+fn reading_a_folder_shows_quietly_on_home_with_how_far_it_has_got() {
+    let (dirs, cores) = household("reading", |_| {});
+    let games = cores.parent().unwrap().join("Games");
+    let clock = ManualClock::at(2026, 10, 31, 17, 0);
+    let mut h = harness(config(dirs, cores, clock));
+    let activity = |h: &Harness<Chanoma>| h.program().chrome(Vec::new()).activity;
+    assert_eq!(activity(&h), None, "nothing going on");
+    let look = |folders, files, parts, over| Look { folder: Some(games.clone()), folders, files, parts, over };
+    // A look the index answers at once (its only word is that it's over)
+    // isn't shown.
+    h.send(Msg::Looking(look(3, 40, Some((2, 2)), true)));
+    assert_eq!(activity(&h), None);
+    // One that goes on: which folder, how far through its own folders, and
+    // how many files so far.
+    h.send(Msg::Looking(look(212, 4812, Some((12, 31)), false)));
+    let a = activity(&h).expect("shown");
+    assert!(a.label.starts_with("Reading "), "{}", a.label);
+    assert_eq!((a.step.as_str(), a.count.as_str()), ("12 of 31 folders", "4,812 files"));
+    assert_eq!(a.progress, Some(387));
+    shot(&mut h, "15-home-reading");
+    // Then the games recognised, and gone once they show.
+    h.send(Msg::Looking(Look::default()));
+    assert_eq!(activity(&h).map(|a| a.label).as_deref(), Some("Recognising the games"));
+    let library = h.program().library.clone();
+    h.send(Msg::Scanned(library, true));
+    assert_eq!(activity(&h), None);
 }
 
 fn hold(h: &mut Harness<Chanoma>, b: Button, pressed: bool) {

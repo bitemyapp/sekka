@@ -42,7 +42,7 @@ use crate::pad::mapping::{Database, Mapping};
 use crate::pad::{Button, Dir, Family, PadEvent, PadInfo, Pads, Shared};
 use crate::rules::{Gate, Lockout, Settings, Usage};
 use crate::store::Dirs;
-use crate::ui::{self, Chrome, Focus, Overlay, PadBadge, Scene, Target, View};
+use crate::ui::{self, Activity, Chrome, Focus, Overlay, PadBadge, Scene, Target, View};
 use state::Recent;
 
 pub use crate::APP_ID;
@@ -155,9 +155,8 @@ pub enum Msg {
     Suggested(Vec<crate::folders::Suggestion>),
     /// The account's password checked, for a forgotten PIN: right or not.
     SignedIn(bool),
-    /// Looking through a folder: it (as the settings have it), and how many
-    /// of the folders in it so far.
-    Looking(PathBuf, usize),
+    /// How far looking through the folders has got.
+    Looking(crate::library::Look),
     /// Looking for games on the drives: where, and how many folders so far.
     Finding(String, usize),
     /// The folders of games found on the drives (`true`: looked again, done).
@@ -446,9 +445,11 @@ pub struct Chanoma {
     pub setup: Option<grownups::PadSetUp>,
     /// Looking for games on the drives, and what was found.
     pub finding: Option<grownups::Finding>,
-    /// A folder being looked through (as the settings have it), and how
-    /// many of the folders in it so far.
-    pub looking: Option<(PathBuf, usize)>,
+    /// How far looking through the folders has got, while it goes.
+    pub looking: Option<crate::library::Look>,
+    /// The look has gone on long enough to show (an unfinished folder's
+    /// read was told of): one the index answers at once isn't shown.
+    pub look_shown: bool,
     pub site: Option<(WindowKey, String, String)>,
     /// The one-instance socket, served once the program runs.
     pub instance: Option<std::os::unix::net::UnixListener>,
@@ -535,6 +536,7 @@ impl Chanoma {
             search: None,
             reset: None,
             looking: None,
+            look_shown: false,
             setup: None,
             finding: None,
             site: None,
@@ -1441,6 +1443,13 @@ impl Chanoma {
             // Beside the keyboard over a page: it goes.
             (Target::Outside, false) => self.close_keyboard(cx),
             (Target::Section(i), false) if self.screen == Screen::Folders => self.picker_click(Some(i), None, cx),
+            // A system's tab.
+            (Target::Section(i), false) if self.screen == Screen::Games => {
+                self.games_tab = i;
+                self.focus.col = 0;
+                self.games_focus = 0;
+                self.want_art(cx);
+            }
             (Target::Item(i), false) if self.screen == Screen::Folders => self.picker_click(None, Some(i), cx),
             (Target::Tile(row, col), false) => {
                 self.focus = Focus { row, col };
@@ -1513,7 +1522,24 @@ impl Chanoma {
             family: self.family,
             ok: self.ok_button(self.family),
             banner,
+            activity: self.activity(),
         }
+    }
+
+    /// The folders being read, for the header: which, how far through its
+    /// own folders (the bar) and how many files so far; then the games
+    /// being recognised.
+    fn activity(&self) -> Option<Activity> {
+        let look = self.looking.as_ref().filter(|_| self.look_shown)?;
+        Some(match &look.folder {
+            Some(folder) => Activity {
+                label: format!("Reading {}", self.said(folder).0),
+                step: look.parts.map(|(done, n)| format!("{done} of {n} folders")).unwrap_or_default(),
+                count: format!("{} files", ui::grouped(look.files)),
+                progress: look.parts.map(|(done, n)| (done * 1000 / n.max(1)) as u16),
+            },
+            None => Activity { label: "Recognising the games".into(), progress: Some(1000), ..Activity::default() },
+        })
     }
 
     /// The header without Chanoma's name, for screens with a title there.
@@ -1971,6 +1997,7 @@ impl Program for Chanoma {
                 self.library = lib;
                 if fresh {
                     self.looking = None;
+                    self.look_shown = false;
                 }
                 self.reshow();
                 self.scanned |= fresh;
@@ -2020,7 +2047,10 @@ impl Program for Chanoma {
             Msg::Listed(reading, listing, inside) => self.listed(reading, listing, inside),
             Msg::Known(reading, known) => self.known(reading, known),
             Msg::Suggested(s) => self.suggested(s, cx),
-            Msg::Looking(folder, n) => self.looking = Some((folder, n)),
+            Msg::Looking(look) => {
+                self.look_shown |= !look.over;
+                self.looking = Some(look);
+            }
             Msg::SignedIn(ok) => self.signed_in(ok, cx),
             Msg::SiteName(s) => {
                 if let Some(site) = &mut self.site {
@@ -2132,22 +2162,22 @@ impl Chanoma {
         let cores = self.config.core_dirs.clone();
         let metadata = self.config.metadata.clone();
         let dirs = self.config.dirs.clone();
-        let scan = move |index: &mut aizome_index::Index, refresh: bool, progress: &dyn Fn(&std::path::Path, usize)| {
+        let scan = move |index: &mut aizome_index::Index, refresh: bool, progress: crate::library::Progress| {
             Arc::new(crate::library::scan(index, &folders, &cores, metadata.as_deref(), refresh, progress))
         };
         match self.sender.clone() {
             Some(tx) => {
                 let _ = std::thread::Builder::new().name("chanoma-scan".into()).spawn(move || {
                     let mut index = dirs.open_index();
-                    tx.send(Msg::Scanned(scan(&mut index, false, &|_, _| {}), false));
-                    // How far each folder's look has got, for the settings.
-                    let tell = |f: &std::path::Path, n| {
-                        tx.send(Msg::Looking(f.to_path_buf(), n));
+                    tx.send(Msg::Scanned(scan(&mut index, false, &|_| {}), false));
+                    // How far the look has got, for Home and the settings.
+                    let tell = |l: &crate::library::Look| {
+                        tx.send(Msg::Looking(l.clone()));
                     };
                     tx.send(Msg::Scanned(scan(&mut index, true, &tell), true));
                 });
             }
-            None => cx.spawn(move || Msg::Scanned(scan(&mut dirs.open_index(), true, &|_, _| {}), true)),
+            None => cx.spawn(move || Msg::Scanned(scan(&mut dirs.open_index(), true, &|_| {}), true)),
         }
     }
 

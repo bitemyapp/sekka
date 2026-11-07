@@ -75,6 +75,7 @@ fn a_second_look_lists_only_what_changed() {
     // The root, snes, psx, Disc Game and cache (listed, its contents not
     // kept); not .hidden or node_modules.
     assert_eq!((first.folders, first.listed), (5, 5), "{first:?}");
+    assert_eq!(first.files, 5, "the five kept, not the cache's or what's hidden: {first:?}");
     assert_eq!(
         t.names(&index),
         [
@@ -95,6 +96,7 @@ fn a_second_look_lists_only_what_changed() {
     // Nothing changed: every folder looked at, none listed.
     let again = index.refresh(&t.root, &Refresh::default()).unwrap();
     assert_eq!((again.folders, again.listed), (5, 0), "{again:?}");
+    assert_eq!(again.files, 5, "files known count too: {again:?}");
     assert!(!again.any());
     assert_eq!(index.generation(&t.root).unwrap(), g);
 

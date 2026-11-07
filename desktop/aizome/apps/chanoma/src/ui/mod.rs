@@ -75,6 +75,39 @@ pub struct Chrome {
     pub ok: Button,
     /// A line along the foot (no controller, a battery running out).
     pub banner: Option<String>,
+    /// Something going on, shown in the header: the folders being read.
+    pub activity: Option<Activity>,
+}
+
+/// Work going on that the header shows, quietly: what it is, how far it
+/// has got (with a bar where that's known) and how it's going, never how
+/// long it has left.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub struct Activity {
+    /// "Reading Extreme Pro".
+    pub label: String,
+    /// How far through, in words: "12 of 31 folders".
+    pub step: String,
+    /// How much so far: "4,812 files".
+    pub count: String,
+    /// How far through, in thousandths.
+    pub progress: Option<u16>,
+}
+
+/// The header's activity's width.
+pub const ACTIVITY_W: f64 = 480.0;
+
+/// A count as it's read aloud: 7,549.
+pub fn grouped(n: usize) -> String {
+    let digits = n.to_string();
+    let mut out = String::new();
+    for (i, d) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i).is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(d);
+    }
+    out
 }
 
 impl Chrome {
@@ -221,7 +254,9 @@ impl Scene {
             Some(Overlay::Pin(p)) => {
                 return pinpad::hit(d, p.done, p.forgot).map(Target::Key).or_else(|| outside(pinpad::frame()));
             }
-            Some(Overlay::Menu(m)) => return m.hit(d).map(Target::Item).or_else(|| outside(m.frame())),
+            Some(Overlay::Menu(m)) => {
+                return m.hit(d, self.modal_focus).map(Target::Item).or_else(|| outside(m.frame()));
+            }
             Some(Overlay::Keyboard(k)) => {
                 return k.hit(d).map(Target::Key).or_else(|| outside(keyboard::Keyboard::frame()));
             }
@@ -238,7 +273,7 @@ impl Scene {
         }
         match &self.view {
             View::Home(h) => h.hit(self.focus, d).map(|(row, col)| Target::Tile(row, col)),
-            View::Grid(g) => g.hit(self.focus, d).map(Target::Item),
+            View::Grid(g) => g.tab_hit(d).map(Target::Section).or_else(|| g.hit(self.focus, d).map(Target::Item)),
             View::Settings(p) => p.hit(self.focus, d),
             View::Picker(p) => p.hit(self.focus, d),
             View::Message(m) => m.hit(d).map(Target::Item),
@@ -505,20 +540,71 @@ pub fn toast(c: &mut Canvas, theme: &Theme, t: &str, note: Note) {
         Note::Outside => (Icon::Shield, theme.text2()),
         Note::Drive => (Icon::HardDrive, theme.role(Role::Warning)),
     };
-    let w = (RAIL + 32.0 + 36.0 + 20.0 + size.width + 40.0).round();
+    // As wide as it says, but never past the margins: a long one is cut.
+    let chrome_w = RAIL + 32.0 + 36.0 + 20.0 + 40.0;
+    let room = W - 2.0 * MARGIN - chrome_w;
+    let t = if size.width > room { fit_text(theme, t, room, spec) } else { t.to_owned() };
+    let w = (chrome_w + size.width.min(room)).ceil();
     let r = Rect::new((W / 2.0 - w / 2.0).round(), 36.0, (W / 2.0 + w / 2.0).round(), 116.0);
     floating(c, theme, r);
     c.fill_rect(Rect::new(r.x0, r.y0, r.x0 + RAIL, r.y1), color);
     icon(c, glyph, Point::new(r.x0 + RAIL + 32.0 + 18.0, r.center().y), 36.0, color);
-    text_mid(c, theme, t, r.x0 + RAIL + 32.0 + 36.0 + 20.0, r.center().y, spec, theme.text());
+    text_mid(c, theme, &t, r.x0 + RAIL + 32.0 + 36.0 + 20.0, r.center().y, spec, theme.text());
+}
+
+/// A screen's title where Home has its name, and a note after it (how
+/// many, or what's going on), both kept short of the header's right side.
+pub fn head_title(c: &mut Canvas, theme: &Theme, title: &str, note: &str) {
+    let room = W - MARGIN - HEAD_RIGHT - MARGIN;
+    let spec = font(HEADLINE - 4.0, BOLD);
+    let title = fit_text(theme, title, room, spec);
+    let w = text_mid(c, theme, &title, MARGIN, HEAD_Y, spec, theme.text());
+    let left = room - w - 24.0;
+    if !note.is_empty() && left > 80.0 {
+        let spec = font(SMALL + 2.0, REGULAR);
+        text_mid(c, theme, &fit_text(theme, note, left, spec), MARGIN + w + 24.0, HEAD_Y + 3.0, spec, theme.text3());
+    }
+}
+
+/// What the header's right side may take: the clock, four controllers,
+/// the time left and grown-up mode.
+pub const HEAD_RIGHT: f64 = 760.0;
+
+/// The header's activity, its right edge at `right`.
+fn paint_activity(c: &mut Canvas, theme: &Theme, a: &Activity, right: f64) {
+    let r = Rect::new(right - ACTIVITY_W, HEAD_Y - 30.0, right, HEAD_Y + 30.0);
+    let accent = theme.role(Role::Accent);
+    icon(c, Icon::FolderSearch, Point::new(r.x0 + 18.0, HEAD_Y), 32.0, theme.text2());
+    let x = r.x0 + 52.0;
+    let small = mono(CAPTION, REGULAR);
+    // What it is, and how far through (at the right, the same line).
+    let (top, below) = (HEAD_Y - 13.0, HEAD_Y + 17.0);
+    let step = if a.step.is_empty() { 0.0 } else { text_right(c, theme, &a.step, r.x1, top, small, theme.text3()) };
+    let spec = font(SMALL, MEDIUM);
+    let label = fit_text(theme, &a.label, r.x1 - x - step - 16.0, spec);
+    text_mid(c, theme, &label, x, top, spec, theme.text2());
+    // The bar, then how much so far: its growing says how fast it goes.
+    let count =
+        if a.count.is_empty() { 0.0 } else { text_right(c, theme, &a.count, r.x1, below, small, theme.text3()) };
+    let track = Rect::new(x, below - 4.0, r.x1 - count - if count > 0.0 { 16.0 } else { 0.0 }, below + 4.0);
+    c.fill_rect(track, theme.sunk());
+    if let Some(p) = a.progress {
+        let done = Rect::new(track.x0, track.y0, track.x0 + track.width() * f64::from(p.min(1000)) / 1000.0, track.y1);
+        if done.width() >= 1.0 {
+            c.fill_rect(done, accent);
+        }
+    }
 }
 
 /// The header (Chanoma's name; grown-up mode, the controllers, the time
 /// left and the clock) and the hints along the foot.
 pub fn paint_chrome(c: &mut Canvas, theme: &Theme, ch: &Chrome) {
+    // Where the left side ends: the name, or a screen's own title.
+    let mut left_end = MARGIN + W - 2.0 * MARGIN - HEAD_RIGHT;
     if ch.brand {
         mark(c, theme, Point::new(MARGIN, HEAD_Y - 18.0), 9.0);
-        text_mid(c, theme, "Chanoma", MARGIN + 54.0, HEAD_Y, font(TITLE, BOLD), theme.text());
+        left_end =
+            MARGIN + 54.0 + text_mid(c, theme, "Chanoma", MARGIN + 54.0, HEAD_Y, font(TITLE, BOLD), theme.text());
     }
     let mut right = W - MARGIN;
     if !ch.clock.is_empty() {
@@ -542,21 +628,38 @@ pub fn paint_chrome(c: &mut Canvas, theme: &Theme, ch: &Chrome) {
         right -= 36.0 + 32.0;
     }
     if ch.grownup {
-        chip(c, theme, "Grown-up", right - 16.0, HEAD_Y, 18.0);
+        right = chip(c, theme, "Grown-up", right - 16.0, HEAD_Y, 18.0).x0;
     }
-    if let Some(b) = &ch.banner {
-        let w = text_right(c, theme, b, W - MARGIN, FOOT_Y, font(SMALL + 2.0, MEDIUM), theme.text());
-        icon(c, Icon::Gamepad2, Point::new(W - MARGIN - w - 30.0, FOOT_Y), 36.0, theme.role(Role::Warning));
+    // Before the right side, where it leaves room after the left's.
+    if let Some(a) = &ch.activity
+        && right - 40.0 - ACTIVITY_W >= left_end + 48.0
+    {
+        paint_activity(c, theme, a, right - 40.0);
     }
     let mut x = MARGIN;
     for (b, what) in &ch.hints {
         x = hint(c, theme, ch.family, *b, what, x, FOOT_Y);
+    }
+    // At the right of the foot, cut short of the hints.
+    if let Some(b) = &ch.banner {
+        let spec = font(SMALL + 2.0, MEDIUM);
+        let b = fit_text(theme, b, W - MARGIN - x - HINT_GAP - 48.0, spec);
+        if !b.is_empty() {
+            let w = text_right(c, theme, &b, W - MARGIN, FOOT_Y, spec, theme.text());
+            icon(c, Icon::Gamepad2, Point::new(W - MARGIN - w - 30.0, FOOT_Y), 36.0, theme.role(Role::Warning));
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn counts_are_grouped_by_thousands() {
+        let said: Vec<String> = [0, 999, 1000, 7549, 1_234_567].into_iter().map(grouped).collect();
+        assert_eq!(said, ["0", "999", "1,000", "7,549", "1,234,567"]);
+    }
 
     fn scene(overlay: Option<Overlay>, hints: Vec<(Button, String)>) -> Scene {
         let chrome = Chrome { hints, family: Family::Xbox, ..Chrome::default() };
