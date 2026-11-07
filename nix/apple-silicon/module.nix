@@ -140,6 +140,25 @@ in
     };
   };
 
+  # NixOS's systemd-boot builder deletes every file its extraFiles markers
+  # list, and syncs that, before extraInstallCommands run. A generation from
+  # before boot_bin.py installed m1n1/boot.bin that way (the original J514S
+  # installation's, or one rolled back to): its marker is removed first, so
+  # boot.bin stays in place until boot_bin.py replaces it.
+  options.system.build.installBootLoader = lib.mkOption {
+    apply =
+      install:
+      if cfg.enable && config.boot.loader.systemd-boot.enable then
+        pkgs.writeScript "install-systemd-boot-sekka.sh" ''
+          #!${pkgs.runtimeShell}
+          set -euo pipefail
+          ${pkgs.python3.interpreter} ${bootBinTool} forget-extra-files --esp ${esp}
+          exec ${install} "$@"
+        ''
+      else
+        install;
+  };
+
   config = lib.mkIf cfg.enable (
     lib.mkMerge [
       {
@@ -174,12 +193,12 @@ in
 
         # U-Boot has no EFI variables to write.
         boot.loader.efi.canTouchEfiVariables = lib.mkForce false;
-        # m1n1/boot.bin is shared by every generation, so it is replaced
-        # verified and its previous copy kept (boot-bin/boot_bin.py), not
-        # with systemd-boot's extraFiles, which delete it first. On a system
-        # that had it in extraFiles, NixOS deletes it once more before this
-        # runs; the copy the running system installed is then kept from its
-        # closure.
+        # m1n1/boot.bin is shared by every generation, so it is replaced in
+        # the order FAT needs, verified, and a copy that booted is kept
+        # (boot-bin/boot_bin.py), not with systemd-boot's extraFiles, which
+        # delete it first. A system that had it in extraFiles keeps NixOS's
+        # marker for it, from which NixOS's builder would delete it again:
+        # installBootLoader (below) removes the marker first.
         boot.loader.systemd-boot.extraInstallCommands = ''
           if [ -f ${esp}/vendorfw/firmware.cpio ]; then
             for entry in ${esp}/loader/entries/nixos-*.conf; do
@@ -193,6 +212,20 @@ in
             --esp ${esp} --source ${bootBin} --system "$1" --recover-from /run/current-system
         '';
         system.build.appleSiliconBootBin = bootBin;
+        # Which copy of boot.bin started this Mac: an installation keeps that
+        # one as boot.bin.previous, and a copy put back from macOS is held.
+        # It never fails the boot.
+        systemd.services.sekka-boot-bin = {
+          description = "Record that m1n1/boot.bin started this Mac";
+          wantedBy = [ "multi-user.target" ];
+          after = [ "local-fs.target" ];
+          unitConfig.RequiresMountsFor = [ esp ];
+          serviceConfig = {
+            Type = "oneshot";
+            RemainAfterExit = true;
+            ExecStart = "${pkgs.python3.interpreter} ${bootBinTool} mark-booted --esp ${esp}";
+          };
+        };
 
         boot.initrd.systemd.initrdBin = [
           pkgs.coreutils

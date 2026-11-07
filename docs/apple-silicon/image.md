@@ -201,27 +201,87 @@ settings, and all generations share it. NixOS's `extraFiles` deleted it and
 then copied the new one in place on every switch, so an interruption could
 leave no second stage, and the replaced copy was lost. `boot-bin/boot_bin.py`
 now replaces it on every boot loader installation (`module.nix`, for every
-`calamares.appleSilicon` system):
+`calamares.appleSilicon` system).
 
-1. Leftovers of an interrupted run (`*.new`) are removed.
-2. Nothing is written when the active copy already has the new digest.
-3. The ESP must have room for both copies plus 4 MiB.
-4. The active copy is written to `m1n1/boot.bin.previous.new`, flushed,
-   read back from the disk (its pages dropped first) and checked, then
-   renamed over `m1n1/boot.bin.previous`, and the directory flushed.
-5. `sekka/boot-bin.json` records the replacement as pending.
-6. The new copy is written to `m1n1/boot.bin.new`, flushed, read back and
-   checked, renamed over `m1n1/boot.bin`, the directory flushed, and the
-   active copy read back once more.
-7. `sekka/boot-bin.json` (`sekka.mac.boot-bin/1`, canonical JSON) records
+**What FAT leaves after a power cut.** A FAT file is a directory entry
+(name, first cluster, size), a chain in the FAT and data clusters, and
+Linux's vfat (`fs/fat`, read in the linux-aurora 7.1.12 source) writes
+them back in no order it promises:
+
+- `rename(2)` over an existing name gives the renamed file the target's
+  entry but writes the new first cluster and size there only when the
+  file's inode is written back; it marks the source entry deleted in the
+  directory's buffer; the replaced file's clusters are freed when its
+  inode is evicted, which is at once unless something holds it open. A
+  directory `fsync` writes the directory's changed sectors and the FAT,
+  not the renamed inode, so the old procedure (`os.replace`, then a
+  directory `fsync`) could leave `boot.bin` naming freed clusters for the
+  30–45 s until writeback, with `boot.bin.previous` in the same state.
+- A file's `fsync` writes its entry only if its inode is still dirty;
+  background writeback may already have copied it into a directory sector
+  it hasn't written. Only `syncfs(2)` certainly writes every entry.
+- The ESP is marked dirty in its boot sector while Linux has it mounted,
+  and stays so after a power cut. m1n1's FAT reader (rust-fatfs 0.4)
+  ignores the flag, and reads the first FAT.
+
+So a name is replaced (`commit`) by holding the replaced file open (its
+clusters stay allocated), renaming, `fsync`ing the directory (the source
+entry's removal reaches the disk first), `syncfs` (the target entry names
+the new clusters, however its inode was written), and only then closing
+the replaced file, which frees its clusters. At every instant the disk's
+entry names either the old clusters, allocated and intact, or the new
+ones, written, read back and flushed before the rename.
+
+The one state it can't exclude: a writeback of the renamed inode during the
+rename, or in the microseconds before the directory's `fsync`, then a power
+cut, leaves the target and its staged copy (`boot.bin` and `boot.bin.new`)
+naming the same new clusters. `boot.bin` is complete in it. Deleting or
+truncating either would free the other's clusters, so `boot_bin.py` checks
+every leftover with `FIBMAP` before removing it and refuses, changing
+nothing, when it shares the target's first block. `fsck.vfat`, which
+systemd runs on `/boot` at every start, resolves shared clusters by
+truncating one of the two names, so the message says to copy `boot.bin`
+somewhere safe first.
+
+`boot-bin/test_boot_bin.py` runs the real procedure against `FatModel`, a
+model of these semantics (directory sectors, inode writeback at any moment,
+the FAT, eviction, `fsync` and `syncfs` as the kernel source has them). After
+every system call it takes every state a power cut can leave, with 128, 16, 2
+or 1 entries per directory sector, and checks that `boot.bin` is certainly
+one complete copy, that once the new copy can be active the replaced one is
+certainly `boot.bin.previous`, and that only a file and its staged copy ever
+share clusters. It mounts every such state again and checks that the next
+run finishes with the new copy active and the old one kept, or refuses with
+`boot.bin` complete. The old procedure fails the same checks.
+
+On every boot loader installation:
+
+1. An interrupted replacement recorded as pending is finished from its
+   staged copies (`*.new`), or, when one is missing, given up with the
+   files as they are. Leftovers are removed (after the `FIBMAP` check).
+2. Nothing is written when the active copy already has the new digest, or
+   when it is a held copy (below) and the new one is the copy it replaced.
+3. The ESP must have room for every copy written plus 4 MiB; when it
+   hasn't and `boot.bin` is missing, the message says so.
+4. The copy being replaced becomes `boot.bin.previous` only if it has
+   booted, or if there is no previous copy: `sekka-boot-bin.service` records
+   at every start that the copy at `m1n1/boot.bin` booted
+   (`boot_bin.py mark-booted`). Two installations without a restart in
+   between keep the copy that booted.
+5. The new previous copy and the new copy are written as `*.new`, flushed,
+   read back from the disk (their pages dropped first) and checked;
+   `sekka/boot-bin.json` records the replacement as pending (which
+   `boot.bin.previous` and `boot.bin` it ends with); then
+   `boot.bin.previous` is committed, then `boot.bin`, each as above, and
+   `boot.bin` is read back once more.
+6. `sekka/boot-bin.json` (`sekka.mac.boot-bin/1`, canonical JSON) records
    the current and previous copies (digest, size, store source, system,
-   time) and the last ten installations.
+   time, whether it booted), any hold, and the last ten installations. A
+   record that isn't what `boot_bin.py` writes (unreadable, another shape)
+   is rebuilt from the files.
 
-The image's ESP carries the record for the copy it installs. FAT has no
-journal: a rename is one directory-entry update, the smallest change FAT
-can make, not a transaction. After any interruption there is one complete
-copy at `m1n1/boot.bin` (the old or the new one), and the record and
-`boot.bin.previous` say which bytes belong there.
+The image's ESP carries the record for the copy it installs, not yet
+booted; the first start marks it.
 
 Generations and boot.bin:
 
@@ -231,24 +291,45 @@ Generations and boot.bin:
   older kernels, but nothing guarantees it.
 - Making an older generation the default (`nixos-rebuild boot --rollback`,
   or its `bin/switch-to-configuration boot`) runs its own installation,
-  which puts its `boot.bin` back by the same procedure and keeps the newer
-  one as the previous copy.
+  which puts its `boot.bin` back by the same procedure, keeping the newer
+  copy as the previous one if it booted. A generation from before
+  `boot_bin.py` (the original J514S installation's) instead copies its
+  `boot.bin` in place with `extraFiles`, keeps no previous copy and leaves
+  the record stale; the next installation of a newer generation notices the
+  active copy and keeps it.
 - `boot_bin.py restore-previous --esp /boot` swaps the two copies,
-  refusing if `boot.bin.previous` doesn't match the record;
-  `boot_bin.py status --esp /boot` compares the files with the record.
+  refusing if `boot.bin.previous` doesn't match the record. It stages both,
+  records the swap, commits the restored copy as `boot.bin` first (so it is
+  never only in memory), then the replaced one as `boot.bin.previous`; a
+  retry, or the next installation, finishes a recorded swap rather than
+  starting another, and a second `restore-previous` doesn't undo it.
+- **A restored copy is held.** The default generation still names the
+  copy that was restored away, and its next installation (a no-change
+  `nixos-rebuild`, a Yukimi update) would put it back. The record keeps a
+  hold: installations leave the held copy and warn, until a different copy
+  comes (a later update) or `boot_bin.py release --esp /boot`. To stay with
+  the older system as a whole, make an older generation the default
+  (`nixos-rebuild boot --rollback`).
+- `boot_bin.py status --esp /boot` compares the files with the record.
 
 Recovery when a new `boot.bin` doesn't start Linux at all: start macOS
 (hold the power button, choose macOS), mount the Sekka ESP
 (`diskutil list`, then `diskutil mount diskNsM`), check
 `shasum -a 256 m1n1/boot.bin.previous` against `previous.digest` in
-`sekka/boot-bin.json`, and copy it over `m1n1/boot.bin`.
+`sekka/boot-bin.json`, and copy it over `m1n1/boot.bin`. At the next start,
+`sekka-boot-bin.service` finds `boot.bin.previous`'s copy active instead of
+the record's current one and holds it, as `restore-previous` does.
 
-A system that installed `boot.bin` with `extraFiles` (the original
-J514S installation) has NixOS delete it one last time at its first
-installation with this module, before `boot_bin.py` runs. `boot_bin.py`
-then keeps the running system's copy, found in its closure, as the previous
-copy.
-
+**Leaving extraFiles.** NixOS's systemd-boot builder deletes every file its
+markers under `EFI/nixos/.extra-files` list, and syncs that, before
+`extraInstallCommands` run. A system that installed `boot.bin` with
+`extraFiles` (the original J514S installation) still has the marker. So
+`module.nix` wraps `system.build.installBootLoader`: `boot_bin.py
+forget-extra-files` removes `boot.bin`'s marker, then NixOS's installer
+runs, leaving `boot.bin` in place for `boot_bin.py install` to replace with
+the steps above, the running copy kept as the previous one. It runs at every
+installation, so a rollback to an `extraFiles` generation, which writes the
+marker again, doesn't reopen the gap at the next forward one.
 ## Manifest (sekka.mac.manifest/1)
 
 `release/manifest.py` writes `manifest.json` in the contract's canonical

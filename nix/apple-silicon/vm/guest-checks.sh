@@ -165,6 +165,9 @@ import hashlib, json
 r = json.load(open("/boot/sekka/boot-bin.json"))
 d = "sha256:" + hashlib.sha256(open("/boot/m1n1/boot.bin", "rb").read()).hexdigest()
 raise SystemExit(r["current"]["digest"] != d or r["pending"] is not None)'
+	check boot-bin-booted "sekka-boot-bin.service recorded this start's boot.bin as booted" python3 -c '
+import json
+raise SystemExit(json.load(open("/boot/sekka/boot-bin.json"))["current"]["booted"] is not True)'
 	;;
 
 second)

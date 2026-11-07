@@ -226,11 +226,12 @@ let
                 exit 1
               fi
             done
-            # The record boot_bin.py keeps, for the copy the image installs.
+            # The record boot_bin.py keeps, for the copy the image installs,
+            # which the first start marks as booted.
             PYTHONPATH=${./boot-bin} ${python} -c '
             import sys, boot_bin as b
             data = open(sys.argv[1], "rb").read()
-            current = b.entry(data, source=sys.argv[1], system=sys.argv[2])
+            current = b.entry(data, source=sys.argv[1], system=sys.argv[2], booted=False)
             record = dict(b.empty_record(), current=current, history=[current])
             open(sys.argv[3], "wb").write(b.canonical(record))
             ' ${bootBin} ${toplevel} $out/sekka/boot-bin.json
