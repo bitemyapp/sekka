@@ -134,6 +134,10 @@ pub struct DiskLayout {
     pub macos_used: u64,
     /// Free space right after the container that joins Sekka's.
     pub adjacent_free: u64,
+    /// Whether Sekka's space comes from shrinking macOS's container. When
+    /// it doesn't, it is free space: `macos` is everything before it, and
+    /// macOS keeps its size.
+    pub shrinks: bool,
     pub size: u64,
     pub min: u64,
     pub max: u64,
@@ -285,11 +289,15 @@ define_class!(
         #[unsafe(method_id(accessibilityValue))]
         fn accessibility_value(&self) -> Retained<NSString> {
             let l = self.ivars().layout.borrow();
-            NSString::from_str(&format!(
-                "{} for Sekka; macOS keeps {}",
-                bytes(l.size),
-                bytes((l.macos + l.adjacent_free).saturating_sub(l.size))
-            ))
+            NSString::from_str(&if l.shrinks {
+                format!(
+                    "{} for Sekka; macOS keeps {}",
+                    bytes(l.size),
+                    bytes((l.macos + l.adjacent_free).saturating_sub(l.size))
+                )
+            } else {
+                format!("{} for Sekka, in free space; macOS isn't resized", bytes(l.size))
+            })
         }
 
         #[unsafe(method(accessibilityPerformIncrement))]
