@@ -24,7 +24,7 @@ use sekka_mac_contract::{ArtifactRole, Progress, Stage};
 
 use super::window::Ui;
 use crate::env::{DownloadProgress, Environment};
-use crate::model::{Model, Msg};
+use crate::model::{Effect, Model, Msg};
 use crate::sim::{Scenario, Simulation, settle};
 
 /// A window's content view as the window shows it. AppKit draws the views
@@ -160,21 +160,27 @@ pub fn run(mtm: MainThreadMarker, dir: &Path) -> Result<usize, String> {
     for scenario in Scenario::ALL {
         for (name, msgs) in states(scenario) {
             for (appearance, label) in [(unsafe { NSAppearanceNameAqua }, "light"), (unsafe { NSAppearanceNameDarkAqua }, "dark")] {
-                let env = Arc::new(Simulation::new(scenario, 0.0));
+                // The installing page, caught writing Sekka.
+                let sim = Simulation::new(scenario, 0.0);
+                let env = Arc::new(if name == "installing" { sim.holding_at(Stage::Root) } else { sim });
                 let (mut model, effects) = Model::new("0.1.0".parse().unwrap(), env.user());
                 if name != "checking" {
                     settle(&env, &mut model, effects);
                 }
-                for msg in msgs.iter().map(clone_msg) {
+                // These pages are caught part way: what their last message
+                // starts is left going, not run to its end.
+                let caught = matches!(name, "downloading" | "installing");
+                let last = msgs.len().saturating_sub(1);
+                for (n, msg) in msgs.iter().map(clone_msg).enumerate() {
                     let effects = model.update(msg);
-                    if name == "installing" {
+                    if caught && n == last {
                         break;
                     }
                     settle(&env, &mut model, effects);
                 }
                 match name {
                     "downloading" => {
-                        model.downloading = true;
+                        debug_assert!(model.screen == crate::model::Screen::Downloading && model.downloading);
                         model.update(Msg::DownloadProgress(DownloadProgress {
                             role: ArtifactRole::Payload,
                             done: 4_100_000_000,
@@ -184,12 +190,21 @@ pub fn run(mtm: MainThreadMarker, dir: &Path) -> Result<usize, String> {
                         }));
                     }
                     "installing" => {
+                        // Begun, and polled once: the polls after that,
+                        // while the run goes on, are left undone.
                         let effects = model.update(Msg::Authorize {
                             owner: "chris".into(),
                             password: crate::env::Secret::new(b"simulated".to_vec()),
                         });
-                        drop(effects);
-                        model.update(Msg::Begun(Ok(sekka_mac_contract::Uuid::from_bytes([0x5e; 16]))));
+                        let Some(Effect::Begin(begin, password)) = effects.into_iter().next() else {
+                            return Err("the installing page needs an installation to begin".into());
+                        };
+                        let begun = env.begin(*begin, password);
+                        for effect in model.update(Msg::Begun(begun)) {
+                            if let Effect::Poll { installation, after, .. } = effect {
+                                let _ = model.update(Msg::Events(env.events(installation, after)));
+                            }
+                        }
                         model.progress = Some(Progress {
                             stage: Stage::Root,
                             done: 62,

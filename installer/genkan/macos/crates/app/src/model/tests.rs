@@ -1121,6 +1121,24 @@ fn an_installation_is_found_again_once_its_helper_may_run() {
 }
 
 #[test]
+fn downloading_and_installing_can_be_caught_part_way() {
+    // As the screenshots catch them: what the last step starts is left
+    // going, so the page is the one it names.
+    let mut j = Journey::start(Scenario::Normal);
+    let effects = j.model.update(Msg::StartDownload);
+    assert!(matches!(effects.as_slice(), [Effect::Download(_)]));
+    assert_eq!(j.model.screen, Screen::Downloading);
+    assert!(j.model.downloading && !j.model.checking_download());
+
+    let mut j = Journey::with(Simulation::new(Scenario::Normal, 0.0).holding_at(Stage::Root));
+    j.begin_unwatched();
+    assert_eq!(j.model.screen, Screen::Installing);
+    let stages = j.model.stages();
+    assert!(stages.contains(&(Stage::Root, CheckState::Warning)), "{stages:?}");
+    assert!(stages.iter().take_while(|(s, _)| *s != Stage::Root).all(|(_, c)| *c == CheckState::Good));
+}
+
+#[test]
 fn every_scenario_settles_somewhere_sensible() {
     for s in Scenario::ALL {
         let j = Journey::start(s);
