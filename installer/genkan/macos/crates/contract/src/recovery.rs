@@ -26,8 +26,11 @@ schema_tag!(RecoveryReceiptSchema, "sekka.mac.recovery-receipt/1");
 /// What the Recovery app has done for its installation
 /// (`Sekka/State/receipt.json` on the stub's System volume). The Recovery
 /// app writes it, each step as started before it runs and as completed or
-/// failed after; the helper reads it back from macOS to learn how the
-/// Recovery step went, since Recovery can't reach the helper's journal.
+/// failed after, as diagnostics. Nothing trusts it as evidence, since
+/// anyone who can write the stub can write it: the helper never reads it,
+/// and learns how the Recovery step went from its own inspection as root
+/// (`Request::Reconcile`); the Recovery app itself reads the Mac's policy
+/// before deciding what to repeat.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RecoveryReceipt {
