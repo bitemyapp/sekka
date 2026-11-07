@@ -636,7 +636,10 @@ client file there with `client --domain trusted --access writer --format buck2
 
 - clones cache hits from the CAS file instead of downloading them, verifies
   them like downloads, and records only a view hint in the content store
-  (`local-cas-downloads.patch`). An evicted blob falls back to the network;
+  (`local-cas-downloads.patch`). An evicted blob falls back to the network.
+  A clone does not read through NativeLink, but its LRU still sees the blob:
+  the completeness check behind each action-cache hit, like
+  `FindMissingBlobs`, touches every blob it asks about (`has`, not a peek);
 - with `--cache-write`, keeps produced outputs out of the content store
   (`local-cas-outputs.patch`). The engine lists each output the cache
   uploader put in the CAS in `buck-out/ISOLATION/local-cas-journal`, and after
@@ -764,8 +767,32 @@ clamped to `--min-cas-bytes` and `--max-cas-bytes` (4 and 256 GiB). It resizes
 only when that shrinks the bound by more than 5% or grows it by more than 25%,
 since a resize restarts the backend; `--dry-run` reports the decision. Logical
 bytes over-count the physical cost of compressed and shared extents, so the
-floor errs on the safe side. Run it periodically, for example from a user
-timer every 15 minutes.
+floor errs on the safe side. A resize also waits until the gateways have
+logged no requests for `--idle-seconds` (300), unless free space is below half
+the floor. Run it periodically, for example from a user timer every 15
+minutes:
+
+```sh
+nix build --out-link ~/.local/state/sekka/build-service .#build-service
+systemd-run --user --unit sekka-cas-autosize --on-calendar '*:0/15' \
+  ~/.local/state/sekka/build-service/bin/sekka-build-service \
+  --local --manifest /ABSOLUTE/PRIVATE.json autosize
+```
+
+The out-link keeps the controller from garbage collection. `systemd-run`
+makes a transient timer that ends with the user's service manager; for a
+lasting one, install the same command as a user service and timer. Either
+way the user's service manager must hold the `docker` group, and one started
+before the user joined it does not until it restarts.
+
+While the backend restarts (`resize`, `restart`, `runtime`), the gateway
+answers `UNAVAILABLE`, which Buck2 retries for about 1.5 s. On
+wx-workstation, a resize 4 s into a build kept its 706 actions succeeding,
+with a 1.2 s restart on a 24 GB CAS. Before this, the gateway's HTML 502 failed
+a fresh worktree's blob reads. A slower restart, for example of a much
+larger CAS, can outlast the retries, so run these by hand only when the
+service is idle. `up` reloads a running gateway's configuration without
+dropping its connections.
 
 For eviction/restart evidence, `cache-inventory --timeout SECONDS` snapshots
 persistent cache names and sizes with the owned backends temporarily paused.

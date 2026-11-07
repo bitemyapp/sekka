@@ -70,6 +70,38 @@ reported 1.83 TB free, a 383 GB floor (10% of the filesystem) and 68.6 GB of
 logical CAS. It would have raised the bound to the 256 GiB maximum. It was a
 dry run; nothing was resized.
 
+## A resize under running builds
+
+Repro: the resize `autosize` would make (same bounds; workers and backend
+restarted, gateway kept) lands a few seconds into a build of a different
+`aizome-theme` edit. The local-CAS writer client was used, and the restart took
+1.0–1.2 s on a 20–24 GB CAS.
+
+| Gateway | Build under the resize | Result |
+| --- | --- | --- |
+| HTML 502 while the backend is down | primed worktree, 55 actions executed and uploaded | pass, 18.1 s; uploads retried on GOAWAY |
+| HTML 502 while the backend is down | fresh worktree, 3 s in | **fail**: 30 blob reads (`BatchReadBlobs`) got the 502, which gRPC clients cannot retry |
+| `UNAVAILABLE` (this branch) | fresh worktree, twice, 3 s in | pass: 706 actions, 651 cached; in the second, 15 requests retried, reaching attempt 3 of 5 |
+
+All 225 502s fell within one second, as the gateway's log shows. Buck2
+retries `UNAVAILABLE` for about 1.5 s (100–800 ms backoff), so a markedly
+slower restart would still fail reads. `autosize` therefore also waits for
+`--idle-seconds` without gateway requests. A dry run over the last 15 minutes
+of these builds counted 30,279 requests and deferred. The gateway also stops
+retiring connections after 1000 requests (nginx's default), which had caused
+GOAWAY retries in builds with no restart at all.
+
+Two things this repro turned up were not faults:
+- A primed build missed the cache entirely because its isolation directory
+  differed from the earlier repro's. Buck2 puts
+  `buck-out/ISOLATION/` into every action's paths.
+- The journal pass reported 108 outputs' blobs missing. All were empty files,
+  whose blob a CAS never stores. The pass now skips sub-block outputs before
+  looking them up.
+
+A transient `systemd-run --user` timer for `autosize` failed on wx because
+its user service manager predates the user's `docker` group.
+
 ## Storage-plan run on this branch
 
 The same 31-stage plan as the storage run, at `c1508843` on a fresh service
@@ -123,9 +155,10 @@ client, a fresh isolation directory):
 On wx, at the branch's commits:
 - `checks.x86_64-linux.buck2-backend` passed. It now runs
   `build/buck2/test_cas_dedupe.py`, which executed on the Btrfs builder:
-  shared, mismatched, journaled, changed and repeated cases.
-- `checks.x86_64-linux.build-service-inventory` passed, with the autosize
-  tests.
+  shared, mismatched, journaled, empty, changed and repeated cases.
+- `checks.x86_64-linux.build-service-inventory` passed, with the autosize,
+  deferral and dispatch tests.
+- The gateway configuration passed `nginx -t` in the pinned nginx image.
 - The engine's check phase passed, including the new content-store,
   presence and local-CAS tests.
 
