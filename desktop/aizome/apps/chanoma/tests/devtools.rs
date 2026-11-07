@@ -2,8 +2,9 @@
 //! (named by `CHANOMA_TEST_BROWSER`) steered over its DevTools pipe as
 //! Chanoma steers it, with no display (`--ozone-platform=headless`). The
 //! site is 127.0.0.1 and elsewhere is localhost, both served here, which
-//! hears every request the browser makes; and Chanoma's keyboard asking
-//! what has the page's and typing there. Skips without a browser.
+//! hears every request the browser makes; Chanoma's keyboard asking what
+//! has the page's and typing there; and a sign-in kept across the
+//! browser's ending with no keyring. Skips without a browser.
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -92,6 +93,10 @@ f2.addEventListener("submit", (e) => {{
 
 const PAGE_B: &str = r#"<!doctype html><title>B</title><script>fetch("/report?loaded-b")</script>"#;
 const FRAME: &str = r#"<!doctype html><title>F</title><script>parent.postMessage("loaded", "*")</script>"#;
+/// A service signed in to: its first answer sets a sign-in that lasts a
+/// day, as streaming services keep theirs.
+const PAGE_SIGN_IN: &str = r#"<!doctype html><title>In</title><script>fetch("/report?signed-in")</script>"#;
+const PAGE_HOME: &str = r#"<!doctype html><title>Home</title><script>fetch("/report?home")</script>"#;
 
 fn serve() -> (u16, Heard) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -114,7 +119,7 @@ fn answer(stream: TcpStream, port: u16, heard: &Heard) {
         return;
     }
     let path = line.split_whitespace().nth(1).unwrap_or("/").to_owned();
-    let (mut host, mut length) = (String::new(), 0usize);
+    let (mut host, mut length, mut cookie) = (String::new(), 0usize, String::new());
     loop {
         let mut header = String::new();
         if reader.read_line(&mut header).unwrap_or(0) == 0 || header.trim().is_empty() {
@@ -124,18 +129,25 @@ fn answer(stream: TcpStream, port: u16, heard: &Heard) {
         match name.to_ascii_lowercase().as_str() {
             "host" => host = value.trim().split(':').next().unwrap_or_default().to_owned(),
             "content-length" => length = value.trim().parse().unwrap_or(0),
+            "cookie" => cookie = value.trim().to_owned(),
             _ => {}
         }
     }
     let mut body = vec![0u8; length];
     let _ = reader.read_exact(&mut body);
-    heard.lock().unwrap().push(format!("{host} {path}"));
+    // With the sign-in it carries, if any.
+    let cookie = if cookie.is_empty() { cookie } else { format!(" cookie:{cookie}") };
+    heard.lock().unwrap().push(format!("{host} {path}{cookie}"));
     let (status, extra, page) = match path.split('?').next().unwrap_or_default() {
         "/a" => ("200 OK", String::new(), page_a(port)),
         "/c" => ("200 OK", String::new(), page_c(port)),
         "/t" => ("200 OK", String::new(), page_t(port)),
         "/b" => ("200 OK", String::new(), PAGE_B.to_owned()),
         "/frame" => ("200 OK", String::new(), FRAME.to_owned()),
+        "/sign-in" => {
+            ("200 OK", "Set-Cookie: signed=in; Max-Age=86400; Path=/\r\n".to_owned(), PAGE_SIGN_IN.to_owned())
+        }
+        "/home" => ("200 OK", String::new(), PAGE_HOME.to_owned()),
         "/redirect" => ("302 Found", format!("Location: http://localhost:{port}/b?how=redirect\r\n"), String::new()),
         _ => ("204 No Content", String::new(), String::new()),
     };
@@ -173,6 +185,9 @@ impl Run {
         command
             .args(arguments(&profile, None))
             .args(["--ozone-platform=headless", "--no-sandbox", "--disable-gpu", "--disable-popup-blocking"])
+            // No session bus, so no keyring to be had, as on a television
+            // whose account runs none.
+            .env("DBUS_SESSION_BUS_ADDRESS", "unix:path=/nonexistent/bus")
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null());
@@ -205,8 +220,13 @@ impl Run {
     }
 
     /// Chanoma gone: the pipe closes, and so does the browser (whether it
-    /// did in time).
-    fn finish(mut self) -> bool {
+    /// did in time). Its profile goes too.
+    fn finish(self) -> bool {
+        self.end(true)
+    }
+
+    /// As [`Run::finish`], keeping the profile when not `remove`.
+    fn end(mut self, remove: bool) -> bool {
         self.stop.store(true, Ordering::Release);
         if let Some(k) = self.keeper.take() {
             k.join().unwrap();
@@ -223,7 +243,9 @@ impl Run {
             }
             std::thread::sleep(Duration::from_millis(100));
         };
-        let _ = std::fs::remove_dir_all(&self.profile);
+        if remove {
+            let _ = std::fs::remove_dir_all(&self.profile);
+        }
         ended
     }
 }
@@ -312,5 +334,21 @@ fn chanomas_keyboard_hears_what_has_the_pages_and_types_there() {
     eventually("the password sent", Duration::from_secs(10), || has("/report?password-2"));
     assert!(has("/report?unseen-true"), "the page saw something of Chanoma's asking");
     assert_eq!(run.focused(), Focused::Frame);
+    assert!(run.finish(), "the browser outlived its pipe");
+}
+
+#[test]
+fn a_sign_in_outlasts_the_browser_with_no_keyring() {
+    let Some(browser) = test_browser() else { return };
+    let (port, heard) = serve();
+    let has = |what: &str| heard.lock().unwrap().iter().any(|h| h.contains(what));
+    // Signed in, then the browser ends, as when a kid goes home.
+    let run = Run::start(&browser, format!("http://127.0.0.1:{port}/sign-in"), "signed-in");
+    eventually("the sign-in", Duration::from_secs(30), || has("127.0.0.1 /report?signed-in cookie:signed=in"));
+    assert!(run.end(false), "the browser outlived its pipe");
+    // Started again on its profile, the service knows who's there.
+    let run = Run::start(&browser, format!("http://127.0.0.1:{port}/home"), "signed-in");
+    eventually("the service's home", Duration::from_secs(30), || has("127.0.0.1 /report?home"));
+    assert!(has("127.0.0.1 /home cookie:signed=in"), "signed out: {:?}", heard.lock().unwrap());
     assert!(run.finish(), "the browser outlived its pipe");
 }

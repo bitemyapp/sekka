@@ -404,6 +404,20 @@ impl Chanoma {
         if !self.is_grownup() && !self.settings.services.iter().any(|x| x == id) {
             return;
         }
+        // Said here rather than by the service's own error page, whose
+        // code means nothing to a kid.
+        if s.drm && browser::find(self.settings.browser.as_deref()).is_some_and(|b| !browser::is_chrome(&b)) {
+            self.go(
+                Screen::Problem(
+                    format!("{} needs Google Chrome", s.name),
+                    "Its shows are protected, and only Google Chrome plays those here. A grown-up can install it \
+                     from Yukimi, Sekka's Software."
+                        .into(),
+                ),
+                cx,
+            );
+            return;
+        }
         let agent = s.tv_agent.then_some(services::TV_AGENT);
         let item = Item::Service { id: id.to_owned() };
         self.open_page(s.id, s.name, s.url, Sites::of(s), agent, s.drive, s.keyboard, item, cx);

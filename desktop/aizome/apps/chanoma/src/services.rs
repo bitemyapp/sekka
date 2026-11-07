@@ -36,6 +36,8 @@ pub struct Service {
     pub kids: bool,
     /// Needs an account.
     pub account: bool,
+    /// Protects its shows (Widevine), which only Google Chrome plays here.
+    pub drm: bool,
     pub drive: Drive,
     /// Ask for its television interface (a TV's user agent).
     pub tv_agent: bool,
@@ -59,6 +61,9 @@ const fn service(id: &'static str, name: &'static str, url: &'static str, color:
         ink,
         kids: false,
         account: true,
+        // The paid services do, and Plex's and Kanopy's free films;
+        // PBS KIDS and YouTube don't, below.
+        drm: true,
         drive: Drive::Pointer,
         tv_agent: false,
         keyboard: true,
@@ -70,6 +75,7 @@ pub const CATALOG: &[Service] = &[
         kids: true,
         account: false,
         short: "PBS KIDS",
+        drm: false,
         ..service("pbs-kids", "PBS KIDS Video", "https://pbskids.org/video", 0x2b6dd1, 0xffffff)
     },
     // Google's sign-in, which YouTube Kids passes through as it opens,
@@ -79,10 +85,12 @@ pub const CATALOG: &[Service] = &[
         kids: true,
         account: false,
         sites: &["accounts.google.com"],
+        drm: false,
         ..service("youtube-kids", "YouTube Kids", "https://www.youtubekids.com", 0xff2b2b, 0xffffff)
     },
     Service {
         account: false,
+        drm: false,
         drive: Drive::Tv,
         tv_agent: true,
         keyboard: false,
