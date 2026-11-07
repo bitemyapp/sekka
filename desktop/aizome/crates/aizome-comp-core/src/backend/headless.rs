@@ -384,6 +384,6 @@ fn open_gles(path: &std::path::Path) -> Result<(GlesRenderer, DrmNode), String> 
     let display = unsafe { EGLDisplay::new(gbm) }.map_err(|e| e.to_string())?;
     let context = EGLContext::new(&display).map_err(|e| e.to_string())?;
     // Safety: the context is current on this thread only.
-    let renderer = unsafe { GlesRenderer::new(context) }.map_err(|e| e.to_string())?;
+    let renderer = unsafe { super::gles_renderer(context) }.map_err(|e| e.to_string())?;
     Ok((renderer, node))
 }

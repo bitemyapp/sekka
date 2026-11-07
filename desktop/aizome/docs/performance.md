@@ -445,6 +445,32 @@ previous one's scan-out rather than being dropped, and the CPU cost per
 frame is the same as above (DrmCompositor also puts suitable buffers on
 planes for direct scan-out, which only lowers it).
 
+### Memory
+
+Textures carry no GL fences. smithay's GLES renderer puts a `glFenceSync`
+after every texture upload and every draw that reads a texture (and waits
+on and deletes the one before), so that a context sharing the texture knows
+when it is free. The compositor shares no contexts and draws on one thread,
+where GL keeps uploads and draws in order by itself, so it builds its
+renderers without that capability (`backend::gles_renderer`): three driver
+calls fewer per drawn texture.
+
+It also stops most of a leak in NVIDIA's driver (615.78): every sync object
+leaves 16–42 bytes in an array the driver never shrinks
+([report](../../../docs/upstream/nvidia/sync-object-leak.md)). On runnymede,
+at 3840 × 2160 and 240 Hz, that array had reached 410 MiB after two days,
+300 MiB of it swapped out. Headless on the same GPU, with two clients
+redrawing every frame, the array grew 39 bytes a frame with the fences and
+14 without. Those 14 are the EGL fence each frame ends with, which DRM
+waits on; they go when NVIDIA fixes the driver. A smithay loop drawing 16
+textures a frame went from 231 bytes a frame to 16, and from about 5,100
+frames a second to 20,000 (CPU-bound, offscreen). In `frame_bench` at
+3840 × 2160 on the RTX 5090 (the installed build against this one, second
+of two alternating rounds), scenes with many textures got cheaper: ten
+windows p50 0.46 → 0.39 ms and p95 0.94 → 0.53, frost over a moving window
+0.55 → 0.45 and 1.45 → 0.68, the overview 0.86 → 0.74 and 2.48 → 1.24;
+single-surface scenes stayed within ±0.03 ms.
+
 ## Tokei (Clock)
 
 A clock's tick is the typical interaction: once a second the program
