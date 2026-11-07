@@ -141,6 +141,18 @@ class CommandLine(unittest.TestCase):
         finally:
             t.cleanup()
 
+    def test_the_diagnostic_log_names_no_administrator(self):
+        """Asahi's OSEnum logs every administrator's name; the helper keeps
+        this log for diagnostics."""
+        import logging
+
+        record = logging.LogRecord("root", logging.INFO, __file__, 1, "  Admin users: %s", (["callen", "other"],), None)
+        self.assertTrue(cli.WithoutAccounts().filter(record))
+        self.assertEqual(record.getMessage(), "  Admin users: (not logged)")
+        record = logging.LogRecord("root", logging.INFO, __file__, 1, "  Found %s", ("Macintosh HD",), None)
+        cli.WithoutAccounts().filter(record)
+        self.assertEqual(record.getMessage(), "  Found Macintosh HD")
+
     def test_the_adapter_digest_covers_every_source_file(self):
         files = provenance.adapter_files()
         names = [f[0] for f in files]

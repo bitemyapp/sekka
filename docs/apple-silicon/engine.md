@@ -59,7 +59,10 @@ of that run's Esp checkpoint from the journal, and only that stage (below).
   their fakes into the `Engine` class, which no argument or variable reaches.
 - **Descriptors.** Standard output is the transcript: one canonical JSON
   message per line, numbered from 1. Standard input carries the helper's
-  acknowledgements. Standard error is a diagnostic log. In `execute` and
+  acknowledgements. Standard error is a diagnostic log: the helper and the
+  app drain it as it is written and keep its last 500 lines, the helper for
+  Copy Diagnostics (with the owner's name and home folders taken out, and
+  Asahi's list of administrators left out by the engine). In `execute` and
   `startup-disk`, file descriptor 3 carries the owner's password, read once
   to end of file and closed; it is kept in a `bytearray` only until `bless`
   has it, then overwritten. (Python may hold other copies, such as the bytes

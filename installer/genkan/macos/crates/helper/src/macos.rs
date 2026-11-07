@@ -16,7 +16,7 @@ use sekka_mac_journal::InstallLock;
 use sekka_mac_trust::TrustConfig;
 
 use crate::engine::{ChildEngine, EngineProcess};
-use sekka_mac_engine::PATH;
+use sekka_mac_engine::{EngineError, PATH};
 use crate::{EngineInstall, EngineRun, Helper, PASSWORD_LIMIT, Paths, Platform, PlatformError, Secret};
 
 /// The team that signs release builds, fixed at build time.
@@ -116,7 +116,13 @@ impl Platform for MacPlatform {
     }
 
     fn inspect(&self, engine: &EngineInstall) -> Result<Inspection, PlatformError> {
-        sekka_mac_engine::inspect(engine).map_err(|e| PlatformError::Inspection(e.to_string()))
+        sekka_mac_engine::inspect(engine).map_err(|e| match e {
+            EngineError::Inspection { message, log } => PlatformError::Inspection { message, log },
+            e => PlatformError::Inspection {
+                message: e.to_string(),
+                log: Vec::new(),
+            },
+        })
     }
 
     fn authenticate_owner(&self, user: &str, password: &[u8]) -> Result<(), PlatformError> {
@@ -208,7 +214,9 @@ impl Platform for MacPlatform {
         };
         let mut command = sekka_mac_engine::command(engine, &args)
         .map_err(|e| PlatformError::Engine(e.to_string()))?;
-        command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null());
+        // Its diagnostic log is drained as it runs and kept, its last lines,
+        // for Copy Diagnostics (see `ChildEngine`).
+        command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
         sekka_mac_engine::inherit(&mut command, read_end.as_raw_fd(), lock.as_fd().as_raw_fd());
         let child = command.spawn();
         drop(read_end);

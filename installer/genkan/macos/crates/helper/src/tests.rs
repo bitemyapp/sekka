@@ -113,6 +113,8 @@ struct Fake {
     /// Run once, during the next inspection, as something else might act
     /// while the Mac is being inspected.
     during_inspection: Mutex<Option<Box<dyn FnOnce() + Send>>>,
+    /// How the next inspection fails, if it does.
+    inspection_fails: Mutex<Option<PlatformError>>,
     /// The engine this copy of the app carries, and those already unpacked
     /// into the helper's cache, which `sekka_mac_engine::unpack` reuses by
     /// digest whatever the app carries.
@@ -151,6 +153,9 @@ impl Platform for Fake {
         let meanwhile = self.during_inspection.lock().unwrap().take();
         if let Some(meanwhile) = meanwhile {
             meanwhile();
+        }
+        if let Some(e) = self.inspection_fails.lock().unwrap().take() {
+            return Err(e);
         }
         Ok(self.inspection.lock().unwrap().clone())
     }
@@ -230,6 +235,13 @@ fn failure(changed: DiskChanged) -> Failure {
         disk_changed: changed,
     }
 }
+
+/// What every scripted engine writes to its diagnostic log, naming its
+/// owner and their home folder as a traceback might.
+const ENGINE_LOG: [&str; 2] = [
+    "Traceback (most recent call last):",
+    "  File \"/Users/owner/Library/x.py\", line 1: KeyError: 'owner'",
+];
 
 struct ScriptedEngine {
     lines: Receiver<Vec<u8>>,
@@ -385,6 +397,9 @@ impl EngineProcess for ScriptedEngine {
         self.acks = None;
         Ok(self.thread.take().map(|t| t.join().is_ok()).unwrap_or(true))
     }
+    fn log(&mut self) -> Vec<String> {
+        ENGINE_LOG.iter().map(|l| l.to_string()).collect()
+    }
 }
 
 fn engine_digest() -> Digest {
@@ -431,6 +446,7 @@ fn fake(dir: &Path, script: Script) -> Fake {
         dir: dir.into(),
         inspection: Mutex::new(samples::inspection()),
         during_inspection: Mutex::new(None),
+        inspection_fails: Mutex::new(None),
         bundled: Mutex::new(engine_digest()),
         unpacked: Mutex::new(Vec::new()),
         inspected_with: Mutex::new(Vec::new()),
@@ -1166,6 +1182,42 @@ fn diagnostics_name_no_account_after_a_restart() {
     let lines = w.lines(id);
     assert!(lines.iter().any(|l| l.contains("(account) isn't one of")), "{lines:?}");
     assert!(lines.iter().all(|l| !l.contains("owner")), "{lines:?}");
+}
+
+#[test]
+fn the_engines_own_log_reaches_the_diagnostics_without_names() {
+    // A stage stopped with only its exception's text in the transcript; the
+    // traceback is in the engine's own log.
+    let w = world(Script::Die(Stage::Root));
+    let id = w.begun();
+    w.finish(id);
+    let lines = w.lines(id);
+    let at = lines.iter().position(|l| l == "stderr: Traceback (most recent call last):").expect("the engine's log is kept");
+    assert_eq!(
+        lines[at + 1],
+        "stderr:   File \"/Users/…/Library/x.py\", line 1: KeyError: '(account)'"
+    );
+    assert!(lines.iter().all(|l| !l.contains("owner")), "{lines:?}");
+    // A retry's too, and a failed inspection's when the helper looks at
+    // the Mac for an installation.
+    let w = world(Script::Fail(Stage::StartupDisk, DiskChanged::No));
+    let id = w.begun();
+    w.finish(id);
+    let before = w.lines(id).iter().filter(|l| l.starts_with("stderr: ")).count();
+    let Response::Events { .. } = w.ask(Request::RetryStartupDisk { installation: id }, Some(PASSWORD)) else { panic!() };
+    assert_eq!(w.lines(id).iter().filter(|l| l.starts_with("stderr: ")).count(), before + ENGINE_LOG.len());
+    let w = world(Script::Die(Stage::Root));
+    let id = w.begun();
+    w.finish(id);
+    let w = w.restarted(Script::Happy);
+    *w.fake().inspection_fails.lock().unwrap() = Some(PlatformError::Inspection {
+        message: "This Mac couldn't be inspected: 'Volumes'".into(),
+        log: vec!["KeyError: 'Volumes' for owner".into()],
+    });
+    let (code, message) = refused(w.ask(Request::Reconcile { installation: id }, None));
+    assert_eq!(code, HelperRefusalCode::State);
+    assert!(message.contains("'Volumes'"), "{message}");
+    assert!(w.lines(id).contains(&"stderr: KeyError: 'Volumes' for (account)".to_string()));
 }
 
 #[test]

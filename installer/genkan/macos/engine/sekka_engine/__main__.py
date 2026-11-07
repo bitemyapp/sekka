@@ -43,6 +43,17 @@ def usage(message):
     return 2
 
 
+class WithoutAccounts(logging.Filter):
+    """The diagnostic log reaches the helper's diagnostics, which name no
+    account: the helper takes out the owner's name and home folders, and
+    this the names of every administrator, which Asahi's OSEnum logs."""
+
+    def filter(self, record):
+        if record.getMessage().lstrip().startswith("Admin users:"):
+            record.msg, record.args = "  Admin users: (not logged)", ()
+        return True
+
+
 OPTIONS = {
     "execute": ("--plan", "--assets", "--installation", "--owner"),
     "startup-disk": ("--plan", "--installation", "--owner", "--esp-inventory"),
@@ -81,6 +92,8 @@ def main(argv=None):
     password = read_password(3) if mode in OPTIONS else None
     transcript, acks = take_standard_streams()
     logging.basicConfig(stream=sys.stderr, level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
+    for handler in logging.getLogger().handlers:
+        handler.addFilter(WithoutAccounts())
 
     from . import provenance
     from .asahi import load

@@ -7,16 +7,20 @@
 //! password; the helper runs `inspect` again as root, then `execute`. Both
 //! unpack the same archive, after checking its digest, into a directory of
 //! their own.
+use std::collections::VecDeque;
 use std::fs;
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::os::fd::RawFd;
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
-use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
+use std::process::{Child, ChildStderr, ChildStdin, ChildStdout, Command, Stdio};
+use std::sync::mpsc::{Receiver, channel};
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use sekka_mac_contract::{
-    Ack, Digest, EngineBody, EngineOutcome, Hasher, Inspection, Transcript, canonical, limits,
+    Ack, Digest, EngineBody, EngineOutcome, Failure, Hasher, Inspection, Transcript, canonical, limits,
 };
 
 /// The search path every engine process gets.
@@ -32,8 +36,10 @@ pub enum EngineError {
     Unpack(String),
     #[error("the installer's engine couldn't be started: {0}")]
     Start(String),
-    #[error("{0}")]
-    Inspection(String),
+    /// The inspection failed or broke the protocol. `log` is the end of the
+    /// engine's diagnostic log, for diagnostics only.
+    #[error("{message}")]
+    Inspection { message: String, log: Vec<String> },
 }
 
 /// An unpacked engine.
@@ -258,14 +264,91 @@ pub trait EngineProcess: Send {
     fn terminator(&self) -> Box<dyn FnMut() + Send>;
     /// Wait for it to exit; whether it exited successfully.
     fn wait(&mut self) -> io::Result<bool>;
+    /// The last lines of its diagnostic log (its standard error), once it
+    /// has exited. They can name accounts and folders: the caller redacts
+    /// them before they leave it.
+    fn log(&mut self) -> Vec<String> {
+        Vec::new()
+    }
+}
+
+/// How many lines of an engine's diagnostic log are kept, the last ones,
+/// and how many bytes of each.
+pub const LOG_LINES: usize = 500;
+const LOG_LINE: usize = 1024;
+
+/// An engine's diagnostic log, read on a thread of its own as it is
+/// written, so the engine never waits on it.
+struct Log {
+    lines: Arc<Mutex<VecDeque<String>>>,
+    ended: Receiver<()>,
+}
+
+impl Log {
+    fn read(stderr: ChildStderr) -> Self {
+        let lines = Arc::new(Mutex::new(VecDeque::new()));
+        let (end, ended) = channel();
+        let kept = lines.clone();
+        std::thread::spawn(move || {
+            let mut reader = BufReader::new(stderr);
+            let mut line = Vec::new();
+            while let Ok(true) = read_log_line(&mut reader, &mut line) {
+                let text: String = String::from_utf8_lossy(&line)
+                    .chars()
+                    .map(|c| if c.is_control() { ' ' } else { c })
+                    .collect();
+                let mut kept = kept.lock().unwrap();
+                if kept.len() == LOG_LINES {
+                    kept.pop_front();
+                }
+                kept.push_back(text.trim_end().to_owned());
+                line.clear();
+            }
+            let _ = end.send(());
+        });
+        Self { lines, ended }
+    }
+
+    fn take(&self) -> Vec<String> {
+        // The engine has exited: give its last lines a moment to arrive. A
+        // tool it started that kept the log open doesn't hold this up.
+        let _ = self.ended.recv_timeout(Duration::from_secs(2));
+        self.lines.lock().unwrap().drain(..).collect()
+    }
+}
+
+/// Read one line into `line`, keeping at most [`LOG_LINE`] bytes of it and
+/// reading past the rest; false at the end of the log.
+fn read_log_line(reader: &mut impl BufRead, line: &mut Vec<u8>) -> io::Result<bool> {
+    let mut any = false;
+    loop {
+        let buf = reader.fill_buf()?;
+        if buf.is_empty() {
+            return Ok(any);
+        }
+        any = true;
+        let (text, used) = match buf.iter().position(|b| *b == b'\n') {
+            Some(i) => (i, i + 1),
+            None => (buf.len(), buf.len()),
+        };
+        let room = LOG_LINE.saturating_sub(line.len());
+        line.extend_from_slice(&buf[..text.min(room)]);
+        let ended = used > text;
+        reader.consume(used);
+        if ended {
+            return Ok(true);
+        }
+    }
 }
 
 /// An engine started as a child process: transcript on its stdout,
-/// acknowledgements on its stdin.
+/// acknowledgements on its stdin, and its diagnostic log, when that is
+/// piped, on its stderr.
 pub struct ChildEngine {
     child: Child,
     stdin: Option<ChildStdin>,
     stdout: BufReader<ChildStdout>,
+    log: Option<Log>,
 }
 
 impl ChildEngine {
@@ -275,10 +358,12 @@ impl ChildEngine {
             .stdout
             .take()
             .ok_or_else(|| io::Error::other("the engine has no output"))?;
+        let log = child.stderr.take().map(Log::read);
         Ok(Self {
             child,
             stdin,
             stdout: BufReader::new(stdout),
+            log,
         })
     }
 }
@@ -326,6 +411,9 @@ impl EngineProcess for ChildEngine {
         self.stdin = None;
         Ok(self.child.wait()?.success())
     }
+    fn log(&mut self) -> Vec<String> {
+        self.log.as_ref().map(Log::take).unwrap_or_default()
+    }
 }
 
 /// Run `inspect` and return what it found, checked against the protocol.
@@ -333,7 +421,7 @@ pub fn inspect(engine: &EngineInstall) -> Result<Inspection, EngineError> {
     let child = command(engine, &["inspect"])?
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn()
         .map_err(|e| EngineError::Start(e.to_string()))?;
     let mut process = ChildEngine::new(child).map_err(|e| EngineError::Start(e.to_string()))?;
@@ -354,34 +442,66 @@ pub fn inspect(engine: &EngineInstall) -> Result<Inspection, EngineError> {
 /// How long an inspection may take.
 pub const INSPECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(300);
 
-/// Read an inspection transcript to its end.
+/// Read an inspection transcript to its end. A failed one keeps the end of
+/// the engine's log.
 pub fn read_inspection(process: &mut dyn EngineProcess) -> Result<Inspection, EngineError> {
+    let read = read_inspection_transcript(process);
+    if let Inspected::Broken(_) = read {
+        // It may still be running; an inspection changes nothing, so it can
+        // be stopped.
+        (process.terminator())();
+    }
+    let _ = process.wait();
+    let message = match read {
+        Inspected::Found(i) => return Ok(*i),
+        Inspected::Failed(f) => f.message.to_string(),
+        Inspected::Ended => "The engine couldn't inspect this Mac.".into(),
+        Inspected::Broken(why) => why,
+    };
+    Err(EngineError::Inspection {
+        message,
+        log: process.log(),
+    })
+}
+
+/// How an inspection transcript ended.
+enum Inspected {
+    Found(Box<Inspection>),
+    /// The engine reported a failure.
+    Failed(Failure),
+    /// It ended without an inspection or a failure.
+    Ended,
+    /// It couldn't be read, or broke the protocol.
+    Broken(String),
+}
+
+fn read_inspection_transcript(process: &mut dyn EngineProcess) -> Inspected {
     let mut transcript = Transcript::inspect();
     let mut inspection = None;
     let mut failure = None;
-    while let Some(line) = process
-        .next_line()
-        .map_err(|e| EngineError::Inspection(e.to_string()))?
-    {
-        let message = transcript
-            .accept(&line)
-            .map_err(|e| EngineError::Inspection(format!("The engine's inspection didn't make sense: {e}")))?;
+    loop {
+        let line = match process.next_line() {
+            Ok(Some(line)) => line,
+            Ok(None) => break,
+            Err(e) => return Inspected::Broken(e.to_string()),
+        };
+        let message = match transcript.accept(&line) {
+            Ok(m) => m,
+            Err(e) => return Inspected::Broken(format!("The engine's inspection didn't make sense: {e}")),
+        };
         match message.message {
-            EngineBody::Inspection(i) => inspection = Some(*i),
-            EngineBody::Failure { failure: f, .. } => failure = Some(f.message.to_string()),
+            EngineBody::Inspection(i) => inspection = Some(i),
+            EngineBody::Failure { failure: f, .. } => failure = Some(f),
             _ => {}
         }
         if transcript.outcome().is_some() {
             break;
         }
     }
-    let _ = process.wait();
-    if let Some(f) = failure {
-        return Err(EngineError::Inspection(f));
-    }
-    match (transcript.outcome(), inspection) {
-        (Some(EngineOutcome::Inspected), Some(i)) => Ok(i),
-        _ => Err(EngineError::Inspection("The engine couldn't inspect this Mac.".into())),
+    match (failure, transcript.outcome(), inspection) {
+        (Some(f), _, _) => Inspected::Failed(f),
+        (None, Some(EngineOutcome::Inspected), Some(i)) => Inspected::Found(i),
+        _ => Inspected::Ended,
     }
 }
 
@@ -454,6 +574,84 @@ mod tests {
         assert!(unpack(&archive, &tmp.path().join("cache"), Some(&Digest::of(b"other"))).is_err());
         let found = inspect(&engine).unwrap();
         assert_eq!(found, sekka_mac_contract::samples::inspection());
+    }
+
+    /// An engine whose "Python" is a shell script that writes `log` to its
+    /// standard error and `messages` as its transcript.
+    fn scripted(dir: &Path, log: &str, messages: &[EngineBody]) -> EngineInstall {
+        fs::create_dir_all(dir.join("bin")).unwrap();
+        let mut lines = String::new();
+        for (seq, message) in messages.iter().enumerate() {
+            let m = sekka_mac_contract::EngineMessage {
+                schema: sekka_mac_contract::EngineSchema,
+                seq: seq as u64 + 1,
+                message: message.clone(),
+            };
+            lines.push_str(&String::from_utf8(canonical::to_vec(&m).unwrap()).unwrap());
+            lines.push('\n');
+        }
+        fs::write(dir.join("transcript"), lines).unwrap();
+        fs::write(dir.join("log"), log).unwrap();
+        let script = "#!/bin/sh\ncat log >&2\ncat transcript\n";
+        fs::write(dir.join("bin/python3"), script).unwrap();
+        fs::set_permissions(dir.join("bin/python3"), fs::Permissions::from_mode(0o755)).unwrap();
+        fs::write(dir.join("engine-lock.json"), br#"{"entry":"sekka_engine/__main__.py","runtime":"bin/python3"}"#).unwrap();
+        EngineInstall {
+            root: dir.into(),
+            digest: Digest::of(b"tree"),
+        }
+    }
+
+    fn hello() -> EngineBody {
+        EngineBody::Hello {
+            engine: "0.9.2+sekka.1".parse().unwrap(),
+            asahi: "0.9.2".parse().unwrap(),
+            adapter: Digest::of(b"a"),
+            mode: sekka_mac_contract::EngineMode::Inspect,
+            protocol: sekka_mac_contract::ENGINE_PROTOCOL,
+        }
+    }
+
+    #[test]
+    fn a_failed_inspection_keeps_the_end_of_the_engines_log() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut log: String = (0..LOG_LINES + 100).map(|n| format!("line {n}\n")).collect();
+        log.push_str(&"x".repeat(5000));
+        log.push_str("\nTraceback (most recent call last):\tKeyError: 'x'\n");
+        let failure = Failure {
+            code: "inspection-failed".parse().unwrap(),
+            message: "This Mac couldn't be inspected: 'x'".parse().unwrap(),
+            apple_diagnostic: None,
+            disk_changed: sekka_mac_contract::DiskChanged::No,
+        };
+        let engine = scripted(
+            tmp.path(),
+            &log,
+            &[
+                hello(),
+                EngineBody::Failure { stage: None, failure },
+                EngineBody::Completion { outcome: EngineOutcome::Failed },
+            ],
+        );
+        let Err(EngineError::Inspection { message, log }) = inspect(&engine) else { panic!() };
+        assert_eq!(message, "This Mac couldn't be inspected: 'x'");
+        // The last lines, each cut to a line's worth, control characters
+        // made spaces.
+        assert_eq!(log.len(), LOG_LINES);
+        assert_eq!(log[0], "line 102");
+        assert_eq!(log[LOG_LINES - 2], "x".repeat(LOG_LINE));
+        assert_eq!(log[LOG_LINES - 1], "Traceback (most recent call last): KeyError: 'x'");
+        // A successful one needs none of it, and an engine that ends without
+        // saying anything leaves its log too.
+        let tmp = tempfile::tempdir().unwrap();
+        let engine = scripted(tmp.path(), "Segmentation fault\n", &[hello()]);
+        assert_eq!(
+            inspect(&engine),
+            Err(EngineError::Inspection {
+                message: "The engine couldn't inspect this Mac.".into(),
+                log: vec!["Segmentation fault".into()],
+            })
+        );
     }
 
     #[test]

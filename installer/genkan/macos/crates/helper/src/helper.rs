@@ -92,6 +92,15 @@ impl Active {
         s.log.push_back(line);
     }
 
+    /// What the engine wrote to its own diagnostic log, after it exited:
+    /// tracebacks and Apple's tools' output that its transcript leaves out.
+    /// Redacted, like every line, when diagnostics are copied.
+    fn engine_log(&self, lines: Vec<String>) {
+        for line in lines {
+            self.log(format!("stderr: {line}"));
+        }
+    }
+
     /// What the engine reports, for Events and diagnostics.
     fn observe(&self, o: Observation) {
         match o {
@@ -657,6 +666,7 @@ impl<P: Platform> Helper<P> {
             None,
         );
         let _ = process.wait();
+        active.engine_log(process.log());
         if let Err(e) = &result {
             active.log(e.to_string());
             if open_stage(journal.records()) == Some(Stage::StartupDisk) {
@@ -726,6 +736,11 @@ impl<P: Platform> Helper<P> {
         let inspection = match self.platform.inspect(&engine) {
             Ok(i) => i,
             Err(e) => {
+                if let PlatformError::Inspection { log, .. } = &e {
+                    for line in log {
+                        self.note(installation, format!("stderr: {line}"));
+                    }
+                }
                 return refuse(
                     HelperRefusalCode::State,
                     format!("This Mac couldn't be inspected ({e}). Nothing was changed."),
@@ -1068,6 +1083,7 @@ impl<P: Platform> Run<P> {
         };
         self.active.shared.lock().unwrap().terminate = None;
         let clean_exit = process.wait().unwrap_or(false);
+        self.active.engine_log(process.log());
         match result {
             Ok(EngineOutcome::WaitingForRecovery) if clean_exit => {
                 self.log("macOS's part is finished; Recovery is next.".into());

@@ -34,8 +34,9 @@ pub enum PlatformError {
     Authorization(String),
     #[error("{0}")]
     Engine(String),
-    #[error("{0}")]
-    Inspection(String),
+    /// `log` is the end of the engine's diagnostic log, for diagnostics.
+    #[error("{message}")]
+    Inspection { message: String, log: Vec<String> },
     #[error("{0}")]
     Other(String),
 }
