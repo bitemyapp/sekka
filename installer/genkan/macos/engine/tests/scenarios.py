@@ -12,6 +12,15 @@ def clean_inspection(t, privileged=True, builder=None):
     return mac, asahi, host, outcome, doc, channel
 
 
+def owner_refused(t):
+    """The helper's inspection before it opens an installation, for an
+    owner whose password ends with a space, which bless can't take."""
+    mac = S.j514s_clean(t.sub("mac"))
+    asahi, host = S.load_asahi(mac)
+    _, _, channel = S.inspect(mac, asahi, host, t.sub("work-inspect"), owner=S.OWNER, password=S.PASSWORD + b" ")
+    return channel
+
+
 def execute(t, builder=S.j514s_clean, sekka=190 * S.GIB, place="shrink", before=None, plan_edit=None, release_kw=None, run_kw=None):
     """Inspect, derive a plan, optionally change something, and execute."""
     mac = builder(t.sub("mac"))

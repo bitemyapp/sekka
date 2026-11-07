@@ -19,8 +19,8 @@ use std::sync::{Arc, Mutex};
 use sekka_mac_contract::{
     ArtifactRole, Begin, Digest, DiskChanged, EngineOutcome, Event, Fact, Failure, HELPER_PROTOCOL,
     HelperRefusal, HelperRefusalCode, HelperRequest, HelperRequestSchema, HelperResponse,
-    HelperResponseSchema, InstallState, Progress, Release, Request, Response, Stage, Summary,
-    Text, Transcript, Uuid, Verification, Version, canonical, derive_plan, limits,
+    HelperResponseSchema, InstallState, OWNER_REFUSALS, Progress, Release, Request, Response, Stage,
+    Summary, Text, Transcript, Uuid, Verification, Version, canonical, derive_plan, limits,
 };
 use sekka_mac_journal::{FsStorage, InstallLock, Journal, JournalError};
 use sekka_mac_stage::{Expect, StagingDir};
@@ -28,7 +28,7 @@ use sekka_mac_trust::{AcceptedStore, TrustConfig};
 
 use crate::engine::{DriveError, Observation, drive};
 use crate::reconcile::{Finding, fact, open_stage, recorded_facts};
-use crate::{EngineInstall, Paths, Platform, PlatformError, Secret, redact};
+use crate::{Account, EngineInstall, Paths, Platform, PlatformError, Secret, redact};
 
 /// How many engine log lines are kept for diagnostics.
 const LOG_LINES: usize = 2000;
@@ -113,7 +113,7 @@ impl Active {
             }
             Observation::Progress(p) => self.shared.lock().unwrap().progress = Some(p),
             Observation::Log(level, line) => self.log(format!("{level:?}: {line}")),
-            Observation::Refusal(why) => self.log(format!("Refused: {why}")),
+            Observation::Refusal(failure) => self.log(format!("Refused: {}", failure.message)),
         }
     }
 
@@ -396,19 +396,28 @@ impl<P: Platform> Helper<P> {
             return refuse(HelperRefusalCode::Catalog, "The catalog doesn't offer that release.");
         };
 
-        // The owner, before anything slow.
-        let owner = begin.owner.to_string();
-        if let Err(e) = self.platform.authenticate_owner(&owner, &password) {
-            return refuse(HelperRefusalCode::Authorization, e.to_string());
-        }
+        // The owner, before anything slow, by the name the directory gives
+        // the account.
+        let owner = match self.platform.authenticate_owner(begin.owner.as_str(), &password) {
+            Ok(name) => name,
+            Err(e) => return refuse(HelperRefusalCode::Authorization, e.to_string()),
+        };
 
-        // The engine this release needs, and the Mac as root sees it.
+        // The engine this release needs, and the Mac as root sees it. The
+        // engine checks the owner and the password too, by the rules it
+        // installs by, so nothing is recorded or imported for an owner it
+        // would refuse once it starts.
         let engine = match self.engine(&release.artifacts.engine.digest) {
             Ok(e) => e,
             Err(e) => return refuse(HelperRefusalCode::Download, e.to_string()),
         };
-        let inspection = match self.platform.inspect(&engine) {
+        let checked = Account {
+            name: &owner,
+            password: &password,
+        };
+        let inspection = match self.platform.inspect(&engine, Some(checked)) {
             Ok(i) => i,
+            Err(PlatformError::Authorization(why)) => return refuse(HelperRefusalCode::Authorization, why),
             Err(e) => return refuse(HelperRefusalCode::PlanChanged, e.to_string()),
         };
         let plan = match derive_plan(&inspection, catalog, &begin.request, 0) {
@@ -613,9 +622,10 @@ impl<P: Platform> Helper<P> {
                 "The installation's record doesn't say what its boot partition holds, so the startup disk can't be set again safely.",
             );
         };
-        if let Err(e) = self.platform.authenticate_owner(&owner, &password) {
-            return refuse(HelperRefusalCode::Authorization, e.to_string());
-        }
+        let owner = match self.platform.authenticate_owner(&owner, &password) {
+            Ok(name) => name,
+            Err(e) => return refuse(HelperRefusalCode::Authorization, e.to_string()),
+        };
         // The engine that installed it, finding its stub by the
         // installation's identity and checking the target is still there.
         let engine = match self.engine(&plan.release.engine) {
@@ -682,8 +692,8 @@ impl<P: Platform> Helper<P> {
             &|| self.platform.now(),
             &mut |_| true,
             &mut |o| {
-                if let Observation::Refusal(why) = &o {
-                    refusal = Some(why.clone());
+                if let Observation::Refusal(failure) = &o {
+                    refusal = Some(failure.clone());
                 }
                 active.observe(o);
             },
@@ -713,11 +723,20 @@ impl<P: Platform> Helper<P> {
         }
         active.stop();
         if journal.records().len() == before {
-            // Refused before trying, so nothing was recorded: say why here.
-            let why = refusal
-                .or_else(|| result.err().map(|e| e.to_string()))
-                .unwrap_or_else(|| "The startup disk wasn't set again, and the engine didn't say why.".into());
-            return refuse(HelperRefusalCode::State, why);
+            // Refused before trying, so nothing was recorded: say why here,
+            // as the owner's to fix when it is the account or password.
+            return match refusal {
+                Some(f) if OWNER_REFUSALS.contains(&f.code.as_str()) => {
+                    refuse(HelperRefusalCode::Authorization, f.message.as_str())
+                }
+                Some(f) => refuse(HelperRefusalCode::State, f.message.as_str()),
+                None => refuse(
+                    HelperRefusalCode::State,
+                    result.err().map(|e| e.to_string()).unwrap_or_else(|| {
+                        "The startup disk wasn't set again, and the engine didn't say why.".into()
+                    }),
+                ),
+            };
         }
         self.events(installation, 0)
     }
@@ -757,7 +776,7 @@ impl<P: Platform> Helper<P> {
             Ok(e) => e,
             Err(e) => return refuse(HelperRefusalCode::Download, e.to_string()),
         };
-        let inspection = match self.platform.inspect(&engine) {
+        let inspection = match self.platform.inspect(&engine, None) {
             Ok(i) => i,
             Err(e) => {
                 if let PlatformError::Inspection { log, .. } = &e {

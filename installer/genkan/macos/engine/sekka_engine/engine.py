@@ -195,24 +195,42 @@ class Engine:
 
     # inspect -----------------------------------------------------------------
 
-    def run_inspect(self):
+    def run_inspect(self, owner=None):
+        """Describe the Mac. With `owner` (the helper's inspection before it
+        opens an installation), first check that account and the password
+        on descriptor 3 by the rules execute and startup-disk apply, so the
+        helper refuses what they would before anything is recorded or
+        imported."""
         self.t.hello(ENGINE_VERSION, ASAHI_VERSION, self.adapter, "inspect")
         try:
-            profile, _ = c.load_profile(self.profile_bytes)
-            doc, inspector = inspect_mac(self.asahi, self.host, profile, privileged=self.privileged)
-        except Exception as error:  # report every failure through the transcript
-            log.exception("inspection failed")
-            self.t.failure(
-                None,
-                c.failure(
-                    "inspection-failed",
-                    f"This Mac couldn't be inspected: {error}",
+            try:
+                if owner is not None:
+                    self.check_owner(owner)
+                profile, _ = c.load_profile(self.profile_bytes)
+                doc, inspector = inspect_mac(self.asahi, self.host, profile, privileged=self.privileged)
+                # Without the running macOS the inspection says so in an issue
+                # that stops installing; there is no list to look in.
+                if owner is not None and inspector.cur_os is not None:
+                    self.check_admin(inspector.cur_os)
+            except Refusal as refusal:
+                self.t.failure(None, c.failure(refusal.code, refusal.message, refusal.diagnostic, "no"))
+                self.t.completion("failed")
+                return "failed"
+            except Exception as error:  # report every failure through the transcript
+                log.exception("inspection failed")
+                self.t.failure(
                     None,
-                    "no",
-                ),
-            )
-            self.t.completion("failed")
-            return "failed"
+                    c.failure(
+                        "inspection-failed",
+                        f"This Mac couldn't be inspected: {error}",
+                        None,
+                        "no",
+                    ),
+                )
+                self.t.completion("failed")
+                return "failed"
+        finally:
+            wipe(self.password)
         for what in inspector.unavailable:
             self.t.log("info", f"Not read without administrator rights: {what}.")
         self.t.inspection(doc)
@@ -390,12 +408,7 @@ class Engine:
                 normal[0]["detail"] if normal else "The running macOS can't be found on the internal disk.",
             )
         self.cur_os = inspector.cur_os
-        admins = self.cur_os.admin_users or []
-        if owner not in admins or owner == "_mbsetupuser":
-            raise Refusal(
-                "owner-not-admin",
-                f"{owner} isn't one of this Mac's administrators who can approve startup changes in Recovery.",
-            )
+        self.check_admin(self.cur_os)
         # Looked at read-only until the checks pass; then only the stub's own
         # volumes become writable (the stage renames its SystemVersion).
         self.open_working_view()
@@ -558,10 +571,7 @@ class Engine:
             self.installation = c.uuid(installation)
         except c.Invalid:
             raise Refusal("installation-invalid", "The installation identity isn't a lower-case UUID.")
-        if not isinstance(owner, str) or not OWNER.fullmatch(owner):
-            raise Refusal("owner-invalid", "The owner's account name isn't a macOS short name.")
-        self.owner = owner
-        self.check_password()
+        self.check_owner(owner)
         try:
             self.profile, profile_digest = c.load_profile(self.profile_bytes)
         except (c.Invalid, canonical.CanonicalError, KeyError, TypeError) as error:
@@ -596,12 +606,7 @@ class Engine:
         self.check_against_plan(doc, inspector)
         self.check_actions(doc)
         self.cur_os = inspector.cur_os
-        admins = self.cur_os.admin_users or []
-        if owner not in admins or owner == "_mbsetupuser":
-            raise Refusal(
-                "owner-not-admin",
-                f"{owner} isn't one of this Mac's administrators who can approve startup changes in Recovery.",
-            )
+        self.check_admin(self.cur_os)
         self.ipsw = self.choose_ipsw()
         self.t.log("info", f"Asahi's installer gives the new system macOS {self.ipsw.version}'s OS firmware.")
         # Room for Apple's files, which the apple-inputs stage keeps in the
@@ -637,6 +642,32 @@ class Engine:
             return None
         return name if isinstance(name, str) else None
 
+    # The owner, as every mode that is given one checks it ------------------------
+    #
+    # The refusals' codes are contract.OWNER_REFUSALS: the helper tells the
+    # owner these are theirs to change, not the Mac's.
+
+    def check_owner(self, owner):
+        """The owner's short name and the password on descriptor 3."""
+        if not isinstance(owner, str) or not OWNER.fullmatch(owner):
+            raise Refusal("owner-invalid", "The owner's account name isn't a macOS short name.")
+        self.owner = owner
+        self.check_password()
+
+    def check_admin(self, cur_os):
+        """The owner can approve the new system's startup in Recovery: Asahi's
+        admin_users, the running macOS's AdminUserRecoveryInfo.plist, which
+        the stub's Recovery gets a copy of."""
+        admins = cur_os.admin_users or []
+        if self.owner not in admins or self.owner == "_mbsetupuser":
+            raise Refusal(
+                "owner-not-admin",
+                f"{self.owner} isn't one of the administrators this Mac's Recovery accepts. macOS keeps that "
+                "list on its Preboot volume and brings it up to date when macOS updates, so an account made an "
+                "administrator or given a secure token since then isn't on it yet; "
+                "“diskutil apfs updatePreboot /” in Terminal brings it up to date now.",
+            )
+
     def check_password(self):
         p = self.password
         if p is None:
@@ -654,7 +685,8 @@ class Engine:
             raise Refusal(
                 "password-unusable",
                 "The owner's password starts or ends with a space, which Apple's bless can't accept "
-                "from the installer.",
+                "from an installer. Use another owner of this Mac, or change this account's password "
+                "so that it doesn't.",
             )
         del decoded
 

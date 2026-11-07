@@ -33,6 +33,10 @@
     "mode": "inspect",
     "outcome": "Inspected"
   },
+  "inspect-owner-refused.jsonl": {
+    "mode": "inspect",
+    "outcome": "Failed"
+  },
   "startup-disk-failed.jsonl": {
     "mode": "startup-disk",
     "outcome": "Failed",

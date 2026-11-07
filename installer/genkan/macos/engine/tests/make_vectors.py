@@ -39,6 +39,13 @@ def main():
     finally:
         t.cleanup()
 
+    t = S.TempDir()
+    try:
+        scenarios.write_lines(os.path.join(out, "inspect-owner-refused.jsonl"), scenarios.owner_refused(t).lines)
+        transcripts["inspect-owner-refused.jsonl"] = {"mode": "inspect", "outcome": "Failed"}
+    finally:
+        t.cleanup()
+
     for name, builder in (("existing-sekka", lambda root, **kw: S.j514s_existing_sekka(root, **kw)[0]), ("m1-pro-asahi", S.m1_pro_with_asahi)):
         t = S.TempDir()
         try:
@@ -155,9 +162,10 @@ def write_expected(rust, out):
         {
             "documents": documents,
             "machine_bindings": bindings,
-            # Not computed: the one number plan.rs and the engine each check
+            # Not computed: what plan.rs, engine.rs and the engine each check
             # theirs against.
             "macos_margin": c.MACOS_MARGIN,
+            "owner_refusals": list(c.OWNER_REFUSALS),
             "profile_digest": report["digest"],
         },
     )

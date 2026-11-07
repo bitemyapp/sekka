@@ -32,6 +32,10 @@ PROFILE_SCHEMA = "sekka.mac.profile/1"
 RECOVERY_SCHEMA = "sekka.mac.recovery/1"
 HANDOFF_SCHEMA = "sekka.mac.handoff/1"
 
+# engine.rs: the codes with which every mode that is given an owner refuses
+# that account or its password, before anything changes.
+OWNER_REFUSALS = ("no-password", "password-unusable", "owner-invalid", "owner-not-admin")
+
 # plan.rs
 ALIGN = 1024 * 1024
 STUB_BYTES = 2_500_000_000 // ALIGN * ALIGN

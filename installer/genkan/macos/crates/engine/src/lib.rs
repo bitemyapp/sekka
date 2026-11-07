@@ -20,7 +20,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use sekka_mac_contract::{
-    Ack, Digest, EngineBody, EngineOutcome, Failure, Hasher, Inspection, Transcript, canonical, limits,
+    Ack, Digest, EngineBody, EngineOutcome, Failure, Hasher, Inspection, OWNER_REFUSALS, Transcript, canonical,
+    limits,
 };
 
 /// The search path every engine process gets.
@@ -40,6 +41,10 @@ pub enum EngineError {
     /// engine's diagnostic log, for diagnostics only.
     #[error("{message}")]
     Inspection { message: String, log: Vec<String> },
+    /// The engine refused the owner it was named or the password it was
+    /// handed ([`OWNER_REFUSALS`]), in its own words.
+    #[error("{0}")]
+    Owner(String),
 }
 
 /// An unpacked engine.
@@ -229,22 +234,47 @@ pub fn command(engine: &EngineInstall, args: &[&str]) -> Result<Command, EngineE
     Ok(command)
 }
 
-/// Give an engine started for an installation its two private
-/// descriptors: the owner's password on 3, which it reads to its end, and
+/// The most the helper hands an engine as a password. The engine applies
+/// its own rule to what it reads (it refuses one over 1024 bytes); this
+/// only keeps what waits in the pipe for it small.
+pub const PASSWORD_LIMIT: usize = 4096;
+
+/// A pipe holding `password`, its writing end closed, for an engine's
+/// descriptor 3 (see [`inherit`]): never an argument, never the
+/// environment, never a file. Both ends are close-on-exec.
+pub fn password_pipe(password: &[u8]) -> io::Result<io::PipeReader> {
+    if password.len() > PASSWORD_LIMIT {
+        return Err(io::Error::other("the password is longer than any the engine accepts"));
+    }
+    let (read, mut write) = io::pipe()?;
+    write.write_all(password)?;
+    Ok(read)
+}
+
+/// Give an engine its private descriptors: the owner's password on 3,
+/// which it reads to its end, and, when it is started for an installation,
 /// the install lock on 4, which it keeps open until it exits. The lock
 /// belongs to the open file, so the engine holds it for as long as it runs,
 /// even if the helper that started it stops first, and nothing claims it
 /// meanwhile to inspect or install. The engine starts its own tools without
-/// either. Both descriptors must stay open until `command` is spawned.
-pub fn inherit(command: &mut Command, password: RawFd, lock: RawFd) {
+/// either. The descriptors must stay open until `command` is spawned.
+pub fn inherit(command: &mut Command, password: RawFd, lock: Option<RawFd>) {
     // SAFETY: only async-signal-safe calls between fork and exec.
     unsafe {
         command.pre_exec(move || {
             // Copies above both targets first, so neither dup2 below closes
             // the other's source. The copies end at exec; 3 and 4 don't.
             let password = libc::fcntl(password, libc::F_DUPFD_CLOEXEC, 5);
-            let lock = libc::fcntl(lock, libc::F_DUPFD_CLOEXEC, 5);
-            if password < 0 || lock < 0 || libc::dup2(password, 3) < 0 || libc::dup2(lock, 4) < 0 {
+            if password < 0 {
+                return Err(io::Error::last_os_error());
+            }
+            if let Some(lock) = lock {
+                let lock = libc::fcntl(lock, libc::F_DUPFD_CLOEXEC, 5);
+                if lock < 0 || libc::dup2(lock, 4) < 0 {
+                    return Err(io::Error::last_os_error());
+                }
+            }
+            if libc::dup2(password, 3) < 0 {
                 return Err(io::Error::last_os_error());
             }
             Ok(())
@@ -421,12 +451,29 @@ impl EngineProcess for ChildEngine {
 
 /// Run `inspect` and return what it found, checked against the protocol.
 pub fn inspect(engine: &EngineInstall) -> Result<Inspection, EngineError> {
-    let child = command(engine, &["inspect"])?
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| EngineError::Start(e.to_string()))?;
+    let mut command = command(engine, &["inspect"])?;
+    command.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    let child = command.spawn().map_err(|e| EngineError::Start(e.to_string()))?;
+    watch_inspection(child)
+}
+
+/// Run `inspect --owner OWNER` as root before an installation opens: the
+/// engine checks the owner and the password by the rules `execute` and
+/// `startup-disk` apply, and refuses with [`EngineError::Owner`] before it
+/// reports anything, so nothing is recorded or imported for an owner it
+/// would refuse later.
+pub fn inspect_for(engine: &EngineInstall, owner: &str, password: &[u8]) -> Result<Inspection, EngineError> {
+    let pipe = password_pipe(password).map_err(|e| EngineError::Owner(format!("The password can't be used: {e}.")))?;
+    let mut command = command(engine, &["inspect", "--owner", owner])?;
+    command.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    inherit(&mut command, std::os::fd::AsRawFd::as_raw_fd(&pipe), None);
+    let child = command.spawn();
+    drop(pipe);
+    watch_inspection(child.map_err(|e| EngineError::Start(e.to_string()))?)
+}
+
+/// Read an inspection from `child`, stopping it if it takes too long.
+fn watch_inspection(child: Child) -> Result<Inspection, EngineError> {
     let mut process = ChildEngine::new(child).map_err(|e| EngineError::Start(e.to_string()))?;
     // Inspection changes nothing, so a stuck one can be stopped.
     let mut stop = process.terminator();
@@ -446,7 +493,7 @@ pub fn inspect(engine: &EngineInstall) -> Result<Inspection, EngineError> {
 pub const INSPECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(300);
 
 /// Read an inspection transcript to its end. A failed one keeps the end of
-/// the engine's log.
+/// the engine's log; a refused owner is [`EngineError::Owner`].
 pub fn read_inspection(process: &mut dyn EngineProcess) -> Result<Inspection, EngineError> {
     let read = read_inspection_transcript(process);
     if let Inspected::Broken(_) = read {
@@ -457,6 +504,9 @@ pub fn read_inspection(process: &mut dyn EngineProcess) -> Result<Inspection, En
     let _ = process.wait();
     let message = match read {
         Inspected::Found(i) => return Ok(*i),
+        Inspected::Failed(f) if OWNER_REFUSALS.contains(&f.code.as_str()) => {
+            return Err(EngineError::Owner(f.message.to_string()));
+        }
         Inspected::Failed(f) => f.message.to_string(),
         Inspected::Ended => "The engine couldn't inspect this Mac.".into(),
         Inspected::Broken(why) => why,
@@ -658,6 +708,27 @@ mod tests {
     }
 
     #[test]
+    fn an_inspection_for_an_owner_hands_over_the_password_and_refuses_as_the_engine_does() {
+        // The engine's own transcript for an owner whose password ends with
+        // a space (engine/tests/vectors), from a "Python" that checks its
+        // arguments and keeps what it read on descriptor 3.
+        let vector = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../engine/tests/vectors/inspect-owner-refused.jsonl");
+        let tmp = tempfile::tempdir().unwrap();
+        let engine = scripted(tmp.path(), "", &[]);
+        fs::copy(&vector, tmp.path().join("transcript")).unwrap();
+        let script = "#!/bin/sh\n[ \"$4\" = inspect ] && [ \"$5\" = --owner ] && [ \"$6\" = owner ] && [ $# -eq 6 ] || exit 3\ncat <&3 > password\ncat transcript\n";
+        fs::write(tmp.path().join("bin/python3"), script).unwrap();
+        let Err(EngineError::Owner(message)) = inspect_for(&engine, "owner", b"hunter2 ") else { panic!() };
+        assert!(message.contains("starts or ends with a space"), "{message}");
+        assert_eq!(fs::read(tmp.path().join("password")).unwrap(), b"hunter2 ");
+        // One longer than any the engine takes isn't handed over at all.
+        fs::remove_file(tmp.path().join("password")).unwrap();
+        let long = vec![b'x'; PASSWORD_LIMIT + 1];
+        assert!(matches!(inspect_for(&engine, "owner", &long), Err(EngineError::Owner(_))));
+        assert!(!tmp.path().join("password").exists());
+    }
+
+    #[test]
     fn an_engine_holds_the_install_lock_until_it_exits() {
         use std::os::fd::AsRawFd;
         let tmp = tempfile::tempdir().unwrap();
@@ -683,7 +754,7 @@ mod tests {
             .args(["-c", "cat <&3; read line || :"])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped());
-        inherit(&mut command, password.as_raw_fd(), lock.as_raw_fd());
+        inherit(&mut command, password.as_raw_fd(), Some(lock.as_raw_fd()));
         let mut child = command.spawn().unwrap();
         drop(password);
         let mut read = [0u8; 13];

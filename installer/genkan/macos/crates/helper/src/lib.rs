@@ -9,7 +9,9 @@
 //!
 //! - it verifies the catalog with its own trust roots and its own record of
 //!   accepted catalogs, which the person can't reset;
-//! - it checks the owner's account and password itself;
+//! - it checks the owner's account and password itself, and has the engine
+//!   check them by the rules it installs by, before it opens an
+//!   installation;
 //! - it inspects the Mac itself, as root, derives the plan itself, and
 //!   starts only if that plan's digest is the one the owner confirmed;
 //! - it copies the app's downloads into its own staging, hashing them
@@ -36,7 +38,7 @@ pub mod macos;
 
 pub use helper::Helper;
 pub use paths::Paths;
-pub use platform::{EngineInstall, EngineRun, PASSWORD_LIMIT, Platform, PlatformError, Secret};
+pub use platform::{Account, EngineInstall, EngineRun, PASSWORD_LIMIT, Platform, PlatformError, Secret};
 pub use redact::redact;
 
 #[cfg(test)]

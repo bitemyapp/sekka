@@ -235,12 +235,10 @@ class StartupDiskRetry(unittest.TestCase):
         cases = (
             ({"plan": other}, "wrong-machine"),
             ({"plan": b'{"schema": "sekka.mac.plan/1"}'}, "plan-invalid"),
-            ({"password": None}, "no-password"),
-            ({"owner": "nobody"}, "owner-not-admin"),
             ({"installation": INSTALLATION.upper()}, "installation-invalid"),
             ({"esp_inventory": "sha256:" + "0" * 64}, "installation-changed"),
             ({"esp_inventory": "not a digest"}, "esp-inventory-invalid"),
-        )
+        ) + tuple(({"owner": owner, "password": password}, code) for owner, password, code in S.UNUSABLE_OWNERS)
         for i, (kw, code) in enumerate(cases):
             with self.subTest(code=code):
                 rr = scenarios.retry(r, self.t, name=f"work-retry-{i}", **kw)

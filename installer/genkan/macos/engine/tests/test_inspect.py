@@ -32,6 +32,28 @@ class InspectTests(unittest.TestCase):
         self.mac, self.channel = mac, channel
         return outcome, doc
 
+    def test_an_inspection_for_an_owner_refuses_what_execute_would(self):
+        """The helper's inspection before it opens an installation names the
+        owner: the engine refuses, before it reports anything, every account
+        and password execute and startup-disk refuse, with their codes, and
+        otherwise reports the same inspection."""
+        mac = S.j514s_clean(self.t.sub("mac"))
+        asahi, host = S.load_asahi(mac)
+        _, plain, _ = S.inspect(mac, asahi, host, self.t.sub("w-plain"))
+        outcome, doc, _ = S.inspect(mac, asahi, host, self.t.sub("w-owner"), owner=S.OWNER)
+        self.assertEqual((outcome, doc), ("inspected", plain))
+        before = mac.state_digest()
+        for i, (owner, password, code) in enumerate(S.UNUSABLE_OWNERS):
+            with self.subTest(owner=owner, password=password):
+                outcome, doc, channel = S.inspect(mac, asahi, host, self.t.sub(f"w{i}"), owner=owner, password=password)
+                self.assertEqual((outcome, doc), ("failed", None))
+                [failure] = [m["message"]["payload"] for m in channel.messages() if m["message"]["type"] == "failure"]
+                self.assertEqual((failure["stage"], failure["failure"]["code"], failure["failure"]["disk_changed"]), (None, code, "no"))
+                self.assertIn(code, c.OWNER_REFUSALS)
+                self.assertNotIn(S.PASSWORD, b"\n".join(channel.lines))
+        self.assertEqual(mac.state_digest(), before)
+        self.assertEqual(mac.mounted_now(), [])
+
     def test_a_clean_j514s(self):
         outcome, doc = self.inspect()
         self.assertEqual(outcome, "inspected")

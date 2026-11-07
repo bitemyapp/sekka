@@ -4,7 +4,7 @@ pinned runtime, isolated (-I) and writing no bytecode (-B), from the
 extracted engine archive ROOT:
 
     ROOT/Frameworks/Python.framework/Versions/3.13/bin/python3.13 -I -B \
-        ROOT/sekka_engine/__main__.py inspect
+        ROOT/sekka_engine/__main__.py inspect [--owner NAME]
     … -I -B ROOT/sekka_engine/__main__.py execute --plan FILE --assets DIR \
         --installation UUID --owner NAME
     … -I -B ROOT/sekka_engine/__main__.py startup-disk --plan FILE \
@@ -19,8 +19,10 @@ signature.
 again, for an installation execute left with its payload verified.
 `--esp-inventory` is the esp-inventory fact of that execute run's Esp
 checkpoint, from the helper's journal; the ESP must still match it.
-`execute` and `startup-disk` read the owner's password from file
-descriptor 3, to its end.
+`inspect --owner` is the helper's inspection before it opens an
+installation: it also checks the owner and password as `execute` will.
+`execute`, `startup-disk` and `inspect --owner` read the owner's password
+from file descriptor 3, to its end.
 Standard output carries the transcript; standard input carries the helper's
 `{"ack":SEQ}` answers; standard error carries a diagnostic log. There are
 no other options: no simulation, no other installer, profile or command.
@@ -35,7 +37,7 @@ import sys
 def usage(message):
     sys.stderr.write(f"sekka_engine: {message}\n")
     sys.stderr.write(
-        "usage: python3 -I sekka_engine/__main__.py inspect\n"
+        "usage: python3 -I sekka_engine/__main__.py inspect [--owner NAME   (password on fd 3)]\n"
         "       python3 -I sekka_engine/__main__.py execute --plan FILE --assets DIR"
         " --installation UUID --owner NAME   (password on fd 3)\n"
         "       python3 -I sekka_engine/__main__.py startup-disk --plan FILE"
@@ -66,9 +68,11 @@ def parse(argv):
         raise ValueError("the mode is inspect, execute or startup-disk")
     mode, rest = argv[0], argv[1:]
     if mode == "inspect":
-        if rest:
-            raise ValueError("inspect takes no options")
-        return mode, {}
+        if not rest:
+            return mode, {}
+        if len(rest) != 2 or rest[0] != "--owner" or not rest[1] or rest[1].startswith("-"):
+            raise ValueError("inspect takes nothing, or --owner NAME")
+        return mode, {"--owner": rest[1]}
     wanted = OPTIONS[mode]
     options = {}
     if len(rest) != 2 * len(wanted):
@@ -90,7 +94,7 @@ def main(argv=None):
         mode, options = parse(argv)
     except ValueError as error:
         return usage(str(error))
-    password = read_password(3) if mode in OPTIONS else None
+    password = read_password(3) if "--owner" in options else None
     transcript, acks = take_standard_streams()
     logging.basicConfig(stream=sys.stderr, level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
     for handler in logging.getLogger().handlers:
@@ -160,7 +164,7 @@ def main(argv=None):
 
 def run(engine, mode, options):
     if mode == "inspect":
-        return engine.run_inspect()
+        return engine.run_inspect(options.get("--owner"))
     try:
         with open(options["--plan"], "rb") as f:
             plan_bytes = f.read(64 * 1024 + 1)

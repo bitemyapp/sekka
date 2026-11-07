@@ -20,7 +20,7 @@ point's path:
 
 ```sh
 ROOT/Frameworks/Python.framework/Versions/3.13/bin/python3.13 -I -B \
-    ROOT/sekka_engine/__main__.py inspect
+    ROOT/sekka_engine/__main__.py inspect [--owner SHORTNAME  3< password]
 ROOT/Frameworks/Python.framework/Versions/3.13/bin/python3.13 -I -B \
     ROOT/sekka_engine/__main__.py execute --plan FILE --assets DIR \
     --installation UUID --owner SHORTNAME     3< password
@@ -54,7 +54,8 @@ of that run's Esp checkpoint from the journal, and only that stage (below).
   UUID the helper's journal uses for this installation; execute writes it
   into the first-boot handoff and the Recovery configuration, and
   startup-disk finds the installation by it. `--owner` is the macOS short
-  name whose password the helper verified. There is no option for
+  name whose password the helper verified, as the directory records it (the
+  helper looks up the name typed, in whatever case). There is no option for
   simulation, another installer, profile, command or path; the tests inject
   their fakes into the `Engine` class, which no argument or variable reaches.
 - **Descriptors.** Standard output is the transcript: one canonical JSON
@@ -62,11 +63,12 @@ of that run's Esp checkpoint from the journal, and only that stage (below).
   acknowledgements. Standard error is a diagnostic log: the helper and the
   app drain it as it is written and keep its last 500 lines, the helper for
   Copy Diagnostics (with the owner's name and home folders taken out, and
-  Asahi's list of administrators left out by the engine). In `execute` and
-  `startup-disk`, file descriptor 3 carries the owner's password, read once
-  to end of file and closed; it is kept in a `bytearray` only until `bless`
-  has it, then overwritten. (Python may hold other copies, such as the bytes
-  handed to `bless`'s standard input; no complete erasure is claimed.)
+  Asahi's list of administrators left out by the engine). In `execute`,
+  `startup-disk` and `inspect --owner`, file descriptor 3 carries the owner's
+  password, read once to end of file and closed; it is kept in a `bytearray`
+  only until `bless` has it (or the check has passed), then overwritten.
+  (Python may hold other copies, such as the bytes handed to `bless`'s
+  standard input; no complete erasure is claimed.)
   Descriptor 4 is the helper's install lock, a `flock` the engine holds by
   leaving it open until it exits, so nothing else installs or inspects for
   the helper while it may still be changing the disk, even if the helper
@@ -115,6 +117,17 @@ as root. Either way:
 - what only root can read is reported in a `log` line rather than guessed:
   without `bputil` the boot mode is taken from the booted volume group, and a
   stub's state is `unknown`.
+
+The helper's inspection at Begin, before it opens an installation, names
+the owner (`inspect --owner`). The engine then checks that account and the
+password on descriptor 3 by the same code `execute` and `startup-disk` use
+(below: a short name, a password `bless` can take, and the owner in the
+running macOS's `AdminUserRecoveryInfo.plist`) and refuses, with a stage-less
+`failure` whose code is one of the contract's `OWNER_REFUSALS` and no
+inspection, what they would refuse. The helper refuses Begin with that
+reason before it records or imports anything, so the rule lives in the
+engine alone; the tests hold all three modes to the same cases
+(`support.UNUSABLE_OWNERS`).
 
 What it fills in:
 
@@ -175,7 +188,11 @@ and nothing changed, unless all of these hold:
   minimum, and leaves Sekka's extent directly behind the container; a
   free-space plan lies inside a free region Asahi sees;
 - the owner is in the running macOS's `AdminUserRecoveryInfo.plist` (Asahi's
-  `admin_users`);
+  `admin_users`), the list the stub's Recovery gets. macOS updates it when
+  it updates, so an account made an administrator or given a secure token
+  since may be missing; the refusal says so and how to bring it up to date
+  (`diskutil apfs updatePreboot /`, which Asahi's installer runs itself and
+  the engine doesn't, since it changes a volume outside the plan);
 - Asahi's `choose_ipsw` rule, without prompts, gives an OS firmware the
   profile lists (14.8.3).
 
@@ -404,6 +421,9 @@ with Asahi installed (MIT fixtures, see their NOTICE). They cover:
   untested firmware and another board; inspection never changes the fake, and
   as root too mounts only read-only (other systems' volumes and an Asahi
   ESP included) and leaves nothing mounted;
+- the helper's inspection for an owner refusing exactly the owners and
+  passwords execute and startup-disk refuse (`UNUSABLE_OWNERS`), with their
+  codes, and otherwise reporting the same inspection;
 - execute mounting read-write only the stub's volumes and the ESP, and leaving
   nothing mounted, the verified ESP included;
 - setup hints: a FIFO, a link to `/dev/zero`, a folder, an oversized file or
@@ -442,7 +462,7 @@ with Asahi installed (MIT fixtures, see their NOTICE). They cover:
   payload, template and manifest substitutions bound into a plan;
 - canonical JSON's rules, and vectors: `tests/vectors` holds inspections,
   plans, a handoff, a Recovery configuration, a string-escaping document and
-  nine transcripts. Python must write `expected.json`'s bytes and digests,
+  ten transcripts. Python must write `expected.json`'s bytes and digests,
   which the Rust crate computed; the crate's `tests/engine_vectors.rs` checks
   the same documents with its types and feeds every transcript to the
   helper's `Transcript`, which accepts all of them.

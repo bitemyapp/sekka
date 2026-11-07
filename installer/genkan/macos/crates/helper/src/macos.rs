@@ -4,7 +4,6 @@
 //! helper's own engine directory, with a fixed argument list and a cleared
 //! environment.
 use std::ffi::{CStr, CString, c_char, c_int, c_void};
-use std::io::Write;
 use std::os::fd::{AsFd, AsRawFd};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -17,7 +16,7 @@ use sekka_mac_trust::TrustConfig;
 
 use crate::engine::{ChildEngine, EngineProcess};
 use sekka_mac_engine::{EngineError, PATH};
-use crate::{EngineInstall, EngineRun, Helper, PASSWORD_LIMIT, Paths, Platform, PlatformError, Secret};
+use crate::{Account, EngineInstall, EngineRun, Helper, Paths, Platform, PlatformError, Secret};
 
 /// The team that signs release builds, fixed at build time.
 const TEAM: Option<&str> = option_env!("SEKKA_TEAM_ID");
@@ -115,8 +114,13 @@ impl Platform for MacPlatform {
             .map_err(|e| PlatformError::Engine(e.to_string()))
     }
 
-    fn inspect(&self, engine: &EngineInstall) -> Result<Inspection, PlatformError> {
-        sekka_mac_engine::inspect(engine).map_err(|e| match e {
+    fn inspect(&self, engine: &EngineInstall, owner: Option<Account<'_>>) -> Result<Inspection, PlatformError> {
+        let found = match owner {
+            Some(owner) => sekka_mac_engine::inspect_for(engine, owner.name, owner.password),
+            None => sekka_mac_engine::inspect(engine),
+        };
+        found.map_err(|e| match e {
+            EngineError::Owner(message) => PlatformError::Authorization(message),
             EngineError::Inspection { message, log } => PlatformError::Inspection { message, log },
             e => PlatformError::Inspection {
                 message: e.to_string(),
@@ -125,10 +129,16 @@ impl Platform for MacPlatform {
         })
     }
 
-    fn authenticate_owner(&self, user: &str, password: &[u8]) -> Result<(), PlatformError> {
+    fn authenticate_owner(&self, user: &str, password: &[u8]) -> Result<String, PlatformError> {
+        let unknown = || PlatformError::Authorization("That isn't an account name on this Mac.".into());
         if !plain_account_name(user) {
-            return Err(PlatformError::Authorization("That isn't an account name on this Mac.".into()));
+            return Err(unknown());
         }
+        // The directory finds an account whatever the case its name is typed
+        // in; the engine compares it exactly with the list Recovery accepts.
+        // Everything from here uses the directory's own short name.
+        let user = short_name(user).filter(|name| plain_account_name(name)).ok_or_else(unknown)?;
+        let user = user.as_str();
         let admin = run("/usr/sbin/dseditgroup", &["-o", "checkmember", "-m", user, "admin"])
             .map_err(|e| PlatformError::Authorization(e.to_string()))?;
         if !admin.status.success() {
@@ -151,7 +161,7 @@ impl Platform for MacPlatform {
                 "{user} can't change how this Mac starts up (it isn't one of the Mac's owners). Use the account that set up this Mac, or another owner."
             )));
         }
-        Ok(())
+        Ok(user.to_owned())
     }
 
     fn user_staging(&self, uid: u32) -> Result<PathBuf, PlatformError> {
@@ -173,14 +183,10 @@ impl Platform for MacPlatform {
             return Err(PlatformError::Authorization("That isn't an account name on this Mac.".into()));
         }
         // The password goes through a pipe on the engine's file descriptor
-        // 3, written before it starts and closed: never an argument, never
-        // the environment, never a file. Both ends are close-on-exec; only
-        // the engine gets the read end, as its 3.
-        let (read_end, mut write_end) = std::io::pipe().map_err(|e| PlatformError::Engine(e.to_string()))?;
-        if password.len() > PASSWORD_LIMIT || write_end.write_all(&password).is_err() {
-            return Err(PlatformError::Engine("The password couldn't be handed to the engine.".into()));
-        }
-        drop(write_end);
+        // 3, written before it starts and closed; only the engine gets the
+        // read end, as its 3.
+        let read_end = sekka_mac_engine::password_pipe(&password)
+            .map_err(|_| PlatformError::Engine("The password couldn't be handed to the engine.".into()))?;
         drop(password);
         let id = installation.to_string();
         let plan = plan.to_str().unwrap_or_default();
@@ -217,12 +223,28 @@ impl Platform for MacPlatform {
         // Its diagnostic log is drained as it runs and kept, its last lines,
         // for Copy Diagnostics (see `ChildEngine`).
         command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
-        sekka_mac_engine::inherit(&mut command, read_end.as_raw_fd(), lock.as_fd().as_raw_fd());
+        sekka_mac_engine::inherit(&mut command, read_end.as_raw_fd(), Some(lock.as_fd().as_raw_fd()));
         let child = command.spawn();
         drop(read_end);
         let child = child.map_err(|e| PlatformError::Engine(e.to_string()))?;
         Ok(Box::new(ChildEngine::new(child).map_err(|e| PlatformError::Engine(e.to_string()))?))
     }
+}
+
+/// The short name the directory records for the account `name` finds
+/// (`getpwnam`'s `pw_name`).
+fn short_name(name: &str) -> Option<String> {
+    let name = CString::new(name).ok()?;
+    let mut buffer = vec![0 as c_char; 16 * 1024];
+    let mut pwd: libc::passwd = unsafe { std::mem::zeroed() };
+    let mut result: *mut libc::passwd = std::ptr::null_mut();
+    // SAFETY: getpwnam_r writes into our buffers.
+    let rc = unsafe { libc::getpwnam_r(name.as_ptr(), &mut pwd, buffer.as_mut_ptr(), buffer.len(), &mut result) };
+    if rc != 0 || result.is_null() || pwd.pw_name.is_null() {
+        return None;
+    }
+    // SAFETY: pw_name points into `buffer`, NUL-terminated.
+    Some(unsafe { CStr::from_ptr(pwd.pw_name) }.to_str().ok()?.to_owned())
 }
 
 fn home_of(uid: u32) -> Option<PathBuf> {

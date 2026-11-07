@@ -159,6 +159,10 @@ class Vectors(unittest.TestCase):
         # engine_vectors.rs holds plan.rs's MACOS_MARGIN to the same number.
         self.assertEqual(c.MACOS_MARGIN, self.expected["macos_margin"])
 
+    def test_the_helper_and_the_engine_agree_on_what_refuses_the_owner(self):
+        # engine_vectors.rs holds engine.rs's OWNER_REFUSALS to the same list.
+        self.assertEqual(list(c.OWNER_REFUSALS), self.expected["owner_refusals"])
+
 
 if __name__ == "__main__":
     unittest.main()

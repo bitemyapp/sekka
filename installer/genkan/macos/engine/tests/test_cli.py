@@ -60,6 +60,7 @@ def run_by_path(root, argv):
 class CommandLine(unittest.TestCase):
     def test_arguments(self):
         self.assertEqual(cli.parse(["inspect"]), ("inspect", {}))
+        self.assertEqual(cli.parse(["inspect", "--owner", "o"]), ("inspect", {"--owner": "o"}))
         mode, options = cli.parse(["execute", "--plan", "p", "--assets", "a", "--installation", "u", "--owner", "o"])
         self.assertEqual(mode, "execute")
         self.assertEqual(options["--owner"], "o")
@@ -73,6 +74,10 @@ class CommandLine(unittest.TestCase):
             [],
             ["simulate"],
             ["inspect", "--simulate"],
+            ["inspect", "--owner"],
+            ["inspect", "--owner", "-x"],
+            ["inspect", "--owner", "o", "--owner", "p"],
+            ["inspect", "--plan", "p"],
             ["execute", "--plan", "p"],
             ["execute", "--plan", "p", "--assets", "a", "--installation", "u", "--owner", "o", "--engine", "x"],
             ["execute", "--plan", "p", "--plan", "q", "--installation", "u", "--owner", "o"],
@@ -103,6 +108,7 @@ class CommandLine(unittest.TestCase):
             shutil.copytree(os.path.join(S.ENGINE, "sekka_engine"), os.path.join(root, "sekka_engine"))
             for argv, password in (
                 (["inspect"], None),
+                (["inspect", "--owner", "callen"], b"secret"),
                 (["startup-disk", "--plan", "/nonexistent", "--installation", "1f7d9c62-4a1b-4c8e-9d3f-2b6a8e0c5d47", "--owner", "callen", "--esp-inventory", "sha256:" + "0" * 64], b"secret"),
                 (["execute", "--plan", "/nonexistent", "--assets", "/nonexistent", "--installation", "1f7d9c62-4a1b-4c8e-9d3f-2b6a8e0c5d47", "--owner", "callen"], b"secret"),
             ):

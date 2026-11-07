@@ -56,6 +56,9 @@ class TranscriptVectors(unittest.TestCase):
         *_, channel = scenarios.clean_inspection(self.t)
         self.check("inspect-j514s-clean.jsonl", channel.lines)
 
+    def test_inspect_for_an_owner(self):
+        self.check("inspect-owner-refused.jsonl", scenarios.owner_refused(self.t).lines)
+
     def test_happy_path(self):
         r = scenarios.execute(self.t)
         self.check("execute-happy.jsonl", r["channel"].lines, r["plan"])

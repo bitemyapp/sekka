@@ -355,15 +355,9 @@ class ExecuteTests(unittest.TestCase):
         self.assert_refused(self.run_plan(plan_edit=edit), "profile-mismatch")
 
     def test_the_password_and_owner_are_checked_before_anything(self):
-        for kw, code in (
-            ({"password": None}, "no-password"),
-            ({"password": b" padded "}, "password-unusable"),
-            ({"password": b"two\nlines"}, "password-unusable"),
-            ({"owner": "nobody"}, "owner-not-admin"),
-            ({"owner": "-rf"}, "owner-invalid"),
-            ({"installation": "NOT-A-UUID"}, "installation-invalid"),
-        ):
-            with self.subTest(code=code, kw=list(kw)):
+        cases = [({"owner": owner, "password": password}, code) for owner, password, code in S.UNUSABLE_OWNERS]
+        for kw, code in cases + [({"installation": "NOT-A-UUID"}, "installation-invalid")]:
+            with self.subTest(code=code, kw=kw):
                 self.t.cleanup()
                 self.t = S.TempDir()
                 self.assert_refused(self.run_plan(run_kw=kw), code)

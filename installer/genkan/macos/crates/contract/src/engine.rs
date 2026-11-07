@@ -4,9 +4,10 @@
 //!
 //! The engine is Asahi's installer with Sekka's adapter, run with a fixed
 //! command line in one of three modes: `inspect` reports an [`Inspection`]
-//! and changes nothing; `execute` carries out one plan; `startup-disk` runs
-//! only that plan's startup-disk stage again, for the helper's bounded
-//! retry. In `execute` and `startup-disk` modes,
+//! and changes nothing (named an owner, it first checks that account and
+//! its password as the other modes will); `execute` carries out one plan;
+//! `startup-disk` runs only that plan's startup-disk stage again, for the
+//! helper's bounded retry. In `execute` and `startup-disk` modes,
 //! before each stage it writes an [`EngineBody::Intent`] and waits for the
 //! helper to answer `{"ack":SEQ}` on its standard input: the helper
 //! answers only after the intent is durable in its journal, so no change
@@ -23,6 +24,14 @@ schema_tag!(EngineSchema, "sekka.mac.engine/1");
 
 /// The protocol version the app, helper and engine speak.
 pub const ENGINE_PROTOCOL: u32 = 1;
+
+/// The failure codes with which the engine refuses the owner it is named or
+/// the password it is handed, before anything changes, in every mode given
+/// one: `execute`, `startup-disk`, and `inspect --owner`, the helper's
+/// inspection before it opens an installation. What they name is the
+/// owner's to change, not the Mac's. The engine's `contract.OWNER_REFUSALS`
+/// is the same list (both are held to `tests/vectors/expected.json`).
+pub const OWNER_REFUSALS: [&str; 4] = ["no-password", "password-unusable", "owner-invalid", "owner-not-admin"];
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

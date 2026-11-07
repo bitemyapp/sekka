@@ -94,6 +94,12 @@ fn free_space_plans_keep_the_room_in_macos_the_engine_keeps() {
 }
 
 #[test]
+fn the_engine_refuses_an_owner_with_the_codes_the_helper_knows() {
+    // As the engine's test_canonical.py holds its OWNER_REFUSALS.
+    assert_eq!(expected()["owner_refusals"], serde_json::json!(OWNER_REFUSALS));
+}
+
+#[test]
 fn machine_bindings_are_the_recorded_ones() {
     let expected = expected();
     for (platform, binding) in expected["machine_bindings"].as_object().unwrap() {

@@ -47,6 +47,22 @@ FIXTURES = os.path.join(HERE, "fixtures")
 VECTORS = os.path.join(HERE, "vectors")
 OWNER = "callen"
 PASSWORD = b"correct horse battery staple"
+# (owner, password, code): what every mode given an owner refuses before
+# anything changes. The helper's inspection, execute and startup-disk are
+# each tested with all of them, so the helper refuses at Begin exactly what
+# the others would.
+UNUSABLE_OWNERS = (
+    (OWNER, None, "no-password"),
+    (OWNER, b"", "password-unusable"),
+    (OWNER, b" padded ", "password-unusable"),
+    (OWNER, PASSWORD + b" ", "password-unusable"),
+    (OWNER, b"two\nlines", "password-unusable"),
+    (OWNER, b"\xffnot utf-8", "password-unusable"),
+    (OWNER, b"x" * 1025, "password-unusable"),
+    ("nobody", PASSWORD, "owner-not-admin"),
+    (OWNER.capitalize(), PASSWORD, "owner-not-admin"),
+    ("-rf", PASSWORD, "owner-invalid"),
+)
 NOW = 1_800_000_000
 # The tests' Hello names a fixed adapter digest, so that transcripts don't
 # change with every edit to the adapter; test_cli checks the real one.
@@ -1390,7 +1406,9 @@ class Channel:
         return [json.loads(line) for line in self.lines]
 
 
-def run_engine(mode, mac, asahi, host, workdir, plan=None, release=None, password=PASSWORD, owner=OWNER, installation="1f7d9c62-4a1b-4c8e-9d3f-2b6a8e0c5d47", channel=None, privileged=True, restore=None, esp_inventory=None):
+def run_engine(mode, mac, asahi, host, workdir, plan=None, release=None, password=PASSWORD, owner=OWNER, installation="1f7d9c62-4a1b-4c8e-9d3f-2b6a8e0c5d47", channel=None, privileged=True, restore=None, esp_inventory=None, inspect_owner=None):
+    """One run of the engine; an inspection names `inspect_owner` (with
+    `password`), as the helper's before an installation does, if given."""
     from sekka_engine.engine import Engine
 
     channel = channel or Channel(mac)
@@ -1416,7 +1434,7 @@ def run_engine(mode, mac, asahi, host, workdir, plan=None, release=None, passwor
             # Asahi's modules leave plist files for the garbage collector.
             warnings.simplefilter("ignore", ResourceWarning)
             if mode == "inspect":
-                outcome = engine.run_inspect()
+                outcome = engine.run_inspect(inspect_owner)
             elif mode == "startup-disk":
                 plan_bytes = canonical.dumps(plan) if isinstance(plan, dict) else plan
                 outcome = engine.run_startup_disk(plan_bytes, installation, owner, esp_inventory)
@@ -1428,8 +1446,8 @@ def run_engine(mode, mac, asahi, host, workdir, plan=None, release=None, passwor
     return outcome, channel
 
 
-def inspect(mac, asahi, host, workdir, privileged=True):
-    outcome, channel = run_engine("inspect", mac, asahi, host, workdir, privileged=privileged)
+def inspect(mac, asahi, host, workdir, privileged=True, owner=None, password=PASSWORD):
+    outcome, channel = run_engine("inspect", mac, asahi, host, workdir, privileged=privileged, inspect_owner=owner, password=password)
     docs = [m["message"]["payload"] for m in channel.messages() if m["message"]["type"] == "inspection"]
     return outcome, (docs[0] if docs else None), channel
 

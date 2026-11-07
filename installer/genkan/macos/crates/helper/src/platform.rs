@@ -25,8 +25,18 @@ pub enum EngineRun<'a> {
     StartupDisk { esp_inventory: &'a Digest },
 }
 
-/// The longest password handed to the engine, as it reads it.
-pub const PASSWORD_LIMIT: usize = 1024;
+/// The most handed to the engine as a password; the engine's own rule
+/// decides what it accepts.
+pub use sekka_mac_engine::PASSWORD_LIMIT;
+
+/// The account that authorizes an installation, as Begin hands it to the
+/// engine's inspection to be checked.
+#[derive(Clone, Copy, Debug)]
+pub struct Account<'a> {
+    /// Its short name as the directory records it.
+    pub name: &'a str,
+    pub password: &'a [u8],
+}
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum PlatformError {
@@ -52,12 +62,16 @@ pub trait Platform: Send + Sync + 'static {
     fn engine(&self, expected: &Digest) -> Result<EngineInstall, PlatformError>;
 
     /// Run the engine's `inspect` as root and return what it found, already
-    /// checked against the transcript protocol.
-    fn inspect(&self, engine: &EngineInstall) -> Result<Inspection, PlatformError>;
+    /// checked against the transcript protocol. Named an owner, the engine
+    /// first checks that account and its password by the rules `execute`
+    /// and `startup-disk` apply (see `sekka_mac_engine::inspect_for`), and
+    /// what it refuses is [`PlatformError::Authorization`].
+    fn inspect(&self, engine: &EngineInstall, owner: Option<Account<'_>>) -> Result<Inspection, PlatformError>;
 
     /// Whether `user` is an administrator and an owner of this Mac, and
-    /// `password` is that account's password.
-    fn authenticate_owner(&self, user: &str, password: &[u8]) -> Result<(), PlatformError>;
+    /// `password` is that account's password; its short name as the
+    /// directory records it, whatever form of it was typed.
+    fn authenticate_owner(&self, user: &str, password: &[u8]) -> Result<String, PlatformError>;
 
     /// The app's staging folder for the person with this uid.
     fn user_staging(&self, uid: u32) -> Result<PathBuf, PlatformError>;

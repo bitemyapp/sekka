@@ -23,9 +23,9 @@ pub enum Observation {
     Progress(Progress),
     Log(LogLevel, String),
     /// The engine refused before any stage began, and nothing was journaled
-    /// for it (there was no preparation stage to put it under): why, in the
-    /// engine's words.
-    Refusal(String),
+    /// for it (there was no preparation stage to put it under): its code,
+    /// and why in the engine's words.
+    Refusal(Failure),
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -127,7 +127,7 @@ pub fn drive<S: Storage>(
                     // Refused before trying, with no stage to record it
                     // under (a retry of the startup disk): the caller says
                     // why.
-                    None if !started => observe(Observation::Refusal(failure.message.to_string())),
+                    None if !started => observe(Observation::Refusal(failure)),
                     // Between stages, after the disk changed: the journal
                     // already shows the installation mid-way, which is the
                     // truth; the message goes to diagnostics.

@@ -34,6 +34,8 @@ enum Script {
     EndBefore(Stage),
     /// Refuse before any stage began, saying this.
     Refuse(&'static str),
+    /// Refuse the owner's password before any stage began, saying this.
+    RefuseOwner(&'static str),
 }
 
 /// The parts the scripted engine creates, as its checkpoints record them.
@@ -107,6 +109,9 @@ fn esp_inventory() -> Digest {
     Digest::of(b"the new ESP's files")
 }
 
+/// The owner and password an inspection was handed to check.
+type Checked = (String, Vec<u8>);
+
 struct Fake {
     dir: PathBuf,
     inspection: Mutex<Inspection>,
@@ -115,6 +120,10 @@ struct Fake {
     during_inspection: Mutex<Option<Box<dyn FnOnce() + Send>>>,
     /// How the next inspection fails, if it does.
     inspection_fails: Mutex<Option<PlatformError>>,
+    /// The owner and password each inspection was handed to check.
+    inspected_for: Mutex<Vec<Option<Checked>>>,
+    /// Why the engine refuses the owner it is named, if it does.
+    engine_refuses_owner: Mutex<Option<String>>,
     /// The engine this copy of the app carries, and those already unpacked
     /// into the helper's cache, which `sekka_mac_engine::unpack` reuses by
     /// digest whatever the app carries.
@@ -148,8 +157,12 @@ impl Platform for Fake {
             digest: *expected,
         })
     }
-    fn inspect(&self, engine: &EngineInstall) -> Result<Inspection, PlatformError> {
+    fn inspect(&self, engine: &EngineInstall, owner: Option<Account<'_>>) -> Result<Inspection, PlatformError> {
         self.inspected_with.lock().unwrap().push(engine.digest);
+        self.inspected_for
+            .lock()
+            .unwrap()
+            .push(owner.map(|o| (o.name.to_string(), o.password.to_vec())));
         let meanwhile = self.during_inspection.lock().unwrap().take();
         if let Some(meanwhile) = meanwhile {
             meanwhile();
@@ -157,11 +170,17 @@ impl Platform for Fake {
         if let Some(e) = self.inspection_fails.lock().unwrap().take() {
             return Err(e);
         }
+        // The engine applies its rules to the owner it is named.
+        if let (Some(_), Some(why)) = (owner, self.engine_refuses_owner.lock().unwrap().as_ref()) {
+            return Err(PlatformError::Authorization(why.clone()));
+        }
         Ok(self.inspection.lock().unwrap().clone())
     }
-    fn authenticate_owner(&self, user: &str, password: &[u8]) -> Result<(), PlatformError> {
-        if user == "owner" && password == PASSWORD {
-            Ok(())
+    fn authenticate_owner(&self, user: &str, password: &[u8]) -> Result<String, PlatformError> {
+        // Found whatever the case its name is typed in, as Open Directory
+        // finds it.
+        if user.eq_ignore_ascii_case("owner") && password == PASSWORD {
+            Ok("owner".into())
         } else {
             Err(PlatformError::Authorization("That password isn't right for owner.".into()))
         }
@@ -207,6 +226,7 @@ impl Platform for Fake {
                 *self.startup_runs.lock().unwrap() += 1;
                 let script = match *self.script.lock().unwrap() {
                     Script::Refuse(why) => Script::Refuse(why),
+                    Script::RefuseOwner(why) => Script::RefuseOwner(why),
                     _ if self.startup_disk_ok.load(Ordering::SeqCst) => Script::Happy,
                     _ => Script::Fail(Stage::StartupDisk, DiskChanged::No),
                 };
@@ -278,11 +298,15 @@ impl ScriptedEngine {
                 mode,
                 protocol: ENGINE_PROTOCOL,
             });
-            if let Script::Refuse(why) = script {
+            if let Script::Refuse(why) | Script::RefuseOwner(why) = script {
+                let code = match script {
+                    Script::RefuseOwner(_) => "password-unusable",
+                    _ => "installation-changed",
+                };
                 send(EngineBody::Failure {
                     stage: None,
                     failure: Failure {
-                        code: "installation-changed".parse().unwrap(),
+                        code: code.parse().unwrap(),
                         message: why.parse().unwrap(),
                         apple_diagnostic: None,
                         disk_changed: DiskChanged::No,
@@ -447,6 +471,8 @@ fn fake(dir: &Path, script: Script) -> Fake {
         inspection: Mutex::new(samples::inspection()),
         during_inspection: Mutex::new(None),
         inspection_fails: Mutex::new(None),
+        inspected_for: Mutex::new(Vec::new()),
+        engine_refuses_owner: Mutex::new(None),
         bundled: Mutex::new(engine_digest()),
         unpacked: Mutex::new(Vec::new()),
         inspected_with: Mutex::new(Vec::new()),
@@ -840,6 +866,39 @@ fn a_wrong_password_changes_nothing() {
 }
 
 #[test]
+fn an_owner_the_engine_would_refuse_is_refused_before_anything_is_recorded() {
+    // macOS accepts the account and its password, but the engine's rules
+    // don't (a password ending in a space, an owner Recovery doesn't list):
+    // Begin says so, and nothing is opened, imported or run.
+    let w = world(Script::Happy);
+    let why = "The owner's password starts or ends with a space, which Apple's bless can't accept from an installer.";
+    *w.fake().engine_refuses_owner.lock().unwrap() = Some(why.into());
+    let (code, message) = refused(w.begin());
+    assert_eq!((code, message.as_str()), (HelperRefusalCode::Authorization, why));
+    let inspected = w.fake().inspected_for.lock().unwrap().clone();
+    assert_eq!(inspected, vec![Some(("owner".to_string(), PASSWORD.to_vec()))]);
+    let Response::Status { installations } = w.ask(Request::Status, None) else { panic!() };
+    assert!(installations.is_empty());
+    assert_eq!(*w.fake().engine_runs.lock().unwrap(), 0);
+    assert!(std::fs::read_dir(w.helper.paths_for_tests().all_staging()).map_or(true, |mut d| d.next().is_none()));
+    *w.fake().engine_refuses_owner.lock().unwrap() = None;
+    assert_eq!(w.finish(w.begun()).0, InstallState::WaitingForRecovery);
+}
+
+#[test]
+fn the_owner_is_the_account_as_the_directory_names_it() {
+    // Typed in another case: authenticated, checked by the engine and
+    // recorded as the directory's short name, which is what Recovery's list
+    // and the engine use.
+    let mut w = world(Script::Happy);
+    w.begin.owner = "Owner".parse().unwrap();
+    let (state, records) = w.finish(w.begun());
+    assert_eq!(state, InstallState::WaitingForRecovery);
+    assert_eq!(w.fake().inspected_for.lock().unwrap()[0].as_ref().map(|o| o.0.as_str()), Some("owner"));
+    assert_eq!(records.iter().find_map(|r| fact_of(&r.event, "owner")).as_deref(), Some("owner"));
+}
+
+#[test]
 fn a_changed_mac_needs_a_new_review() {
     let w = world(Script::Happy);
     {
@@ -1219,6 +1278,13 @@ fn a_retry_the_engine_refuses_says_why() {
     };
     assert_eq!((state, now.len(), running), (InstallState::StartupDiskFailed, records.len(), false));
     assert!(w.lines(id).iter().any(|l| l.contains(why)));
+    // A password the engine can't use is the owner's to change.
+    let why = "The owner's password starts or ends with a space, which Apple's bless can't accept from an installer.";
+    *w.fake().script.lock().unwrap() = Script::RefuseOwner(why);
+    let (code, message) = refused(w.ask(Request::RetryStartupDisk { installation: id }, Some(PASSWORD)));
+    assert_eq!((code, message.as_str()), (HelperRefusalCode::Authorization, why));
+    // Reconcile's inspection checks no owner.
+    assert!(w.fake().inspected_for.lock().unwrap()[1..].iter().all(Option::is_none));
 }
 
 #[test]
