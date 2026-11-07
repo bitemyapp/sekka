@@ -15,7 +15,10 @@ object: the CAS file holds the bytes, and the store records only a
 buffered view hint, so it can still recover the bytes from this worktree
 if NativeLink evicts them. Names carry a generation, so an index maps
 SHA-256 digest and size to the newest file and is rescanned at most once
-a second on a miss. An evicted or unopenable blob, another digest
+a second on a miss. The rescan runs outside the index's lock, since at
+500,000 blobs holding it would stall every other clone: hits use the
+current index meanwhile, and misses wait for the scan, which may find
+them. An evicted or unopenable blob, another digest
 algorithm, or an injected test miss falls back to the network. The
 directory joins the daemon startup identity.
 
@@ -80,10 +83,10 @@ index db56c16..afa6ba8 100644
                                  missing.push(download);
                                  files.push(NamedDigestWithPermissions {
 diff --git a/app/buck2_execute_impl/src/materializers/local_content_store.rs b/app/buck2_execute_impl/src/materializers/local_content_store.rs
-index fc397e2..bf84d82 100644
+index fc397e2..e9d55e9 100644
 --- a/app/buck2_execute_impl/src/materializers/local_content_store.rs
 +++ b/app/buck2_execute_impl/src/materializers/local_content_store.rs
-@@ -1255,6 +1255,92 @@ mod linux {
+@@ -1255,6 +1255,131 @@ mod linux {
          })
      }
  
@@ -93,22 +96,48 @@ index fc397e2..bf84d82 100644
 +    /// digests to files and is rescanned at most once a second on a miss.
 +    struct LocalCas {
 +        root: PathBuf,
-+        files: HashMap<(String, u64), (u64, PathBuf)>,
-+        scanned: Option<std::time::Instant>,
++        index: Mutex<LocalCasIndex>,
++        /// Signalled when a scan finishes.
++        scan_done: std::sync::Condvar,
 +    }
 +
-+    static LOCAL_CAS: LazyLock<Option<Mutex<LocalCas>>> = LazyLock::new(|| {
++    type LocalCasFiles = HashMap<(String, u64), (u64, PathBuf)>;
++
++    #[derive(Default)]
++    struct LocalCasIndex {
++        files: LocalCasFiles,
++        /// When the latest scan started, and whether it is still running.
++        scanned: Option<std::time::Instant>,
++        scanning: bool,
++    }
++
++    /// Ends a scan, waking its waiters even if the scan unwinds.
++    struct ScanDone<'a>(&'a LocalCas);
++
++    impl Drop for ScanDone<'_> {
++        fn drop(&mut self) {
++            if let Ok(mut index) = self.0.index.lock() {
++                index.scanning = false;
++            }
++            self.0.scan_done.notify_all();
++        }
++    }
++
++    static LOCAL_CAS: LazyLock<Option<LocalCas>> = LazyLock::new(|| {
 +        let root = std::env::var_os("BUCK2_LOCAL_CAS_DIR")?;
-+        Some(Mutex::new(LocalCas { root: PathBuf::from(root), files: HashMap::new(), scanned: None }))
++        Some(LocalCas::new(PathBuf::from(root)))
 +    });
 +
 +    impl LocalCas {
-+        fn scan(&mut self) {
-+            self.files.clear();
-+            self.scanned = Some(std::time::Instant::now());
++        fn new(root: PathBuf) -> Self {
++            Self { root, index: Mutex::new(LocalCasIndex::default()), scan_done: std::sync::Condvar::new() }
++        }
++
++        fn scan(root: &Path) -> LocalCasFiles {
++            let mut files = LocalCasFiles::new();
 +            // Digest folders of NativeLink's layouts v2 and v1; string keys are not blobs.
 +            for folder in ["d2", "d"] {
-+                let Ok(entries) = fs::read_dir(self.root.join(folder)) else {
++                let Ok(entries) = fs::read_dir(root.join(folder)) else {
 +                    continue;
 +                };
 +                for entry in entries.flatten() {
@@ -121,22 +150,41 @@ index fc397e2..bf84d82 100644
 +                    if hash.len() != 64 || parts.next().is_some() {
 +                        continue;
 +                    }
-+                    let slot = self.files.entry((hash.to_owned(), size)).or_insert((generation, entry.path()));
++                    let slot = files.entry((hash.to_owned(), size)).or_insert((generation, entry.path()));
 +                    if generation > slot.0 {
 +                        *slot = (generation, entry.path());
 +                    }
 +                }
 +            }
++            files
 +        }
 +
-+        fn find(&mut self, hash: &str, size: u64) -> Option<PathBuf> {
++        /// The scan runs outside the lock: at 500,000 blobs it takes long
++        /// enough that holding the lock would stall every other clone. Hits
++        /// use the current index meanwhile; misses wait for the scan, which
++        /// may find them, as at a daemon's first lookups.
++        fn find(&self, hash: &str, size: u64) -> Option<PathBuf> {
 +            let key = (hash.to_owned(), size);
-+            if !self.files.contains_key(&key)
-+                && self.scanned.is_none_or(|at| at.elapsed() >= std::time::Duration::from_secs(1))
-+            {
-+                self.scan();
++            let found = |files: &LocalCasFiles| files.get(&key).map(|(_, path)| path.clone());
++            let mut index = self.index.lock().ok()?;
++            if let Some(path) = found(&index.files) {
++                return Some(path);
 +            }
-+            self.files.get(&key).map(|(_, path)| path.clone())
++            if index.scanning {
++                let index = self.scan_done.wait_while(index, |index| index.scanning).ok()?;
++                return found(&index.files);
++            }
++            if index.scanned.is_some_and(|at| at.elapsed() < std::time::Duration::from_secs(1)) {
++                return None;
++            }
++            index.scanned = Some(std::time::Instant::now());
++            index.scanning = true;
++            drop(index);
++            let _done = ScanDone(self);
++            let files = Self::scan(&self.root);
++            let mut index = self.index.lock().ok()?;
++            index.files = files;
++            found(&index.files)
 +        }
 +    }
 +
@@ -144,17 +192,11 @@ index fc397e2..bf84d82 100644
 +    /// when there is no local CAS, it lacks the blob, or it cannot be cloned; the
 +    /// caller then downloads, and verifies either way.
 +    pub(super) fn local_cas_contains(hash: &str, size: u64) -> bool {
-+        LOCAL_CAS
-+            .as_ref()
-+            .and_then(|cas| cas.lock().ok())
-+            .is_some_and(|mut cas| cas.find(hash, size).is_some())
++        LOCAL_CAS.as_ref().is_some_and(|cas| cas.find(hash, size).is_some())
 +    }
 +
 +    pub(super) fn clone_from_local_cas(hash: &str, size: u64, destination: &Path) -> bool {
-+        let Some(cas) = LOCAL_CAS.as_ref() else {
-+            return false;
-+        };
-+        let Some(source) = cas.lock().ok().and_then(|mut cas| cas.find(hash, size)) else {
++        let Some(source) = LOCAL_CAS.as_ref().and_then(|cas| cas.find(hash, size)) else {
 +            return false;
 +        };
 +        clone_blob(&source, size, destination)
@@ -176,7 +218,7 @@ index fc397e2..bf84d82 100644
      #[cfg(test)]
      mod tests {
          use buck2_common::cas_digest::DigestAlgorithm;
-@@ -1395,6 +1481,27 @@ mod linux {
+@@ -1395,6 +1520,27 @@ mod linux {
              Ok(())
          }
  
@@ -189,7 +231,7 @@ index fc397e2..bf84d82 100644
 +            fs::write(d2.join(format!("{hash}-5-3")), b"older")?;
 +            fs::write(d2.join(format!("{hash}-5-9")), b"newer")?;
 +            fs::write(d2.join("not-a-blob"), b"x")?;
-+            let mut cas = LocalCas { root: temp.path().to_path_buf(), files: HashMap::new(), scanned: None };
++            let cas = LocalCas::new(temp.path().to_path_buf());
 +            let newest = cas.find(&hash, 5).expect("indexed blob");
 +            assert_eq!(newest, d2.join(format!("{hash}-5-9")));
 +            assert_eq!(cas.find(&"b".repeat(64), 5), None);
@@ -204,7 +246,7 @@ index fc397e2..bf84d82 100644
          #[test]
          fn reflink_store_buffers_advisory_writes_until_eviction() -> buck2_error::Result<()> {
              let temp = tempfile::tempdir()?;
-@@ -2169,6 +2276,9 @@ pub(crate) struct Download {
+@@ -2169,6 +2315,9 @@ pub(crate) struct Download {
      destination: buck2_fs::paths::abs_norm_path::AbsNormPathBuf,
      temporary: tempfile::TempPath,
      metadata: buck2_common::file_ops::metadata::FileMetadata,
@@ -214,7 +256,7 @@ index fc397e2..bf84d82 100644
  }
  
  impl Download {
-@@ -2177,13 +2287,18 @@ impl Download {
+@@ -2177,13 +2326,18 @@ impl Download {
          metadata: buck2_common::file_ops::metadata::FileMetadata,
          config: DigestConfig,
      ) -> buck2_error::Result<Option<Self>> {
@@ -240,7 +282,7 @@ index fc397e2..bf84d82 100644
              return Ok(None);
          }
          let parent = destination.parent().ok_or_else(|| {
-@@ -2200,9 +2315,46 @@ impl Download {
+@@ -2200,9 +2354,46 @@ impl Download {
              destination,
              temporary,
              metadata,
@@ -287,7 +329,7 @@ index fc397e2..bf84d82 100644
      pub(crate) fn name(&self) -> buck2_error::Result<String> {
          Ok(
              buck2_fs::paths::abs_norm_path::AbsNormPathBuf::new(self.temporary.to_path_buf())?
-@@ -2214,13 +2366,15 @@ impl Download {
+@@ -2214,13 +2405,15 @@ impl Download {
      pub(crate) fn finish(self, config: DigestConfig) -> buck2_error::Result<()> {
          let path =
              buck2_fs::paths::abs_norm_path::AbsNormPathBuf::new(self.temporary.to_path_buf())?;
