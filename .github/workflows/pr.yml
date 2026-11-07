@@ -95,8 +95,9 @@ jobs:
           test "$ALLOWED" = true
           test "$CURRENT_MERGE" = "$EXPECTED_MERGE"
       # Main's retention wrapper, kept outside the workspace the merge
-      # checkout replaces: candidate code in this pool runs only in Nix's
-      # sandbox, never beside the GC roots main's jobs share.
+      # checkout replaces. The candidate's builds run in Nix's sandbox, but
+      # its flake is evaluated here (impurely, for the builder check), so
+      # this pool gets no secrets and never shares main's GC roots.
       - name: Keep main's retention wrapper
         run: install -m 0644 scripts/ci-retain.py "$RUNNER_TEMP/ci-retain.py"
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
