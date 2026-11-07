@@ -6,7 +6,10 @@ preceding Sekka patches.
 On the CAS host every blob the remote cache serves is already a file in
 NativeLink's filesystem store. With BUCK2_LOCAL_CAS_DIR naming its content
 directory, a missing artifact file is cloned from that file into its
-staged download instead of being fetched over gRPC. The clone is verified
+staged download instead of being fetched over gRPC, before any store
+lookup: a lookup could recover the blob from a peer's view and create a
+store object under the exclusive lock, which four concurrent worktrees
+then queued on. The clone is verified
 by hash like any download, but is not ingested as a second content-store
 object: the CAS file holds the bytes, and the store records only a
 buffered view hint, so it can still recover the bytes from this worktree
@@ -77,10 +80,10 @@ index db56c16..afa6ba8 100644
                                  missing.push(download);
                                  files.push(NamedDigestWithPermissions {
 diff --git a/app/buck2_execute_impl/src/materializers/local_content_store.rs b/app/buck2_execute_impl/src/materializers/local_content_store.rs
-index fc397e2..6ef2d53 100644
+index fc397e2..bf84d82 100644
 --- a/app/buck2_execute_impl/src/materializers/local_content_store.rs
 +++ b/app/buck2_execute_impl/src/materializers/local_content_store.rs
-@@ -1255,6 +1255,85 @@ mod linux {
+@@ -1255,6 +1255,92 @@ mod linux {
          })
      }
  
@@ -140,6 +143,13 @@ index fc397e2..6ef2d53 100644
 +    /// Clones a local CAS blob into `destination`, an existing empty file. False
 +    /// when there is no local CAS, it lacks the blob, or it cannot be cloned; the
 +    /// caller then downloads, and verifies either way.
++    pub(super) fn local_cas_contains(hash: &str, size: u64) -> bool {
++        LOCAL_CAS
++            .as_ref()
++            .and_then(|cas| cas.lock().ok())
++            .is_some_and(|mut cas| cas.find(hash, size).is_some())
++    }
++
 +    pub(super) fn clone_from_local_cas(hash: &str, size: u64, destination: &Path) -> bool {
 +        let Some(cas) = LOCAL_CAS.as_ref() else {
 +            return false;
@@ -166,7 +176,7 @@ index fc397e2..6ef2d53 100644
      #[cfg(test)]
      mod tests {
          use buck2_common::cas_digest::DigestAlgorithm;
-@@ -1395,6 +1474,27 @@ mod linux {
+@@ -1395,6 +1481,27 @@ mod linux {
              Ok(())
          }
  
@@ -194,7 +204,7 @@ index fc397e2..6ef2d53 100644
          #[test]
          fn reflink_store_buffers_advisory_writes_until_eviction() -> buck2_error::Result<()> {
              let temp = tempfile::tempdir()?;
-@@ -2169,6 +2269,9 @@ pub(crate) struct Download {
+@@ -2169,6 +2276,9 @@ pub(crate) struct Download {
      destination: buck2_fs::paths::abs_norm_path::AbsNormPathBuf,
      temporary: tempfile::TempPath,
      metadata: buck2_common::file_ops::metadata::FileMetadata,
@@ -204,7 +214,33 @@ index fc397e2..6ef2d53 100644
  }
  
  impl Download {
-@@ -2200,9 +2303,30 @@ impl Download {
+@@ -2177,13 +2287,18 @@ impl Download {
+         metadata: buck2_common::file_ops::metadata::FileMetadata,
+         config: DigestConfig,
+     ) -> buck2_error::Result<Option<Self>> {
+-        if file(
+-            &destination,
+-            metadata.digest.data(),
+-            metadata.is_executable,
+-            config,
+-            false,
+-        )? {
++        // On the CAS host, a blob in the local CAS is cloned by the caller: that
++        // is cheaper than any store lookup that might recover it from a peer's
++        // view under the exclusive lock.
++        if !Self::in_local_cas(metadata.digest.data())
++            && file(
++                &destination,
++                metadata.digest.data(),
++                metadata.is_executable,
++                config,
++                false,
++            )?
++        {
+             return Ok(None);
+         }
+         let parent = destination.parent().ok_or_else(|| {
+@@ -2200,9 +2315,46 @@ impl Download {
              destination,
              temporary,
              metadata,
@@ -212,20 +248,36 @@ index fc397e2..6ef2d53 100644
          }))
      }
  
++    fn local_cas_key(digest: &FileDigest) -> Option<(String, u64)> {
++        if digest.raw_digest().algorithm() != buck2_common::cas_digest::DigestAlgorithmFamily::Sha256 {
++            return None;
++        }
++        let rendered = digest.to_string();
++        let (hash, _) = rendered.split_once(':')?;
++        Some((hash.to_owned(), digest.size()))
++    }
++
++    fn in_local_cas(digest: &FileDigest) -> bool {
++        #[cfg(target_os = "linux")]
++        {
++            Self::local_cas_key(digest).is_some_and(|(hash, size)| linux::local_cas_contains(&hash, size))
++        }
++        #[cfg(not(target_os = "linux"))]
++        {
++            let _ = digest;
++            false
++        }
++    }
++
 +    /// On the CAS host, fills the staged download from the local CAS instead of
 +    /// the network. `finish` verifies it like any download.
 +    pub(crate) fn clone_from_local_cas(&mut self) -> bool {
 +        #[cfg(target_os = "linux")]
 +        {
-+            let digest = self.metadata.digest.data();
-+            if digest.raw_digest().algorithm() != buck2_common::cas_digest::DigestAlgorithmFamily::Sha256 {
-+                return false;
-+            }
-+            let rendered = digest.to_string();
-+            let Some((hash, _)) = rendered.split_once(':') else {
++            let Some((hash, size)) = Self::local_cas_key(self.metadata.digest.data()) else {
 +                return false;
 +            };
-+            self.local = linux::clone_from_local_cas(hash, digest.size(), self.temporary.as_ref());
++            self.local = linux::clone_from_local_cas(&hash, size, self.temporary.as_ref());
 +            self.local
 +        }
 +        #[cfg(not(target_os = "linux"))]
@@ -235,7 +287,7 @@ index fc397e2..6ef2d53 100644
      pub(crate) fn name(&self) -> buck2_error::Result<String> {
          Ok(
              buck2_fs::paths::abs_norm_path::AbsNormPathBuf::new(self.temporary.to_path_buf())?
-@@ -2214,13 +2338,15 @@ impl Download {
+@@ -2214,13 +2366,15 @@ impl Download {
      pub(crate) fn finish(self, config: DigestConfig) -> buck2_error::Result<()> {
          let path =
              buck2_fs::paths::abs_norm_path::AbsNormPathBuf::new(self.temporary.to_path_buf())?;
