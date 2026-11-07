@@ -23,6 +23,7 @@ use sekka_mac_contract::{
 };
 use sekka_mac_stage::{Expect, RangeResponse, StageEvent, Stager, StagingDir, Transport, TransportError};
 use sekka_mac_trust::{AcceptedStore, TrustConfig, Verified};
+use sekka_mac_xpc::XpcError;
 
 use crate::env::*;
 
@@ -73,27 +74,49 @@ impl Live {
         StagingDir::open(&self.support.join("Staging")).map_err(|e| e.to_string())
     }
 
-    fn helper(&self, request: Request, password: Option<&[u8]>) -> Result<Response, String> {
+    fn helper(&self, request: Request, password: Option<&[u8]>) -> Result<Response, Unanswered> {
         let client = sekka_mac_xpc::Client::connect(
             HELPER_SERVICE,
             &sekka_mac_xpc::requirement(HELPER_IDENTIFIER, TEAM),
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| Unanswered::Unreached(e.to_string()))?;
         let bytes = canonical::to_vec(&HelperRequest {
             schema: HelperRequestSchema,
             id: 1,
             request,
         })
-        .map_err(|e| e.to_string())?;
-        let reply = client.send(&bytes, password).map_err(|e| e.to_string())?;
+        .map_err(|e| Unanswered::Unreached(e.to_string()))?;
+        let reply = client.send(&bytes, password).map_err(|e| match e {
+            XpcError::BadReply => Unanswered::Unreadable("its reply held no answer".into()),
+            e => Unanswered::Unreached(e.to_string()),
+        })?;
         let reply: HelperResponse =
             canonical::from_slice(&reply, limits::HELPER_MESSAGE, HelperResponseSchema::VALUE)
-                .map_err(|e| format!("The helper's answer couldn't be read: {e}"))?;
+                .map_err(|e| Unanswered::Unreadable(e.to_string()))?;
         Ok(reply.response)
     }
 
     fn service() -> Retained<SMAppService> {
         unsafe { SMAppService::daemonServiceWithPlistName(&NSString::from_str(HELPER_PLIST)) }
+    }
+}
+
+/// Why a request to the helper has no answer the app can use.
+#[derive(Debug)]
+enum Unanswered {
+    /// The helper wasn't reached, or didn't answer in time.
+    Unreached(String),
+    /// It answered, and its answer couldn't be read: a helper from another
+    /// version of the app, still running, say.
+    Unreadable(String),
+}
+
+impl std::fmt::Display for Unanswered {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Unanswered::Unreached(e) => f.write_str(e),
+            Unanswered::Unreadable(e) => write!(f, "The helper's answer couldn't be read: {e}"),
+        }
     }
 }
 
@@ -106,7 +129,7 @@ fn refusal(message: String) -> HelperRefusal {
 
 /// The helper's answer to a request it answers with the installation's
 /// records.
-fn events_reply(reply: Result<Response, String>) -> Result<Events, HelperRefusal> {
+fn events_reply(reply: Result<Response, Unanswered>) -> Result<Events, HelperRefusal> {
     match reply {
         Ok(Response::Events {
             records,
@@ -121,7 +144,7 @@ fn events_reply(reply: Result<Response, String>) -> Result<Events, HelperRefusal
         }),
         Ok(Response::Refused(r)) => Err(r),
         Ok(_) => Err(refusal("The helper answered something unexpected.".into())),
-        Err(e) => Err(refusal(e)),
+        Err(e) => Err(refusal(e.to_string())),
     }
 }
 
@@ -225,7 +248,8 @@ impl Environment for Live {
             Ok(Response::Status { installations }) => Ok(installations),
             Ok(Response::Refused(r)) => Err(HelperProblem::Other(r.message.to_string())),
             Ok(_) => Err(HelperProblem::Other("The helper answered something unexpected.".into())),
-            Err(e) => Err(HelperProblem::Unreachable(e)),
+            Err(Unanswered::Unreadable(e)) => Err(HelperProblem::Unreadable(e)),
+            Err(Unanswered::Unreached(e)) => Err(HelperProblem::Unreachable(e)),
         }
     }
 
@@ -349,12 +373,12 @@ impl Environment for Live {
             Ok(Response::Begun { installation }) => Ok(installation),
             Ok(Response::Refused(r)) => Err(r),
             Ok(_) => Err(refusal("The helper answered something unexpected.".into())),
-            Err(e) => Err(refusal(e)),
+            Err(e) => Err(refusal(e.to_string())),
         }
     }
 
     fn events(&self, installation: Uuid, after: u64) -> Result<Events, String> {
-        match self.helper(Request::Events { installation, after }, None)? {
+        match self.helper(Request::Events { installation, after }, None).map_err(|e| e.to_string())? {
             Response::Events {
                 records,
                 state,
@@ -376,7 +400,7 @@ impl Environment for Live {
             Ok(Response::Cancelled) => Ok(()),
             Ok(Response::Refused(r)) => Err(r),
             Ok(_) => Err(refusal("The helper answered something unexpected.".into())),
-            Err(e) => Err(refusal(e)),
+            Err(e) => Err(refusal(e.to_string())),
         }
     }
 
@@ -409,7 +433,8 @@ impl Environment for Live {
         match self.helper(Request::Diagnostics { installation }, None) {
             Ok(Response::Diagnostics { lines }) => lines.into_iter().map(|l| l.to_string()).collect(),
             Ok(other) => vec![format!("The helper answered: {other:?}")],
-            Err(e) => vec![format!("The helper couldn't be reached: {e}")],
+            Err(e @ Unanswered::Unreadable(_)) => vec![e.to_string()],
+            Err(Unanswered::Unreached(e)) => vec![format!("The helper couldn't be reached: {e}")],
         }
     }
 

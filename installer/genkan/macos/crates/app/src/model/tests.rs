@@ -1053,6 +1053,10 @@ fn nothing_is_planned_while_the_helpers_installations_arent_known() {
     let (m, effects) = hear(&env, Err(HelperProblem::Unreachable("The connection was interrupted.".into())), env.inspect());
     assert!(effects.is_empty(), "{effects:?}");
     assert_eq!(m.screen, Screen::HelperUnknown);
+    // Nor while what it answered can't be read.
+    let (m, _) = hear(&env, Err(HelperProblem::Unreadable("unknown field `installation`".into())), env.inspect());
+    assert_eq!(m.screen, Screen::HelperUnknown);
+    assert!(m.report(&[]).contains("couldn't be read"));
 }
 
 #[test]

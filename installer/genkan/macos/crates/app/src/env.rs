@@ -62,8 +62,11 @@ pub enum HelperProblem {
     NeedsApproval,
     /// Allowed to run, and it didn't answer.
     Unreachable(String),
-    /// It answered with a refusal (a record it can't read, say) or
-    /// something unreadable.
+    /// It answered, and the answer couldn't be read: a helper from another
+    /// version of the app, still running, say.
+    Unreadable(String),
+    /// It answered with a refusal (a record it can't read, say), or with
+    /// something other than its list.
     Other(String),
 }
 
@@ -73,6 +76,7 @@ impl std::fmt::Display for HelperProblem {
             HelperProblem::NotRegistered => f.write_str("the helper isn't set up"),
             HelperProblem::NeedsApproval => f.write_str("the helper isn't allowed to run (Login Items)"),
             HelperProblem::Unreachable(e) => write!(f, "the helper couldn't be reached: {e}"),
+            HelperProblem::Unreadable(e) => write!(f, "the helper's answer couldn't be read: {e}"),
             HelperProblem::Other(m) => write!(f, "the helper said: {m}"),
         }
     }

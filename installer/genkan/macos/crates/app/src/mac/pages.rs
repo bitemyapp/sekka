@@ -471,6 +471,11 @@ fn helper_unknown(m: &Model, p: &mut Page) {
             p.gap(2.0);
             p.row(Mark::Bad, "What happened", e);
         }
+        Some(HelperProblem::Unreadable(e)) => {
+            p.body(text::HELPER_UNREADABLE);
+            p.gap(2.0);
+            p.row(Mark::Bad, "What happened", e);
+        }
         Some(HelperProblem::Other(said)) => {
             p.body(text::HELPER_REFUSED);
             p.gap(2.0);
