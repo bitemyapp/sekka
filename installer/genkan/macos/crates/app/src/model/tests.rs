@@ -569,6 +569,58 @@ fn known(state: InstallState) -> Result<Vec<Summary>, crate::env::HelperProblem>
     }])
 }
 
+/// Run effects as the simulation answers them, but with the helper's
+/// installations and this Mac's inspection as given, and a helper that is
+/// allowed as soon as it is set up. What asks the helper to act (Begin,
+/// say) is left for the test to answer.
+fn drive(
+    env: &Simulation,
+    m: &mut Model,
+    effects: Vec<Effect>,
+    status: &dyn Fn() -> Result<Vec<Summary>, HelperProblem>,
+    inspection: &dyn Fn() -> Result<Inspection, String>,
+) -> Vec<Effect> {
+    let mut queue: std::collections::VecDeque<Effect> = effects.into();
+    let mut left = Vec::new();
+    while let Some(effect) = queue.pop_front() {
+        let msg = match effect {
+            Effect::Inspect => Msg::Inspected(inspection()),
+            Effect::LoadCatalog => Msg::Catalog(env.catalog()),
+            Effect::CheckEngine => Msg::Engine(env.bundled_engine()),
+            Effect::HelperStatus => Msg::HelperStatus(status()),
+            Effect::MeasureDownload(r) => Msg::ToDownload(env.still_to_download(&r)),
+            Effect::Download(r) => Msg::Downloaded(env.download(&r, &std::sync::atomic::AtomicBool::new(false), &mut |_| {})),
+            Effect::RegisterHelper => Msg::Registration(Ok(Registration::Ready)),
+            other => {
+                left.push(other);
+                continue;
+            }
+        };
+        queue.extend(m.update(msg));
+    }
+    left
+}
+
+/// Download, review and confirm the plan offered, then Install.
+fn install(
+    env: &Simulation,
+    m: &mut Model,
+    status: &dyn Fn() -> Result<Vec<Summary>, HelperProblem>,
+    inspection: &dyn Fn() -> Result<Inspection, String>,
+) -> Vec<Effect> {
+    assert_eq!(m.screen, Screen::Plan);
+    let effects = m.update(Msg::StartDownload);
+    let left = drive(env, m, effects, status, inspection);
+    assert!(left.is_empty(), "{left:?}");
+    assert_eq!(m.screen, Screen::Review, "{:?}", m.plan_error);
+    m.update(Msg::SetBackup(true));
+    for a in m.plan.clone().unwrap().acknowledgements {
+        m.update(Msg::SetAcknowledged(a, true));
+    }
+    let effects = m.update(Msg::Install);
+    drive(env, m, effects, status, inspection)
+}
+
 /// An installation on the disk, as this Mac's own inspection reports it.
 fn on_disk(kind: InstallationKind, state: InstallationState, id: Option<Uuid>) -> sekka_mac_contract::Installation {
     sekka_mac_contract::Installation {
@@ -1141,6 +1193,51 @@ fn the_password_is_asked_for_once_the_helper_has_said_what_it_knows() {
     j.reach_review().send(Msg::CheckAgain);
     assert_eq!(j.model.screen, Screen::Review);
     assert!(j.model.authorization.is_none());
+}
+
+#[test]
+fn a_finished_installation_gone_from_the_disk_doesnt_come_first() {
+    // Set up only at Install (the app was replaced, say), on a disk with
+    // nothing of Sekka on it; its records keep an installation that
+    // finished, whose partitions were removed since.
+    let env = Simulation::new(Scenario::Normal, 0.0);
+    let finished = || known(InstallState::WaitingForSetup);
+    let clean = || env.inspect();
+    let (mut m, _) = hear(&env, Err(HelperProblem::NotRegistered), clean());
+    let left = install(&env, &mut m, &finished, &clean);
+    assert!(left.is_empty(), "{left:?}");
+    // Nothing of it stands in the way: the password is asked for at once,
+    // and nothing is said to come first.
+    assert_eq!(m.screen, Screen::Review);
+    assert!(m.authorization.is_some());
+    assert_eq!(m.notice, None);
+
+    // One beside a system this Mac can't identify does come first...
+    let unread = || {
+        let mut i = env.inspect().unwrap();
+        i.installations.push(on_disk(InstallationKind::OtherLinux, InstallationState::Unknown, None));
+        Ok(i)
+    };
+    let (mut m, _) = hear(&env, Err(HelperProblem::NotRegistered), unread());
+    install(&env, &mut m, &finished, &unread);
+    assert_eq!(m.screen, Screen::Existing);
+    assert!(m.authorization.is_none());
+    assert_eq!(m.notice.as_deref(), Some(crate::text::EARLIER_FIRST));
+
+    // ...unless, by the time this Mac is looked at again, it is gone: then
+    // nothing comes first after all, and nothing says so.
+    let (mut m, _) = hear(&env, Err(HelperProblem::NotRegistered), unread());
+    let effects = m.update(Msg::StartDownload);
+    drive(&env, &mut m, effects, &finished, &unread);
+    m.update(Msg::SetBackup(true));
+    for a in m.plan.clone().unwrap().acknowledgements {
+        m.update(Msg::SetAcknowledged(a, true));
+    }
+    let effects = m.update(Msg::Install);
+    drive(&env, &mut m, effects, &finished, &clean);
+    assert_eq!(m.screen, Screen::Review);
+    assert_eq!(m.notice, None);
+    assert!(m.unfinished().is_none());
 }
 
 #[test]

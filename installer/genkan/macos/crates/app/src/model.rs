@@ -604,13 +604,15 @@ impl Model {
         self.helper.as_ref()?.as_ref().err()
     }
 
-    /// Installations the helper knows that need the person's attention.
+    /// Installations the helper knows that need the person's attention:
+    /// one running, or stopped in the way of another, and a finished one,
+    /// unless the owner set it aside or this Mac's own look shows it gone.
     pub fn unfinished(&self) -> Option<&Summary> {
         let Some(Ok(list)) = &self.helper else { return None };
         list.iter().rev().find(|s| {
             let finished = s.state == InstallState::WaitingForSetup;
             (s.running || !s.state.allows_new_installation() || finished)
-                && !(finished && self.set_aside == Some(s.installation))
+                && !(finished && (self.set_aside == Some(s.installation) || self.gone(s)))
         })
     }
 
@@ -1368,6 +1370,12 @@ impl Model {
         else {
             return Vec::new();
         };
+        // Install found one of the helper's installations in the way, and
+        // this look, with everything known, doesn't stop on it: nothing
+        // comes first after all.
+        if self.notice.as_deref() == Some(text::EARLIER_FIRST) {
+            self.notice = None;
+        }
         let Ok(inspection) = inspection else {
             self.screen = Screen::NotReady;
             return Vec::new();
@@ -1469,10 +1477,10 @@ impl Model {
         }
         let complete = self.on_disk(id).is_some_and(|x| x.state == InstallationState::Complete);
         let gone = self.gone(summary);
-        // Finished, then removed by hand: nothing of it stands in the way.
-        // And of a finished one on a disk this Mac couldn't look at, there
-        // is nothing to say: that the look failed is said instead.
-        if summary.state == InstallState::WaitingForSetup && (gone || !inspected) {
+        // Of a finished one on a disk this Mac couldn't look at, there is
+        // nothing to say: that the look failed is said instead. (One gone
+        // from the disk isn't unfinished.)
+        if summary.state == InstallState::WaitingForSetup && !inspected {
             return None;
         }
         self.installation = Some(id);
