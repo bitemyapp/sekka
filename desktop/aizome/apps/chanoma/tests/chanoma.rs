@@ -25,6 +25,7 @@ use aizome_chanoma::rules::{PinHash, Settings};
 use aizome_chanoma::store::Dirs;
 use aizome_chanoma::ui::keyboard::{Key, Shift};
 use aizome_chanoma::ui::pinpad::button_of;
+use aizome_chanoma::ui::settings::{Do, Value};
 use aizome_chanoma::ui::{MARGIN, W};
 use aizome_chanoma::{Chanoma, Config, Msg};
 use aizome_kit::layout::Point;
@@ -1405,7 +1406,7 @@ fn a_big_collection_is_managed_a_system_at_a_time_and_found_on_a_drive() {
     // on, its games join.
     to_row(&mut h, "Your folders");
     input(&mut h, Input::Ok);
-    to_row(&mut h, "Search every drive for games…");
+    to_row(&mut h, "Search every drive for games");
     input(&mut h, Input::Ok);
     until(&mut h, |a| a.finding.as_ref().is_some_and(|f| !f.running));
     let page = h.program().grownups_page();
@@ -1419,6 +1420,110 @@ fn a_big_collection_is_managed_a_system_at_a_time_and_found_on_a_drive() {
     input(&mut h, Input::Ok);
     until(&mut h, |a| a.shown_games().any(|g| g.title == "Zelda"));
     assert_eq!(h.program().shown_games().filter(|g| g.title == "Zelda").count(), 1, "one of each");
+}
+
+/// The confirm button's word on the settings' hints, when it has one.
+fn ok_hint(h: &Harness<Chanoma>) -> Option<String> {
+    let mut hints = h.program().grownups_hints();
+    (hints.len() == 2).then(|| hints.remove(0).1)
+}
+
+/// Into a section's rows, from wherever the settings' focus is.
+fn to_section(h: &mut Harness<Chanoma>, s: usize) {
+    while h.program().grownups.in_list {
+        input(h, Input::Back);
+    }
+    while h.program().grownups.section != s {
+        input(h, Input::Dir(if h.program().grownups.section < s { Dir::Down } else { Dir::Up }));
+    }
+    input(h, Input::Dir(Dir::Right));
+}
+
+/// The row the settings' focus is on.
+fn row_on(h: &Harness<Chanoma>) -> aizome_chanoma::ui::settings::Row {
+    h.program().grownups_page().rows[h.program().grownups.row].clone()
+}
+
+#[test]
+fn every_settings_row_says_what_pressing_it_does() {
+    use aizome_chanoma::app::grownups::{FOLDERS, SECTIONS};
+    let (dirs, cores) = household("rows", |_| {});
+    let clock = ManualClock::at(2026, 10, 31, 17, 0);
+    let mut h = harness(config(dirs, cores, clock));
+    into_settings(&mut h);
+    assert_eq!(ok_hint(&h).as_deref(), Some("Choose"));
+    // Down the sections: building each one's rows checks that a chevron
+    // opens a page and nothing else has one.
+    for s in 1..SECTIONS.len() {
+        input(&mut h, Input::Dir(Dir::Down));
+        assert_eq!(h.program().grownups.section, s);
+    }
+
+    // Time: a choice is changed, more time is added.
+    to_section(&mut h, 0);
+    to_row(&mut h, "Monday to Friday");
+    assert_eq!(ok_hint(&h).as_deref(), Some("Change"));
+    to_row(&mut h, "15 more minutes today");
+    assert_eq!(row_on(&h).value, Value::Do(Do::Add));
+    assert_eq!(ok_hint(&h).as_deref(), Some("Add"));
+    to_row(&mut h, "Watched and played");
+    assert_eq!(ok_hint(&h), None, "a note does nothing");
+    shot(&mut h, "34-rows-time");
+
+    // Games: a page opened with right, the way its chevron points, and
+    // left back to its row.
+    to_section(&mut h, 2);
+    to_row(&mut h, "Systems");
+    assert_eq!(row_on(&h).value, Value::Open("1 of 1".into()));
+    assert_eq!(ok_hint(&h).as_deref(), Some("Open"));
+    shot(&mut h, "35-rows-games");
+    input(&mut h, Input::Dir(Dir::Right));
+    assert_eq!(h.program().grownups_page().title, "Games › Systems");
+    input(&mut h, Input::Dir(Dir::Left));
+    assert_eq!(row_on(&h).label, "Systems");
+    to_row(&mut h, "Look again");
+    assert_eq!(row_on(&h).value, Value::Do(Do::LookAgain));
+    assert_eq!(ok_hint(&h).as_deref(), Some("Look again"));
+    // An action isn't done by right: only the confirm button does it.
+    to_row(&mut h, "Super Nintendo");
+    input(&mut h, Input::Dir(Dir::Right));
+    assert_eq!(h.program().grownups_page().title, "Games › Super NES");
+    to_row(&mut h, "Keep all 1 from kids");
+    assert_eq!(row_on(&h).value, Value::Do(Do::KeepFromKids));
+    assert_eq!(ok_hint(&h).as_deref(), Some("Keep from kids"));
+    input(&mut h, Input::Dir(Dir::Right));
+    assert!(h.program().settings.game_allowed("snes/snes/Test Quest (USA).sfc"), "not kept from kids by right");
+    assert_eq!(row_on(&h).label, "Keep all 1 from kids");
+    to_row(&mut h, "Test Quest");
+    assert_eq!(ok_hint(&h).as_deref(), Some("Turn off"));
+    to_row(&mut h, "Let kids play all 1");
+    assert_eq!(ok_hint(&h).as_deref(), Some("Allow"));
+    shot(&mut h, "36-rows-system");
+    input(&mut h, Input::Back);
+
+    // Over to Folders from Games' row, and Back back to it.
+    to_row(&mut h, "Your folders");
+    input(&mut h, Input::Ok);
+    assert_eq!(h.program().grownups.section, FOLDERS);
+    assert!(h.program().grownups.in_list);
+    to_row(&mut h, "Add a folder…");
+    assert_eq!(row_on(&h).value, Value::Do(Do::Add));
+    to_row(&mut h, "Search every drive for games");
+    assert_eq!(row_on(&h).value, Value::Open(String::new()));
+    shot(&mut h, "37-rows-folders");
+    input(&mut h, Input::Back);
+    assert_eq!((h.program().grownups.section, row_on(&h).label.as_str()), (2, "Your folders"));
+    assert!(h.program().grownups.in_list);
+    // From there Back goes out to the sections, as it does from any list.
+    input(&mut h, Input::Back);
+    assert!(!h.program().grownups.in_list);
+
+    // Chanoma: the way out says so; the version is only a note.
+    to_section(&mut h, SECTIONS.len() - 1);
+    to_row(&mut h, "Leave Chanoma");
+    assert_eq!(ok_hint(&h).as_deref(), Some("Leave"));
+    to_row(&mut h, "Version");
+    assert_eq!(ok_hint(&h), None);
 }
 
 /// A file's folder made, for writing it.
@@ -2018,15 +2123,15 @@ fn a_drive_that_wont_open_is_said_once_and_its_folder_comes_back_when_it_opens()
     let folder = page
         .rows
         .iter()
-        .find(|r| r.detail.contains("couldn't be opened") && !r.detail.contains("Try again"))
+        .find(|r| r.detail.contains("couldn't be opened") && r.value != Value::Do(Do::TryAgain))
         .expect("the folder");
     assert!(folder.detail.ends_with("Its drive, MOVIES, couldn't be opened"), "{}", folder.detail);
-    let drive = page.rows.iter().find(|r| r.detail.contains("Try again")).expect("the drive");
-    assert_eq!(drive.detail, "Error mounting /dev/sdb1: wrong fs type · Try again");
+    let drive = page.rows.iter().find(|r| r.value == Value::Do(Do::TryAgain)).expect("the drive");
+    assert_eq!(drive.detail, "Error mounting /dev/sdb1: wrong fs type");
     shot(&mut h, "31-drive-unopened");
     // Tried again (here UDisks isn't there to answer): the row goes until
     // it answers.
-    let i = page.rows.iter().position(|r| r.detail.contains("Try again")).unwrap();
+    let i = page.rows.iter().position(|r| r.value == Value::Do(Do::TryAgain)).unwrap();
     while h.program().grownups.row < i {
         input(&mut h, Input::Dir(Dir::Down));
     }

@@ -1774,8 +1774,7 @@ impl Chanoma {
             }
             Screen::GrownUps => {
                 let p = self.grownups_page();
-                let back = if self.settings.setup_done { "Back" } else { "Done" };
-                self.stage(self.scene(View::Settings(p), Some(self.chrome_titled(self.hints("Choose", Some(back))))))
+                self.stage(self.scene(View::Settings(p), Some(self.chrome_titled(self.grownups_hints()))))
             }
             Screen::Closed => {
                 let m = self.closed_message();

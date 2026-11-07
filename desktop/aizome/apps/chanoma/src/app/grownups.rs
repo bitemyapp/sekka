@@ -25,7 +25,7 @@ use crate::rules::{Bedtime, Confirm, CustomService, NewGames};
 use crate::services::CATALOG;
 use crate::ui::Focus;
 use crate::ui::screens::{Art, Message};
-use crate::ui::settings::{Page, Row, Value};
+use crate::ui::settings::{Do, Page, Row, Value};
 
 pub const SECTIONS: [&str; 8] =
     ["Time", "Watch", "Games", "Films and shows", "Folders", "Controllers", "PIN and lock", "Chanoma"];
@@ -61,6 +61,9 @@ pub struct State {
     /// opened from.
     pub sub: Option<Sub>,
     pub back_to: usize,
+    /// Over to this section from another's row (Games' "Your folders"):
+    /// the section and row Back goes back to.
+    pub came_from: Option<(usize, usize)>,
 }
 
 /// A page a section's row opens.
@@ -97,6 +100,16 @@ impl State {
             self.row = f.row;
         } else {
             self.section = f.row;
+            self.came_from = None;
+        }
+    }
+
+    /// Out of the list: back where a row brought it from, else to the
+    /// sections.
+    fn out_of_list(&mut self) {
+        match self.came_from.take() {
+            Some((section, row)) => *self = State { section, row, in_list: true, ..State::default() },
+            None => self.in_list = false,
         }
     }
 }
@@ -287,7 +300,7 @@ impl Chanoma {
                 for m in [15, 30, 60] {
                     let label =
                         if m == 60 { "An hour more today".to_owned() } else { format!("{m} more minutes today") };
-                    rows.push((Row::new(label, Value::Action), Act::Give(m)));
+                    rows.push((Row::new(label, Value::Do(Do::Add)), Act::Give(m)));
                 }
             }
             1 => {
@@ -305,20 +318,20 @@ impl Chanoma {
                 rows.push((Row::heading("Websites you added"), Act::None));
                 for (i, c) in s.custom_services.iter().enumerate() {
                     rows.push((
-                        Row::new(format!("Remove {}", c.name), Value::Action).detail(c.url.clone()),
+                        Row::new(format!("Remove {}", c.name), Value::Do(Do::Remove)).detail(c.url.clone()),
                         Act::RemoveSite(i),
                     ));
                 }
-                rows.push((Row::new("Add a website…", Value::Action).detail("Needs a keyboard"), Act::AddSite));
+                rows.push((Row::new("Add a website…", Value::Do(Do::Add)).detail("Needs a keyboard"), Act::AddSite));
             }
             2 => {
                 self.folder_rows(&mut rows);
-                rows.push((Row::new("Look again", Value::Action).detail(self.cores_note()), Act::Rescan));
+                rows.push((Row::new("Look again", Value::Do(Do::LookAgain)).detail(self.cores_note()), Act::Rescan));
                 rows.push((Row::heading("Which games show"), Act::None));
                 let systems = self.systems_found();
                 let on = systems.iter().filter(|(sys, _)| !s.systems_off.contains(sys.id)).count();
                 rows.push((
-                    Row::new("Systems", Value::Note(format!("{on} of {}", systems.len())))
+                    Row::new("Systems", Value::Open(format!("{on} of {}", systems.len())))
                         .detail("Turn a whole system off"),
                     Act::Open(Sub::Systems),
                 ));
@@ -352,7 +365,7 @@ impl Chanoma {
                     } else {
                         format!("Allow all {waiting} new games")
                     };
-                    rows.push((Row::new(label, Value::Action), Act::AllowAll));
+                    rows.push((Row::new(label, Value::Do(Do::Allow)), Act::AllowAll));
                 }
                 // A system at a time: thousands of games in one list
                 // would be no list at all.
@@ -370,7 +383,7 @@ impl Chanoma {
                 by_system.sort_by_key(|(sys, ..)| sys.name);
                 for (sys, n, allowed) in by_system {
                     rows.push((
-                        Row::new(sys.name, Value::Note(format!("{allowed} of {n}"))).detail("For kids"),
+                        Row::new(sys.name, Value::Open(format!("{allowed} of {n}"))).detail("For kids"),
                         Act::Open(Sub::System(sys.id)),
                     ));
                 }
@@ -380,7 +393,7 @@ impl Chanoma {
                 let shelves = &self.library.shelves;
                 let n = shelves.len();
                 rows.push((
-                    Row::new("Look again", Value::Action)
+                    Row::new("Look again", Value::Do(Do::LookAgain))
                         .detail(format!("{n} films and shows found: a folder of episodes is a show")),
                     Act::Rescan,
                 ));
@@ -397,11 +410,14 @@ impl Chanoma {
                     } else {
                         format!("Allow all {waiting} new ones")
                     };
-                    rows.push((Row::new(label, Value::Action), Act::AllowAllFilms));
+                    rows.push((Row::new(label, Value::Do(Do::Allow)), Act::AllowAllFilms));
                 }
                 if n > 0 {
-                    rows.push((Row::new(format!("Let kids watch all {n}"), Value::Action), Act::FilmsAll(true)));
-                    rows.push((Row::new(format!("Keep all {n} from kids"), Value::Action), Act::FilmsAll(false)));
+                    rows.push((Row::new(format!("Let kids watch all {n}"), Value::Do(Do::Allow)), Act::FilmsAll(true)));
+                    rows.push((
+                        Row::new(format!("Keep all {n} from kids"), Value::Do(Do::KeepFromKids)),
+                        Act::FilmsAll(false),
+                    ));
                     rows.push((Row::heading("A letter at a time with the shoulder buttons"), Act::None));
                 }
                 for f in shelves {
@@ -421,27 +437,31 @@ impl Chanoma {
                 for (i, f) in s.folders.iter().enumerate() {
                     let (name, place) = self.said(f);
                     rows.push((
-                        Row::new(name, Value::Action).detail(format!("{place} · {}", self.folder_state(f))),
+                        Row::new(name, Value::Open(String::new()))
+                            .detail(format!("{place} · {}", self.folder_state(f))),
                         Act::Open(Sub::Folder(i)),
                     ));
                 }
                 if s.folders.is_empty() {
                     rows.push((Row::heading("None yet"), Act::None));
                 }
-                rows.push((Row::new("Add a folder…", Value::Action).detail(ADD_DETAIL), Act::AddFolder));
-                rows.push((Row::new("Look again", Value::Action).detail("Reads what's changed since"), Act::Rescan));
+                rows.push((Row::new("Add a folder…", Value::Do(Do::Add)).detail(ADD_DETAIL), Act::AddFolder));
+                rows.push((
+                    Row::new("Look again", Value::Do(Do::LookAgain)).detail("Reads what's changed since"),
+                    Act::Rescan,
+                ));
                 if !self.drives.unopened.is_empty() {
                     rows.push((Row::heading("Drives that couldn't be opened"), Act::None));
                     for (i, u) in self.drives.unopened.iter().enumerate() {
                         rows.push((
-                            Row::new(u.name.clone(), Value::Action).detail(format!("{} · Try again", u.why)),
+                            Row::new(u.name.clone(), Value::Do(Do::TryAgain)).detail(u.why.clone()),
                             Act::TryDrive(i),
                         ));
                     }
                 }
                 rows.push((Row::heading("Not sure where your games are?"), Act::None));
                 rows.push((
-                    Row::new("Search every drive for games…", Value::Action)
+                    Row::new("Search every drive for games", Value::Open(String::new()))
                         .detail("Reads all of home and each drive plugged in: minutes, on a big drive"),
                     Act::FindGames,
                 ));
@@ -460,14 +480,14 @@ impl Chanoma {
                         Source::Kernel => "buttons as Linux says",
                     };
                     rows.push((
-                        Row::new(format!("Player {}: {}", p.slot + 1, p.name), Value::Action).detail(format!(
+                        Row::new(format!("Player {}: {}", p.slot + 1, p.name), Value::Do(Do::SetUp)).detail(format!(
                             "{}{battery}, {how}. Set up its buttons…",
                             if p.bluetooth { "Bluetooth" } else { "USB" }
                         )),
                         Act::SetUp(p.id),
                     ));
                 }
-                rows.push((Row::new("Pair a controller…", Value::Action).detail("Bluetooth"), Act::Pair));
+                rows.push((Row::new("Pair a controller…", Value::Do(Do::Pair)).detail("Bluetooth"), Act::Pair));
                 let confirm = match s.confirm {
                     Confirm::Auto => "As printed",
                     Confirm::Bottom => "Bottom button",
@@ -480,19 +500,19 @@ impl Chanoma {
                 ));
             }
             6 => {
-                rows.push((Row::new("Change the PIN…", Value::Action), Act::ChangePin));
+                rows.push((Row::new("Change the PIN…", Value::Do(Do::ChangePin)), Act::ChangePin));
                 rows.push((
                     Row::new("Lock grown-up mode after", Value::Choice(format!("{} minutes", s.relock_minutes)))
                         .detail("Untouched; never during a film or game"),
                     Act::Relock,
                 ));
-                rows.push((Row::new("Lock now", Value::Action).detail("Back to kids' mode"), Act::Lock));
+                rows.push((Row::new("Lock now", Value::Do(Do::Lock)).detail("Back to kids' mode"), Act::Lock));
             }
             _ => {
                 let leave = if self.config.tv {
-                    Row::new("Log Out", Value::Action).detail("Back to the login screen")
+                    Row::new("Log Out", Value::Do(Do::LogOut)).detail("Back to the login screen")
                 } else {
-                    Row::new("Leave Chanoma", Value::Action).detail("Back to the desktop")
+                    Row::new("Leave Chanoma", Value::Do(Do::Leave)).detail("Back to the desktop")
                 };
                 rows.push((leave, Act::Leave));
                 rows.push((Row::new("Version", Value::Note(env!("CARGO_PKG_VERSION").into())), Act::None));
@@ -509,10 +529,30 @@ impl Chanoma {
 
     /// The rows showing: a page opened from a row's, else the section's.
     fn list_rows(&self) -> Vec<(Row, Act)> {
-        match &self.grownups.sub {
+        let rows = match &self.grownups.sub {
             Some(sub) => self.sub_rows(sub),
             None => self.section_rows(self.grownups.section),
+        };
+        // A chevron goes into a page, and only a chevron does.
+        for (row, act) in &rows {
+            debug_assert_eq!(
+                matches!(row.value, Value::Open(_)),
+                matches!(act, Act::Open(_) | Act::GoFolders | Act::FindGames),
+                "{:?}",
+                row.label
+            );
         }
+        rows
+    }
+
+    /// What the confirm and back buttons do where the focus is.
+    pub fn grownups_hints(&self) -> Vec<(Button, String)> {
+        let page = self.grownups_page();
+        let back = if !self.settings.setup_done && !self.grownups.in_list { "Done" } else { "Back" };
+        let mut h = self.hints(page.ok_word(self.grownups.focus()).unwrap_or_default(), Some(back));
+        // Nothing to say where it does nothing.
+        h.retain(|(_, word)| !word.is_empty());
+        h
     }
 
     /// Each system with games found (shown or not), and how many.
@@ -546,8 +586,14 @@ impl Chanoma {
                 let here: Vec<&crate::library::Game> = self.shown_games().filter(|g| g.system.id == *id).collect();
                 let name = crate::library::SYSTEMS.iter().find(|x| x.id == *id).map_or("", |x| x.name);
                 rows.push((Row::heading(name), Act::None));
-                rows.push((Row::new(format!("Let kids play all {}", here.len()), Value::Action), Act::KidsAll(id)));
-                rows.push((Row::new(format!("Keep all {} from kids", here.len()), Value::Action), Act::KidsNone(id)));
+                rows.push((
+                    Row::new(format!("Let kids play all {}", here.len()), Value::Do(Do::Allow)),
+                    Act::KidsAll(id),
+                ));
+                rows.push((
+                    Row::new(format!("Keep all {} from kids", here.len()), Value::Do(Do::KeepFromKids)),
+                    Act::KidsNone(id),
+                ));
                 rows.push((
                     Row::heading(format!("{}, a letter at a time with the shoulder buttons", games(here.len()))),
                     Act::None,
@@ -609,11 +655,11 @@ impl Chanoma {
                 rows.push((Row::heading(place), Act::None));
                 rows.push((Row::new(f.display().to_string(), Value::None).detail(self.folder_state(f)), Act::None));
                 rows.push((
-                    Row::new("Look again", Value::Action).detail("Reads what's changed in it since"),
+                    Row::new("Look again", Value::Do(Do::LookAgain)).detail("Reads what's changed in it since"),
                     Act::Rescan,
                 ));
                 rows.push((
-                    Row::new(format!("Remove {name}"), Value::Action)
+                    Row::new(format!("Remove {name}"), Value::Do(Do::Remove))
                         .detail("Its games, films and shows leave Chanoma; nothing is deleted"),
                     Act::RemoveFolder(*i),
                 ));
@@ -727,7 +773,7 @@ impl Chanoma {
                 if n != row {
                     self.grownups.row = n;
                 } else if !sub {
-                    self.grownups.in_list = false;
+                    self.grownups.set_focus(Focus { row: self.grownups.section, col: 0 });
                 }
             }
             Input::Dir(Dir::Down) => self.grownups.row = page.next(row, true),
@@ -735,13 +781,16 @@ impl Chanoma {
             Input::Prev | Input::Next => self.grownups.row = page.next_letter(row, i == Input::Next),
             // Out of a page opened from a row, back on that row.
             Input::Back if sub => self.close_sub(),
-            Input::Back => self.grownups.in_list = false,
+            Input::Back => self.grownups.out_of_list(),
             Input::Dir(Dir::Left) | Input::Dir(Dir::Right) => {
                 let forward = i == Input::Dir(Dir::Right);
                 match rows.get(row).map(|(r, a)| (r.value.clone(), a.clone())) {
                     Some((Value::Choice(_), act)) => self.change(act, forward, cx),
+                    // Into a page the way its chevron points, as the
+                    // picker goes into a folder; never an action.
+                    Some((Value::Open(_), act)) if forward => self.do_row(act, cx),
                     _ if !forward && sub => self.close_sub(),
-                    _ if !forward => self.grownups.in_list = false,
+                    _ if !forward => self.grownups.out_of_list(),
                     _ => {}
                 }
             }
@@ -981,7 +1030,8 @@ impl Chanoma {
             Act::RemoveFolder(i) => self.open_menu(super::MenuKind::Remove(super::Removal::Folder(i)), cx),
             Act::AddFolder => self.open_picker(super::picker::From::Settings(self.grownups.clone()), cx),
             Act::GoFolders => {
-                self.grownups = State { section: FOLDERS, in_list: true, ..State::default() };
+                let from = (self.grownups.section, self.grownups.row);
+                self.grownups = State { section: FOLDERS, in_list: true, came_from: Some(from), ..State::default() };
                 self.grownups.row = self.grownups_page().first_row();
             }
             Act::Rescan => {
@@ -1077,8 +1127,8 @@ impl Chanoma {
         let names: Vec<String> = self.settings.folders.iter().map(|f| self.said(f).0).collect();
         let which = if names.is_empty() { "None yet".to_owned() } else { names.join(", ") };
         rows.push((Row::heading("Folders"), Act::None));
-        rows.push((Row::new("Your folders", Value::Note(names.len().to_string())).detail(which), Act::GoFolders));
-        rows.push((Row::new("Add a folder…", Value::Action).detail(ADD_DETAIL), Act::AddFolder));
+        rows.push((Row::new("Your folders", Value::Open(names.len().to_string())).detail(which), Act::GoFolders));
+        rows.push((Row::new("Add a folder…", Value::Do(Do::Add)).detail(ADD_DETAIL), Act::AddFolder));
     }
 
     /// How one of the folders is: being looked through, its drive out, or

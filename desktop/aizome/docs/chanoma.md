@@ -98,6 +98,32 @@ Text that can be long is cut with an ellipsis where it's drawn:
 menu in focus and check it's on the screen; the flows go along every
 system's tab.
 
+**A row says what pressing it does** (`ui::settings`), at its right and
+in the confirm button's hint along the foot:
+- a chevron goes into a page (a system's games, a folder, *Your folders*,
+  *Search every drive for games*), with its count before it where it has
+  one ("3 of 5"); right goes in as well, the way it points, as it goes
+  into a folder in the picker, and left and Back come out to the row it
+  was opened from (*Your folders* back to Games, or Films and shows);
+- a switch is switched ("Turn on", "Turn off"), and solid arrows either
+  side of a choice (◀ No limit ▶) change it, left and right or "Change"
+  stepping on: not chevrons, so a choice never looks like a page;
+- an action has its own sign, as the picker's plus has: a plus to add (a
+  folder, a website, more time today), arrows round to look or try again,
+  a bin to remove, an eye or a crossed-out eye to let kids see a list or
+  keep it from them, Bluetooth to pair, sliders to set up a controller's
+  buttons, a key for the PIN, a lock, the way out; the hint says its word
+  ("Allow", "Remove", "Look again"). A trailing "…" means it asks
+  something first (a folder, a website's address, a new PIN);
+- a note (the version, today's minutes) does nothing, and the hint says
+  nothing.
+
+A chevron on a row is never an action's or a choice's: building the rows
+checks that a chevron row opens a page and nothing else does (a debug
+assertion the flows run through; `every_settings_row_says_what_pressing_it_does`
+goes through each kind). The chevrons in the margins, over and under a
+list, a menu or the tabs, only say there's more that way.
+
 ### Controllers
 
 Chanoma reads controllers' event devices itself (`crates/aizome-gamepad`,
@@ -659,7 +685,7 @@ drive beside its backups. Games' settings handle that a system at a time
   extensions, else the largest. Stored and deflated files are read, the
   CRC checked; the eight played last stay unpacked. Saves and states go
   by the game's key, the zip's path, as for any game.
-- **Search every drive for games…** (in Folders) looks through home and
+- **Search every drive for games** (in Folders) looks through home and
   each drive plugged in (the picker's places) and lists the folders of
   games it finds, by place and system, each with how many and where ("2
   games in roms › snes"). It shows what the index knew first, then each

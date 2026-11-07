@@ -1,7 +1,13 @@
 //! The grown-ups' settings: sections down the left, the section's rows on
 //! the right. Up and down move between rows; left and right change a
-//! choice; the confirm button switches a switch or does an action; Back
-//! goes to the sections, and from there out.
+//! choice; the confirm button switches a switch, opens a page or does an
+//! action; Back goes to the sections, and from there out.
+//!
+//! A row's right says what pressing it does, and the hint along the foot
+//! says it in words: a chevron is a page to go into (right goes in too,
+//! left and Back come out), a switch is switched, arrows change a choice,
+//! and an action has its own sign, as the folder picker's plus has. A
+//! chevron is never an action's.
 //!
 //! The focus: `row` is the row (in the list) or the section (at the side),
 //! `col` is 0 at the side and 1 in the list.
@@ -21,10 +27,82 @@ pub enum Value {
     Switch(bool),
     /// A choice changed with left and right.
     Choice(String),
-    /// Something the confirm button does.
-    Action,
+    /// A page the row opens, with a note before its chevron (a count; or
+    /// nothing).
+    Open(String),
+    /// Something the confirm button does, there and then or after asking.
+    Do(Do),
     /// A note (a count, a state).
     Note(String),
+}
+
+/// The actions a row can do, each with its sign and its word on the hint.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Do {
+    /// A folder, a website, more time today.
+    Add,
+    /// Read the folders again.
+    LookAgain,
+    /// A drive opened again.
+    TryAgain,
+    /// After asking.
+    Remove,
+    /// For kids: those waiting, or a whole list.
+    Allow,
+    KeepFromKids,
+    Pair,
+    /// A controller's buttons.
+    SetUp,
+    ChangePin,
+    Lock,
+    LogOut,
+    Leave,
+}
+
+impl Do {
+    pub fn icon(self) -> Icon {
+        match self {
+            Do::Add => Icon::CirclePlus,
+            Do::LookAgain | Do::TryAgain => Icon::RefreshCw,
+            Do::Remove => Icon::Trash,
+            // As the headings say: which games kids see.
+            Do::Allow => Icon::Eye,
+            Do::KeepFromKids => Icon::EyeOff,
+            Do::Pair => Icon::Bluetooth,
+            Do::SetUp => Icon::SlidersHorizontal,
+            Do::ChangePin => Icon::KeyRound,
+            Do::Lock => Icon::Lock,
+            Do::LogOut | Do::Leave => Icon::LogOut,
+        }
+    }
+
+    /// The confirm button's hint.
+    pub fn word(self) -> &'static str {
+        match self {
+            Do::Add => "Add",
+            Do::LookAgain => "Look again",
+            Do::TryAgain => "Try again",
+            Do::Remove => "Remove",
+            Do::Allow => "Allow",
+            Do::KeepFromKids => "Keep from kids",
+            Do::Pair => "Pair",
+            Do::SetUp => "Set up",
+            Do::ChangePin => "Change",
+            Do::Lock => "Lock",
+            Do::LogOut => "Log out",
+            Do::Leave => "Leave",
+        }
+    }
+
+    /// Its sign's colour with the focus on it: adding and allowing green,
+    /// as the picker's plus; removing red.
+    fn ink(self, theme: &Theme) -> aizome_kit::Color {
+        match self {
+            Do::Add | Do::Allow => theme.role(Role::Success),
+            Do::Remove => theme.role(Role::Danger),
+            _ => theme.text(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -137,6 +215,22 @@ impl Page {
     /// The first row to stop on.
     pub fn first_row(&self) -> usize {
         self.rows.iter().position(|r| !r.heading).unwrap_or(0)
+    }
+
+    /// What the confirm button does where the focus is, for its hint; none
+    /// on a row it does nothing on.
+    pub fn ok_word(&self, focus: Focus) -> Option<&'static str> {
+        if focus.col == 0 {
+            return Some("Choose");
+        }
+        match &self.rows.get(focus.row)?.value {
+            Value::Switch(true) => Some("Turn off"),
+            Value::Switch(false) => Some("Turn on"),
+            Value::Choice(_) => Some("Change"),
+            Value::Open(_) => Some("Open"),
+            Value::Do(d) => Some(d.word()),
+            Value::Note(_) | Value::None => None,
+        }
     }
 
     /// From row `i`, the first row of the next letter (or of the one
@@ -275,7 +369,9 @@ fn value_width(theme: &Theme, v: &Value) -> f64 {
         Value::Switch(_) => 100.0,
         Value::Choice(s) => measure(theme, s, font(BODY, SEMIBOLD)).width + 100.0,
         Value::Note(s) => measure(theme, s, font(SMALL + 2.0, REGULAR)).width + 30.0,
-        Value::Action => 50.0,
+        Value::Open(s) if s.is_empty() => 50.0,
+        Value::Open(s) => measure(theme, s, font(SMALL + 2.0, REGULAR)).width + 70.0,
+        Value::Do(_) => 50.0,
         Value::None => 0.0,
     }
 }
@@ -300,23 +396,42 @@ fn paint_value(c: &mut Canvas, theme: &Theme, v: &Value, r: Rect, on: bool) {
             aizome_kit::draw::border(c, knob, theme.bevel_lo(), EDGE);
         }
         Value::Choice(s) => {
+            // Solid arrows to step it, as a console's settings have: a
+            // chevron is a page's.
             let arrows = if on { theme.text() } else { theme.text3() };
-            icon(c, Icon::ChevronRight, Point::new(right - 14.0, cy), 28.0, arrows);
+            step_arrow(c, Point::new(right - 14.0, cy), true, arrows);
             let w = text_right(c, theme, s, right - 40.0, cy, font(BODY, SEMIBOLD), theme.text());
-            icon(c, Icon::ChevronLeft, Point::new(right - 40.0 - w - 26.0, cy), 28.0, arrows);
+            step_arrow(c, Point::new(right - 40.0 - w - 26.0, cy), false, arrows);
         }
         Value::Note(s) => {
             text_right(c, theme, s, right, cy, font(SMALL + 2.0, REGULAR), theme.text2());
         }
-        Value::Action => icon(
-            c,
-            Icon::ChevronRight,
-            Point::new(right - 14.0, cy),
-            32.0,
-            if on { theme.text() } else { theme.text3() },
-        ),
+        Value::Open(s) => {
+            let ink = if on { theme.text() } else { theme.text3() };
+            icon(c, Icon::ChevronRight, Point::new(right - 14.0, cy), 32.0, ink);
+            if !s.is_empty() {
+                text_right(c, theme, s, right - 44.0, cy, font(SMALL + 2.0, REGULAR), theme.text2());
+            }
+        }
+        Value::Do(d) => {
+            let ink = if on { d.ink(theme) } else { theme.text3() };
+            icon(c, d.icon(), Point::new(right - 14.0, cy), 30.0, ink);
+        }
         Value::None => {}
     }
+}
+
+/// A choice's arrow, a solid triangle pointing right or left, centred on
+/// `at`.
+fn step_arrow(c: &mut Canvas, at: Point, right: bool, ink: aizome_kit::Color) {
+    let (w, h) = (12.0, 18.0);
+    let d = if right { 1.0 } else { -1.0 };
+    let mut p = aizome_kit::sidestep_ui::kurbo::BezPath::new();
+    p.move_to((at.x - d * w / 2.0, at.y - h / 2.0));
+    p.line_to((at.x + d * w / 2.0, at.y));
+    p.line_to((at.x - d * w / 2.0, at.y + h / 2.0));
+    p.close_path();
+    c.fill(&p, ink);
 }
 
 #[cfg(test)]
@@ -325,7 +440,7 @@ mod tests {
 
     fn page(n: usize) -> Page {
         let mut rows = vec![Row::heading("Head")];
-        rows.extend((0..n).map(|i| Row::new(format!("Row {i}"), Value::Action)));
+        rows.extend((0..n).map(|i| Row::new(format!("Row {i}"), Value::Do(Do::Add))));
         Page {
             title: "T".into(),
             sections: vec!["A".into()],
