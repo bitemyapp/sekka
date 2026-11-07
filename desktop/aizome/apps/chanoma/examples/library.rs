@@ -32,9 +32,16 @@ fn main() {
     }
     .expect("the files index");
     let cores = Cores::search_path();
-    for (pass, refresh) in [("first look", true), ("second look", true)] {
+    let mut catalogs = aizome_chanoma::metadata::Catalogs::default();
+    // A first start (the index read through), then a start as every later
+    // one is: what the index knows, then a look for what's changed.
+    for (pass, refresh) in [("first look", true), ("from the index", false), ("looked again", true)] {
+        if !refresh {
+            // A later start reads the databases afresh.
+            catalogs = aizome_chanoma::metadata::Catalogs::default();
+        }
         let began = Instant::now();
-        let lib = scan(&mut index, &folders, &cores, metadata.as_deref(), refresh, &|_| {});
+        let lib = scan(&mut index, &folders, &cores, metadata.as_deref(), &mut catalogs, refresh, &|_| {});
         let took = began.elapsed();
         let known = lib.games.iter().filter(|g| g.info.is_some()).count();
         println!(

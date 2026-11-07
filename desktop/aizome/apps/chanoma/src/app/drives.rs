@@ -49,6 +49,8 @@ pub struct Drives {
     pub warned: Warned,
     /// Drives found open where this account can't read them, by block.
     pub elsewhere: HashSet<String>,
+    /// UDisks's drives looked at once (those to open are being opened).
+    pub looked: bool,
     path: std::path::PathBuf,
 }
 
@@ -123,7 +125,9 @@ impl Chanoma {
         let Some(disks) = &self.drives.disks else { return };
         let mut outcomes = self.drives.automount.update(disks);
         outcomes.extend(elsewhere(&disks.snapshot(), &mut self.drives.elsewhere));
+        self.drives.looked |= disks.available();
         self.opened(outcomes, cx);
+        self.splash_check();
     }
 
     /// Drives that finished opening: their folders come back, and those

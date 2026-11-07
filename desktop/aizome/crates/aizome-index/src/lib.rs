@@ -470,6 +470,35 @@ impl Index {
             .and_then(|(size, mtime, v)| (size == Some(md.len() as i64) && mtime == Some(mtime_ns(&md))).then_some(v)))
     }
 
+    /// What's known under `key` of the files in `folder`, by name, as
+    /// [`Index::fact`] says it of one but in one query for the folder,
+    /// where that looks each file up, its folders and volume and all:
+    /// thousands of games at a start. With `check`, a fact holds while its
+    /// file is as it was (a `stat` each); without, as kept, for a look at
+    /// what the index knows that a refresh will follow.
+    pub fn facts_in(&self, folder: &Path, key: &str, check: bool) -> Result<HashMap<OsString, Vec<u8>>> {
+        let Some((_, _, id)) = self.locate(folder, false)? else { return Ok(HashMap::new()) };
+        let mut q = self.db.prepare_cached(
+            "SELECT n.name, f.size, f.mtime, f.value FROM node n JOIN fact f ON f.node = n.id
+             WHERE n.parent = ?1 AND f.key = ?2",
+        )?;
+        let rows = q.query_map(params![id, key], |r| {
+            let name = OsString::from_vec(r.get::<_, Vec<u8>>(0)?);
+            Ok((name, r.get::<_, Option<i64>>(1)?, r.get::<_, Option<i64>>(2)?, r.get::<_, Vec<u8>>(3)?))
+        })?;
+        let mut out = HashMap::new();
+        for row in rows {
+            let (name, size, mtime, value) = row?;
+            let holds = !check
+                || std::fs::metadata(folder.join(&name))
+                    .is_ok_and(|md| size == Some(md.len() as i64) && mtime == Some(mtime_ns(&md)));
+            if holds {
+                out.insert(name, value);
+            }
+        }
+        Ok(out)
+    }
+
     /// Keep `value` as what's known of the file at `path` under `key`,
     /// while it stays as it is now. The file is indexed if it wasn't.
     pub fn set_fact(&self, path: &Path, key: &str, value: &[u8]) -> Result<()> {

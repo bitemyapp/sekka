@@ -1422,6 +1422,42 @@ fn a_big_collection_is_managed_a_system_at_a_time_and_found_on_a_drive() {
     assert_eq!(h.program().shown_games().filter(|g| g.title == "Zelda").count(), 1, "one of each");
 }
 
+#[test]
+fn starting_shows_chanomas_name_until_home_has_its_games() {
+    let (dirs, cores) = household("splash", |_| {});
+    // The SNES's games' database a pipe: the look at the folders waits to
+    // read it, holding the start where the test can see it.
+    let metadata = cores.parent().unwrap().join("metadata");
+    std::fs::create_dir_all(&metadata).unwrap();
+    let pipe = metadata.join("Nintendo - Super Nintendo Entertainment System.rdb");
+    let c = std::ffi::CString::new(pipe.as_os_str().as_encoded_bytes()).unwrap();
+    assert_eq!(unsafe { libc::mkfifo(c.as_ptr(), 0o600) }, 0, "a pipe");
+    // A start like every one after the first: the index knows the games.
+    let games = cores.parent().unwrap().join("Games");
+    dirs.open_index().refresh(&games, &aizome_index::Refresh::default()).unwrap();
+    let mut config = config(dirs, cores, ManualClock::at(2026, 10, 31, 17, 0));
+    config.metadata = Some(metadata);
+    let mut h = Harness::new(Chanoma::new(config));
+    let w = h.window();
+    h.resize(w, Size::new(1920.0, 1080.0));
+
+    // The name from the first frame, and nothing to press yet.
+    assert!(h.program().splash.is_some());
+    assert_eq!(h.program().splash_message().body, "Getting your games ready");
+    let focus = h.program().focus;
+    input(&mut h, Input::Dir(Dir::Down));
+    input(&mut h, Input::Ok);
+    assert_eq!((h.program().screen.clone(), h.program().focus), (Screen::Home, focus));
+    assert!(h.program().splash.is_some());
+    shot(&mut h, "38-starting");
+
+    // The database read (an empty one): the games, and Home.
+    std::fs::write(&pipe, b"").unwrap();
+    until(&mut h, |a| a.splash.is_none());
+    assert!(h.program().shown_games().any(|g| g.title == "Test Quest"));
+    assert_eq!(h.program().screen, Screen::Home);
+}
+
 /// The confirm button's word on the settings' hints, when it has one.
 fn ok_hint(h: &Harness<Chanoma>) -> Option<String> {
     let mut hints = h.program().grownups_hints();

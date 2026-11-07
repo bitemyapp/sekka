@@ -399,6 +399,9 @@ pub struct Held {
 }
 
 const ART_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "webp"];
+/// After a picture's game's name: none, or as Batocera's scraper names
+/// them (the box first).
+const ART_SUFFIXES: &[&str] = &["", "-thumb", "-boxart", "-box", "-cover", "-image"];
 /// What's in a folder, as the shared index has it ([`aizome_index`]),
 /// brought up to date first when `refresh` (only what changed is read
 /// again): its files' paths, and its pictures' for box art. A folder
@@ -407,6 +410,8 @@ pub struct Read {
     pub root: PathBuf,
     pub files: Vec<PathBuf>,
     pub pictures: HashSet<PathBuf>,
+    /// The pictures' names without their extensions.
+    pub picture_names: HashSet<std::ffi::OsString>,
 }
 
 /// How a look at the folders goes, for the screens that show it.
@@ -466,6 +471,7 @@ pub fn read(index: &mut Index, root: &Path, refresh: bool, progress: Progress) -
     }
     let mut files: Vec<PathBuf> = Vec::new();
     let mut pictures = HashSet::new();
+    let mut picture_names = HashSet::new();
     for e in index.entries(&root).unwrap_or_default() {
         // Hidden files aren't games: a Mac leaves `._Game.sfc` (its
         // resource fork) beside every file it copies to a FAT drive.
@@ -474,18 +480,29 @@ pub fn read(index: &mut Index, root: &Path, refresh: bool, progress: Progress) -
         }
         if e.ext.as_deref().is_some_and(|x| ART_EXTENSIONS.contains(&x)) {
             pictures.insert(e.path.clone());
+            picture_names.extend(e.path.file_stem().map(ToOwned::to_owned));
         }
         files.push(e.path);
     }
     files.sort();
-    Read { root, files, pictures }
+    Read { root, files, pictures, picture_names }
 }
 
 /// A picture for `path`'s stem in its own folder or a pictures folder
 /// beside it (`media`, `boxart`, `Named_Boxarts`, `images`, `covers`),
 /// among the folder's `pictures` (nothing more is read for it).
-fn art_for(path: &Path, root: &Path, pictures: &HashSet<PathBuf>) -> Option<PathBuf> {
+fn art_for(path: &Path, root: &Path, read: &Read) -> Option<PathBuf> {
     let stem = path.file_stem()?.to_string_lossy().into_owned();
+    // Only the names a picture has: most games have none, and every place
+    // looked in for every name was most of a big collection's start.
+    let suffixes: Vec<&str> = ART_SUFFIXES
+        .iter()
+        .copied()
+        .filter(|s| read.picture_names.contains(std::ffi::OsStr::new(&format!("{stem}{s}"))))
+        .collect();
+    if suffixes.is_empty() {
+        return None;
+    }
     let dir = path.parent()?;
     let mut places = vec![dir.to_path_buf()];
     let mut d = Some(dir);
@@ -499,12 +516,10 @@ fn art_for(path: &Path, root: &Path, pictures: &HashSet<PathBuf>) -> Option<Path
         d = here.parent();
     }
     for place in places {
-        // As named, or as Batocera's scraper names its pictures (the box
-        // first).
-        for suffix in ["", "-thumb", "-boxart", "-box", "-cover", "-image"] {
+        for suffix in &suffixes {
             for ext in ART_EXTENSIONS {
                 let p = place.join(format!("{stem}{suffix}.{ext}"));
-                if pictures.contains(&p) {
+                if read.pictures.contains(&p) {
                     return Some(p);
                 }
             }
@@ -548,7 +563,8 @@ const DISC_PARTS: &[&str] = &["bin", "img", "iso", "chd", "cue", "ccd", "pbp", "
 fn games_of(reads: &[(usize, Read)], cores: &Cores, held: &mut [Held]) -> (Vec<Game>, usize) {
     let mut games = Vec::new();
     let mut unplayable = 0;
-    for (i, Read { root, files, pictures }) in reads {
+    for (i, read) in reads {
+        let Read { root, files, pictures, .. } = read;
         // A disc's tracks are named by its sheet: they aren't games of
         // their own.
         let sheets: Vec<(&PathBuf, Vec<PathBuf>)> = files
@@ -592,7 +608,7 @@ fn games_of(reads: &[(usize, Read)], cores: &Cores, held: &mut [Held]) -> (Vec<G
             games.push(Game {
                 key: format!("{}/{}", system.id, rel),
                 title: title_of(path),
-                art: listed_art.get(path).cloned().or_else(|| art_for(path, root, pictures)),
+                art: listed_art.get(path).cloned().or_else(|| art_for(path, root, read)),
                 info: None,
                 known_as: None,
                 path: path.clone(),
@@ -601,7 +617,8 @@ fn games_of(reads: &[(usize, Read)], cores: &Cores, held: &mut [Held]) -> (Vec<G
         }
         held[*i].systems = systems.len();
     }
-    games.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()).then(a.key.cmp(&b.key)));
+    // Each title lowered once, not at each comparison.
+    games.sort_by_cached_key(|g| (g.title.to_lowercase(), g.key.clone()));
     games.dedup_by(|a, b| a.key == b.key);
     (games, unplayable)
 }
@@ -774,7 +791,8 @@ fn shelf_of(video: &Path, root: &Path) -> PathBuf {
 /// games' clips, and left out.
 fn shelves_of(reads: &[(usize, Read)], held: &mut [Held]) -> Vec<Shelf> {
     let mut shelves: Vec<Shelf> = Vec::new();
-    for (i, Read { root, files, pictures }) in reads {
+    for (i, read) in reads {
+        let Read { root, files, pictures, .. } = read;
         let videos = files.iter().filter(|p| aizome_media::is_video(p) && !in_system_folder(p, root)).cloned();
         let mut groups: std::collections::BTreeMap<PathBuf, Vec<PathBuf>> = Default::default();
         for v in videos {
@@ -795,9 +813,9 @@ fn shelves_of(reads: &[(usize, Read)], held: &mut [Held]) -> Vec<Shelf> {
                 title_of(&key)
             };
             let poster = if folder {
-                poster_in(&key, pictures).or_else(|| art_for(&vids[0], root, pictures))
+                poster_in(&key, pictures).or_else(|| art_for(&vids[0], root, read))
             } else {
-                art_for(&key, root, pictures)
+                art_for(&key, root, read)
             };
             let several = vids.len() > 1;
             let videos = vids
@@ -902,15 +920,18 @@ pub fn natural(a: &str, b: &str) -> std::cmp::Ordering {
 
 /// Everything to play and watch, as the shared index has it: brought up to
 /// date first when `refresh`, the games found in the databases in
-/// `metadata` (by what's in them too when `refresh`: [`crate::metadata`]).
+/// `metadata` (by what's in them too when `refresh`: [`crate::metadata`]),
+/// those read before kept in `catalogs` for the next look.
 pub fn scan(
     index: &mut Index,
     folders: &[PathBuf],
     core_dirs: &[PathBuf],
     metadata: Option<&Path>,
+    catalogs: &mut crate::metadata::Catalogs,
     refresh: bool,
     progress: Progress,
 ) -> Library {
+    let began = std::time::Instant::now();
     let cores = Cores::scan(core_dirs);
     // Whether a read took long enough to be shown going (an unfinished
     // folder was told of): then recognising the games is shown too.
@@ -920,14 +941,16 @@ pub fn scan(
         progress(l);
     };
     let reads = read_all(index, folders, refresh, &tell);
+    let read = began.elapsed();
     let mut held = held_of(folders, &reads);
     let (mut games, unplayable) = games_of(&reads, &cores, &mut held);
+    log::debug!("chanoma: the folders read in {read:.0?}, their games recognised in {:.0?}", began.elapsed() - read);
     if shown.get() {
         progress(&Look::default());
     }
     if let Some(dir) = metadata {
         let began = std::time::Instant::now();
-        let (by_name, by_content) = crate::metadata::describe(&mut games, index, dir, refresh);
+        let (by_name, by_content) = crate::metadata::describe(&mut games, index, dir, refresh, catalogs);
         log::info!(
             "chanoma: {by_name} of {} games found in the databases by name, {by_content} more by what's in them ({:.0?})",
             games.len(),
@@ -1021,7 +1044,15 @@ mod tests {
         }
         std::fs::write(games.join("PS1/Disc.cue"), "FILE \"Disc (Track 1).bin\" BINARY\n  TRACK 01 MODE2/2352\n")
             .unwrap();
-        let lib = scan(&mut index(&d), std::slice::from_ref(&games), &[cores_dir], None, true, &|_| {});
+        let lib = scan(
+            &mut index(&d),
+            std::slice::from_ref(&games),
+            &[cores_dir],
+            None,
+            &mut Default::default(),
+            true,
+            &|_| {},
+        );
         let keys: Vec<&str> = lib.games.iter().map(|g| g.key.as_str()).collect();
         assert_eq!(keys, ["psx/PS1/Disc.cue", "snes/SNES/Kirby (USA).sfc", "gb/GB/Tetris.gb"]);
         assert_eq!(lib.games[1].title, "Kirby");

@@ -54,6 +54,27 @@ explicitly (and Chanoma also looks in NixOS's profiles).
 | `app/` | The program: screens, input, home shelves, playing, settings, time, search, a forgotten PIN |
 | `ui/` | What's drawn: a 1920 × 1080 stage scaled to the screen |
 
+### Starting
+
+From its first frame Chanoma shows its name (`app/splash.rs`): Aizome's
+mark, "Chanoma" and "Getting your games ready", until Home has its
+games, so a television never shows nothing and then a Home that fills
+in. Home comes when the first look at the folders, at what the files
+index knows, is in (tens of milliseconds for thousands of games) and no
+folder's drive is being opened ("Opening the drive Extreme Pro": its
+games come once it's open; a drive UDisks hasn't said anything of yet is
+waited for 3 s at most). It's never up longer than 10 s, and buttons do
+nothing on it. A first start, with nothing in the index yet, goes
+straight to Home, which shows the folders being read.
+
+How long it took goes to the journal on its own (`chanoma: Home, with N
+games, T after starting`: the `aizome_chanoma::start` target).
+The rest of Chanoma's info stays out of it, what's typed over a page
+among it. On a laptop docked to the television with its lid closed, the
+compositor knows the lid as it starts ([compositor.md](compositor.md),
+"The lid"), so Chanoma opens on the television rather than the panel
+behind the lid.
+
 ### The look
 
 Chanoma draws on one canvas rather than with the kit's widgets (a
@@ -747,6 +768,10 @@ play, who made it.
   2,352-, 2,336- or 2,048-byte sectors. CHD and PBP discs aren't read.
 - A game named twice in a database (a release per disc or revision) takes
   what any of its entries says.
+- **Read once a start, all at once**: the systems' databases are read on
+  a thread each, once for both looks at the folders (`Catalogs`), and the
+  facts a folder at a time (`Index::facts_in`). Looking each file up on
+  its own was most of a start with thousands of games.
 
 What it's for:
 
@@ -885,9 +910,11 @@ cargo run --release -p aizome-chanoma --example library -- FOLDER… \
   are `aizome-media`'s, tested there; serving the media controls is
   `aizome-mpris`'s, tested there against a private `dbus-daemon` (what a
   player says, and which asks reach it).
-- **Headless** (`tests/chanoma.rs`, also in the package's check): the
-  first setup, its PIN pressed on the controller (a slip taken back with
-  B; the stick, Start and Select pressing nothing; the right trigger a 0)
+- **Headless** (`tests/chanoma.rs`, also in the package's check):
+  starting (the name from the first frame, buttons doing nothing, until a
+  games' database the test holds back as a pipe is read); the first
+  setup, its PIN pressed on the controller (a slip taken back with B;
+  the stick, Start and Select pressing nothing; the right trigger a 0)
   and again on the keyboard; Home for kids and grown-ups (the PIN typed by
   its numbers on a keyboard, 9 and 0 among them); a PIN made on an Xbox
   controller pressed on a Nintendo one, its B taking a press back; a pad

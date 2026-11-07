@@ -295,16 +295,35 @@ struct Ids {
     serial: Option<String>,
 }
 
+/// The facts the index keeps of the games' files, read a folder at a time.
+struct Facts<'a> {
+    index: &'a Index,
+    /// Whether a fact holds only while its file is as it was.
+    check: bool,
+    folders: HashMap<(PathBuf, &'static str), HashMap<std::ffi::OsString, Vec<u8>>>,
+}
+
+impl Facts<'_> {
+    fn get(&mut self, path: &Path, key: &'static str) -> Option<Vec<u8>> {
+        let (dir, name) = (path.parent()?, path.file_name()?);
+        let Facts { index, check, folders } = self;
+        let here = folders
+            .entry((dir.to_owned(), key))
+            .or_insert_with(|| index.facts_in(dir, key, *check).unwrap_or_default());
+        here.get(name).cloned()
+    }
+}
+
 /// `path`'s ids (a disc's when `disc`): kept in the index, else worked out
 /// (when `read`) and kept.
-fn ids(index: &Index, path: &Path, disc: bool, read: bool) -> Option<Ids> {
+fn ids(facts: &mut Facts, path: &Path, disc: bool, read: bool) -> Option<Ids> {
     let ext = path.extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
     // A disc by its sheet; a CHD or PBP isn't read.
     if disc && !matches!(ext.as_str(), "cue" | "m3u") {
         return None;
     }
     let key = if disc { FACT_SERIAL } else { FACT_CRC };
-    if let Ok(Some(v)) = index.fact(path, key) {
+    if let Some(v) = facts.get(path, key) {
         return Some(if disc {
             Ids { serial: (!v.is_empty()).then(|| String::from_utf8_lossy(&v).into_owned()), ..Ids::default() }
         } else {
@@ -323,7 +342,7 @@ fn ids(index: &Index, path: &Path, disc: bool, read: bool) -> Option<Ids> {
         let value = crcs.iter().flat_map(|c| c.to_le_bytes()).collect();
         (Ids { crcs, serial: None }, value)
     };
-    if let Err(e) = index.set_fact(path, key, &value) {
+    if let Err(e) = facts.index.set_fact(path, key, &value) {
         log::debug!("chanoma: keeping what {} is: {e}", path.display());
     }
     Some(ids)
@@ -443,17 +462,39 @@ impl Disc {
     }
 }
 
+/// The systems' databases read so far. They're 21 MB in all (the
+/// PlayStation's near 8, the NES's 6), so a start reads each once for both
+/// its looks through the games, and the systems' at once, a thread each.
+#[derive(Debug, Default)]
+pub struct Catalogs(HashMap<&'static str, Catalog>);
+
+impl Catalogs {
+    /// Reads those of `systems`' databases not read yet.
+    pub fn read(&mut self, dir: &Path, systems: impl IntoIterator<Item = &'static str>) {
+        let mut missing: Vec<&'static str> = systems.into_iter().filter(|s| !self.0.contains_key(s)).collect();
+        missing.sort_unstable();
+        missing.dedup();
+        let read: Vec<(&'static str, Catalog)> = std::thread::scope(|s| {
+            let each: Vec<_> = missing.iter().map(|sys| s.spawn(move || (*sys, Catalog::load(dir, sys)))).collect();
+            each.into_iter().filter_map(|t| t.join().ok()).collect()
+        });
+        self.0.extend(read);
+    }
+}
+
 /// Find each game in its system's databases, by name, else (when `read`,
 /// or already worked out) by what's in its file. Says how many were
 /// found by name and how many by what's in them.
-pub fn describe(games: &mut [Game], index: &Index, dir: &Path, read: bool) -> (usize, usize) {
-    let mut catalogs: HashMap<&'static str, Catalog> = HashMap::new();
+pub fn describe(games: &mut [Game], index: &Index, dir: &Path, read: bool, catalogs: &mut Catalogs) -> (usize, usize) {
+    let began = std::time::Instant::now();
+    catalogs.read(dir, games.iter().map(|g| g.system.id));
+    log::debug!("chanoma: the games' databases read in {:.0?}", began.elapsed());
+    // A look at what the index knows takes what it kept as it is; the look
+    // after a refresh holds it to the files as they are.
+    let mut facts = Facts { index, check: read, folders: HashMap::new() };
     let (mut by_name, mut by_content) = (0, 0);
     for g in games.iter_mut() {
-        let c = catalogs.entry(g.system.id).or_insert_with(|| Catalog::load(dir, g.system.id));
-        if c.is_empty() {
-            continue;
-        }
+        let Some(c) = catalogs.0.get(g.system.id).filter(|c| !c.is_empty()) else { continue };
         let stem = g.path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
         if c.knows(&stem) {
             if let Some(i) = c.by_name(&stem) {
@@ -463,7 +504,7 @@ pub fn describe(games: &mut [Game], index: &Index, dir: &Path, read: bool) -> (u
             g.known_as = Some(stem);
             continue;
         }
-        let Some(ids) = ids(index, &g.path, g.system.id == "psx", read) else { continue };
+        let Some(ids) = ids(&mut facts, &g.path, g.system.id == "psx", read) else { continue };
         let name =
             ids.crcs.iter().find_map(|crc| c.name_by_crc(*crc)).or_else(|| c.name_by_serial(ids.serial.as_deref()?));
         if let Some(n) = name {

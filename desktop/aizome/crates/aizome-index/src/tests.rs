@@ -163,6 +163,34 @@ fn facts_hold_while_their_file_does() {
 }
 
 #[test]
+fn a_folders_facts_come_at_once() {
+    let t = Tree::new("folder-facts");
+    let mut index = Index::open_at(&t.db).unwrap();
+    index.refresh(&t.root, &Refresh::default()).unwrap();
+    let snes = t.root.join("snes");
+    let rom = snes.join("Kirby (USA).sfc");
+    let other = snes.join("new.sfc");
+    std::fs::write(&other, "n").unwrap();
+    index.set_fact(&rom, "crc32", b"1234abcd").unwrap();
+    index.set_fact(&other, "crc32", b"0").unwrap();
+    index.set_fact(&rom, "serial", b"S").unwrap();
+    let names = |m: std::collections::HashMap<std::ffi::OsString, Vec<u8>>| {
+        let mut v: Vec<(String, Vec<u8>)> = m.into_iter().map(|(k, v)| (k.to_string_lossy().into_owned(), v)).collect();
+        v.sort();
+        v
+    };
+    let both = vec![("Kirby (USA).sfc".to_owned(), b"1234abcd".to_vec()), ("new.sfc".to_owned(), b"0".to_vec())];
+    assert_eq!(names(index.facts_in(&snes, "crc32", true).unwrap()), both);
+    // Rewritten: a checked look forgets it; one at what's kept doesn't.
+    std::fs::write(&rom, "kirby, patched").unwrap();
+    assert_eq!(names(index.facts_in(&snes, "crc32", true).unwrap()), both[1..]);
+    assert_eq!(names(index.facts_in(&snes, "crc32", false).unwrap()), both);
+    // Another folder, or one the index doesn't know, has none.
+    assert!(index.facts_in(&t.root, "crc32", false).unwrap().is_empty());
+    assert!(index.facts_in(&t.root.join("nowhere"), "crc32", false).is_err());
+}
+
+#[test]
 fn apps_share_the_index() {
     let t = Tree::new("shared");
     // Two connections, as two apps would have: what one read, the other

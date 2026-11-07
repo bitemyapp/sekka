@@ -20,6 +20,7 @@ pub mod play;
 pub mod reset;
 pub mod rows;
 pub mod search;
+pub mod splash;
 pub mod state;
 pub mod time;
 pub mod typing;
@@ -123,6 +124,10 @@ pub enum Msg {
     /// What the folders hold: as the files index knew it, or (`true`) read
     /// again.
     Scanned(Arc<Library>, bool),
+    /// Starting has shown long enough ([`splash`]).
+    SplashOver,
+    /// UDisks has had its time to say of the drives.
+    DrivesWaited,
     Art(PathBuf, Option<Image>),
     /// Box art fetched (or not), and its picture if it was.
     ArtFetched(PathBuf, crate::art::Fetched, Option<Image>),
@@ -369,6 +374,8 @@ pub struct Chanoma {
     /// Which of its games show, by place ([`crate::collection`]).
     pub shown: Vec<usize>,
     pub scanned: bool,
+    /// Starting, Chanoma's name up until Home has its games.
+    pub splash: Option<splash::Splash>,
     pub pads: Option<Pads>,
     pub shared: Arc<Shared>,
     pub controllers: Vec<PadInfo>,
@@ -484,6 +491,7 @@ impl Chanoma {
             library: Arc::new(Library::default()),
             shown: Vec::new(),
             scanned: false,
+            splash: None,
             pads: None,
             shared: Arc::new(Shared::default()),
             controllers: Vec::new(),
@@ -956,6 +964,7 @@ impl Chanoma {
         }
         match self.screen.clone() {
             Screen::Welcome => self.welcome_input(i, cx),
+            Screen::Home if self.splash.is_some() => {}
             Screen::Home => self.home_input(i, cx),
             Screen::Games => self.games_input(i, cx),
             Screen::Episodes(s) => self.episodes_input(s, i, cx),
@@ -1715,6 +1724,10 @@ impl Chanoma {
                 .actions(&["Set it up"]);
                 self.stage(self.scene(View::Message(m), Some(self.chrome_titled(self.hints("Start", None)))))
             }
+            // Starting: the name, and nothing to press.
+            Screen::Home if self.splash.is_some() => {
+                self.stage(self.scene(View::Message(self.splash_message()), Some(self.chrome_titled(Vec::new()))))
+            }
             Screen::Home => {
                 let home = self.home_view();
                 let mut hints = self.hints("Open", None);
@@ -1939,6 +1952,7 @@ impl Program for Chanoma {
             self.drives.watch(tx.clone());
         }
         self.outputs_changed(cx);
+        self.start_splash(cx);
         if self.config.scan {
             self.rescan(cx);
         }
@@ -2002,6 +2016,17 @@ impl Program for Chanoma {
                 self.scanned |= fresh;
                 self.clamp_home_focus();
                 self.want_art(cx);
+                if let Some(s) = &mut self.splash {
+                    s.scan_due = false;
+                }
+                self.splash_check();
+            }
+            Msg::SplashOver => self.splash_over(),
+            Msg::DrivesWaited => {
+                if let Some(s) = &mut self.splash {
+                    s.drives_waited = true;
+                }
+                self.splash_check();
             }
             Msg::Art(path, img) => {
                 if let Some(img) = img {
@@ -2157,26 +2182,37 @@ impl Chanoma {
     /// index knows at once, then what's there now (only folders that
     /// changed are read again).
     pub fn rescan(&mut self, cx: &mut Cx<Msg>) {
+        if let Some(s) = &mut self.splash {
+            s.scan_due = true;
+        }
         let folders = self.settings.folders.clone();
         let cores = self.config.core_dirs.clone();
         let metadata = self.config.metadata.clone();
         let dirs = self.config.dirs.clone();
-        let scan = move |index: &mut aizome_index::Index, refresh: bool, progress: crate::library::Progress| {
-            Arc::new(crate::library::scan(index, &folders, &cores, metadata.as_deref(), refresh, progress))
+        let scan = move |index: &mut aizome_index::Index,
+                         catalogs: &mut crate::metadata::Catalogs,
+                         refresh: bool,
+                         progress: crate::library::Progress| {
+            Arc::new(crate::library::scan(index, &folders, &cores, metadata.as_deref(), catalogs, refresh, progress))
         };
         match self.sender.clone() {
             Some(tx) => {
                 let _ = std::thread::Builder::new().name("chanoma-scan".into()).spawn(move || {
                     let mut index = dirs.open_index();
-                    tx.send(Msg::Scanned(scan(&mut index, false, &|_| {}), false));
+                    // The databases read once, for both looks.
+                    let mut catalogs = crate::metadata::Catalogs::default();
+                    tx.send(Msg::Scanned(scan(&mut index, &mut catalogs, false, &|_| {}), false));
                     // How far the look has got, for Home and the settings.
                     let tell = |l: &crate::library::Look| {
                         tx.send(Msg::Looking(l.clone()));
                     };
-                    tx.send(Msg::Scanned(scan(&mut index, true, &tell), true));
+                    tx.send(Msg::Scanned(scan(&mut index, &mut catalogs, true, &tell), true));
                 });
             }
-            None => cx.spawn(move || Msg::Scanned(scan(&mut dirs.open_index(), true, &|_| {}), true)),
+            None => cx.spawn(move || {
+                let mut catalogs = crate::metadata::Catalogs::default();
+                Msg::Scanned(scan(&mut dirs.open_index(), &mut catalogs, true, &|_| {}), true)
+            }),
         }
     }
 
