@@ -2941,7 +2941,10 @@ python3 -I -m unittest discover -s installer/genkan/macos/packaging/tests
 
 The AppKit code is type-checked for `aarch64-apple-darwin` from Linux
 (`rustup target add aarch64-apple-darwin`; no SDK is needed to check).
-Linking and running need a Mac:
+Linking and running need a Mac with Xcode's command line tools
+(`xcode-select --install`), rustup and Python 3.11 or later as `python3`
+(macOS's own is older; `build-app.sh` stops at once without one). The
+engine archive and icon come from Linux, as above:
 
 ```sh
 installer/genkan/macos/packaging/build-app.sh --engine ENGINE.tar.gz --icon AppIcon.icns

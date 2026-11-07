@@ -46,6 +46,12 @@ while (( $# )); do
 done
 
 # What a build is given is checked before anything is built.
+# provenance.py reads Cargo.lock with tomllib (Python 3.11); macOS's own
+# python3 is older, so say so now rather than after the build.
+if ! python3 -c 'import sys; sys.exit(sys.version_info < (3, 11))' 2>/dev/null; then
+  echo "build-app.sh needs Python 3.11 or later as python3 (found $(python3 -V 2>&1)); install one, for example from python.org or Homebrew, and put it first on PATH." >&2
+  exit 2
+fi
 if $release; then
   : "${SEKKA_TEAM_ID:?a release names the team that signs it (SEKKA_TEAM_ID)}"
   : "${SEKKA_SIGNING_IDENTITY:?a release names its Developer ID Application identity (SEKKA_SIGNING_IDENTITY)}"
