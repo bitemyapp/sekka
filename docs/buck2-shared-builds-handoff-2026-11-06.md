@@ -23,7 +23,11 @@ over long benchmark matrices. Builds, tests and measurements go to
     (`local-cas-outputs.patch`, `build/buck2/cas_dedupe.py`);
   - the client opts in with a `build-service client --local-cas` file.
 - `build-service autosize` sizes the CAS to free disk space above a floor,
-  and `dedupe` shares the CAS with a content store.
+  and `dedupe` shares the CAS with a content store. `autosize` waits for an
+  idle service before resizing, unless the disk is under half its floor.
+- A backend restart (resize, restart, runtime) no longer fails builds in
+  flight. The gateway answers `UNAVAILABLE`, which Buck2 retries for about
+  1.5 s; a restart took 1.0–1.2 s on wx.
 - [The single-CAS evidence](test-results/buck2/2026-11-06-single-cas/README.md)
   holds the targeted repros and a full storage-plan run.
 - On wx, at these commits: the engine's check phase, `checks.buck2-backend`
@@ -68,13 +72,18 @@ it. Incremental state is private per worktree (~0.7 GB after a dev build).
      failure was a controller bug, fixed in `84954a1a`, and a targeted
      eviction repro passed.
    - Rerun the plan once if a full eviction-stage record is wanted.
-2. **Make `autosize` routine** on the deployment host, for example from a
-   user timer every 15 minutes. It resizes only on a 5% shrink or a 25%
-   growth, because a resize restarts the backend.
+2. **Make `autosize` routine** on the deployment host: DEVELOPERS.md has the
+   timer recipe, tried on wx. It resizes only on a 5% shrink or a 25%
+   growth, and only when idle. On wx, the user's service manager has run
+   since 2026-11-03, before callen joined `docker`, so its units cannot
+   reach Docker. Logging out of every session or rebooting fixes that; it
+   is the user's call.
 3. **NativeLink fork**, only if needed: stable digest paths (dropping the
-   client's index), local reads counted in its LRU, and casita-style
-   retention. That retention means roots, leases, and action-cache-first
-   eviction. Free-space sizing is already covered by `autosize`.
+   client's index) and casita-style retention (roots, and action-cache-first
+   eviction). Cloned blobs are already kept recent: `has()` touches each key
+   in 1.8.3. Its evicting map also leases keys, but only the worker's input
+   staging takes those leases. Free-space sizing is already covered by
+   `autosize`.
 4. **Laptop phase.** On a host without the CAS, the content store and
    downloads work as before. runnymede is ext4, so it gets no reflinks.
 5. **CI.** Decide how PR CI's `build` job should exercise this work.
