@@ -266,6 +266,18 @@ pub const REMOVED: &str = "Nothing of the earlier installation was found on your
 /// step is done. Whether Sekka has started since isn't known here.
 pub const INSTALLED: &str = "Recovery's step is done. Start your Mac in Sekka; the first time it starts, Sekka asks you to create your account.";
 
+/// The existing screen, for an installation whose record says Recovery's
+/// step is done, but that this Mac's own look at the disk finds only part
+/// of.
+pub const FINISHED_PARTIAL_TITLE: &str = "Sekka is only partly on this Mac";
+pub const FINISHED_PARTIAL: &str = "Sekka Installer's record says Sekka was installed here, but looking at the disk it finds only part of that installation: some of its partitions may have been removed in Disk Utility. Sekka Installer doesn't repair or remove an installation yet, and doesn't install another beside this one.";
+/// The existing screen, for an installation whose record says Recovery's
+/// step is done, but that this Mac's own look at the disk doesn't find,
+/// beside a system it can't identify.
+pub const FINISHED_UNFOUND_TITLE: &str = "Sekka Installer can't find the Sekka it installed";
+pub const FINISHED_UNFOUND: &str = "Its record says Sekka was installed on this Mac, but looking at the disk it doesn't find that installation. The disk holds a system Sekka Installer can't identify, and that may be it.";
+pub const FINISHED_UNFOUND_NEXT: &str = "If you removed Sekka, you can install it again: the system Sekka Installer can't identify is left as it is. If that system is Sekka, the new one is installed beside it.";
+
 /// The existing screen's last step, naming this Mac's macOS volume.
 pub fn choose_sekka(macos: &str) -> String {
     format!("Choose Sekka. To return to macOS later, choose {macos} the same way.")

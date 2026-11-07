@@ -141,6 +141,8 @@ pub enum Msg {
     CancelInstallation,
     RetryStartupDisk,
     CopyDiagnostics,
+    /// Install again past a finished installation this Mac can't find.
+    InstallAgain,
     ShutDown,
     ToggleDetails,
     DismissNotice,
@@ -227,6 +229,9 @@ pub struct Model {
     /// Why the helper didn't set the startup disk again, when it refused
     /// before trying.
     pub retry_refused: Option<String>,
+    /// A finished installation this Mac can't find, which the owner chose
+    /// to install again past.
+    pub set_aside: Option<Uuid>,
 }
 
 impl Model {
@@ -268,6 +273,7 @@ impl Model {
             cancelling: false,
             reconciling: None,
             retry_refused: None,
+            set_aside: None,
         };
         (
             model,
@@ -453,13 +459,29 @@ impl Model {
             .unwrap_or_default()
     }
 
-    /// Whether the installation the helper knows is installed: Recovery's
-    /// step is done, by its record or by the disk.
+    /// Whether the installation the helper knows is installed: complete on
+    /// the disk, or Recovery's step done by its record and there on the
+    /// disk. This Mac's own look can't read the boot policy, so it usually
+    /// can't call a finished installation complete; but one it finds only
+    /// in part, or not at all, isn't installed, whatever the record says.
     pub fn installed(&self) -> bool {
-        self.state == Some(InstallState::WaitingForSetup)
-            || self
-                .installation
-                .is_some_and(|id| self.on_disk(id).is_some_and(|x| x.state == InstallationState::Complete))
+        let found = self.found();
+        found == Some(InstallationState::Complete)
+            || (self.state == Some(InstallState::WaitingForSetup)
+                && found.is_some_and(|s| s != InstallationState::Partial))
+    }
+
+    /// What this Mac's own inspection shows of the installation the helper
+    /// knows.
+    pub fn found(&self) -> Option<InstallationState> {
+        self.on_disk(self.installation?).map(|x| x.state)
+    }
+
+    /// Whether the record says the installation finished, and this Mac's
+    /// own look doesn't find it: something it can't identify is on the
+    /// disk, and may be it.
+    pub fn finished_unfound(&self) -> bool {
+        self.state == Some(InstallState::WaitingForSetup) && self.installation.is_some() && self.found().is_none()
     }
 
     /// What this Mac's own inspection shows of an installation the helper
@@ -535,7 +557,11 @@ impl Model {
     /// Installations the helper knows that need the person's attention.
     pub fn unfinished(&self) -> Option<&Summary> {
         let Some(Ok(list)) = &self.helper else { return None };
-        list.iter().rev().find(|s| s.running || !s.state.allows_new_installation() || s.state == InstallState::WaitingForSetup)
+        list.iter().rev().find(|s| {
+            let finished = s.state == InstallState::WaitingForSetup;
+            (s.running || !s.state.allows_new_installation() || finished)
+                && !(finished && self.set_aside == Some(s.installation))
+        })
     }
 
     pub fn update(&mut self, msg: Msg) -> Vec<Effect> {
@@ -846,6 +872,18 @@ impl Model {
                 }
                 Vec::new()
             }
+            // The owner says the finished installation this Mac can't find
+            // is gone: it no longer keeps a plan from being offered. (The
+            // helper would let another begin; it is what may be the
+            // unidentified system beside it that the owner decides about.)
+            Msg::InstallAgain => match self.installation {
+                Some(id) if self.screen == Screen::Existing && self.finished_unfound() => {
+                    self.set_aside = Some(id);
+                    self.notice = None;
+                    self.check_again()
+                }
+                _ => Vec::new(),
+            },
             Msg::CopyDiagnostics => match self.installation {
                 Some(id) => vec![Effect::Diagnostics(id)],
                 None => vec![Effect::CopyToPasteboard(self.report(&[]))],

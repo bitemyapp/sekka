@@ -744,19 +744,33 @@ fn every_installation_that_stands_in_the_way_is_looked_at_by_the_helper() {
 }
 
 #[test]
-fn a_finished_installation_this_mac_cant_identify_is_not_offered_a_second() {
+fn a_finished_installation_this_mac_cant_find_isnt_called_installed() {
     let env = Simulation::new(Scenario::Normal, 0.0);
-    // The inspection couldn't read the stub's records, so it reports it
-    // unidentified.
+    // Something the inspection couldn't identify: the stub, its records
+    // unreadable, or another system altogether (Fedora Asahi Remix, say).
     let unread = || {
         let mut i = env.inspect().unwrap();
         i.installations.push(on_disk(InstallationKind::OtherLinux, InstallationState::Unknown, None));
         Ok(i)
     };
-    let (m, effects) = hear(&env, known(InstallState::WaitingForSetup), unread());
+    let (mut m, effects) = hear(&env, known(InstallState::WaitingForSetup), unread());
     assert!(effects.is_empty(), "{effects:?}");
     assert_eq!(m.screen, Screen::Existing);
-    assert!(m.installed());
+    assert!(!m.installed(), "never the steps to start a Sekka that may not be there");
+    assert!(m.finished_unfound());
+    assert_eq!(m.step(), Step::Check);
+    // The owner knows whether they removed it, and may install again.
+    let effects = m.update(Msg::InstallAgain);
+    assert!(matches!(effects.as_slice(), [Effect::Inspect, Effect::LoadCatalog, Effect::HelperStatus]));
+    m.update(Msg::HelperStatus(known(InstallState::WaitingForSetup)));
+    m.update(Msg::Catalog(env.catalog()));
+    for e in m.update(Msg::Inspected(unread())) {
+        if let Effect::MeasureDownload(r) = e {
+            m.update(Msg::ToDownload(env.still_to_download(&r)));
+        }
+    }
+    assert_eq!(m.screen, Screen::Plan);
+    assert!(m.unfinished().is_none());
 
     // On a disk the inspection accounts for, a finished installation that
     // is gone doesn't stand in the way.
@@ -767,6 +781,28 @@ fn a_finished_installation_this_mac_cant_identify_is_not_offered_a_second() {
     let (mut m, _) = hear(&env, known(InstallState::WaitingForRecovery), unread());
     m.update(Msg::Reconciled(Err(inspection_failed())));
     assert_eq!(m.screen, Screen::Recovery);
+}
+
+#[test]
+fn a_finished_installation_found_only_in_part_isnt_called_installed() {
+    let env = Simulation::new(Scenario::Normal, 0.0);
+    let found = |state| {
+        let mut i = env.inspect().unwrap();
+        i.installations.push(on_disk(InstallationKind::Sekka, state, Some(SIM_ID)));
+        Ok(i)
+    };
+    // Its stub and root removed by hand, its ESP left: this Mac's own look
+    // finds it by the handoff there, in part.
+    let (m, _) = hear(&env, known(InstallState::WaitingForSetup), found(InstallationState::Partial));
+    assert_eq!(m.screen, Screen::Existing);
+    assert!(!m.installed());
+    assert!(!m.finished_unfound(), "found, in part: nothing is offered beside it");
+    assert_eq!(m.step(), Step::Check);
+    // Whole, as far as it can tell without the boot policy: the record
+    // says the rest.
+    let (m, _) = hear(&env, known(InstallState::WaitingForSetup), found(InstallationState::Unknown));
+    assert!(m.installed());
+    assert_eq!(m.step(), Step::Account);
 }
 
 #[test]

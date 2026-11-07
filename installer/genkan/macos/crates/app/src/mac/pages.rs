@@ -369,30 +369,53 @@ fn needs_update(p: &mut Page) {
     p.primary("Check Again", || Msg::CheckAgain);
 }
 
+/// What this Mac's own inspection found of each system on the disk.
+fn installations(m: &Model, p: &mut Page) {
+    let Some(i) = m.inspection() else { return };
+    for x in &i.installations {
+        p.row(
+            if x.state == sekka_mac_contract::InstallationState::Complete { Mark::Good } else { Mark::Warning },
+            x.name.as_str(),
+            match x.state {
+                sekka_mac_contract::InstallationState::Complete => "Installed",
+                sekka_mac_contract::InstallationState::WaitingForRecovery => "Waiting for its step in Recovery",
+                sekka_mac_contract::InstallationState::Partial => "Partly installed: some of its partitions are missing",
+                sekka_mac_contract::InstallationState::Unknown => "Its state couldn't be read",
+            },
+        );
+    }
+}
+
 fn existing(m: &Model, p: &mut Page) {
+    let finished = m.state == Some(sekka_mac_contract::InstallState::WaitingForSetup);
     if m.installed() {
         p.title("Sekka is installed");
         p.lede(text::INSTALLED);
         p.numbered(1, "Shut down your Mac.");
         p.numbered(2, "Press and hold the power button until “Loading startup options” appears.");
         p.numbered(3, &text::choose_sekka(&m.macos_volume()));
+    } else if m.finished_unfound() {
+        // The owner knows whether they removed it: the plan is theirs to
+        // ask for.
+        p.title(text::FINISHED_UNFOUND_TITLE);
+        p.body(text::FINISHED_UNFOUND);
+        installations(m, p);
+        p.divider();
+        p.heading("What you can do");
+        p.body(text::FINISHED_UNFOUND_NEXT);
+        p.quit();
+        p.left("Copy Details", || Msg::CopyDiagnostics);
+        p.right("Check Again", || Msg::CheckAgain);
+        p.primary("Install Again", || Msg::InstallAgain);
+        return;
+    } else if finished {
+        p.title(text::FINISHED_PARTIAL_TITLE);
+        p.body(text::FINISHED_PARTIAL);
+        installations(m, p);
     } else {
         p.title("Sekka is already on this Mac");
         p.body("Sekka Installer found a Sekka installation on this disk. It doesn't install a second one beside it, and this version doesn't remove or replace an installation.");
-        if let Some(i) = m.inspection() {
-            for x in &i.installations {
-                p.row(
-                    if x.state == sekka_mac_contract::InstallationState::Complete { Mark::Good } else { Mark::Warning },
-                    x.name.as_str(),
-                    match x.state {
-                        sekka_mac_contract::InstallationState::Complete => "Installed",
-                        sekka_mac_contract::InstallationState::WaitingForRecovery => "Waiting for its step in Recovery",
-                        sekka_mac_contract::InstallationState::Partial => "Partly installed: some of its partitions are missing",
-                        sekka_mac_contract::InstallationState::Unknown => "Its state couldn't be read",
-                    },
-                );
-            }
-        }
+        installations(m, p);
         p.note("To start Sekka, hold the power button when your Mac starts and choose Sekka.");
     }
     p.quit();
