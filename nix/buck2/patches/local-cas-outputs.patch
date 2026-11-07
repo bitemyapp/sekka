@@ -8,7 +8,9 @@ BUCK2_LOCAL_CAS_JOURNAL), every produced output is uploaded to the CAS
 anyway, so ingesting it into the content store as well only repeats the
 work: a verified canonical stage and syncs per file under the exclusive
 lock, which four worktrees rebuilding at once queued on (88 s each, in
-lockstep). Produced outputs now skip ingestion; after the cache uploader
+lockstep). Produced outputs now skip ingestion, both at declaration and in
+the output pipeline, which then uploads from its private snapshots as it
+does with the store off. After the cache uploader
 finishes, it appends one HASH SIZE PATH line per output file to the
 journal, and the client shares those files' extents with their CAS blobs
 after the build. The journal joins the daemon startup identity. Read-only
@@ -64,27 +66,54 @@ index 33be254..7f9ce02 100644
  
          let worker;
  
+diff --git a/app/buck2_execute_impl/src/executors/output_pipeline.rs b/app/buck2_execute_impl/src/executors/output_pipeline.rs
+index 01dd6cb..b448dde 100644
+--- a/app/buck2_execute_impl/src/executors/output_pipeline.rs
++++ b/app/buck2_execute_impl/src/executors/output_pipeline.rs
+@@ -319,7 +319,7 @@ fn capture(
+             retention,
+         });
+     }
+-    if local_content_store::enabled() {
++    if local_content_store::ingests_outputs() {
+         let paths = files
+             .iter()
+             .map(|file| {
+@@ -334,13 +334,13 @@ fn capture(
+         local_content_store::ingest_files(&paths, config)?;
+     }
+     let mut uploads = Vec::with_capacity(if want_upload { files.len() } else { 0 });
+-    let mut prepared = Vec::with_capacity(if local_content_store::enabled() {
++    let mut prepared = Vec::with_capacity(if local_content_store::ingests_outputs() {
+         files.len()
+     } else {
+         0
+     });
+     for file in files {
+-        if local_content_store::enabled() {
++        if local_content_store::ingests_outputs() {
+             let mut source = File::open(&file.path)?;
+             let mode = if file.metadata.is_executable {
+                 0o755
 diff --git a/app/buck2_execute_impl/src/materializers/deferred.rs b/app/buck2_execute_impl/src/materializers/deferred.rs
-index 1593bc5..2115294 100644
+index 1593bc5..3f838d2 100644
 --- a/app/buck2_execute_impl/src/materializers/deferred.rs
 +++ b/app/buck2_execute_impl/src/materializers/deferred.rs
-@@ -435,7 +435,10 @@ impl<T: IoHandler + Allocative> Materializer for DeferredMaterializerAccessor<T>
+@@ -435,7 +435,8 @@ impl<T: IoHandler + Allocative> Materializer for DeferredMaterializerAccessor<T>
          _lease: &WriteLease,
          artifacts: Vec<DeclareArtifactPayload>,
      ) -> buck2_error::Result<()> {
 -        let artifacts = if crate::materializers::local_content_store::enabled() {
 +        // On the CAS host with cache writes, the CAS keeps produced outputs.
-+        let artifacts = if crate::materializers::local_content_store::enabled()
-+            && !crate::materializers::local_content_store::local_cas_writes()
-+        {
++        let artifacts = if crate::materializers::local_content_store::ingests_outputs() {
              let fs = self.io.fs().clone();
              let digest_config = self.io.digest_config();
              tokio::task::spawn_blocking(move || {
 diff --git a/app/buck2_execute_impl/src/materializers/local_content_store.rs b/app/buck2_execute_impl/src/materializers/local_content_store.rs
-index bf84d82..ce8460d 100644
+index bf84d82..bc98327 100644
 --- a/app/buck2_execute_impl/src/materializers/local_content_store.rs
 +++ b/app/buck2_execute_impl/src/materializers/local_content_store.rs
-@@ -2257,6 +2257,58 @@ pub(crate) fn artifact<D: ActionDirectory>(
+@@ -2257,6 +2257,64 @@ pub(crate) fn artifact<D: ActionDirectory>(
      Ok(())
  }
  
@@ -99,6 +128,12 @@ index bf84d82..ce8460d 100644
 +            && std::env::var_os("BUCK2_LOCAL_CAS_JOURNAL").is_some()
 +    });
 +    *WRITES
++}
++
++/// Whether produced outputs go into the content store: not when the local CAS
++/// keeps them (see `local_cas_writes`).
++pub(crate) fn ingests_outputs() -> bool {
++    enabled() && !local_cas_writes()
 +}
 +
 +/// Lists every file of an output the CAS now holds. One `HASH SIZE PATH` line
