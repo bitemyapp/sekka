@@ -37,8 +37,20 @@ conflict. The optional files are imported by `imports.nix`, so that
 `configuration.nix`'s own `imports` is a plain list, which Yukimi appends
 `./yukimi.nix` to when it installs for everyone. `mac-image-tests` runs
 Yukimi's own `packages::import_into` and `edit::set_string` on the shipped
-file (`yukimi-edits.rs`), with the former forms as the failing control. The
-VM harness, which doesn't drive
+file (`yukimi-edits.rs`), with the former forms as the failing control.
+
+Setup builds no generation, so until the first update the running system is
+the image's, which configures no host name: hostnamed keeps setup's choice
+in `/etc/hostname`, and Settings, which treats a host name outside the store
+as the system's own, would offer to rename the computer. `setup.nix`
+declares the name, though, and the flake names its system after it, so a
+rename would leave `nixos-rebuild` without a system and Yukimi building the
+declared name back. Once `setup.nix` exists, `sekka-setup-hostname.service`
+(`image-system.nix`) keeps the name in the store, as a configured one is
+(`/etc/hostname` a link to it, held by a garbage-collection root), and
+Settings shows it as the configuration's until the update builds it.
+
+The VM harness, which doesn't drive
 setup's screens, logs in through systemd's debug shell, enabled only on the
 VM's copy of the boot entries.
 

@@ -57,6 +57,45 @@ in
         };
       }
 
+      # Between setup and the first update, the running system is still the
+      # image's, which configures no host name, so hostnamed keeps setup's
+      # choice in /etc/hostname, and Settings, which treats a host name
+      # outside the store as the system's own, offers to rename the computer.
+      # But setup.nix now declares the name, and the flake names its only
+      # system after it: after a rename, nixos-rebuild finds no system for
+      # the new name, and Yukimi builds the declared one, quietly putting the
+      # old name back. So once setup.nix exists, the name is kept in the
+      # store, as a configured one is, until the update that builds it
+      # replaces /etc/hostname with its own.
+      (lib.mkIf ((config.calamares.firstBootSetup.enable or false) && config.networking.hostName == "") {
+        systemd.paths.sekka-setup-hostname = {
+          description = "Keep the host name first-boot setup chose";
+          wantedBy = [ "multi-user.target" ];
+          pathConfig.PathExists = "/etc/nixos/setup.nix";
+        };
+        systemd.services.sekka-setup-hostname = {
+          description = "Keep the host name first-boot setup chose until the update that builds it";
+          path = [
+            config.nix.package.out
+            pkgs.coreutils
+          ];
+          serviceConfig = {
+            Type = "oneshot";
+            RemainAfterExit = true;
+          };
+          script = ''
+            if [ -L /etc/hostname ] || [ ! -s /etc/hostname ]; then
+              exit 0
+            fi
+            kept=$(nix-store --add /etc/hostname)
+            ln -sfn "$kept" /nix/var/nix/gcroots/sekka-setup-hostname
+            ln -sfn "$kept" /etc/.hostname.sekka
+            mv -T /etc/.hostname.sekka /etc/hostname
+            echo "the host name $(cat /etc/hostname) is kept in $kept until the next update builds it"
+          '';
+        };
+      })
+
       (lib.mkIf (config.calamares.firstBootSetup.enable or false) {
         i18n.supportedLocales = lib.mkDefault (
           lib.unique (
