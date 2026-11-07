@@ -477,14 +477,31 @@ impl Model {
 
     /// Whether the installation the helper knows is installed: complete on
     /// the disk, or Recovery's step done by its record and there on the
-    /// disk. This Mac's own look can't read the boot policy, so it usually
-    /// can't call a finished installation complete; but one it finds only
-    /// in part, or not at all, isn't installed, whatever the record says.
+    /// disk, or found complete by the helper's own look in this check. This
+    /// Mac's own look can't read the boot policy, so it usually can't call
+    /// a finished installation complete; and one it finds only in part, or
+    /// not at all, isn't installed by its record alone.
     pub fn installed(&self) -> bool {
         let found = self.found();
-        found == Some(InstallationState::Complete)
+        let confirmed = match (self.installation, &self.state) {
+            (Some(id), Some(state)) => self.confirmed(id, state),
+            _ => false,
+        };
+        confirmed
+            || found == Some(InstallationState::Complete)
             || (self.state == Some(InstallState::WaitingForSetup)
                 && found.is_some_and(|s| s != InstallationState::Partial))
+    }
+
+    /// Whether the helper, looking at the Mac as root in this check, found
+    /// an installation it knows complete, made of the parts its record
+    /// names, and recorded Recovery's steps. Only that look brings a record
+    /// to waiting for setup, and the helper isn't asked about one that
+    /// waits for setup already. This Mac's own look, as the person using
+    /// the app, may not even identify it, when it can't read the
+    /// installation's records.
+    fn confirmed(&self, installation: Uuid, state: &InstallState) -> bool {
+        *state == InstallState::WaitingForSetup && self.reconciling == Some(Reconciling::Answered(installation))
     }
 
     /// What this Mac's own inspection shows of the installation the helper
@@ -494,10 +511,15 @@ impl Model {
     }
 
     /// Whether the record says the installation finished, and this Mac's
-    /// own look doesn't find it: something it can't identify is on the
-    /// disk, and may be it.
+    /// own look, which did look, doesn't find it: something it can't
+    /// identify is on the disk, and may be it. Never one the helper found
+    /// there itself.
     pub fn finished_unfound(&self) -> bool {
-        self.state == Some(InstallState::WaitingForSetup) && self.installation.is_some() && self.found().is_none()
+        self.state == Some(InstallState::WaitingForSetup)
+            && self.installation.is_some()
+            && self.found().is_none()
+            && self.unidentified()
+            && !self.installed()
     }
 
     /// What this Mac's own inspection shows of an installation the helper
@@ -516,6 +538,18 @@ impl Model {
     fn unidentified(&self) -> bool {
         self.inspection()
             .is_some_and(|i| i.installations.iter().any(|x| x.installation_id.is_none()))
+    }
+
+    /// Whether nothing on the disk could be an installation the helper
+    /// knows, by this Mac's own look: its record says something would name
+    /// it, nothing does, and nothing the look couldn't identify could be it
+    /// either. Never one the helper found there itself in this check.
+    fn gone(&self, summary: &Summary) -> bool {
+        self.inspection().is_some()
+            && self.on_disk(summary.installation).is_none()
+            && named_on_disk(&summary.state)
+            && !self.unidentified()
+            && !self.confirmed(summary.installation, &summary.state)
     }
 
     /// Whether the record waits for Recovery, and the helper couldn't look
@@ -1420,12 +1454,6 @@ impl Model {
         let id = summary.installation;
         let Some(inspection) = &self.inspection else { return Some(Vec::new()) };
         let inspected = inspection.is_ok();
-        let found = self.on_disk(id).map(|x| x.state);
-        let complete = found == Some(InstallationState::Complete);
-        // Nothing on the disk names it, though its record says something
-        // would; and gone when nothing unidentified could be it either.
-        let absent = inspected && found.is_none() && named_on_disk(&summary.state);
-        let gone = absent && !self.unidentified();
         match self.reconciling {
             Some(Reconciling::Asked(asked)) if asked == id => return Some(Vec::new()),
             Some(Reconciling::Answered(answered) | Reconciling::Refused(answered)) if answered == id => {}
@@ -1439,8 +1467,12 @@ impl Model {
             }
             _ => {}
         }
+        let complete = self.on_disk(id).is_some_and(|x| x.state == InstallationState::Complete);
+        let gone = self.gone(summary);
         // Finished, then removed by hand: nothing of it stands in the way.
-        if summary.state == InstallState::WaitingForSetup && gone {
+        // And of a finished one on a disk this Mac couldn't look at, there
+        // is nothing to say: that the look failed is said instead.
+        if summary.state == InstallState::WaitingForSetup && (gone || !inspected) {
             return None;
         }
         self.installation = Some(id);

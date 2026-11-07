@@ -784,6 +784,51 @@ fn a_finished_installation_this_mac_cant_find_isnt_called_installed() {
 }
 
 #[test]
+fn a_finished_installation_on_a_mac_that_couldnt_be_looked_at_is_neither_found_nor_lost() {
+    let env = Simulation::new(Scenario::Normal, 0.0);
+    let (mut m, effects) = hear(&env, known(InstallState::WaitingForSetup), Err("The engine stopped.".into()));
+    assert!(effects.is_empty(), "{effects:?}");
+    // That the look failed is said, with a way to look again; nothing is
+    // said of where Sekka is, and nothing is offered past it.
+    assert_eq!(m.screen, Screen::NotReady);
+    assert!(!m.installed() && !m.finished_unfound());
+    assert!(m.update(Msg::InstallAgain).is_empty());
+}
+
+#[test]
+fn a_finished_installation_the_helper_found_is_installed_whatever_this_mac_sees() {
+    let env = Simulation::new(Scenario::RecoveryFinished, 0.0);
+    // This Mac's own look can't read the stub's records, so it doesn't
+    // know it for Sekka.
+    let unread = || {
+        let mut i = env.inspect().unwrap();
+        i.installations = vec![on_disk(InstallationKind::OtherLinux, InstallationState::Unknown, None)];
+        i.issues.retain(|x| x.code != IssueCode::ExistingSekka);
+        Ok(i)
+    };
+    let (mut m, effects) = hear(&env, env.helper_status(), unread());
+    assert!(matches!(effects.as_slice(), [Effect::Reconcile { .. }]), "{effects:?}");
+    // The helper looks as root, finds it whole, and records Recovery's
+    // steps: that is what this check found.
+    m.update(Msg::Reconciled(env.reconcile(SIM_ID)));
+    assert_eq!(m.screen, Screen::Existing);
+    assert_eq!(m.state, Some(InstallState::WaitingForSetup));
+    assert!(m.installed());
+    assert!(!m.finished_unfound(), "never Install Again past it");
+    assert_eq!(m.step(), Step::Account);
+
+    // Nor is it called gone where this Mac's own look finds nothing there.
+    let env = Simulation::new(Scenario::RecoveryFinished, 0.0);
+    let mut empty = env.inspect().unwrap();
+    empty.installations.clear();
+    empty.issues.clear();
+    let (mut m, _) = hear(&env, env.helper_status(), Ok(empty));
+    m.update(Msg::Reconciled(env.reconcile(SIM_ID)));
+    assert_eq!(m.screen, Screen::Existing);
+    assert!(m.installed());
+}
+
+#[test]
 fn a_finished_installation_found_only_in_part_isnt_called_installed() {
     let env = Simulation::new(Scenario::Normal, 0.0);
     let found = |state| {
