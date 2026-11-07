@@ -13,21 +13,23 @@ over long benchmark matrices. Builds, tests and measurements go to
 
 ## State
 
-- Checkout `/home/callen/work/sekka-shared-builds`, rebased onto `origin/main`
-  `2711942e` with no merge commits, pushed to `origin/feat/buck2-shared-builds`.
-- Since the storage run, three engine patches:
-  - `presence-consistent-hits.patch`: cache uploads ask NativeLink about every
-    output; no more action results naming evicted blobs.
-  - `content-store-unlocked-views.patch`: views are cloned, verified and synced
-    after the store locks are released.
-  - `content-store-advisory-writes.patch`: LRU and hint writes are buffered
-    instead of each costing a synchronous commit.
-- `scripts/sekka-buck2` now fingerprints every engine patch by glob.
-- On wx, the engine's check phase, `checks.buck2-backend`,
-  `checks.build-service-inventory` and `.#build-service` pass at these
-  commits. No broad flake check was run.
-- PR CI: the trust check passes; the Nix `build` job is skipped, so CI does
-  not exercise Buck2.
+- `feat/buck2-shared-builds` (PR #291, draft) is pushed with the lost-writes
+  and contention fixes (`5baedd7c`).
+- `feat/buck2-single-cas` branches from it and is pushed; it has no PR yet.
+  It makes NativeLink's CAS the only store on the CAS host:
+  - hits are cloned from it (`local-cas-downloads.patch`);
+  - produced outputs skip the content store, are journaled, and have their
+    extents shared with their CAS blobs after each build
+    (`local-cas-outputs.patch`, `build/buck2/cas_dedupe.py`);
+  - the client opts in with a `build-service client --local-cas` file.
+- `build-service autosize` sizes the CAS to free disk space above a floor,
+  and `dedupe` shares the CAS with a content store.
+- [The single-CAS evidence](test-results/buck2/2026-11-06-single-cas/README.md)
+  holds the targeted repros and a full storage-plan run.
+- On wx, at these commits: the engine's check phase, `checks.buck2-backend`
+  (now with the dedupe/journal test) and `checks.build-service-inventory`
+  (now with autosize and dispatch tests) pass. No broad flake check was run.
+- PR CI: only the trust check runs; the Nix `build` job is skipped.
 
 ## What is proved
 
@@ -60,46 +62,33 @@ it. Incremental state is private per worktree (~0.7 GB after a dev build).
 
 ## Open work, in order
 
-1. **Option 2, on its own branch `feat/buck2-single-cas`:** one physical copy
-   of each output on a host.
-   - Phase 1 (Buck2 only): the content store reads NativeLink's CAS
-     directory, through a digest index because names carry a generation, and
-     reflinks from it. Uploaded outputs are deduplicated against the CAS inline.
-   - Phase 2: a NativeLink built from source with stable digest paths, local
-     reads counted in its LRU, a free-space floor, and casita-style retention.
-     That retention means roots that keep their whole graph, leases for
-     in-flight uploads and reads, and eviction of action-cache entries before
-     the blobs they name.
-   - The casita investigation found casita itself unsuitable today: it stores
-     chunks with no reflinks, speaks no REAPI or substituter protocol, and is
-     pre-release.
-2. **Writers under concurrency.** Four worktrees materializing at once take
-   68–93 s against 37 s with the store off. A single worktree is at its
-   baseline. The cost is ingesting new outputs, mostly incremental state,
-   under the exclusive lock. Option 2 replaces that ingest path; revisit after it.
-3. **Make dedupe routine** until option 2 makes it unnecessary: a timer on the
-   deployment host or a hook after large builds.
-4. **Bounds.** The content store's 10 GiB default is below the dev plus
-   release working set. The 64 GiB CAS default has no free-space awareness.
+1. **Review and land.** Land PR #291 first. Then open a PR for
+   `feat/buck2-single-cas` or fold it in; the user decides.
+   - Its storage-plan run passed every gate except eviction recovery. That
+     failure was a controller bug, fixed in `84954a1a`, and a targeted
+     eviction repro passed.
+   - Rerun the plan once if a full eviction-stage record is wanted.
+2. **Make `autosize` routine** on the deployment host, for example from a
+   user timer every 15 minutes. It resizes only on a 5% shrink or a 25%
+   growth, because a resize restarts the backend.
+3. **NativeLink fork**, only if needed: stable digest paths (dropping the
+   client's index), local reads counted in its LRU, and casita-style
+   retention. That retention means roots, leases, and action-cache-first
+   eviction. Free-space sizing is already covered by `autosize`.
+4. **Laptop phase.** On a host without the CAS, the content store and
+   downloads work as before. runnymede is ext4, so it gets no reflinks.
 5. **CI.** Decide how PR CI's `build` job should exercise this work.
-6. **When PR 333 (per-application Aizome packages) lands**, or this branch
-   lands after it:
+6. **When PR 333 (per-application Aizome packages) lands:**
    - move `nix/bazel/without-build-files.nix` into its `package-sources.nix`;
-     otherwise BUCK/BUILD edits rebuild Nix packages;
-   - rerun `scripts/sekka-buck2 generate` for the lock change;
+   - rerun `scripts/sekka-buck2 generate`;
    - point `checks.bazel-native-inputs` at `components.compositor`.
 
-   Measured combination on wx:
-   - Buck2: PR 333 invalidates 0 of 706 actions.
-   - A Soroban edit rebuilds only Soroban in Nix: 24 s and +17 MiB, against
-     7:23 and +573 MiB.
-   - Full check evaluation: 72.8 s against 68.8 s.
-
-   Details are in `/home/callen/sekka-work/pr333-combo-20261106/results/` on wx.
-7. **Scope decisions for the user:** whether Bazel stays beside Buck2, and
-   when to start the laptop phase. Btrfs on runnymede (ext4 today) would save
-   ~89 GiB of its ~140 GiB of build state by compression alone (2026-11-06
-   estimate). Shipping Nix packages remain separate from this development path.
+   It invalidates none of the 706 Buck2 actions. Details are in
+   `/home/callen/sekka-work/pr333-combo-20261106/results/` on wx.
+7. **Scope decisions for the user:**
+   - Does Bazel stay beside Buck2?
+   - Does runnymede move to Btrfs? About 89 GiB of its 140 GiB of build state
+     would be saved by compression alone.
 
 ## Resume
 
