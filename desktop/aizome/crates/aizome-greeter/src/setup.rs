@@ -175,10 +175,33 @@ pub struct Failure {
     pub can_retry: bool,
 }
 
+/// Counts what would be written.
+struct Length(usize);
+
+impl Write for Length {
+    fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
+        self.0 += b.len();
+        Ok(b.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
 /// A request as the line sent, which the link zeroes once it's written
-/// (a completion holds the password).
+/// (a completion holds the password). Measured first and written into a
+/// buffer of exactly that size: one that grew would leave the earlier
+/// copies of the password it held behind, unzeroed.
 fn line(r: &Request) -> Vec<u8> {
-    let mut v = serde_json::to_vec(r).unwrap_or_default();
+    let mut length = Length(0);
+    if serde_json::to_writer(&mut length, r).is_err() {
+        return b"\n".to_vec();
+    }
+    let mut v = Vec::with_capacity(length.0 + 1);
+    if serde_json::to_writer(&mut v, r).is_err() {
+        greetd::zero(&mut v);
+        v.clear();
+    }
     v.push(b'\n');
     v
 }
@@ -1024,6 +1047,10 @@ mod tests {
         assert!(!check.contains("password"));
         let complete = String::from_utf8(line(&Request::Complete { choices: &d, password: "pw" })).unwrap();
         assert!(complete.ends_with(",\"password\":\"pw\"}\n"), "{complete}");
+        // Escaped, and in a buffer made its size, never grown.
+        let l = line(&Request::Complete { choices: &d, password: "a \"quoted\" \\ one" });
+        assert!(l.ends_with(b",\"password\":\"a \\\"quoted\\\" \\\\ one\"}\n"), "{}", String::from_utf8_lossy(&l));
+        assert_eq!(l.capacity(), l.len());
     }
 
     #[test]

@@ -3,7 +3,9 @@
 //! a line over the helper's socket, each request answered before the next
 //! is read. Requests are bounded and every field is parsed (unknown ones
 //! refused), as Genkan's helper session reads its plan; the password
-//! arrives only here, read into buffers that are zeroed once parsed.
+//! arrives only here, read into buffers that are zeroed once parsed. The
+//! parser's own (serde_json unescapes a string with `"` or `\` into a
+//! scratch buffer of its own) are zeroed as they're freed (memory.rs).
 //!
 //! | Request | Answer |
 //! | --- | --- |

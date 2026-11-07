@@ -276,6 +276,8 @@ in
             LockPersonality = true;
             SystemCallArchitectures = "native";
             UMask = "0077";
+            # Its memory holds the password while it works: never a core.
+            LimitCORE = 0;
           };
         };
         systemd.tmpfiles.rules = [ "d /var/lib/sekka-setup 0700 root root -" ];

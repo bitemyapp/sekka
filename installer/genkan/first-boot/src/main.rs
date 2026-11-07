@@ -64,6 +64,12 @@ fn usage() -> ExitCode {
 }
 
 fn serve(path: &std::path::Path) -> anyhow::Result<()> {
+    // The password passes through this process: never a core of it
+    // (sekka-setup.service also sets LimitCORE=0).
+    // Safety: prctl with an integer option and argument.
+    if unsafe { libc::prctl(libc::PR_SET_DUMPABLE, 0) } != 0 {
+        eprintln!("sekka-setup-helper: making the helper undumpable: {}", std::io::Error::last_os_error());
+    }
     let listener = server::activated()?;
     let config = Config::load(path)?;
     let greeter = server::uid_of(&Host::new(&config), &config.greeter_user)?;

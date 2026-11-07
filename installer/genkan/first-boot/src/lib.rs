@@ -10,8 +10,13 @@
 pub mod choices;
 pub mod config;
 pub mod handoff;
+pub mod memory;
 pub mod protocol;
 pub mod render;
 pub mod server;
 pub mod system;
 pub mod transaction;
+
+/// The helper's, and its tests': no freed block keeps what it held.
+#[global_allocator]
+static ALLOCATOR: memory::Zeroing = memory::Zeroing(std::alloc::System);
