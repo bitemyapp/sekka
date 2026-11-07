@@ -256,8 +256,8 @@ pub fn choice<Msg: Clone + Send + 'static>(
     options: &[&str],
     selected: usize,
     f: impl Fn(usize) -> Msg + 'static,
-) -> Element<Msg> {
-    dropdown(options.iter().map(|s| (*s).to_owned()), selected).on_select(f).min_width(160.0).into()
+) -> aizome_kit::widgets::controls::Dropdown<Msg> {
+    dropdown(options.iter().map(|s| (*s).to_owned()), selected).on_select(f).min_width(160.0)
 }
 
 /// A segmented control of `options`, none lit when `selected` is `None`.
