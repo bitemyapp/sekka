@@ -224,11 +224,16 @@ in
         # one as boot.bin.previous, and a copy put back from macOS is held.
         # Then it finishes a replacement a power cut interrupted, where
         # fsck.vfat may have truncated boot.bin, before m1n1 reads it again.
-        # It never fails the boot.
+        # It never fails the boot. Only at a start: a switch installs the
+        # boot loader before it restarts changed units and starts new ones,
+        # so boot.bin is then a copy that never booted. A change to the unit
+        # doesn't restart it, and mark-booted does nothing when the running
+        # system isn't the one that booted (the unit's first switch).
         systemd.services.sekka-boot-bin = {
           description = "Record that m1n1/boot.bin started this Mac, and finish its interrupted replacement";
           wantedBy = [ "multi-user.target" ];
           after = [ "local-fs.target" ];
+          restartIfChanged = false;
           unitConfig.RequiresMountsFor = [ esp ];
           serviceConfig = {
             Type = "oneshot";

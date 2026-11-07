@@ -8,6 +8,8 @@
 
 Run: python3 -m unittest test_boot_bin."""
 
+import contextlib
+import io
 import itertools
 import json
 import tempfile
@@ -100,6 +102,35 @@ class BootBin(unittest.TestCase):
         self.assertEqual((self.active(), self.previous()), (B, C))
         self.assertEqual([h["digest"] for h in self.record()["history"]], [bb.digest(x) for x in (A, B, C, B)])
         self.assertEqual(self.leftovers(), [])
+
+    def test_a_switch_marks_nothing(self):
+        """switch-to-configuration starts sekka-boot-bin.service when it is
+        new, after installing the boot loader: the copy at boot.bin then
+        never booted, and two installations before a restart keep A."""
+        self.install(A)
+        self.booted()
+        self.install(B)
+        with tempfile.TemporaryDirectory() as tmp:
+            systems = Path(tmp)
+            for n in ("one", "two"):
+                (systems / n).mkdir()
+            (systems / "booted").symlink_to(systems / "one")
+            (systems / "current").symlink_to(systems / "two")
+            mark = ["mark-booted", "--esp", str(self.esp),
+                    "--booted-system", str(systems / "booted"), "--current-system", str(systems / "current")]
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                self.assertEqual(bb.main(mark), 0)
+            self.assertIn("isn't a start", out.getvalue())
+            self.assertIs(self.record()["current"]["booted"], False)
+            self.install(C)
+            self.assertEqual((self.active(), self.previous()), (C, A))
+            # At a start the two are one system, and C is marked.
+            (systems / "current").unlink()
+            (systems / "current").symlink_to(systems / "one")
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(bb.main(mark), 0)
+            self.assertIs(self.record()["current"]["booted"], True)
 
     def test_rollback_installs_the_older_copy(self):
         # An older generation's boot loader installation brings its boot.bin back.

@@ -351,7 +351,11 @@ On every boot loader installation:
    booted, or if there is no previous copy: `sekka-boot-bin.service` records
    at every start that the copy at `m1n1/boot.bin` booted
    (`boot_bin.py mark-booted`). Two installations without a restart in
-   between keep the copy that booted. When `boot.bin.previous` already
+   between keep the copy that booted. It records only at a start: a switch
+   installs the boot loader before it restarts changed units and starts new
+   ones, so the unit isn't restarted when it changes, and `mark-booted`
+   records nothing while `/run/current-system` isn't `/run/booted-system`
+   (the switch that first brings the unit). When `boot.bin.previous` already
    holds it (after a rollback to an `extraFiles` generation), it isn't
    staged again.
 5. The new previous copy and the new copy are written as `*.new`, flushed,

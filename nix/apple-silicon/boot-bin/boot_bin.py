@@ -73,7 +73,8 @@ On every boot loader installation:
   boot_bin.py restore-previous --esp /boot   swap the two copies, and hold
   boot_bin.py release --esp /boot            let installations replace a held copy
   boot_bin.py mark-booted --esp /boot        at every start: this copy booted;
-      then finish an interrupted replacement
+      then finish an interrupted replacement. Nothing when /run/current-system
+      isn't /run/booted-system (a switch, not a start)
   boot_bin.py status --esp /boot
   boot_bin.py forget-extra-files --esp /boot before NixOS's systemd-boot
       installer: stop it deleting boot.bin, which a generation from before
@@ -649,6 +650,15 @@ def mark_booted(esp, say=print, warn=None, disk=None) -> str:
     return result
 
 
+def at_start(booted: str, current: str) -> bool:
+    """Whether the running system is the one that booted, as at a start.
+    switch-to-configuration installs the boot loader first and then starts
+    sekka-boot-bin.service if it is new (its own restartIfChanged is off):
+    the running system is then another, and boot.bin may be the copy it just
+    installed, which never booted."""
+    return os.path.exists(booted) and os.path.realpath(booted) == os.path.realpath(current)
+
+
 def _mark(disk, record, d, warn) -> str:
     p = record.get("pending") or {}
     changed = False
@@ -710,6 +720,9 @@ def main(argv=None) -> int:
     i.add_argument("--recover-from", action="append", default=[])
     for name in ("restore-previous", "release", "mark-booted", "status", "forget-extra-files"):
         sub.add_parser(name).add_argument("--esp", type=Path, required=True)
+    mark = sub.choices["mark-booted"]
+    mark.add_argument("--booted-system", default="/run/booted-system")
+    mark.add_argument("--current-system", default="/run/current-system")
     args = parser.parse_args(argv)
     say = lambda m: print(f"sekka: {m}")  # noqa: E731
     try:
@@ -721,6 +734,12 @@ def main(argv=None) -> int:
         elif args.command == "release":
             say(release(args.esp))
         elif args.command == "mark-booted":
+            if not at_start(args.booted_system, args.current_system):
+                say(
+                    f"{args.current_system} isn't {args.booted_system}, so this isn't a start: {ACTIVE} may be "
+                    f"a copy this switch installed, which hasn't booted. Nothing is recorded."
+                )
+                return 0
             # Never fails a boot: what it can't record now, it records next time.
             try:
                 say(mark_booted(args.esp, say))
