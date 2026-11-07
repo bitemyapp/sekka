@@ -10,8 +10,6 @@ Turn it on with the Aizome module:
 ```nix
 programs.aizome.chanoma = {
   enable = true;
-  # Optional: Google Chrome for DRM-protected services (unfree).
-  browser = pkgs.google-chrome;
   # A television: start with every session, and again after a crash.
   autostart = true;
 };
@@ -25,10 +23,14 @@ don't list it), the cores (`programs.aizome.chanoma.cores`; snes9x and
 Genesis Plus GX, whose licences forbid selling them, only where unfree
 packages are allowed) and a PlayStation BIOS
 (`programs.aizome.chanoma.bios`: OpenBIOS, below), exports
-`CHANOMA_CORES`, `CHANOMA_BIOS` (and `CHANOMA_BROWSER`, for a browser
-given) to the session, and sets BlueZ to connect quickly and to
-let a controller that forgot the computer pair again without anyone
-confirming. `autostart` is a user unit wanted by and ordered after
+`CHANOMA_CORES`, `CHANOMA_BIOS` and `CHANOMA_BROWSER` to the session,
+installs the browser (`programs.aizome.chanoma.browser`: Google Chrome
+where unfree packages are allowed, as the services that protect their
+shows play only in it; none otherwise, and Chanoma looks on the PATH),
+keeps the TV account's own systemd to what it needs
+(`programs.aizome.chanoma.tvUnits`, under The TV account), and sets
+BlueZ to connect quickly and to let a controller that forgot the
+computer pair again without anyone confirming. `autostart` is a user unit wanted by and ordered after
 `aizome-session.target`, which starts once the compositor is ready; it
 restarts on failure, and a stop (logging out) keeps a game where it was.
 The unit has systemd's short PATH, which is why the browser is passed
@@ -207,13 +209,32 @@ pausing, saving and leaving are Chanoma's.
 
 ### Services
 
-Each service opens in the first of `google-chrome-stable`,
-`google-chrome`, `chromium` and `chromium-browser` on the PATH (or the
-grown-ups' choice), with `--kiosk`, a profile of its own under
+Each service opens in the browser the system gave Chanoma
+(`CHANOMA_BROWSER`, Google Chrome by default) or the grown-ups' choice,
+else the first of `google-chrome-stable`, `google-chrome`, `chromium` and
+`chromium-browser` on the PATH, with `--kiosk`, a profile of its own under
 `$XDG_DATA_HOME/aizome/chanoma/browser/`, no first-run or crash-restore
-bubbles, no translation or casting UI, and `--password-store=basic` (no
-keyring to unlock). YouTube gets a television's user agent, which serves
-its TV interface.
+bubbles, no translation or casting UI, and `--password-store=basic`.
+YouTube gets a television's user agent, which serves its TV interface.
+
+The services that protect their shows with Widevine (`Service::drm`:
+every paid one, and Plex's and Kanopy's free films; not PBS KIDS or
+YouTube) play only in Google Chrome, which has the decoder; Chromium
+hasn't. In another browser such a service doesn't open: the screen says
+it needs Google Chrome, where its own page would show an error code.
+
+**Sign-ins are kept in the profiles, without a keyring.** Chrome encrypts
+cookies and saved passwords with a key it keeps in the desktop's keyring
+when it has one; `--password-store=basic` has it use its built-in key
+instead, so a service stays signed in from one evening to the next with
+no keyring daemon running, nothing to unlock and no prompt on the
+television (checked in a real browser with no session bus, below). The
+profiles are as private as the account's home (0700), and as the disk's
+encryption makes them at rest. A keyring would add nothing for the TV
+account: it signs in with no password, or a PIN, so there's nothing to
+unlock a keyring with, and it would either ask on the television or keep
+its contents unencrypted. The choice stays fixed: sign-ins written under a
+keyring's key can't be read without that keyring.
 
 A thread follows the browser through the compositor's IPC: it makes its
 window full screen and focuses it, closes any other window of its
@@ -744,6 +765,20 @@ for the PIN and the setup; the PIN unlocks grown-up mode), but leaving is
 *Log Out*, which kids may choose too (beyond is only the login screen),
 and *Forgot it?* doesn't sign in with the account's own password.
 
+The account's own systemd starts only what Chanoma and its browser need:
+the session bus, PipeWire and its PulseAudio side (WirePlumber with
+them), speech for pages that ask, and the account's NixOS activation and
+temporary files (`programs.aizome.chanoma.tvUnits`). Everything else a
+login starts for every account (an SSH agent, a location agent, rootless
+Docker, whatever a desktop adds) is masked for it alone, by a generator
+its systemd runs as it starts (`aizome-tv-units`): it reads the account's
+name from the record, and masks each unit `default.target`,
+`basic.target`, `sockets.target`, `timers.target` and `paths.target`
+pull in but those kept, in the generator's early directory, which comes
+before `/etc`. Services D-Bus starts when something asks (the portals)
+are as they were. No keyring runs: nothing in the session asks for one
+(the browser's sign-ins, under Services).
+
 The account is made and changed by `aizome-tv-account`, Settings' helper,
 run as root through pkexec under the polkit action
 `org.aizome.Settei.tv-account` (an administrator's password): `useradd`
@@ -804,7 +839,10 @@ cargo run --release -p aizome-chanoma --example library -- FOLDER… \
   seconds, kept waiting for and starting when it lets go; *Stop it now*
   taking it out of *Keep playing*; the question put away with Back, and
   Home stopping it after; a slow one starting under the question, which
-  goes); time running out mid-game, with the warning, the game kept, the closed
+  goes); a service that protects its shows saying it needs Google Chrome
+  in a stand-in named `chromium` and opening in one named
+  `google-chrome-stable`, with PBS KIDS opening in Chromium; time running
+  out mid-game, with the warning, the game kept, the closed
   screen, and a grown-up's grant; bedtime; a folder added with the
   controller alone (*Suggested* offering a drive's `roms` and home's
   `ROMs`, the drive's first; one press adding it, the settings back on
@@ -924,6 +962,10 @@ cargo run --release -p aizome-chanoma --example library -- FOLDER… \
   from another site says only that it's a frame. Nothing is added to the
   page's own world meanwhile. On 2026-11-01 both passed with the same two
   browsers (7.8 s and 7.9 s).
+  A third signs in to a service of the test's (a cookie lasting a day),
+  ends the browser as Chanoma does, and starts it again on the same
+  profile: the service's next page is asked for signed in. Every run has
+  no session bus (`DBUS_SESSION_BUS_ADDRESS` at nothing), so no keyring.
 - **In a VM** (`nix build .#aizome-checks.chanoma`): the packaged app in an
   Aizome session, started by the module's autostart, with a uinput
   controller that looks like Microsoft's Bluetooth one and nothing else.

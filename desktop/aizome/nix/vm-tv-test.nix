@@ -111,6 +111,12 @@ pkgs.testers.runNixOSTest {
         + "env AIZOME_KIT_INSPECT=/run/greeter-inspect ${aizome}/bin/aizome-greeter"
       );
       systemd.tmpfiles.rules = [ "d /run/greeter-inspect 0755 greeter greeter -" ];
+      # Something every account's systemd starts at login, as a desktop's
+      # agents are: Alice's runs it, the TV account's leaves it out.
+      systemd.user.services.desktop-errand = {
+        wantedBy = [ "default.target" ];
+        serviceConfig.ExecStart = "${pkgs.coreutils}/bin/sleep infinity";
+      };
       # Chanoma's own account of itself, in the TV session's journal.
       environment.etc."xdg/aizome/environment".text = lib.mkAfter "RUST_LOG=info\n";
       environment.systemPackages = [ python ];

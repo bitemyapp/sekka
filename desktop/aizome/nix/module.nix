@@ -212,6 +212,33 @@ let
     name = "chanoma-cores";
     paths = cfg.chanoma.cores;
   };
+  # Google Chrome, where this system can have it: it's unfree, and built
+  # for x86-64 alone.
+  chrome =
+    let
+      unfree = pkgs.config.allowUnfree or false || (pkgs.config.allowUnfreePredicate or (_: false)) pkgs.google-chrome;
+    in
+    if unfree && lib.meta.availableOn pkgs.stdenv.hostPlatform pkgs.google-chrome then pkgs.google-chrome else null;
+  # The TV account's own systemd starts only what Chanoma and its browser
+  # need: a generator its systemd runs as it starts (systemd.generator(7))
+  # masks every other unit the login's targets pull in, for that account
+  # alone. Masks go in the early directory ($2), which comes before
+  # /etc. Services D-Bus starts when something asks (the portals, say)
+  # aren't touched.
+  tvUnits = pkgs.writeShellScript "aizome-tv-units" ''
+    record=/var/lib/aizome/tv-account.toml
+    [ -r "$record" ] || exit 0
+    tv=$(${pkgs.gnused}/bin/sed -n 's/^user = "\(.*\)"$/\1/p' "$record")
+    [ -n "$tv" ] && [ "$(${pkgs.coreutils}/bin/id -un)" = "$tv" ] || exit 0
+    for unit in /etc/systemd/user/{default,basic,sockets,timers,paths}.target.wants/*; do
+      [ -L "$unit" ] || [ -e "$unit" ] || continue
+      name=''${unit##*/}
+      case " ${lib.concatStringsSep " " cfg.chanoma.tvUnits} " in
+        *" $name "*) ;;
+        *) ${pkgs.coreutils}/bin/ln -sfn /dev/null "$2/$name" ;;
+      esac
+    done
+  '';
   chanomaBios = pkgs.symlinkJoin {
     name = "chanoma-bios";
     paths = cfg.chanoma.bios;
@@ -318,12 +345,46 @@ in
       };
       browser = lib.mkOption {
         type = lib.types.nullOr lib.types.package;
-        default = null;
-        example = lib.literalExpression "pkgs.google-chrome";
+        default = chrome;
+        defaultText = lib.literalExpression "pkgs.google-chrome where unfree packages are allowed (on x86-64), else null";
+        example = lib.literalExpression "pkgs.chromium";
         description = ''
-          A browser for the streaming services, installed with Chanoma.
-          Chanoma uses Google Chrome or Chromium from the PATH; DRM-protected
-          services (Netflix, Disney+ and the like) need Google Chrome.
+          The browser the streaming services open in, installed with
+          Chanoma. Google Chrome where the system allows unfree
+          packages: the services that protect their shows (Netflix,
+          Disney+ and the like, with Widevine) play only in it. With
+          none, Chanoma uses Google Chrome or Chromium from the PATH, and
+          in Chromium those services say they need Google Chrome.
+        '';
+      };
+      tvUnits = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [
+          # The session's bus, which Chanoma's media controls and the
+          # browser use, and which starts what's asked of it.
+          "dbus.socket"
+          # Sound: games through PipeWire, the browser through its
+          # PulseAudio side. WirePlumber comes with PipeWire.
+          "pipewire.socket"
+          "pipewire-pulse.socket"
+          # Speech, asked for by pages only.
+          "speech-dispatcher.socket"
+          # The account's own NixOS activation and temporary files.
+          "nixos-activation.service"
+          "systemd-tmpfiles-setup.service"
+          "systemd-tmpfiles-clean.timer"
+        ];
+        description = ''
+          The user units the TV account's systemd still starts at login
+          (the account Settings makes for the television, which opens
+          straight into Chanoma). Any other unit the login's targets
+          (`default.target`, `sockets.target` and the like) pull in for
+          every account is masked for that account alone: an SSH agent,
+          a location agent, rootless Docker, and whatever else a
+          desktop starts. Services D-Bus starts when asked aren't
+          affected. Sign-ins to the streaming services don't need a
+          keyring: Chanoma's browser keeps them in its profiles
+          (`--password-store=basic`).
         '';
       };
       autostart = lib.mkOption {
@@ -439,6 +500,7 @@ in
       FastConnectable = lib.mkDefault true;
       JustWorksRepairing = lib.mkDefault "always";
     };
+    systemd.user.generators = lib.mkIf cfg.chanoma.enable { aizome-tv-units = tvUnits; };
     # A television: Chanoma with every session, and again after a crash.
     # Leaving it with the PIN ends it for the session.
     systemd.user.services.aizome-chanoma = lib.mkIf (cfg.chanoma.enable && cfg.chanoma.autostart) {

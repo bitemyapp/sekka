@@ -997,6 +997,52 @@ fn a_page_always_has_a_way_home_by_keyboard_and_mouse() {
     assert!(matches!(&h.program().screen, Screen::Problem(t, _) if t == "PBS KIDS Video didn't open"));
 }
 
+#[test]
+fn a_service_that_protects_its_shows_needs_google_chrome() {
+    // Stand-ins named as the browsers are, that stay till they're stopped.
+    let dir = std::env::temp_dir().join(format!("chanoma-test-browsers-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let stand_in = |name: &str| {
+        let p = dir.join(name);
+        std::fs::write(&p, "#!/bin/sh\nexec sleep 60\n").unwrap();
+        std::fs::set_permissions(&p, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+        p.display().to_string()
+    };
+    let (chromium, chrome) = (stand_in("chromium"), stand_in("google-chrome-stable"));
+    let (dirs, cores) = household("drm", |s| {
+        s.services = vec!["netflix".into(), "pbs-kids".into()];
+        s.browser = Some(chromium.clone());
+    });
+    let clock = ManualClock::at(2026, 10, 31, 17, 0);
+    let mut h = harness(config(dirs, cores, clock));
+    let go_home = |h: &mut Harness<Chanoma>| {
+        press(h, Button::Guide);
+        input(h, Input::Dir(Dir::Down));
+        input(h, Input::Ok);
+        assert_eq!(h.program().screen, Screen::Home);
+    };
+
+    // In Chromium, Netflix says what it needs rather than open.
+    choose(&mut h, "Netflix");
+    assert!(
+        matches!(&h.program().screen, Screen::Problem(t, _) if t == "Netflix needs Google Chrome"),
+        "{:?}",
+        h.program().screen
+    );
+    assert!(h.program().page.is_none(), "nothing opened");
+    shot(&mut h, "13-needs-chrome");
+    input(&mut h, Input::Ok);
+    // PBS KIDS doesn't protect its shows: Chromium opens it.
+    choose(&mut h, "PBS KIDS");
+    assert_eq!(h.program().screen, Screen::Watching);
+    go_home(&mut h);
+    // In Google Chrome, Netflix opens.
+    h.program_mut().settings.browser = Some(chrome);
+    choose(&mut h, "Netflix");
+    assert_eq!(h.program().screen, Screen::Watching);
+    go_home(&mut h);
+}
+
 fn hold(h: &mut Harness<Chanoma>, b: Button, pressed: bool) {
     h.send(Msg::Pad(PadEvent::Button { id: 1, slot: 0, button: b, pressed }));
 }
