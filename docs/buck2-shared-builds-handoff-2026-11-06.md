@@ -37,7 +37,9 @@ over long benchmark matrices. Builds, tests and measurements go to
     not to.
   - The scheduling and incremental source-cache patches had no defects.
     DEVELOPERS.md now states the source-key alias's assumption.
-- `feat/buck2-single-cas` is rebased onto it and pushed; it has no PR yet.
+- `feat/buck2-single-cas` is rebased onto it and pushed as draft PR #334, stacked on
+  #291's branch. PR CI admits only PRs that target `main`, so #334 gets no CI until
+  #291 merges and #334 is retargeted.
   It makes NativeLink's CAS the only store on the CAS host:
   - hits are cloned from it (`local-cas-downloads.patch`);
   - produced outputs skip the content store, are journaled, and have their
@@ -115,8 +117,8 @@ it. Incremental state is private per worktree (~0.7 GB after a dev build).
 
 ## Open work, in order
 
-1. **Review and land.** Land PR #291 first. Then open a PR for
-   `feat/buck2-single-cas` or fold it in; the user decides.
+1. **Review and land.** Land PR #291 first, then retarget #334 to `main` and
+   land it, or fold it into #291; the user decides.
    - Its storage-plan run passed every gate except eviction recovery. That
      failure was a controller bug, fixed in `84954a1a`, and a targeted
      eviction repro passed.
