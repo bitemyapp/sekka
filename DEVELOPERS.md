@@ -423,6 +423,15 @@ worktrees retain separate mutable daemon state. Defaults are 10 GiB and
 `--local-content-store PATH`, `--local-content-store-max-bytes N` and
 `--local-content-store-max-entries N` select an explicit store and bounds.
 Evicting store objects does not invalidate existing reflinked outputs.
+It does leave them as sole copies, including the old copies an edit leaves
+behind for each changed content-based output. `.buckconfig` therefore turns
+on Buck2's daily stale cleaning: artifacts unused for 7 days are deleted, or
+those unused for 12 hours once under 10% of the disk is free. Buck2 skips
+stale cleaning without `defer_write_actions`, so write actions are deferred
+too. `buck2 clean --stale` runs it by hand. A cleaned artifact a later build
+needs comes back from the cache, or is rebuilt without one. On
+wx-workstation, a release worktree cleaned with `--stale=1m` rebuilt all 742
+actions in 99.7 s under `--cache local`.
 The store also keeps a separately entry-bounded index of weak output paths.
 After canonical eviction, a still-live output can supply a digest-verified
 reflink without allocating a second physical extent generation. These hints
