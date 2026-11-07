@@ -7,8 +7,8 @@ The engine inspects a Mac and carries out one installation plan, speaking the
 modules from the extracted, pinned installer at run time; none of Asahi's
 source is copied here.
 
-    python3.13 -I ROOT/sekka_engine/__main__.py inspect
-    python3.13 -I ROOT/sekka_engine/__main__.py execute --plan FILE \
+    python3.13 -I -B ROOT/sekka_engine/__main__.py inspect
+    python3.13 -I -B ROOT/sekka_engine/__main__.py execute --plan FILE \
         --assets DIR --installation UUID --owner NAME   (password on fd 3)
 
 (`python3 -I -m sekka_engine …` where the package is importable.)

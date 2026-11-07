@@ -1,12 +1,13 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """The engine's command line. Started by Sekka's privileged helper with the
-pinned runtime, isolated (-I), from the extracted engine archive ROOT:
+pinned runtime, isolated (-I) and writing no bytecode (-B), from the
+extracted engine archive ROOT:
 
-    ROOT/Frameworks/Python.framework/Versions/3.13/bin/python3.13 -I \
+    ROOT/Frameworks/Python.framework/Versions/3.13/bin/python3.13 -I -B \
         ROOT/sekka_engine/__main__.py inspect
-    … -I ROOT/sekka_engine/__main__.py execute --plan FILE --assets DIR \
+    … -I -B ROOT/sekka_engine/__main__.py execute --plan FILE --assets DIR \
         --installation UUID --owner NAME
-    … -I ROOT/sekka_engine/__main__.py startup-disk --plan FILE \
+    … -I -B ROOT/sekka_engine/__main__.py startup-disk --plan FILE \
         --installation UUID --owner NAME --esp-inventory DIGEST
 
 `python3 -I -m sekka_engine …` runs the same code wherever the package is

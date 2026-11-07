@@ -194,10 +194,12 @@ fn inside(rel: &str) -> bool {
     !rel.is_empty() && !rel.starts_with('/') && rel.split('/').all(|c| !c.is_empty() && c != "..")
 }
 
-/// `RUNTIME -I ENTRY ARGS…`, as Asahi's own `install.sh` starts its
+/// `RUNTIME -I -B ENTRY ARGS…`, as Asahi's own `install.sh` starts its
 /// Python, with nothing inherited from the caller's environment. The entry
 /// is run by path: the bundled Python.framework's signature seals its
-/// site-packages, so the adapter isn't installed there.
+/// site-packages, so the adapter isn't installed there. `-B` keeps bytecode
+/// out of the unpacked tree and that sealed framework; under `-I` Python
+/// ignores `PYTHONDONTWRITEBYTECODE`, so only the flag does that.
 pub fn command(engine: &EngineInstall, args: &[&str]) -> Result<Command, EngineError> {
     let bytes = fs::read(engine.root.join("engine-lock.json"))
         .map_err(|e| EngineError::Missing(format!("The installer's engine is incomplete: {e}")))?;
@@ -209,7 +211,7 @@ pub fn command(engine: &EngineInstall, args: &[&str]) -> Result<Command, EngineE
     let root = &engine.root;
     let mut command = Command::new(root.join(&lock.runtime));
     command
-        .arg("-I")
+        .args(["-I", "-B"])
         .arg(root.join(&lock.entry))
         .args(args)
         .current_dir(root)
@@ -217,8 +219,7 @@ pub fn command(engine: &EngineInstall, args: &[&str]) -> Result<Command, EngineE
         .env("PATH", PATH)
         .env("LC_ALL", "C")
         .env("DYLD_FRAMEWORK_PATH", root.join("Frameworks"))
-        .env("DYLD_LIBRARY_PATH", root.join("Frameworks/Python.framework/Versions/Current/lib"))
-        .env("PYTHONDONTWRITEBYTECODE", "1");
+        .env("DYLD_LIBRARY_PATH", root.join("Frameworks/Python.framework/Versions/Current/lib"));
     Ok(command)
 }
 
@@ -428,7 +429,7 @@ mod tests {
         fs::write(src.join("transcript"), lines).unwrap();
         // The arguments must be exactly the fixed ones, and the environment
         // must be clear.
-        let script = "#!/bin/sh\n[ \"$1\" = -I ] && [ \"${2##*/}\" = __main__.py ] && [ \"$3\" = inspect ] && [ $# -eq 3 ] || exit 3\n[ -z \"$HOME\" ] || exit 4\nwhile IFS= read -r l; do printf '%s\\n' \"$l\"; done < transcript\n";
+        let script = "#!/bin/sh\n[ \"$1\" = -I ] && [ \"$2\" = -B ] && [ \"${3##*/}\" = __main__.py ] && [ \"$4\" = inspect ] && [ $# -eq 4 ] || exit 3\n[ -z \"$HOME\" ] && [ -z \"$PYTHONDONTWRITEBYTECODE\" ] || exit 4\nwhile IFS= read -r l; do printf '%s\\n' \"$l\"; done < transcript\n";
         fs::write(src.join("bin/python3"), script).unwrap();
         fs::set_permissions(src.join("bin/python3"), fs::Permissions::from_mode(0o755)).unwrap();
         fs::create_dir_all(src.join("sekka_engine")).unwrap();

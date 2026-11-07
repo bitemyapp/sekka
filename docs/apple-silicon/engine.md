@@ -19,12 +19,12 @@ private directory ROOT and starts the pinned runtime, isolated, by the entry
 point's path:
 
 ```sh
-ROOT/Frameworks/Python.framework/Versions/3.13/bin/python3.13 -I \
+ROOT/Frameworks/Python.framework/Versions/3.13/bin/python3.13 -I -B \
     ROOT/sekka_engine/__main__.py inspect
-ROOT/Frameworks/Python.framework/Versions/3.13/bin/python3.13 -I \
+ROOT/Frameworks/Python.framework/Versions/3.13/bin/python3.13 -I -B \
     ROOT/sekka_engine/__main__.py execute --plan FILE --assets DIR \
     --installation UUID --owner SHORTNAME     3< password
-ROOT/Frameworks/Python.framework/Versions/3.13/bin/python3.13 -I \
+ROOT/Frameworks/Python.framework/Versions/3.13/bin/python3.13 -I -B \
     ROOT/sekka_engine/__main__.py startup-disk --plan FILE \
     --installation UUID --owner SHORTNAME --esp-inventory DIGEST  3< password
 ```
@@ -39,6 +39,10 @@ of that run's Esp checkpoint from the journal, and only that stage (below).
   as Asahi's `install.sh` sets them. The engine then replaces its environment
   with `PATH`, `LC_ALL=C`, `LANG=C` and `SSL_CERT_FILE` naming the runtime's CA
   bundle; nothing else is read from it.
+- **Bytecode.** `-B`: the first run would otherwise write bytecode into the
+  unpacked engine and the runtime's sealed framework, which the engine cache
+  then trusts as unpacked. Under `-I` Python ignores
+  `PYTHONDONTWRITEBYTECODE`, so only the flag keeps it out.
 - **Why not `-m sekka_engine`.** Under `-I` the package would have to be on the
   runtime's own `sys.path`, which means writing into
   `Python.framework/Versions/3.13/lib/python3.13/site-packages`. That

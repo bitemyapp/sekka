@@ -44,10 +44,11 @@ def run_engine_process(root, argv, password=None):
 
 
 def run_by_path(root, argv):
-    """The archive's form: the entry point's path, isolated."""
+    """The archive's form: the entry point's path, isolated and writing no
+    bytecode, as the helper starts it."""
     env = {"PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "LC_ALL": "C"}
     return subprocess.run(
-        [sys.executable, "-I", os.path.join(root, "sekka_engine", "__main__.py")] + argv,
+        [sys.executable, "-I", "-B", os.path.join(root, "sekka_engine", "__main__.py")] + argv,
         input=b"",
         capture_output=True,
         env=env,
@@ -134,6 +135,9 @@ class CommandLine(unittest.TestCase):
             types = [canonical.loads(line, c.LIMIT_ENGINE_LINE, c.ENGINE_SCHEMA)["message"]["type"] for line in p.stdout.splitlines()]
             self.assertEqual(types, ["hello", "failure", "completion"])
             self.assertEqual(run_by_path(root, ["inspect", "--simulate"]).returncode, 2)
+            # The unpacked engine is left as it was unpacked.
+            written = [d for d, _, _ in os.walk(root) if os.path.basename(d) == "__pycache__"]
+            self.assertEqual(written, [])
         finally:
             t.cleanup()
 
