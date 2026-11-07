@@ -257,11 +257,27 @@ impl Release {
                 self.id
             )));
         }
-        let floor = image.root_image.size + image.esp_bytes;
-        if self.allocation.minimum < floor || self.allocation.recommended < self.allocation.minimum
+        // derive_plan makes the stub, an ESP of ESP_BYTES and a root of the
+        // rest (plan.rs): the installer data's ESP must be that ESP, and the
+        // smallest allocation must leave a root that holds the root image.
+        if image.esp_bytes != crate::ESP_BYTES {
+            return Err(invalid(format!(
+                "release {}: its ESP is {} bytes; the installer makes {}",
+                self.id,
+                image.esp_bytes,
+                crate::ESP_BYTES
+            )));
+        }
+        let floor = image
+            .root_image
+            .size
+            .checked_next_multiple_of(crate::ALIGN)
+            .and_then(|root| root.checked_add(crate::STUB_BYTES + crate::ESP_BYTES));
+        if floor.is_none_or(|floor| self.allocation.minimum < floor)
+            || self.allocation.recommended < self.allocation.minimum
         {
             return Err(invalid(format!(
-                "release {}: its minimum allocation must hold the image and be at most the recommendation",
+                "release {}: its minimum allocation must hold the stub, the ESP and the root image, and be at most the recommendation",
                 self.id
             )));
         }
@@ -339,6 +355,45 @@ mod tests {
         let mut c = sample_catalog();
         c.releases[0].artifacts.engine.size = 0;
         assert!(c.check().is_err());
+    }
+
+    #[test]
+    fn the_minimum_holds_what_the_plan_creates() {
+        // The smallest allocation derive_plan accepts makes the stub, an ESP
+        // of ESP_BYTES and a root partition that holds the root image.
+        let mut c = sample_catalog();
+        let r = &mut c.releases[0];
+        r.image.root_image.size = 14_206_087_168;
+        r.artifacts.payload.size = 14_285_936_786;
+        let root = r.image.root_image.size;
+        let floor = root.next_multiple_of(crate::ALIGN) + crate::STUB_BYTES + crate::ESP_BYTES;
+        r.allocation.minimum = floor;
+        r.allocation.recommended = floor;
+        c.check().unwrap();
+        assert!(floor - crate::STUB_BYTES - crate::ESP_BYTES >= root);
+
+        // The image and the ESP alone, without the stub: the plan's root
+        // would be smaller than the image.
+        let mut c2 = c.clone();
+        c2.releases[0].allocation.minimum = c2.releases[0].image.root_image.size + crate::ESP_BYTES;
+        assert!(c2.check().is_err());
+        let mut c2 = c.clone();
+        c2.releases[0].allocation.minimum = floor - 1;
+        assert!(c2.check().is_err());
+
+        // The plan always makes an ESP of ESP_BYTES.
+        let mut c2 = c.clone();
+        c2.releases[0].image.esp_bytes = 500_000_000;
+        assert!(c2.check().is_err());
+
+        // A minimum below the stub and ESP alone, which derive_plan's
+        // subtraction would wrap, is refused.
+        let mut c2 = c.clone();
+        let r = &mut c2.releases[0];
+        r.image.root_image.size = 4 * 1024 * 1024;
+        r.allocation.minimum = r.image.root_image.size + GIB;
+        r.allocation.recommended = 2 * GIB;
+        assert!(c2.check().is_err());
     }
 
     #[test]
