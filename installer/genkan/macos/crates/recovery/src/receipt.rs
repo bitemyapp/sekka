@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! What this app has done for its installation, kept on the stub's System
 //! volume beside its data (`Sekka/State/receipt.json`) so that a restart,
-//! a crash or a power cut in the middle is noticed next time.
+//! a crash or a power cut in the middle shows in it next time.
 //!
 //! Each step is written as started before it runs and as completed (or
-//! failed) after, replaced atomically and synchronized. A step found
-//! "started" is uncertain: the app reads the Mac's actual policy before
-//! repeating it, and only ever repeats it with the same, checked, boot
-//! object.
+//! failed) after, replaced atomically and synchronized, once the volume is
+//! writable. It is diagnostics, never authority: anyone who can write the
+//! stub can write it, so what the app repeats is decided by the Mac's
+//! actual policy, and a receipt that can't be read or saved never stops a
+//! step.
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -27,17 +28,19 @@ impl Store {
         }
     }
 
+    /// The receipt, a new one if there is none yet, or why the one there
+    /// can't be used.
     pub fn load(&self, installation: Uuid) -> Result<Receipt, String> {
         match fs::read(&self.path) {
             Ok(bytes) => {
-                let r = Receipt::parse(&bytes).map_err(|e| format!("The record of this step is damaged: {e}"))?;
+                let r = Receipt::parse(&bytes).map_err(|e| format!("The record of these steps is damaged ({e})."))?;
                 if r.installation != installation {
-                    return Err("The record of this step belongs to another installation.".into());
+                    return Err("The record of these steps belongs to another installation.".into());
                 }
                 Ok(r)
             }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Receipt::new(installation)),
-            Err(e) => Err(e.to_string()),
+            Err(e) => Err(format!("The record of these steps can't be read ({e}).")),
         }
     }
 

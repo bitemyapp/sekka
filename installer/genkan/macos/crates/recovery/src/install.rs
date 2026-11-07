@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! The installation this app finishes, read from beside it and checked.
+use std::ffi::CString;
 use std::fs;
 use std::io::Read;
+use std::mem::MaybeUninit;
+use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Component, Path, PathBuf};
 
@@ -21,6 +24,20 @@ pub struct Install {
 /// `/Volumes/Sekka/Sekka Recovery.app` → `/Volumes/Sekka`.
 pub fn volume_of(bundle: &Path) -> Option<PathBuf> {
     bundle.parent().map(Path::to_path_buf)
+}
+
+/// Whether the file system holding `path` is mounted read-only, as
+/// recoveryOS mounts the stub's System volume.
+pub fn read_only(path: &Path) -> Result<bool, String> {
+    let c = CString::new(path.as_os_str().as_bytes()).map_err(|e| e.to_string())?;
+    let mut stat = MaybeUninit::<libc::statvfs>::uninit();
+    // SAFETY: a NUL-terminated path, and room for what statvfs fills in.
+    if unsafe { libc::statvfs(c.as_ptr(), stat.as_mut_ptr()) } != 0 {
+        return Err(format!("{}: {}", path.display(), std::io::Error::last_os_error()));
+    }
+    // SAFETY: filled in by the call, which succeeded.
+    let stat = unsafe { stat.assume_init() };
+    Ok(stat.f_flag & libc::ST_RDONLY != 0)
 }
 
 /// Hash a file, refusing links and anything over `limit` bytes.
@@ -155,5 +172,12 @@ pub(crate) mod tests {
     #[test]
     fn the_volume_is_the_bundles_parent() {
         assert_eq!(volume_of(Path::new("/Volumes/Sekka/Sekka Recovery.app")).unwrap(), Path::new("/Volumes/Sekka"));
+    }
+
+    #[test]
+    fn a_writable_volume_reads_as_writable() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(!read_only(dir.path()).unwrap());
+        assert!(read_only(&dir.path().join("not there")).is_err());
     }
 }

@@ -20,12 +20,14 @@ pub enum Screen {
 }
 
 /// Whether macOS is changing how the Mac starts up: `bputil`, `kmutil` or
-/// `bless` is running, or Recovery is being told to stop opening the app.
-/// Each tool answers to the app's pseudo-terminal, and one stopped part way
-/// can leave the startup policy or the boot object half changed, so while
-/// one runs the window stays open and the app doesn't quit. The reads
-/// around them (`diskutil`, `bputil -d`) don't count: the app may go then,
-/// and a read that never answers can't keep it.
+/// `bless` is running. Each tool answers to the app's pseudo-terminal, and
+/// one stopped part way can leave the startup policy or the boot object
+/// half changed, so while one runs the window stays open and the app
+/// doesn't quit. The reads around them (`diskutil`, `bputil -d`) and the
+/// remount don't count: the app may go then, and a read that never answers
+/// can't keep it. Nor do the two renames on the stub's volume between
+/// `kmutil` and `bless`: each happens whole or not at all, and wherever
+/// they stop, the stub starts Sekka or Recovery opens the app again.
 #[derive(Clone, Debug, Default)]
 pub struct Changing(Arc<AtomicUsize>);
 

@@ -30,7 +30,7 @@ use zeroize::Zeroize;
 
 use crate::command;
 use crate::finish::{Environment, FinishError, Finisher, Phase, System};
-use crate::install::{Install, volume_of};
+use crate::install::{Install, read_only, volume_of};
 use crate::pty::{self, AuthError, Program};
 use crate::screen::{self, Screen};
 
@@ -93,20 +93,18 @@ impl System for Mac {
         }
         self.changing.during(|| pty::authorized(program, args, user, password, log))
     }
-    fn disable_autolaunch(&self, volume: &Path) -> Result<(), String> {
-        self.changing.during(|| {
-            run("/sbin/mount", &["-u", "-w", &volume.to_string_lossy()])?;
-            let media = volume.join(".IAPhysicalMedia");
-            if media.exists() {
-                fs::rename(&media, volume.join("IAPhysicalMedia-disabled.plist")).map_err(|e| e.to_string())?;
-            }
-            let services = volume.join("System/Library/CoreServices");
-            let disabled = services.join("SystemVersion-disabled.plist");
-            if disabled.exists() {
-                fs::rename(&disabled, services.join("SystemVersion.plist")).map_err(|e| e.to_string())?;
-            }
-            Ok(())
-        })
+    /// recoveryOS mounts the stub's System volume read-only; Asahi's
+    /// `step2.sh` remounts it the same way before it writes there.
+    fn make_writable(&self, path: &Path) -> Result<(), String> {
+        // A preview writes only where it already can.
+        if cfg!(feature = "preview") || !read_only(path)? {
+            return Ok(());
+        }
+        run("/sbin/mount", &["-u", "-w", &path.to_string_lossy()])?;
+        if read_only(path)? {
+            return Err("it is still mounted read-only".into());
+        }
+        Ok(())
     }
     fn startup_device(&self) -> Result<String, String> {
         Ok(run("/usr/sbin/bless", &["--getBoot"])?.trim().to_string())
@@ -484,7 +482,7 @@ fn open(mtm: MainThreadMarker, changing: screen::Changing) -> Rc<RefCell<Window>
     let bundle = PathBuf::from(objc2_foundation::NSBundle::mainBundle().bundlePath().to_string());
     let loaded = volume_of(&bundle).ok_or_else(|| "The app isn't on a volume.".to_string()).and_then(|v| Install::load(&v));
     let mac = Mac { changing: changing.clone() };
-    let (screen, owner, finisher) = match loaded.and_then(|i| Finisher::open(mac, i)) {
+    let (screen, owner, finisher) = match loaded.map(|i| Finisher::open(mac, i)) {
         Ok(f) => {
             let owner = (f.owner().0.to_string(), f.owner().1.to_string());
             (Screen::Checking, owner, Some(f))
