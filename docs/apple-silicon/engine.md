@@ -576,7 +576,8 @@ changed. `engine.json` beside it gives the archive's size and SHA-256.
 `nix build --rebuild` reproduces it bit for bit.
 
 ```sh
-nix build --impure --expr 'let pkgs = (builtins.getFlake (toString ./.)).inputs.nixpkgs.legacyPackages.aarch64-linux; in (import ./installer/genkan/macos/engine/default.nix { inherit pkgs; }).archive'
+nix build .#packages.aarch64-linux.mac-engine        # the archive and engine.json
+nix build .#packages.aarch64-linux.mac-engine-tests  # the adapter's tests against a fake Mac
 ```
 
 `source-lock.json` records the Asahi tag, commit and tarball, which of its

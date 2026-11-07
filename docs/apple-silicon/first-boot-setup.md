@@ -386,9 +386,13 @@ nix build .#legacyPackages.aarch64-linux.first-boot.vm-test -L
   Aizome, pass `greeterPackage` (Aizome's `greeter` package) and an
   existing Aizome build as `aizomePackage`:
 
+  Name the checkout as a Git flake: `builtins.getFlake (toString ./.)` reads
+  it as a path flake and copies the whole directory into the store, its
+  build outputs and worktrees included.
+
   ```sh
-  nix build --impure -L --expr 'let f = builtins.getFlake (toString ./.); a = f.lib.components.aizome; in
-    import ./installer/genkan/first-boot/vm-test.nix {
+  nix build --impure -L --expr 'let f = builtins.getFlake "git+file://'"$PWD"'"; a = f.lib.components.aizome; in
+    import "${f}/installer/genkan/first-boot/vm-test.nix" {
       pkgs = f.inputs.nixpkgs.legacyPackages.aarch64-linux; aizome = a;
       helper = f.legacyPackages.aarch64-linux.first-boot.helper;
       aizomePackage = builtins.storePath "/nix/store/…-aizome-0.1.0";
@@ -437,6 +441,15 @@ called, `sekka.setup.staged/2` with the first helper's `/1` finished):
 What the first rebuild builds was not evaluated again: the configuration's
 values are the same, only the default desktop's now comes from
 configuration.nix.
+
+On the final branch (`2a9b9ee3`), with room on the disk again, the VM test
+ran (aarch64, `userspaceIrqchip`, this tree's greeter, the Aizome installed
+on the J514S for the compositor and session, the Git flake as above): all
+ten subtests passed in 68 s of test script, its new check of setup's edit
+to `configuration.nix` among them, with screenshots of every page in its
+output. The Mac image's own VM test (docs/apple-silicon/image.md) passed on
+the same sources with setup waiting at its login screen, and with setup's
+sample `setup.nix`, changed to German, rebuilding offline.
 
 ## Limits and what isn't verified
 
