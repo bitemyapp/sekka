@@ -4,12 +4,13 @@
 #
 # - helper: sekka-setup-helper, with its tests;
 # - configuration: a Sekka installed system evaluated before and after
-#   setup.nix (test-data/setup.nix, what the helper writes), proving the
-#   account's groups, shell, host name, locale, keyboard and desktop agree
-#   with what setup applied at run time, that setup.nix leaves the disk,
-#   the system's packages and its locales as they were and the console
-#   keymap follows the keyboard, that the module asserts nothing once it's
-#   applied, and that the result evaluates;
+#   setup (test-data/setup.nix and configuration.after.nix, what the helper
+#   writes), proving the account's groups, shell, host name, locale,
+#   keyboard and desktop agree with what setup applied at run time, that
+#   the default desktop is configuration.nix's alone, that setup.nix leaves
+#   the disk, the system's packages and its locales as they were and the
+#   console keymap follows the keyboard, that the module asserts nothing
+#   once it's applied, and that the result evaluates;
 # - vm-test: the login screen's setup in a disposable VM, typed at as a
 #   person would (vm-test.nix).
 {
@@ -22,10 +23,12 @@ let
   inherit (nixpkgs) lib;
   helper = pkgs.callPackage ./package.nix { };
   # An installed Sekka as the Mac image would be (nix/apple-silicon/
-  # image.nix), its account left to setup.
-  installed =
-    extra:
-    (nixpkgs.lib.nixosSystem {
+  # image.nix), its account left to setup, with the part of configuration.nix
+  # setup changes as `configuration` has it (test-data/configuration.nix as
+  # the image ships it, configuration.after.nix as setup leaves it).
+  installation =
+    configuration: extra:
+    nixpkgs.lib.nixosSystem {
       inherit system;
       specialArgs = {
         applicationPkgs = import inputs.applications {
@@ -38,15 +41,10 @@ let
       modules = [
         inputs.determinate.nixosModules.default
         inputs.calamares.nixosModules.default
+        configuration
         {
           calamares = {
             applications = [ "firefox" ];
-            desktops = [
-              "aizome"
-              "tatami"
-            ];
-            # As the image's configuration.nix has it: setup.nix's choice wins.
-            defaultDesktop = lib.mkDefault "aizome";
             appleSilicon = lib.mkIf (system == "aarch64-linux") {
               enable = true;
               t6030Handoff = true;
@@ -73,15 +71,11 @@ let
         }
       ]
       ++ extra;
-    }).config;
+    };
+  installed = extra: (installation ./test-data/configuration.nix extra).config;
   before = installed [ ];
-  after = installed [ ./test-data/setup.nix ];
-  # The default desktop as Yukimi changes it: a plain value in
-  # configuration.nix.
-  changedLater = installed [
-    ./test-data/setup.nix
-    { calamares.defaultDesktop = "aizome"; }
-  ];
+  afterSetup = installation ./test-data/configuration.after.nix [ ./test-data/setup.nix ];
+  after = afterSetup.config;
   offered = lib.importJSON ./offered.json;
   helperConfig = builtins.fromJSON (
     builtins.unsafeDiscardStringContext before.environment.etc."sekka-setup/helper.json".text
@@ -147,8 +141,12 @@ in
     assert check "setup.nix names the shell the helper makes the account with" (
       after.users.users.ada.shell == helperConfig.shell
     );
-    assert check "a plain default desktop, as Yukimi writes it, wins over setup.nix's" (
-      changedLater.calamares.defaultDesktop == "aizome"
+    # So Yukimi's edit of configuration.nix's line is the only one to make.
+    assert check "the default desktop is configuration.nix's, and setup.nix doesn't name it" (
+      lib.elem (toString ./test-data/configuration.after.nix) (
+        map toString afterSetup.options.calamares.defaultDesktop.files
+      )
+      && !(lib.elem (toString ./test-data/setup.nix) (map toString afterSetup.options.calamares.defaultDesktop.files))
     );
     assert check "setup.nix leaves the disk to the configuration (identity.nix on a Mac)" (
       after.fileSystems."/".device == before.fileSystems."/".device

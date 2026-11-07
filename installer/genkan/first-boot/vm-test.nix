@@ -8,7 +8,8 @@
 # - the Mac installer's hints are where setup starts; the keyboard is
 #   changed to German, the compositor types German at once;
 # - the account, host name, time zone, locale and keyboard are applied,
-#   setup.nix written and evaluated, and nothing secret is left anywhere;
+#   setup.nix written and evaluated, the default desktop changed in
+#   configuration.nix, and nothing secret is left anywhere;
 # - the login screen comes back with the new person; a wrong password is
 #   refused, the right one starts Aizome, which locks and unlocks;
 # - logging out, the other desktop (a stand-in session named Tatami);
@@ -56,7 +57,7 @@ let
     {
       outputs = { self }:
         let
-          setup = import ./setup.nix { lib.mkOverride = _: x: x; };
+          setup = import ./setup.nix { };
         in
         {
           nixosConfigurations.''${setup.networking.hostName}.config.system.build.toplevel = derivation {
@@ -123,6 +124,9 @@ pkgs.testers.runNixOSTest {
       systemd.tmpfiles.rules = [
         "d /etc/nixos 0755 root root -"
         "C /etc/nixos/flake.nix 0644 root root - ${flake}"
+        # The image's configuration.nix as far as setup changes it, but
+        # naming Tatami, so that choosing Aizome shows setup's edit.
+        "C /etc/nixos/configuration.nix 0644 root root - ${./test-data/configuration.after.nix}"
         "d /run/greeter-inspect 0755 greeter greeter -"
       ];
       nix.settings.experimental-features = [
@@ -337,10 +341,13 @@ pkgs.testers.runNixOSTest {
         assert 'layouts = ["de"]' in machine.succeed("cat /home/ada/.config/aizome/settings.toml")
         setup = machine.succeed("cat /etc/nixos/setup.nix")
         for want in ('users.users."ada"', 'networking.hostName = "adas-macbook-pro";',
-                     'i18n.defaultLocale = "de_DE.UTF-8";', 'services.xserver.xkb.layout = "de";',
-                     'calamares.defaultDesktop = lib.mkOverride 900 "aizome";'):
+                     'i18n.defaultLocale = "de_DE.UTF-8";', 'services.xserver.xkb.layout = "de";'):
             assert want in setup, setup
         assert "fileSystems" not in setup, "the disk is identity.nix's"
+        assert "defaultDesktop" not in setup, "the default desktop is configuration.nix's"
+        # Changed as Yukimi changes it: only the default desktop's string.
+        configuration = machine.succeed("cat /etc/nixos/configuration.nix")
+        assert configuration == open("${./test-data/configuration.nix}").read(), configuration
         marker = json.loads(machine.succeed("cat /var/lib/sekka-setup/complete"))
         assert marker["username"] == "ada" and marker["uid"] == 1000, marker
         assert marker["system"].endswith("-first-boot-setup-check.drv"), "the flake was evaluated"

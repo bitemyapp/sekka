@@ -1,9 +1,11 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Sekka's first-boot setup helper (installer/genkan/first-boot): its own
-# Cargo workspace and lock, built with Genkan's backend (rust/) and the Mac
-# installer's contract crate (macos/crates/contract), which it depends on
-# by path. Only those sources are copied, at the paths the manifests name,
-# so neither Genkan's window nor Aizome rebuilds it, nor it them.
+# Cargo workspace and lock, built with Genkan's backend (rust/), the Mac
+# installer's contract crate (macos/crates/contract) and Yukimi's
+# configuration editing (apps/yukimi/crates/yukimi-config), which it depends
+# on by path. Only those sources are copied, at the paths the manifests
+# name, so neither Genkan's window, Yukimi nor Aizome rebuilds it, nor it
+# them.
 {
   lib,
   rustPlatform,
@@ -38,11 +40,21 @@ let
       ../macos/crates/contract/profiles
     ];
   };
+  # The workspace manifest only for what yukimi-config inherits from it.
+  yukimi = lib.fileset.toSource {
+    root = ../../../apps/yukimi;
+    fileset = lib.fileset.unions [
+      ../../../apps/yukimi/Cargo.toml
+      ../../../apps/yukimi/crates/yukimi-config/Cargo.toml
+      ../../../apps/yukimi/crates/yukimi-config/src
+    ];
+  };
   source = runCommand "sekka-setup-source" { } ''
-    mkdir -p $out/installer/genkan
+    mkdir -p $out/installer/genkan $out/apps
     cp -r ${helper} $out/installer/genkan/first-boot
     cp -r ${backend} $out/installer/genkan/rust
     cp -r ${contract} $out/installer/genkan/macos
+    cp -r ${yukimi} $out/apps/yukimi
   '';
 in
 rustPlatform.buildRustPackage {

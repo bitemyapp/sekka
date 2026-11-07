@@ -18,7 +18,8 @@
 //!    stops rather than touch it.
 //! 4. **Settings**: host name, time zone, locale, and the login screen's
 //!    and the person's keyboard.
-//! 5. **Configuration**: `/etc/nixos/setup.nix`.
+//! 5. **Configuration**: the default desktop in `/etc/nixos/configuration.nix`,
+//!    changed as Yukimi changes it, then `/etc/nixos/setup.nix`.
 //! 6. **Verify**: the account, and the installed flake evaluated offline
 //!    for the new host name, proving the configuration the first update
 //!    builds.
@@ -43,6 +44,7 @@ use std::path::Path;
 
 use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
+use yukimi_config::edit;
 use zeroize::Zeroizing;
 
 use crate::choices::Plan;
@@ -92,6 +94,9 @@ pub struct Before {
     pub greeter_keyboard: Option<String>,
     /// `/etc/nixos/setup.nix`, if there was one.
     pub setup_nix: Option<String>,
+    /// The default desktop `/etc/nixos/configuration.nix` named, if it named
+    /// one as a plain string.
+    pub desktop: Option<String>,
 }
 
 /// The parts of finishing setup that are each done once, and recorded.
@@ -106,12 +111,32 @@ pub enum Part {
     Locale,
     /// The login screen's keyboard and the person's.
     Keyboard,
+    /// The default desktop, in configuration.nix.
+    Desktop,
     SetupNix,
 }
 
 impl Part {
-    pub const ALL: [Part; 7] =
-        [Part::Groups, Part::Password, Part::Hostname, Part::TimeZone, Part::Locale, Part::Keyboard, Part::SetupNix];
+    pub const ALL: [Part; 8] = [
+        Part::Groups,
+        Part::Password,
+        Part::Hostname,
+        Part::TimeZone,
+        Part::Locale,
+        Part::Keyboard,
+        Part::Desktop,
+        Part::SetupNix,
+    ];
+}
+
+/// Where configuration.nix names the default desktop, which Yukimi's Default
+/// desktop choice rewrites.
+const DESKTOP: [&str; 2] = ["calamares", "defaultDesktop"];
+
+/// The default desktop a configuration names as a plain string, as Yukimi
+/// reads it; nothing if it names none, names it otherwise, or doesn't parse.
+fn configured_desktop(text: &str) -> Option<String> {
+    edit::string_value(text, &DESKTOP).ok().flatten()
 }
 
 /// The completion marker: who was set up, when, and the system the
@@ -447,6 +472,7 @@ impl<S: System> Run<'_, S> {
                 locale: self.sys.locale()?,
                 greeter_keyboard: self.sys.greeter_keyboard()?,
                 setup_nix: read_text(&c.setup_nix())?,
+                desktop: read_text(&c.configuration_nix())?.as_deref().and_then(configured_desktop),
             },
             applied: BTreeSet::new(),
         };
@@ -608,6 +634,7 @@ impl<S: System> Run<'_, S> {
     }
 
     fn configuration(&mut self, s: &mut Staged) -> Result<()> {
+        self.desktop(s)?;
         if !s.applied.contains(&Part::SetupNix) {
             let path = self.config.setup_nix();
             let text = render::setup_nix(s);
@@ -620,6 +647,47 @@ impl<S: System> Run<'_, S> {
             self.record(s, Part::SetupNix)?;
         }
         Ok(())
+    }
+
+    /// The default desktop, in configuration.nix rather than setup.nix: the
+    /// image names it there as a plain string, which Yukimi's Default
+    /// desktop choice rewrites, and a second definition of it in setup.nix
+    /// would either conflict with that one or override it. So setup makes
+    /// Yukimi's own edit (only that string changes, or it is added beside
+    /// the other `calamares` settings where there is none).
+    fn desktop(&mut self, s: &mut Staged) -> Result<()> {
+        if s.applied.contains(&Part::Desktop) {
+            return Ok(());
+        }
+        let path = self.config.configuration_nix();
+        match read_text(&path)? {
+            None => eprintln!("setup: there's no {}, so no default desktop to set", path.display()),
+            Some(text) => {
+                let now = configured_desktop(&text);
+                match change(&now, &s.before.desktop, &Some(s.desktop.clone())) {
+                    Change::Make => match edit::set_string(&text, &DESKTOP, &s.desktop) {
+                        Ok(new) => {
+                            let mode = std::fs::metadata(&path)?.permissions().mode() & 0o7777;
+                            write_atomic(&path, new.as_bytes(), mode)?;
+                            let set = read_text(&path)?.as_deref().and_then(configured_desktop);
+                            ensure!(set.as_ref() == Some(&s.desktop), "the default desktop didn't change");
+                        }
+                        // Set some other way, by hand: Yukimi leaves it too,
+                        // and the login screen still starts the person's.
+                        Err(e @ yukimi_config::Error::NotAString(_)) => {
+                            eprintln!("setup: {}: {e}", path.display())
+                        }
+                        Err(e) => return Err(e).with_context(|| format!("changing {}", path.display())),
+                    },
+                    Change::Keep => eprintln!(
+                        "setup: the default desktop was changed to {} meanwhile; it stays",
+                        now.as_deref().unwrap_or("something else")
+                    ),
+                    Change::Done => {}
+                }
+            }
+        }
+        self.record(s, Part::Desktop)
     }
 
     fn verify(&mut self, s: &Staged) -> Result<Option<String>> {
@@ -840,27 +908,32 @@ pub(crate) mod tests {
 
     pub const PASSWORD: &str = "correct horse battery";
 
-    fn plan(config: &Config) -> Plan {
-        choices::plan(config, &draft(), &Zeroizing::new(PASSWORD.into()), &|_| false).expect("a valid plan")
-    }
-
     struct World {
         _dir: tempfile::TempDir,
         config: Config,
         sys: Fake,
+        /// What the person chooses.
+        draft: Draft,
         steps: Vec<Step>,
     }
+
+    /// The image's configuration.nix, as far as setup changes it.
+    const CONFIGURATION: &str = include_str!("../test-data/configuration.nix");
+    /// That as setup leaves it for Tatami.
+    const CONFIGURATION_AFTER: &str = include_str!("../test-data/configuration.after.nix");
 
     fn world() -> World {
         let dir = tempfile::tempdir().unwrap();
         let config = sample(dir.path());
         std::fs::create_dir_all(&config.nixos_dir).unwrap();
-        World { _dir: dir, config, sys: Fake::image(), steps: Vec::new() }
+        std::fs::write(config.configuration_nix(), CONFIGURATION).unwrap();
+        World { _dir: dir, config, sys: Fake::image(), draft: draft(), steps: Vec::new() }
     }
 
     impl World {
         fn begin(&mut self, stop_at: Option<Point>) -> Result<Done, Failure> {
-            let plan = plan(&self.config);
+            let plan = choices::plan(&self.config, &self.draft, &Zeroizing::new(PASSWORD.into()), &|_| false)
+                .expect("a valid plan");
             let steps = &mut self.steps;
             let mut progress = |s: Step| steps.push(s);
             let mut stop = |p: Point| if Some(p) == stop_at { anyhow::bail!("stopped at {p:?}") } else { Ok(()) };
@@ -883,7 +956,7 @@ pub(crate) mod tests {
         }
 
         /// Everything that isn't a secret or a time, for comparing runs.
-        fn outcome(&self) -> (Fake, String, Marker) {
+        fn outcome(&self) -> (Fake, String, String, Marker) {
             let mut sys = self.sys.clone();
             sys.calls.clear();
             sys.shadow.insert("ada".into(), "<hash>".into());
@@ -895,7 +968,11 @@ pub(crate) mod tests {
             sys.homes = sys.homes.iter().map(|h| local(h)).collect();
             let mut marker = read_marker(&self.config).unwrap().expect("the marker");
             marker.completed = 0;
-            (sys, std::fs::read_to_string(self.config.setup_nix()).unwrap(), marker)
+            (sys, std::fs::read_to_string(self.config.setup_nix()).unwrap(), self.configuration(), marker)
+        }
+
+        fn configuration(&self) -> String {
+            std::fs::read_to_string(self.config.configuration_nix()).unwrap()
         }
 
         fn files(&self) -> Vec<String> {
@@ -938,12 +1015,15 @@ pub(crate) mod tests {
         assert_eq!((w.sys.hostname.as_str(), w.sys.time_zone.as_str(), w.sys.locale.as_str()), ("analytical", "Europe/Berlin", "de_DE.UTF-8"));
         assert_eq!(w.sys.greeter_keyboard.as_deref(), Some("de"));
         assert_eq!(w.sys.user_keyboards["ada"], "de");
+        // The default desktop, where Yukimi changes it, and the file's mode kept.
+        assert_eq!(w.configuration(), CONFIGURATION_AFTER);
+        assert_eq!(std::fs::metadata(w.config.configuration_nix()).unwrap().permissions().mode() & 0o777, 0o644);
         // Only the lock and the marker remain: no credential, no staged choices.
         assert_eq!(w.files(), ["complete", "lock"]);
         let marker = std::fs::read_to_string(w.config.marker()).unwrap();
         let setup = std::fs::read_to_string(w.config.setup_nix()).unwrap();
         assert!(setup.contains(r#"shell = "/run/current-system/sw/bin/fish";"#), "the account's own: {setup}");
-        for text in [&marker, &setup] {
+        for text in [&marker, &setup, &w.configuration()] {
             assert!(!text.contains(PASSWORD) && !text.contains(&hash) && !text.contains("$6$"), "{text}");
         }
         // No flake: nothing evaluated, and the marker says so.
@@ -1115,12 +1195,16 @@ pub(crate) mod tests {
         w.sys.groups.get_mut("render").unwrap().remove("ada");
         let mine = "# Mine now.\n{ ... }: { }\n";
         std::fs::write(w.config.setup_nix(), mine).unwrap();
+        // Yukimi's Default desktop choice, back to Aizome.
+        let theirs = edit::set_string(&w.configuration(), &DESKTOP, "aizome").unwrap();
+        std::fs::write(w.config.configuration_nix(), &theirs).unwrap();
         let calls = w.sys.calls.len();
         w.resume(None).unwrap();
         assert_eq!(w.state(), State::Complete);
         assert_eq!((w.sys.hostname.as_str(), w.sys.time_zone.as_str(), w.sys.locale.as_str()), ("babbage", "UTC", "ja_JP.UTF-8"));
         assert_eq!(w.sys.groups_of("ada").unwrap(), ["networkmanager", "wheel"]);
         assert_eq!(std::fs::read_to_string(w.config.setup_nix()).unwrap(), mine);
+        assert_eq!(w.configuration(), theirs);
         assert_eq!(w.sys.calls[calls..], ["evaluate"], "only the check again");
         assert_eq!(w.files(), ["complete", "lock"]);
     }
@@ -1155,6 +1239,68 @@ pub(crate) mod tests {
         std::fs::write(w.config.setup_nix(), "# stale\n").unwrap();
         w.begin(None).unwrap();
         assert!(std::fs::read_to_string(w.config.setup_nix()).unwrap().starts_with("# Written by Sekka's first-boot setup"));
+        // The default desktop they chose in Yukimi meanwhile stays; one they
+        // left alone is set, and whatever else they changed in
+        // configuration.nix stays.
+        for (theirs, expected) in [(Some("gnome"), "gnome"), (None, "tatami")] {
+            let mut w = world();
+            w.sys.fail = Some("set_locale");
+            assert!(w.begin(None).unwrap_err().can_log_in);
+            let mut text = w.configuration().replace("  calamares = {", "  services.printing.enable = true;\n  calamares = {");
+            if let Some(d) = theirs {
+                text = edit::set_string(&text, &DESKTOP, d).unwrap();
+            }
+            std::fs::write(w.config.configuration_nix(), &text).unwrap();
+            w.sys.fail = None;
+            w.resume(None).unwrap();
+            let text = w.configuration();
+            assert_eq!(configured_desktop(&text).as_deref(), Some(expected), "{text}");
+            assert!(text.contains("services.printing.enable = true;"), "{text}");
+        }
+    }
+
+    /// The default desktop goes where the image names it and Yukimi changes
+    /// it: configuration.nix, by Yukimi's own edit.
+    #[test]
+    fn the_default_desktop_is_set_where_yukimi_changes_it() {
+        // `test-data/configuration.after.nix` is what setup makes of the
+        // image's for Tatami (the configuration check evaluates both).
+        // `SEKKA_SETUP_GOLDEN=write` writes it anew.
+        let after = edit::set_string(CONFIGURATION, &DESKTOP, "tatami").unwrap();
+        if std::env::var("SEKKA_SETUP_GOLDEN").as_deref() == Ok("write") {
+            let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("test-data/configuration.after.nix");
+            std::fs::write(path, &after).unwrap();
+        }
+        assert_eq!(after, CONFIGURATION_AFTER);
+        assert_eq!(CONFIGURATION.replace("\"aizome\";", "\"tatami\";"), after, "only the default desktop changes");
+        // Yukimi changes it again later, the same way.
+        let later = edit::set_string(&after, &DESKTOP, "aizome").unwrap();
+        assert_eq!(later.matches("defaultDesktop").count(), 1, "{later}");
+        // Chosen as the image has it: configuration.nix stays byte for byte.
+        let mut w = world();
+        w.draft.desktop = "aizome".into();
+        w.begin(None).unwrap();
+        assert_eq!(w.configuration(), CONFIGURATION);
+        // None named: added beside the other calamares settings.
+        let mut w = world();
+        let without = "{ ... }:\n{\n  calamares = {\n    desktops = [ \"aizome\" \"tatami\" ];\n  };\n}\n";
+        std::fs::write(w.config.configuration_nix(), without).unwrap();
+        w.begin(None).unwrap();
+        assert_eq!(configured_desktop(&w.configuration()).as_deref(), Some("tatami"), "{}", w.configuration());
+        // Named some other way, by hand: left alone, as Yukimi leaves it,
+        // and setup still finishes.
+        let mut w = world();
+        let by_hand = "{ lib, ... }:\n{\n  calamares.defaultDesktop = lib.mkDefault \"aizome\";\n}\n";
+        std::fs::write(w.config.configuration_nix(), by_hand).unwrap();
+        w.begin(None).unwrap();
+        assert_eq!(w.configuration(), by_hand);
+        assert_eq!(w.state(), State::Complete);
+        // No configuration.nix: nothing to change.
+        let mut w = world();
+        std::fs::remove_file(w.config.configuration_nix()).unwrap();
+        w.begin(None).unwrap();
+        assert!(!w.config.configuration_nix().exists());
+        assert_eq!(w.state(), State::Complete);
     }
 
     #[test]

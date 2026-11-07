@@ -3,8 +3,9 @@
 # screen that creates the owner's account and records their choices
 # (docs/apple-silicon/first-boot-setup.md). A Cargo workspace of its own.
 # It reuses Genkan's validation (rust/, without its network and zone map
-# features) and the Mac installer's handoff (macos/crates/contract) by
-# path, with Genkan's exact versions, and shares no workspace with either.
+# features), the Mac installer's handoff (macos/crates/contract) and
+# Yukimi's edit of a configuration file (apps/yukimi/crates/yukimi-config)
+# by path, with Genkan's exact versions, and shares no workspace with them.
 [workspace]
 resolver = "3"
 
@@ -20,6 +21,7 @@ publish = false
 [dependencies]
 calamares-nixos = { path = "../rust", default-features = false }
 sekka-mac-contract = { path = "../macos/crates/contract" }
+yukimi-config = { path = "../../../apps/yukimi/crates/yukimi-config" }
 anyhow = "=1.0.100"
 libc = "=0.2.177"
 serde = { version = "=1.0.228", features = ["derive"] }

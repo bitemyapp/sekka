@@ -1,13 +1,11 @@
 # Written by Sekka's first-boot setup: what was chosen when this computer
 # was set up. configuration.nix imports it. Change it as you would the rest
-# of the configuration; the next update builds it.
-{ lib, ... }:
+# of the configuration; the next update builds it. The default desktop
+# is in configuration.nix.
+{ ... }:
 {
   calamares.firstBootSetup.applied = true;
   calamares.installUser = "ada";
-  # Over the image's default, and under a plain value in configuration.nix,
-  # which is where Yukimi changes the default desktop.
-  calamares.defaultDesktop = lib.mkOverride 900 "tatami";
   users.users."ada" = {
     isNormalUser = true;
     uid = 1000;

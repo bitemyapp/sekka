@@ -68,9 +68,10 @@ place it uses.
 ### Genkan's rules, reused
 
 The helper depends on Genkan's backend (`installer/genkan/rust`, crate
-`calamares-nixos`, without its `network` and `zonemap` features) and the
-Mac installer's contract crate by path, with Genkan's exact dependency
-versions. It judges choices with `RawRequest::parse`, the function Genkan's
+`calamares-nixos`, without its `network` and `zonemap` features), the
+Mac installer's contract crate and Yukimi's `yukimi-config` (the edit
+Yukimi makes to a configuration file) by path, with Genkan's exact
+dependency versions. It judges choices with `RawRequest::parse`, the function Genkan's
 own helper parses an installation with: a check puts each field into an
 otherwise valid request, so the verdict is exactly Genkan's, and
 completion parses the whole request. That covers the user name, host name,
@@ -119,9 +120,10 @@ image's own settings.
 
 Setup builds no generation; the image's stays the running system. It
 applies the choices as the running system's state, where NixOS permits it,
-and writes the same choices as configuration:
+and writes the same choices as configuration, all in `setup.nix` but the
+default desktop:
 
-| Choice | At once | In `/etc/nixos/setup.nix` |
+| Choice | At once | In the configuration (`/etc/nixos/setup.nix` unless named) |
 | --- | --- | --- |
 | Account | `useradd` (staged uid, group `users`, the groups below, home 0700, `users.defaultUserShell`), `chpasswd --encrypted` | `users.users.NAME` (`isNormalUser`, `uid`, `description`, `extraGroups = [ "networkmanager" "wheel" ]`, and `shell` by the path it was made with) and `calamares.installUser = NAME`; no password (`mutableUsers` keeps `/etc/shadow`'s) |
 | Groups | `networkmanager`, `wheel`, and `render` on the M3 Pro's GPU | `render` comes from `calamares.appleSilicon.graphicsUsers`, whose default is `installUser` |
@@ -129,7 +131,7 @@ and writes the same choices as configuration:
 | Time zone | `timedatectl set-timezone` | none: Aizome's mutable time zone keeps `/etc/localtime` across rebuilds; setup.nix says so in a comment |
 | Language | `localectl set-locale LANG=…` (`i18n.imperativeLocale`), and `systemctl set-environment` so the person's user manager starts with it before the next boot (systemd reads locale.conf only as it starts) | `i18n.defaultLocale`, which only seeds `/etc/locale.conf` should it be missing: the language stays the system's own, which Settings changes and rebuilds keep; setup.nix says so |
 | Keyboard | `/etc/aizome/keyboard.toml` (the login screen's, `keyboardFile`) and, if not the image's layout, `~/.config/aizome/settings.toml` `[input.keyboard]` | `services.xserver.xkb.layout`, and so the console's keymap (`console.useXkbConfig`; the module keeps `/etc/vconsole.conf` NixOS's under `imperativeLocale`) |
-| Desktop | the login screen remembers it for the person | `calamares.defaultDesktop = lib.mkOverride 900 …`: over the image's `lib.mkDefault`, under a plain value in configuration.nix, which is where Yukimi changes it |
+| Desktop | the login screen remembers it for the person | `calamares.defaultDesktop` in `configuration.nix`, where the image names it as a plain string and Yukimi's Default desktop choice changes it: setup makes Yukimi's own edit (`yukimi_config::edit::set_string`, which changes only that string, or adds it beside the other `calamares` settings where there is none). Named some other way (by hand, say `lib.mkDefault`), it is left alone, as Yukimi leaves it, and the login screen still starts the person's desktop. Not in setup.nix, where a second definition would conflict with configuration.nix's or override it |
 | Partitions | — | nothing: identity.nix's (`calamares.appleSilicon.identity`) |
 
 setup.nix also sets `calamares.firstBootSetup.applied = true`, which
@@ -141,7 +143,7 @@ left in `/var/lib/sekka-setup`, its completion record aside.
 The `configuration` check (below) proves the account's groups and shell at
 run time equal those the built configuration gives it, so the first rebuild
 changes none of them, and that a whole Sekka installation evaluates with
-setup.nix.
+what setup writes.
 
 ### What the first rebuild with setup.nix builds
 
@@ -149,7 +151,7 @@ setup.nix is written to change as little of the image's system as its
 choices need, so the first rebuild builds small files from what the image
 holds. Evaluated on 7 November 2026 for the product image (identity.nix
 alone against identity.nix with setup.nix, `nix-store -qR` of both systems'
-derivations), a setup.nix choosing English (US), a US keyboard and Tatami
+derivations), a setup choosing English (US), a US keyboard and Tatami
 changes only: the host name's files (`etc-hostname`, `hosts`,
 `string-hosts`, both `avahi-daemon.conf`, `initrd-hostname`, so the
 initrd), `users-groups.json`, `tmpfiles.d` and `nixos-tmpfiles.d`,
@@ -191,7 +193,8 @@ recorded as it's done:
    shadow entry is unset or locked. The credential is deleted once the
    password is recorded.
 4. **Settings.** Host name, time zone, locale, keyboards.
-5. **Configuration.** `/etc/nixos/setup.nix`, atomically (0644).
+5. **Configuration.** The default desktop in `/etc/nixos/configuration.nix`
+   (its mode kept), then `/etc/nixos/setup.nix` (0644), each atomically.
 6. **Verify.** The account and its uid, every part recorded; and, with
    `verifyConfiguration` and an `/etc/nixos/flake.nix`, `nix eval
    --offline` of
@@ -200,7 +203,7 @@ recorded as it's done:
    evaluated system; no secrets), then the staged files are deleted.
 
 The groups and home, the password, the host name, the time zone, the
-locale, the keyboards and setup.nix are each a part: done, checked (the
+locale, the keyboards, the default desktop and setup.nix are each a part: done, checked (the
 value read back), synced (`sync`, since systemd's services don't sync what
 they write), and recorded in `staged.json`. A retry never does a recorded
 part again. A part not yet done changes its setting only from the value
@@ -209,8 +212,8 @@ was changed since, by the person, who may log in once the account has its
 password (a failure offers Log In then), and it stays. So a retry, which
 the login screen sends by itself each time it starts while setup is
 unfinished, never undoes what the owner changed after logging in: a time
-zone, a language, a host name, a group they left, a locked password or an
-edited setup.nix.
+zone, a language, a host name, a group they left, a locked password, a
+default desktop chosen in Yukimi or an edited setup.nix.
 
 Files are written to a new name, synced and renamed, and their directory
 synced. Interrupted anywhere:
@@ -246,6 +249,7 @@ and the helper refuses to stage there.
   imports = lib.optional (builtins.pathExists ./setup.nix) ./setup.nix;
   calamares.firstBootSetup.enable = true;
   calamares.desktops = [ "aizome" "tatami" ];
+  calamares.defaultDesktop = "aizome";
   users.mutableUsers = true;
   # …the platform, boot, file systems and applications, as today.
 }
@@ -256,12 +260,11 @@ and must not set, at normal priority, anything setup.nix sets:
 `services.xserver.xkb.layout`, `calamares.installUser` (setup.nix's would
 conflict; the module gives each a default), nor any account with a
 password, `initialPassword` or autologin. `calamares.defaultDesktop` is
-the exception: setup.nix sets it at `lib.mkOverride 900`, over a
-`lib.mkDefault` and the option's own default (`aizome`), so the image
-needn't name it; a plain value in configuration.nix wins over setup's
-choice, which is how Yukimi changes the default desktop afterwards (its
-`set_string` rewrites only a plain string, or adds one where there is
-none). `/etc/nixos/flake.nix` must name its configuration by the host
+the other way round: configuration.nix names it as a plain string
+(`calamares.defaultDesktop = "aizome";`, or in a `calamares = { … }`
+set), or not at all, and setup and Yukimi both change that string in
+place; a `lib.mkDefault` there is a value neither can change.
+`/etc/nixos/flake.nix` must name its configuration by the host
 name setup chooses, as Yukimi and `nixos-rebuild` look it up, for example
 `nixosConfigurations = { ${c.config.networking.hostName or "sekka"} = c; }`
 with `c = nixpkgs.lib.nixosSystem {…}` (an empty host name before setup
@@ -312,8 +315,11 @@ nix build .#legacyPackages.aarch64-linux.first-boot.vm-test -L
 
 - **Helper** (33): the protocol's bounds and strictness; Genkan's verdicts
   field by field and the whole parse; handoff hints kept and dropped;
-  setup.nix (quoting, no secret, nothing about the disk, the golden
-  example); the transaction stopped at each of its 22 durable points (each
+  setup.nix (quoting, no secret, nothing about the disk or the desktop,
+  the golden example); the default desktop changed in configuration.nix by
+  Yukimi's edit (the golden example, only that string changed, a later
+  edit by Yukimi, one added where none is named, one named by hand left
+  alone, no configuration.nix); the transaction stopped at each of its 22 durable points (each
   part's change and its record among them) and finished as the login
   screen would (a retry, or the helper tidying as it starts once the marker
   is written), with the same account, uid, password, settings and files as
@@ -322,8 +328,9 @@ nix build .#legacyPackages.aarch64-linux.first-boot.vm-test -L
   offered only once the password is set; a retry keeping a changed or
   locked password and refusing an account with another uid; a retry after
   the person logged in keeping their host name, time zone (even one put
-  back as it was), language, groups and setup.nix; a part not yet done
-  never replacing a setting they changed meanwhile; an interrupted status
+  back as it was), language, groups, default desktop and setup.nix; a part
+  not yet done never replacing a setting they changed meanwhile, nor their
+  other edits to configuration.nix; an interrupted status
   saying whether its account can log in; an installation with people never
   set up and untouched; SO_PEERCRED refusal, over a socket pair and a real
   socket; connections side by side; files' modes under the service's 0077
@@ -338,10 +345,11 @@ nix build .#legacyPackages.aarch64-linux.first-boot.vm-test -L
   login screen is always Night).
 - **configuration**: a Sekka installed system (Genkan's modules, Aizome and
   Tatami, the Apple Silicon platform on aarch64) evaluated before and after
-  `test-data/setup.nix`, which is byte for byte what the helper writes
-  (a helper test holds them equal); groups, the shell the helper uses,
-  host name, locales, setup.nix's desktop over the image's default and a
-  plain one (Yukimi's) over setup.nix's, the disk left alone, the system's
+  setup: `test-data/configuration.nix` (the image's default desktop, as it
+  names it), then `configuration.after.nix` with `setup.nix`, each byte
+  for byte what the helper writes (helper tests hold them equal); groups,
+  the shell the helper uses, host name, locales, the default desktop
+  chosen and defined by configuration.nix alone, the disk left alone, the system's
   packages (`system-path`) unchanged, the same glibc locales for every
   offered language, the console keymap following the keyboard, the socket
   and the module's assertions gone once applied (with another login

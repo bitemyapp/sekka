@@ -20,7 +20,8 @@ pub struct Config {
     pub greeter_user: String,
     /// Root-only: the staged setup, its credential and the completion marker.
     pub state_dir: PathBuf,
-    /// Where setup.nix goes, beside the installed flake.
+    /// Where setup.nix goes, beside the installed flake and its
+    /// configuration.nix.
     pub nixos_dir: PathBuf,
     /// The Mac installer's handoff on the EFI system partition.
     pub handoff: PathBuf,
@@ -125,6 +126,11 @@ impl Config {
     }
     pub fn setup_nix(&self) -> PathBuf {
         self.nixos_dir.join("setup.nix")
+    }
+    /// The installed configuration, whose default desktop setup sets where
+    /// Yukimi changes it.
+    pub fn configuration_nix(&self) -> PathBuf {
+        self.nixos_dir.join("configuration.nix")
     }
 }
 

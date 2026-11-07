@@ -5,8 +5,9 @@
 # unprivileged, asks; sekka-setup-helper, a root service only it can reach,
 # makes the account and applies the choices as the running system's state,
 # without building a generation, and writes the same choices to
-# /etc/nixos/setup.nix, which configuration.nix imports, so the first
-# update builds exactly what was chosen.
+# /etc/nixos/setup.nix, which configuration.nix imports (the default
+# desktop to configuration.nix itself, where Yukimi changes it), so the
+# first update builds exactly what was chosen.
 #
 # Every installed system imports this module (installer/genkan/rust/system);
 # it does nothing unless enabled. It sets what makes those choices legal at

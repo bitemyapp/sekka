@@ -11,23 +11,23 @@ use calamares_nixos::config::nix_string as q;
 use crate::transaction::Staged;
 
 /// The configuration for `s`: the account (without a password: NixOS keeps
-/// the one set), its host name, keyboard, desktop and language. Nothing
-/// about the disk: this installation's partitions are identity.nix's
+/// the one set), its host name, keyboard and language. Nothing about the
+/// disk: this installation's partitions are identity.nix's
 /// (`calamares.appleSilicon.identity`), so a setup.nix copied to another
-/// installation mounts nothing of this one.
+/// installation mounts nothing of this one. Nor the default desktop: that
+/// is configuration.nix's, where setup and Yukimi change it (the
+/// transaction's desktop part).
 pub fn setup_nix(s: &Staged) -> String {
     let groups = s.groups_declared.iter().map(|g| q(g)).collect::<Vec<_>>().join(" ");
     format!(
         r#"# Written by Sekka's first-boot setup: what was chosen when this computer
 # was set up. configuration.nix imports it. Change it as you would the rest
-# of the configuration; the next update builds it.
-{{ lib, ... }}:
+# of the configuration; the next update builds it. The default desktop
+# is in configuration.nix.
+{{ ... }}:
 {{
   calamares.firstBootSetup.applied = true;
   calamares.installUser = {name};
-  # Over the image's default, and under a plain value in configuration.nix,
-  # which is where Yukimi changes the default desktop.
-  calamares.defaultDesktop = lib.mkOverride 900 {desktop};
   users.users.{name} = {{
     isNormalUser = true;
     uid = {uid};
@@ -50,7 +50,6 @@ pub fn setup_nix(s: &Staged) -> String {
 }}
 "#,
         name = q(&s.username),
-        desktop = q(&s.desktop),
         uid = s.uid,
         full_name = q(&s.full_name),
         shell = q(&s.shell),
@@ -121,8 +120,8 @@ mod tests {
         assert!(text.contains(r#"extraGroups = [ "networkmanager" "wheel" ];"#));
         assert!(text.contains(r#"shell = "/run/current-system/sw/bin/bash";"#));
         assert!(text.contains(r#"networking.hostName = "analytical";"#));
-        assert!(text.contains(r#"calamares.defaultDesktop = lib.mkOverride 900 "tatami";"#));
-        // The disk is identity.nix's alone.
+        // The default desktop is configuration.nix's, the disk identity.nix's.
+        assert!(!text.contains("defaultDesktop") && !text.contains("tatami"), "{text}");
         assert!(!text.contains("fileSystems") && !text.contains("partuuid") && !text.contains("identity"));
         assert!(!text.to_lowercase().contains("hashedpassword") && !text.contains("$6$"));
     }
