@@ -66,7 +66,12 @@ worked out and wants to know whether to work it out again.
 value)` keeps a value (bytes, under a key of the app's choosing, such as
 `chanoma.crc`) beside the file's size and modified time, and
 `fact(path, key)` returns it only while the file still has both. A file
-that changes, or goes, takes its facts with it.
+that changes, or goes, takes its facts with it. `facts_in(folder, key,
+check)` returns a folder's files' facts by name in one query, where
+`fact` looks each file up (its folders, its volume) and stats it, which
+for thousands of games is most of a start: with `check` each is held to
+its file as `fact` holds it (a stat each); without, as kept, for a look
+at what the index knows that a refresh will follow.
 
 ## Sharing it
 
