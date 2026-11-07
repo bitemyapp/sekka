@@ -151,15 +151,103 @@ let
 
       # What the first rebuilds read beyond the system's own closure: the
       # first generation that names this installation's partitions
-      # (identity.nix) and the owner's choices (setup.nix) change the initrd,
-      # /etc and the system itself, whose build inputs (the initrd's modules,
-      # units and splash, the generic builder) aren't in a system's closure.
-      # Kept from garbage collection by a root in the image
+      # (identity.nix) changes the initrd, /etc and the system itself, and
+      # the owner's choices (setup.nix) more (afterSetup, below), whose build
+      # inputs (the initrd's modules, units and splash, the generic builder,
+      # the tools that write /etc's files, the packages a system's package
+      # list holds but its build of it doesn't keep) aren't in a system's
+      # closure. Kept from garbage collection by a root in the image
       # (/nix/var/nix/gcroots/sekka-offline-rebuild), so they build offline.
       # A derivation's inputs, as a file naming them (stdenv's inputDerivation
       # misses structured attributes, which the initrd uses).
       inputsOf =
         drv: pkgs.writeText "${drv.name}-inputs.json" (builtins.toJSON (removeAttrs drv.drvAttrs [ "name" ]));
+
+      # Systems as first-boot setup leaves them: setup.nix and identity.nix as
+      # render.rs and install_identity.py write them, for languages,
+      # keyboards and default desktops other than the image's. The owner's
+      # account (its shell), host name and choices reach the system's
+      # packages, /etc (the login screen's configuration, the keyboard, the
+      # host name, Tatami's settings), its units and its checks (the
+      # keyboard's validation): the first rebuild after setup rebuilds what
+      # differs from the image's own, with these inputs and other strings.
+      afterSetup =
+        {
+          locale,
+          layout,
+          desktop,
+        }:
+        (nixos.extendModules {
+          modules = [
+            (
+              { lib, ... }:
+              {
+                calamares.appleSilicon.identity = {
+                  root = "63d89be1-72f7-4aff-9679-09cafa7e0c2d";
+                  esp = "910de5ca-7390-4716-9a54-8028916e4d78";
+                };
+                calamares.firstBootSetup.applied = true;
+                calamares.installUser = "ada";
+                calamares.defaultDesktop = lib.mkForce desktop;
+                users.users.ada = {
+                  isNormalUser = true;
+                  uid = 1000;
+                  description = "Ada Lovelace";
+                  extraGroups = [
+                    "networkmanager"
+                    "wheel"
+                  ];
+                };
+                networking.hostName = "analytical";
+                i18n.defaultLocale = locale;
+                services.xserver.xkb.layout = layout;
+                fileSystems."/".device = lib.mkForce "/dev/disk/by-partuuid/63d89be1-72f7-4aff-9679-09cafa7e0c2d";
+                fileSystems."/boot".device = lib.mkForce "/dev/disk/by-partuuid/910de5ca-7390-4716-9a54-8028916e4d78";
+              }
+            )
+          ];
+        }).config;
+      # What a system builds that can change with its configuration, by name.
+      parts =
+        c:
+        {
+          "system-path" = c.system.path;
+        }
+        // lib.mapAttrs' (n: e: lib.nameValuePair "etc ${n}" (if e.enable then e.source else null)) c.environment.etc
+        // lib.mapAttrs' (n: u: lib.nameValuePair "unit ${n}" (u.unit or null)) c.systemd.units
+        // lib.mapAttrs' (n: u: lib.nameValuePair "user unit ${n}" (u.unit or null)) c.systemd.user.units
+        // lib.mapAttrs' (n: u: lib.nameValuePair "initrd unit ${n}" (u.unit or null)) c.boot.initrd.systemd.units
+        // lib.listToAttrs (lib.imap0 (i: d: lib.nameValuePair "check ${toString i}" d) c.system.checks)
+        // lib.optionalAttrs (c.documentation.man.man-db.enable or false) {
+          "man pages" = c.documentation.man.man-db.manualPages;
+        };
+      # The parts a setup's system builds anew: a derivation where the
+      # image's has another or none.
+      rebuiltAfterSetup =
+        c:
+        let
+          own = parts nixos.config;
+        in
+        lib.attrValues (
+          lib.filterAttrs (
+            n: d: lib.isDerivation d && !(lib.isDerivation (own.${n} or null) && own.${n}.drvPath == d.drvPath)
+          ) (parts c)
+        );
+      setups = lib.optionals nixos.config.calamares.firstBootSetup.enable [
+        (afterSetup {
+          locale = "de_DE.UTF-8";
+          layout = "de";
+          desktop = "aizome";
+        })
+        (afterSetup {
+          locale = "ja_JP.UTF-8";
+          layout = "jp";
+          desktop = "tatami";
+        })
+      ];
+      setupInputs = pkgs.writeText "${name}-${variant}-after-setup-inputs.json" (
+        builtins.toJSON (map (d: removeAttrs d.drvAttrs [ "name" ]) (lib.concatMap rebuiltAfterSetup setups))
+      );
       rebuildInputs = pkgs.linkFarm "${name}-${variant}-rebuild-inputs" (
         [
         {
@@ -189,13 +277,29 @@ let
           name = "console-keymap";
           path = inputsOf nixos.config.console.keyMap;
         }
+        ++ lib.optional nixos.config.calamares.firstBootSetup.enable {
+          name = "after-setup";
+          path = setupInputs;
+        }
+      );
+
+      # The seeds, under a garbage-collection root of their own
+      # (/nix/var/nix/gcroots/sekka-offline-sources): no closure the system
+      # keeps holds them, so a collection (Yukimi's Storage page, or Nix
+      # freeing space for a build) would take them, and the next offline
+      # evaluation of /etc/nixos would fail to fetch them again.
+      offlineSources = pkgs.linkFarm "${name}-${variant}-offline-sources" (
+        map (path: {
+          name = builtins.unsafeDiscardStringContext (baseNameOf path);
+          inherit path;
+        }) seeds
       );
 
       storePaths = [
         toplevel
         rebuildInputs
-      ]
-      ++ seeds;
+        offlineSources
+      ];
       closureInfo = pkgs.closureInfo { rootPaths = storePaths; };
       rootImage = pkgs.callPackage "${nixpkgs}/nixos/lib/make-ext4-fs.nix" {
         inherit storePaths;
@@ -207,6 +311,7 @@ let
           chmod 755 ./files/etc ./files/etc/nixos
           chmod 644 ./files/etc/nixos/*
           ln -s ${rebuildInputs} ./files/nix/var/nix/gcroots/sekka-offline-rebuild
+          ln -s ${offlineSources} ./files/nix/var/nix/gcroots/sekka-offline-sources
         '';
       };
 

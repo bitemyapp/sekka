@@ -115,6 +115,13 @@ for f in glob.glob("/sys/firmware/efi/efivars/LoaderDevicePartUUID-*"):
 	n=$(nixq path-info --all | wc -l)
 	check registered-count "$n valid store paths (the image registers $REGISTERED)" test "$n" = "$REGISTERED"
 	journalctl -b -o cat -u sekka-image-first-boot.service | sed 's/^/registration: /'
+	# The sources offline evaluation reads survive a garbage collection
+	# (asked what it would delete; nothing is deleted).
+	dead=$(nix-store --gc --print-dead 2>/dev/null)
+	kept=0
+	for s in $SEEDS; do grep -qx "$s" <<<"$dead" || kept=$((kept + 1)); done
+	check seeds-rooted "a garbage collection would keep $kept of the $(echo "$SEEDS" | wc -w) seeded sources" \
+		test "$kept" = "$(echo "$SEEDS" | wc -w)"
 	# The root filesystem grew into its partition.
 	part=$(blockdev --getsize64 "/dev/disk/by-partuuid/$ROOT_A")
 	fs=$(df -B1 --output=size / | tail -1 | tr -d ' ')
@@ -176,6 +183,16 @@ for f in glob.glob("/sys/firmware/efi/efivars/LoaderDevicePartUUID-*"):
 			"path:/tmp/with-setup#nixosConfigurations.analytical.config.system.build.toplevel" 2>/tmp/eval3.err)
 		tail -n 3 /tmp/eval3.err | sed 's/^/evaluation with setup.nix: /'
 		check setup-evaluates "with setup's sample setup.nix (host analytical) the flake evaluates offline, in $((SECONDS - start))s, to $drv" test -n "$drv"
+		# The first update after setup, offline, for a language and keyboard
+		# other than the image's: everything it rebuilds must be buildable
+		# from what the image holds.
+		sed -i -e 's/"en_GB.UTF-8"/"de_DE.UTF-8"/' -e 's/layout = "gb"/layout = "de"/' /tmp/with-setup/setup.nix
+		grep -E 'defaultLocale|layout' /tmp/with-setup/setup.nix | sed 's/^/setup.nix for the build: /'
+		start=$SECONDS
+		(cd /tmp/with-setup && nixos-rebuild build --flake "path:/tmp/with-setup#analytical" --no-update-lock-file --offline) >/tmp/setup-build.log 2>&1
+		status=$?
+		tail -n 15 /tmp/setup-build.log | sed 's/^/build with setup.nix: /'
+		check setup-builds-offline "with setup.nix for de_DE and de, nixos-rebuild build offline exited $status in $((SECONDS - start))s" test "$status" = 0
 	fi
 	# boot.bin as the image installed it, and its record.
 	check boot-bin-record "m1n1/boot.bin is the record's current copy" python3 -c '

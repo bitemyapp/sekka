@@ -111,6 +111,11 @@ lock gives the image's toplevel exactly, and a no-change rebuild is a no-op.
   flake in an empty chroot store with no network: everything else in the
   lock was never fetched. Nix finds a locked input in the store by its NAR
   hash, so the GitHub-locked Sekka resolves offline to the seeded source.
+  No closure the system keeps holds most of them, so they have a
+  garbage-collection root of their own
+  (`/nix/var/nix/gcroots/sekka-offline-sources`): a collection (Yukimi's
+  Storage page, or Nix freeing space for a build) keeps them. Once the lock
+  has moved, both of the image's roots can be removed.
 
 `mac-image-tests` runs the rendered template and generated lock through
 Genkan's real `Template::parse` (the VM fixture's `validate-template`, as
@@ -122,12 +127,28 @@ and checks that a lock with an extra root input is refused.
 PC fixture.
 
 - **First rebuilds offline.** The first generation that names the
-  installation's partitions (`identity.nix`), and the owner's choices in
-  `setup.nix`, change the initrd, `/etc`, the console keymap and the
-  system itself, whose build inputs (the initrd's modules, units and
-  splash, the keymap's tools, the generic builder) are not in a system's
-  closure. The root image holds them too, under a garbage-collection root
-  (`/nix/var/nix/gcroots/sekka-offline-rebuild`), about 23 MB in all.
+  installation's partitions (`identity.nix`) changes the initrd, `/etc`,
+  the console keymap and the system itself, whose build inputs (the
+  initrd's modules, units and splash, the keymap's tools, the generic
+  builder) are not in a system's closure. The owner's choices in
+  `setup.nix` change more: the account's shell joins the system's
+  packages, and the host name, language, keyboard and default desktop reach
+  `/etc` (the login screen's configuration, the keyboard, Tatami's
+  settings), units and checks (the keyboard's validation). `image.nix`
+  evaluates the system as setup leaves it for two owners (`afterSetup`:
+  `de_DE`/`de` with Aizome, `ja_JP`/`jp` with Tatami), takes every package
+  list, `/etc` file, unit, check and manual index whose derivation differs
+  from the image's, and keeps those derivations' inputs (`setupInputs`):
+  the tools that write `/etc`'s files (json2x, xsltproc), texinfo, the
+  keyboard validator, and packages a package list names but its build
+  doesn't keep. The root image holds all of these under a
+  garbage-collection root (`/nix/var/nix/gcroots/sekka-offline-rebuild`).
+- **One glibc-locales for every language.** glibc's locales are compiled
+  from `i18n.supportedLocales` in its order, and NixOS puts the default
+  locale third, so six of setup's eight languages gave a glibc-locales that
+  no cache has and the image can't build. With first-boot setup,
+  `image-system.nix` lists every offered language first, so every choice
+  gives the image's own glibc-locales; a language added later is appended.
 
 ## Per-install identity
 
@@ -490,7 +511,7 @@ The checks in each boot (`vm/guest-checks.sh`):
 
 | Boot | Checks |
 | --- | --- |
-| first (A, B and D) | systemd `running`, no failed units, graphical target and display manager active; the command line names A; `/` and `/boot` are A's partitions by GPT UUID; `by-sekka` links are A's; B's partitions present and unmounted; the product label and UUID on A and B only; the developer label, UUID and serial on D's partitions only, which their `by-label` and `by-uuid` links name, and D unmounted; store registered (path count equals the registration); root grew; stand-in firmware on its tmpfs; `identity.nix` written; shipped lock unchanged; the shipped flake evaluates offline to the image's toplevel; `nixos-rebuild build` offline gives it; the flake with `identity.nix` evaluates; no account with a login shell, root locked; setup waiting and the flake with setup's sample `setup.nix` evaluating under its host name (when setup is in the image); `boot.bin` matches its record |
+| first (A, B and D) | systemd `running`, no failed units, graphical target and display manager active; the command line names A; `/` and `/boot` are A's partitions by GPT UUID; `by-sekka` links are A's; B's partitions present and unmounted; the product label and UUID on A and B only; the developer label, UUID and serial on D's partitions only, which their `by-label` and `by-uuid` links name, and D unmounted; store registered (path count equals the registration); root grew; stand-in firmware on its tmpfs; `identity.nix` written; shipped lock unchanged; the shipped flake evaluates offline to the image's toplevel; `nixos-rebuild build` offline gives it; the flake with `identity.nix` evaluates; no account with a login shell, root locked; setup waiting, the flake with setup's sample `setup.nix` evaluating under its host name, and, with that `setup.nix` changed to `de_DE` and `de`, `nixos-rebuild build` offline (when setup is in the image); a garbage collection would keep every seeded source; `boot.bin` matches its record and `sekka-boot-bin.service` marked it booted |
 | second (A) | registration not repeated; `identity.nix` checked, not rewritten; `boot_bin.py` replace, no-op and restore on the VM's FAT filesystem (a scratch directory, not the real `boot.bin`); an update (a module imported from `configuration.nix`) built offline with `nixos-rebuild boot`; every entry filled, naming A, firmware first |
 | updated (A) | generation 2 booted; the update applied; mounts by partition UUID; no first-start identity service; `nixos-rebuild boot --rollback` |
 | rolled-back (A) | generation 1 booted again, the update gone, `by-sekka` mounts |

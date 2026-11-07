@@ -442,6 +442,7 @@ INSTALLATION=$INSTALLATION
 TOPLEVEL=$(field system.toplevel)
 LOCK_SHA256=$(field source.lock | sed 's/^sha256://')
 REGISTERED=$(field root.registered_paths)
+SEEDS="$("$python" -c 'import json, sys; print(" ".join(json.load(open(sys.argv[1]))["system"]["seeded_sources"]))' "$manifest")"
 ROOT_IMAGE_BYTES=$root_bytes
 VM_ARGS="$vm_args"
 EOF
