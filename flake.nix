@@ -78,6 +78,28 @@
       tools = import ./nix/tools.nix { inherit pkgs; };
       pushCache = import ./nix/push-cache.nix { inherit pkgs; };
       publishNightly = import ./nix/publish-nightly.nix { inherit pkgs; };
+      # Sekka Installer for Mac's parts that Linux builds
+      # (installer/genkan/macos): the engine archive the app carries, its
+      # icon, sekka-mac-tool, the workspace source and the tests. The Mac
+      # build (packaging/build-app.sh) takes the archive and the icon.
+      macInstaller =
+        s:
+        let
+          pkgs = nixpkgs.legacyPackages.${s};
+          installer = import ./installer/genkan/macos {
+            inherit pkgs;
+            appIcon = ./docs/brand/logos/sekka-app-icon.svg;
+          };
+          engine = import ./installer/genkan/macos/engine { inherit pkgs; };
+        in
+        {
+          mac-engine = engine.archive;
+          mac-engine-tests = engine.tests;
+          mac-installer-checks = installer.checks;
+          mac-installer-icon = installer.icon;
+          mac-installer-tool = installer.tool;
+          mac-installer-source = installer.source;
+        };
       kakehashi = import ./nix/kakehashi.nix { inherit pkgs; };
       site = import ./nix/site.nix {
         inherit pkgs;
@@ -327,15 +349,17 @@
         meta.description = "Update an installed Sekka system";
       };
       # Apple Silicon Macs (nix/apple-silicon).
-      packages.aarch64-linux = import ./nix/apple-silicon {
-        inherit
-          inputs
-          nixpkgs
-          hyprlandOverlay
-          self
-          ;
-        revision = self.shortRev or self.dirtyShortRev or "unknown";
-      };
+      packages.aarch64-linux =
+        import ./nix/apple-silicon {
+          inherit
+            inputs
+            nixpkgs
+            hyprlandOverlay
+            self
+            ;
+          revision = self.shortRev or self.dirtyShortRev or "unknown";
+        }
+        // macInstaller "aarch64-linux";
       checks.${system} = {
         pipewire-packages = import ./nix/pipewire-packages-test.nix {
           inherit
@@ -885,6 +909,11 @@
           } > /dev/null
           touch $out
         '';
+        # Sekka Installer for Mac: the Rust workspace's and the packaging
+        # scripts' tests, and the engine adapter's against a fake Mac. Nothing
+        # in them is macOS-specific.
+        mac-installer = (macInstaller system).mac-installer-checks;
+        mac-engine = (macInstaller system).mac-engine-tests;
         # The Mac images' installed flake and lock (nix/apple-silicon), through
         # the same backend parser.
         apple-installed-template =

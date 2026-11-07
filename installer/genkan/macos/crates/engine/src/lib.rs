@@ -428,7 +428,7 @@ mod tests {
         fs::write(src.join("transcript"), lines).unwrap();
         // The arguments must be exactly the fixed ones, and the environment
         // must be clear.
-        let script = "#!/bin/sh\n[ \"$1\" = -I ] && [ \"${2##*/}\" = __main__.py ] && [ \"$3\" = inspect ] && [ $# -eq 3 ] || exit 3\n[ -z \"$HOME\" ] || exit 4\nexec cat transcript\n";
+        let script = "#!/bin/sh\n[ \"$1\" = -I ] && [ \"${2##*/}\" = __main__.py ] && [ \"$3\" = inspect ] && [ $# -eq 3 ] || exit 3\n[ -z \"$HOME\" ] || exit 4\nwhile IFS= read -r l; do printf '%s\\n' \"$l\"; done < transcript\n";
         fs::write(src.join("bin/python3"), script).unwrap();
         fs::set_permissions(src.join("bin/python3"), fs::Permissions::from_mode(0o755)).unwrap();
         fs::create_dir_all(src.join("sekka_engine")).unwrap();

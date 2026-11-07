@@ -23,6 +23,8 @@ let
       ./crates
       ./packaging
       (lib.fileset.maybeMissing ./engine/source-lock.json)
+      # The contract's tests check the engine's recorded transcripts.
+      ./engine/tests/vectors
     ];
   };
   common = {

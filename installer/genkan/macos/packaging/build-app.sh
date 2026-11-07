@@ -20,7 +20,7 @@
 # runtime_adhoc, and nothing else is. The engine archive and icon come from the
 # root flake:
 #
-#   nix build .#packages.aarch64-linux.mac-engine .#packages.aarch64-darwin.mac-installer-icon
+#   nix build .#packages.aarch64-linux.mac-engine .#packages.aarch64-linux.mac-installer-icon
 #
 # Output: DIR/Sekka Installer.app, DIR/recovery.zip (the Recovery app, a
 # release artifact of its own) and DIR/build.json (what was built, from what).
