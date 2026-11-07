@@ -54,9 +54,9 @@ let
       d = identities.developer;
       p = identities.product;
     in
-    assert lib.assertMsg (
-      p.root_label != d.root_label && p.root_uuid != d.root_uuid && p.esp_volume_id == null
-    ) "nix/apple-silicon/identities.json: the product image must share no identity with the developer image's";
+    assert lib.assertMsg
+      (p.root_label != d.root_label && p.root_uuid != d.root_uuid && p.esp_volume_id == null)
+      "nix/apple-silicon/identities.json: the product image must share no identity with the developer image's";
     identities;
   # The installer's ESP for UEFI-only installs is 500 MB; NixOS keeps a
   # kernel and initrd per generation there, so this one is larger
@@ -95,15 +95,41 @@ let
     [ "nixpkgs" ]
     [ "applications" ]
     [ "determinate" ]
-    [ "determinate" "nixpkgs" ]
-    [ "determinate" "determinate-nixd-aarch64-linux" ]
-    [ "determinate" "nix" ]
-    [ "determinate" "nix" "nixpkgs" ]
-    [ "determinate" "nix" "bdwgc" ]
+    [
+      "determinate"
+      "nixpkgs"
+    ]
+    [
+      "determinate"
+      "determinate-nixd-aarch64-linux"
+    ]
+    [
+      "determinate"
+      "nix"
+    ]
+    [
+      "determinate"
+      "nix"
+      "nixpkgs"
+    ]
+    [
+      "determinate"
+      "nix"
+      "bdwgc"
+    ]
     [ "fh" ]
-    [ "fh" "nixpkgs" ]
-    [ "fh" "crane" ]
-    [ "fh" "fenix" ]
+    [
+      "fh"
+      "nixpkgs"
+    ]
+    [
+      "fh"
+      "crane"
+    ]
+    [
+      "fh"
+      "fenix"
+    ]
   ];
   seedOf =
     path:
@@ -161,7 +187,8 @@ let
       # A derivation's inputs, as a file naming them (stdenv's inputDerivation
       # misses structured attributes, which the initrd uses).
       inputsOf =
-        drv: pkgs.writeText "${drv.name}-inputs.json" (builtins.toJSON (removeAttrs drv.drvAttrs [ "name" ]));
+        drv:
+        pkgs.writeText "${drv.name}-inputs.json" (builtins.toJSON (removeAttrs drv.drvAttrs [ "name" ]));
 
       # configuration.nix as first-boot setup leaves it for `desktop`: its
       # default desktop changed in place, setup's one edit of it (Yukimi's own
@@ -177,9 +204,8 @@ let
           default = literal nixos.config.calamares.defaultDesktop;
           once = text: lib.length (lib.splitString text shipped) == 2;
         in
-        assert lib.assertMsg (
-          once default && once "./imports.nix"
-        ) "${variant}/configuration.nix must name its default desktop once, as ${default}, and import ./imports.nix once";
+        assert lib.assertMsg (once default && once "./imports.nix")
+          "${variant}/configuration.nix must name its default desktop once, as ${default}, and import ./imports.nix once";
         builtins.toFile "configuration.nix" (
           builtins.replaceStrings [ default "./imports.nix" ] [ (literal desktop) "" ] shipped
         );
@@ -239,10 +265,14 @@ let
         {
           "system-path" = c.system.path;
         }
-        // lib.mapAttrs' (n: e: lib.nameValuePair "etc ${n}" (if e.enable then e.source else null)) c.environment.etc
+        // lib.mapAttrs' (
+          n: e: lib.nameValuePair "etc ${n}" (if e.enable then e.source else null)
+        ) c.environment.etc
         // lib.mapAttrs' (n: u: lib.nameValuePair "unit ${n}" (u.unit or null)) c.systemd.units
         // lib.mapAttrs' (n: u: lib.nameValuePair "user unit ${n}" (u.unit or null)) c.systemd.user.units
-        // lib.mapAttrs' (n: u: lib.nameValuePair "initrd unit ${n}" (u.unit or null)) c.boot.initrd.systemd.units
+        // lib.mapAttrs' (
+          n: u: lib.nameValuePair "initrd unit ${n}" (u.unit or null)
+        ) c.boot.initrd.systemd.units
         // lib.listToAttrs (lib.imap0 (i: d: lib.nameValuePair "check ${toString i}" d) c.system.checks)
         // lib.optionalAttrs (c.documentation.man.man-db.enable or false) {
           "man pages" = c.documentation.man.man-db.manualPages;
@@ -281,40 +311,42 @@ let
           in
           # The chosen desktop, defined once: by configuration.nix as setup
           # edits it, and by nothing else.
-          assert lib.assertMsg (
-            map (d: d.value) e.options.calamares.defaultDesktop.definitionsWithLocations == [ desktop ]
-          ) "${variant}: after setup chose ${desktop}, configuration.nix alone must name it as the default desktop";
+          assert lib.assertMsg
+            (map (d: d.value) e.options.calamares.defaultDesktop.definitionsWithLocations == [ desktop ])
+            "${variant}: after setup chose ${desktop}, configuration.nix alone must name it as the default desktop";
           e.config
         ) nixos.config.calamares.desktops
       );
       setupInputs = pkgs.writeText "${name}-${variant}-after-setup-inputs.json" (
-        builtins.toJSON (map (d: removeAttrs d.drvAttrs [ "name" ]) (lib.concatMap rebuiltAfterSetup setups))
+        builtins.toJSON (
+          map (d: removeAttrs d.drvAttrs [ "name" ]) (lib.concatMap rebuiltAfterSetup setups)
+        )
       );
       rebuildInputs = pkgs.linkFarm "${name}-${variant}-rebuild-inputs" (
         [
-        {
-          name = "stdenv";
-          path = pkgs.stdenvNoCC;
-        }
-        {
-          # The initrd's units are linked together with it.
-          name = "lndir";
-          path = pkgs.lndir;
-        }
-        {
-          name = "initrd";
-          path = inputsOf nixos.config.system.build.initialRamdisk;
-        }
-        {
-          name = "etc";
-          path = inputsOf nixos.config.system.build.etc;
-        }
-        {
-          name = "system";
-          path = inputsOf toplevel;
-        }
-      ]
-      # The console's keymap, made from the keyboard layout setup chooses.
+          {
+            name = "stdenv";
+            path = pkgs.stdenvNoCC;
+          }
+          {
+            # The initrd's units are linked together with it.
+            name = "lndir";
+            path = pkgs.lndir;
+          }
+          {
+            name = "initrd";
+            path = inputsOf nixos.config.system.build.initialRamdisk;
+          }
+          {
+            name = "etc";
+            path = inputsOf nixos.config.system.build.etc;
+          }
+          {
+            name = "system";
+            path = inputsOf toplevel;
+          }
+        ]
+        # The console's keymap, made from the keyboard layout setup chooses.
         ++ lib.optional (lib.isDerivation nixos.config.console.keyMap) {
           name = "console-keymap";
           path = inputsOf nixos.config.console.keyMap;
@@ -329,13 +361,17 @@ let
       # (/nix/var/nix/gcroots/sekka-offline-sources): no closure the system
       # keeps holds them, so a collection (Yukimi's Storage page, or Nix
       # freeing space for a build) would take them, and the next offline
-      # evaluation of /etc/nixos would fail to fetch them again.
-      offlineSources = pkgs.linkFarm "${name}-${variant}-offline-sources" (
-        map (path: {
-          name = builtins.unsafeDiscardStringContext (baseNameOf path);
-          inherit path;
-        }) seeds
-      );
+      # evaluation of /etc/nixos would fail to fetch them again. Two inputs
+      # with the same contents are one store path once Nix's lazy trees turn
+      # them into store paths, which lib.unique can't see while evaluating,
+      # so each is linked once here.
+      offlineSources = pkgs.runCommand "${name}-${variant}-offline-sources" { } ''
+        mkdir $out
+        for source in ${lib.escapeShellArgs seeds}; do
+          link=$out/$(basename "$source")
+          [ -e "$link" ] || ln -s "$source" "$link"
+        done
+      '';
 
       storePaths = [
         toplevel
@@ -525,7 +561,10 @@ let
         cp ${product.imageCheck} $out/checks/image.txt
         python3 ${./release/manifest.py} \
           --release ${name} --profile j514s --variant product \
-          --revision ${self.rev or (lib.removeSuffix "-dirty" (self.dirtyRev or "0000000000000000000000000000000000000000"))} \
+          --revision ${
+            self.rev
+              or (lib.removeSuffix "-dirty" (self.dirtyRev or "0000000000000000000000000000000000000000"))
+          } \
           --clean ${if self ? rev then "true" else "false"} \
           --nar-hash ${self.narHash} --update-ref ${installed.ref} \
           --lock ${lockFile} --toplevel ${product.toplevel} --closure-info ${product.closureInfo} \
