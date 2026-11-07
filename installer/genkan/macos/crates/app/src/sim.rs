@@ -557,7 +557,33 @@ impl Environment for Simulation {
     }
     fn inspect(&self) -> Result<Inspection, String> {
         self.wait(900);
-        Ok(sim_inspection(self.scenario, self.state.lock().unwrap().downloaded))
+        let (downloaded, begun) = {
+            let s = self.state.lock().unwrap();
+            (s.downloaded, s.installation.is_some())
+        };
+        let mut i = sim_inspection(self.scenario, downloaded);
+        // A run begun here names itself on the disk once the ESP's stage
+        // writes its handoff, and whole, as far as a look without the boot
+        // policy goes, once Recovery's configuration is written too.
+        let done = |stage| {
+            let records = self.current().records;
+            records.iter().any(|r| matches!(r.event, Event::Completed { stage: s, .. } if s == stage))
+        };
+        if begun && done(Stage::Esp) && !i.installations.iter().any(|x| x.installation_id == Some(SIM_ID)) {
+            let (installation, mut issue) = sekka(
+                if done(Stage::Recovery) { InstallationState::Unknown } else { InstallationState::Partial },
+                Some(SIM_ID),
+            );
+            if installation.state == InstallationState::Partial {
+                issue.code = IssueCode::PartialInstallation;
+                issue.detail = "Sekka's installation on Sekka is incomplete: some of its parts are missing. The installer won't repair or remove it yet; nothing will be changed."
+                    .parse()
+                    .unwrap();
+            }
+            i.installations.push(installation);
+            i.issues.push(issue);
+        }
+        Ok(i)
     }
     fn bundled_engine(&self) -> Result<Digest, String> {
         Ok(samples::catalog().releases[0].artifacts.engine.digest)

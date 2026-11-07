@@ -396,6 +396,11 @@ fn an_interrupted_write_is_never_retried_by_the_app() {
     j.send(Msg::CopyDiagnostics);
     assert!(j.copied[0].contains("Simulated diagnostics"));
     assert!(!j.copied[0].contains(" chris "));
+    // Checking again finds it on the disk, in part, and it stays in the
+    // way: the helper's look leaves its record as it is.
+    j.send(Msg::CheckAgain);
+    assert_eq!(j.model.found(), Some(InstallationState::Partial));
+    assert_eq!(j.model.screen, Screen::Stopped);
 }
 
 #[test]
