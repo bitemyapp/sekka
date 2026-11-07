@@ -14,9 +14,17 @@ over long benchmark matrices. Builds, tests and measurements go to
 ## State
 
 - `feat/buck2-shared-builds` (PR #291, draft) is pushed with the lost-writes
-  and contention fixes, the paused-gateway restart (`251253d7`) and stale
-  cleaning (`1356dfba`). Its CI trust check passes; the build job is
-  skipped.
+  and contention fixes, the paused-gateway restart (`251253d7`), stale
+  cleaning (`1356dfba`) and a ByteStream upload fix (`ea3a1a5d`). Its CI
+  trust check passes; the build job is skipped.
+- Independent reviews (2026-11-06) read every #291 engine patch in the
+  storage and upload paths, and the single-CAS code:
+  - The content-store patches had no confirmed defects. One cliff is now
+    documented: an output larger than the store's byte bound fails to
+    materialize while the store is on.
+  - The upload paths had one: a truncated large output was reported
+    uploaded without being sent. That is fixed in `ea3a1a5d`, with a test.
+  - The single-CAS review's five findings are fixed in `bdc406ca`.
 - `feat/buck2-single-cas` is rebased onto it and pushed; it has no PR yet.
   It makes NativeLink's CAS the only store on the CAS host:
   - hits are cloned from it (`local-cas-downloads.patch`);
