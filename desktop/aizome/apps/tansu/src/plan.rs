@@ -22,8 +22,8 @@
 
 use aizome_sys::Task;
 use aizome_sys::disks::{
-    Change, Confirm, CreatePartition, DeletePartition, DisksState, Encryption, Erase, Format, FormatSpec, Holds,
-    Identity, NewPartitionTable, PartitionEntry, Relabel, Repair, Resize, TableKind, format_size,
+    Confirm, CreatePartition, DeletePartition, DisksState, Encryption, Erase, Format, FormatSpec, Holds, Identity,
+    NewPartitionTable, PartitionEntry, Relabel, Repair, Resize, TableKind, format_size,
 };
 
 use crate::backend::Backend;
@@ -140,19 +140,19 @@ pub enum Agreement {
     Repair(Confirm<Repair, Queued>),
 }
 
-impl OpKind {
-    /// What the operation holds its device to, from queueing it to running
-    /// it: what the confirmations of its steps hold it to ([`Op::agreement`]).
-    pub fn holds(&self) -> Holds {
+impl Agreement {
+    /// Whether the device as `state` has it is still the one agreed to, as
+    /// the step's check would find it, without spending the agreement.
+    pub fn matches(&self, state: &DisksState) -> bool {
         match self {
-            OpKind::NewTable { .. } => NewPartitionTable::HOLDS,
-            OpKind::Create(_) => CreatePartition::HOLDS,
-            OpKind::Delete => DeletePartition::HOLDS,
-            OpKind::Format(_) => Format::HOLDS,
-            OpKind::Resize { .. } => Resize::HOLDS,
-            OpKind::Label { .. } => Relabel::HOLDS,
-            OpKind::Flags { .. } => PartitionEntry::HOLDS,
-            OpKind::Repair => Repair::HOLDS,
+            Agreement::NewTable(c) => c.matches(state),
+            Agreement::Create(c) => c.matches(state),
+            Agreement::Delete(c) => c.matches(state),
+            Agreement::Format(c) => c.matches(state),
+            Agreement::Resize(c) => c.matches(state),
+            Agreement::Label(c) => c.matches(state),
+            Agreement::Flags(c) => c.matches(state),
+            Agreement::Repair(c) => c.matches(state),
         }
     }
 }
@@ -196,9 +196,12 @@ impl Op {
         &self.seen
     }
 
-    /// Whether the device it acts on is still the one it was queued for.
+    /// Whether the device it acts on is still the one it was queued for,
+    /// held as its steps' confirmations hold it ([`agreement`](Self::agreement)):
+    /// a resize's partition also at the size it was queued at or the one it
+    /// goes to.
     pub fn still_there(&self, state: &DisksState) -> bool {
-        state.identity(&self.target).is_some_and(|now| self.seen.same(&now, self.kind.holds()))
+        self.agreement().matches(state)
     }
 
     /// The confirmation for a step of it, made now, of its device as it was
@@ -259,7 +262,7 @@ impl Op {
             OpKind::Create(_) => Agreement::Create(Confirm::new(seen(), Queued(()))),
             OpKind::Delete => Agreement::Delete(Confirm::new(seen(), Queued(()))),
             OpKind::Format(_) => Agreement::Format(Confirm::new(seen(), Queued(()))),
-            OpKind::Resize { .. } => Agreement::Resize(Confirm::new(seen(), Queued(()))),
+            OpKind::Resize { from, to } => Agreement::Resize(Confirm::resize(seen(), from, to, Queued(()))),
             OpKind::Label { .. } => Agreement::Label(Confirm::new(seen(), Queued(()))),
             OpKind::Flags { .. } => Agreement::Flags(Confirm::new(seen(), Queued(()))),
             OpKind::Repair => Agreement::Repair(Confirm::new(seen(), Queued(()))),
@@ -909,7 +912,8 @@ impl Plan {
 
     /// Drop operations whose disk or device is gone (unplugged, detached)
     /// or isn't the one they were queued for (another stick at the same
-    /// names, another tool's new filesystem): the words for those dropped.
+    /// names, another tool's new filesystem, or its resize of a partition
+    /// with a resize pending): the words for those dropped.
     pub fn prune(&mut self, state: &DisksState) -> Vec<String> {
         let mut dropped = Vec::new();
         self.ops.retain(|o| {
