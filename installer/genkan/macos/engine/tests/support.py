@@ -1408,7 +1408,9 @@ class Channel:
 
 def run_engine(mode, mac, asahi, host, workdir, plan=None, release=None, password=PASSWORD, owner=OWNER, installation="1f7d9c62-4a1b-4c8e-9d3f-2b6a8e0c5d47", channel=None, privileged=True, restore=None, esp_inventory=None, inspect_owner=None):
     """One run of the engine; an inspection names `inspect_owner` (with
-    `password`), as the helper's before an installation does, if given."""
+    `password`), as the helper's before an installation does, if given.
+    A run that is stopped leaves `channel.stop_limit`: the seconds its
+    cleanup had left of STOP_LIMIT, then cancelled here."""
     from sekka_engine.engine import Engine
 
     channel = channel or Channel(mac)
@@ -1429,6 +1431,8 @@ def run_engine(mode, mac, asahi, host, workdir, plan=None, release=None, passwor
     quiet = io.StringIO()  # Asahi's progress printing; a real run sends it to stderr
     # SIGTERM stops it as it does a real run, which raises Terminated here.
     previous = engine.handle_sigterm()
+    previous_alarm = signal.getsignal(signal.SIGALRM)
+    channel.stop_limit = None
     try:
         with asahi_patches(asahi, mac, restore_zip=restore if restore is not None else make_restore_zip(), served=served), contextlib.redirect_stdout(quiet), warnings.catch_warnings():
             # Asahi's modules leave plist files for the garbage collector.
@@ -1443,6 +1447,9 @@ def run_engine(mode, mac, asahi, host, workdir, plan=None, release=None, passwor
                 outcome = engine.run_execute(plan_bytes, release["dir"], installation, owner)
     finally:
         signal.signal(signal.SIGTERM, previous)
+        # A stopped run's time limit, which would end this process too.
+        channel.stop_limit = signal.alarm(0) or None
+        signal.signal(signal.SIGALRM, previous_alarm)
     return outcome, channel
 
 

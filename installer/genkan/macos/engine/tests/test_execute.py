@@ -7,7 +7,10 @@ import logging
 import os
 import plistlib
 import signal
+import subprocess
 import sys
+import textwrap
+import time
 import unittest
 
 import scenarios
@@ -15,7 +18,7 @@ import support as S
 from sekka_engine import canonical
 from sekka_engine import contract as c
 from sekka_engine.asahi import View
-from sekka_engine.engine import Terminated
+from sekka_engine.engine import STOP_LIMIT, Terminated
 
 logging.disable(logging.CRITICAL)
 
@@ -467,6 +470,8 @@ class ExecuteTests(unittest.TestCase):
         self.assertNotIn("failure", run.types())
         self.assertEqual(run.mac.mounted_now(), [])
         self.assertEqual(run.mac.state_digest(), run.state_before)
+        # The cleanup had a time limit (test_a_cleanup_that_never_ends_is_ended).
+        self.assertTrue(run.channel.stop_limit and run.channel.stop_limit <= STOP_LIMIT, run.channel.stop_limit)
 
     def test_a_stop_asked_while_the_disk_changes_waits_for_the_stage(self):
         """SIGTERM while the container is being resized interrupts nothing:
@@ -488,6 +493,46 @@ class ExecuteTests(unittest.TestCase):
         self.assertEqual(run.mac.ordered()[1].size, run.plan["actions"][0]["to"])
         self.assertEqual(run.mac.mounted_now(), [])
         self.assertFalse(os.path.exists(run.channel.engine.workdir))
+        self.assertTrue(run.channel.stop_limit and run.channel.stop_limit <= STOP_LIMIT, run.channel.stop_limit)
+
+    def test_a_cleanup_that_never_ends_is_ended(self):
+        """A cancel whose cleanup is stuck on a tool that never answers (the
+        diskutil that unmounts, held up by what held the run up) still ends
+        the engine, STOP_LIMIT seconds after it was asked, by a signal
+        Python doesn't handle; the helper then reads the end of the
+        transcript. Here the limit is a second."""
+        code = textwrap.dedent(
+            f"""
+            import os, signal, subprocess, sys
+            sys.path.insert(0, {S.ENGINE!r})
+            from sekka_engine import engine as E
+            E.STOP_LIMIT = 1
+            e = E.Engine(host=None, asahi=None, profile_bytes=b"", out=None, adapter="", privileged=False)
+            e.handle_sigterm()
+            try:
+                os.kill(os.getpid(), signal.SIGTERM)
+            finally:
+                # As MacHost runs a tool, its output captured.
+                tool = subprocess.Popen(
+                    [sys.executable, "-c", "import time; time.sleep(60)"],
+                    stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True,
+                )
+                print(tool.pid, flush=True)
+                tool.communicate()
+            """
+        )
+        started = time.monotonic()
+        p = subprocess.run([sys.executable, "-I", "-c", code], stdin=subprocess.DEVNULL, capture_output=True, timeout=60)
+        took = time.monotonic() - started
+        try:
+            self.assertEqual(p.returncode, -signal.SIGALRM, p.stderr.decode()[-2000:])
+            self.assertLess(took, 20)
+        finally:
+            for pid in p.stdout.split():
+                try:
+                    os.kill(int(pid), signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
 
     def test_a_cancel_while_the_mac_is_looked_at_unmounts_what_it_mounted(self):
         """SIGTERM while a view of the Mac is still being built, as its

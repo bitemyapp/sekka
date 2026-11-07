@@ -83,14 +83,17 @@ of that run's Esp checkpoint from the journal, and only that stage (below).
   failed `completion`, and the stage never starts.
 - **Exit status.** 0 after `inspected` or `waiting-for-recovery`, 1 after
   `failed`, 2 for a usage error (nothing is written to standard output),
-  143 when stopped by SIGTERM.
+  143 when stopped by SIGTERM (or ended by SIGALRM, below).
 - **SIGTERM.** The helper's Cancel and its inspection's time limit send it.
   Outside a stage that changes the disk the engine stops where it is,
   through the run's own cleanup: what it mounted is unmounted and its
   working folder, with Apple's files in it, is deleted; nothing more is
-  written to the transcript. During such a stage nothing is interrupted
-  (Apple's tools are never stopped part way): the stage finishes and no
-  other starts.
+  written to the transcript. That cleanup has 30 seconds (`STOP_LIMIT`):
+  it unmounts through `diskutil`, which may be stuck on what the run was
+  stuck on, so after that SIGALRM, or a second SIGTERM, ends the engine at
+  once, wherever it is, and a Cancel or the time limit always ends it.
+  During such a stage nothing is interrupted (Apple's tools are never
+  stopped part way): the stage finishes and no other starts.
 - **Commands.** Every command, the adapter's and Asahi's, goes through one
   `Host`: only `bless bputil chflags diskutil fdesetup hdiutil ioreg log mount
   newfs_msdos nvram pmset scutil sync sysctl tar xattr`, found only in the

@@ -293,7 +293,9 @@ pub trait EngineProcess: Send {
     /// killed mid-operation. The engine stops through its own cleanup,
     /// unmounting what it mounted and deleting its working folder, and
     /// writes nothing more (and if a stage that changes the disk is running
-    /// after all, it lets that stage finish and starts no other).
+    /// after all, it lets that stage finish and starts no other). The
+    /// cleanup has 30 seconds, after which the engine ends wherever it is,
+    /// so the transcript always ends.
     fn terminator(&self) -> Box<dyn FnMut() + Send>;
     /// Wait for it to exit; whether it exited successfully.
     fn wait(&mut self) -> io::Result<bool>;

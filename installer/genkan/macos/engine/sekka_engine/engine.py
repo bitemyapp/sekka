@@ -50,6 +50,11 @@ OWNER = re.compile(r"[A-Za-z0-9_][A-Za-z0-9._-]{0,254}\Z")
 # macOS's own bookkeeping on a mounted FAT volume, not part of the ESP.
 MACOS_BOOKKEEPING = (".fseventsd", ".Spotlight-V100", ".Trashes", ".TemporaryItems")
 LAYOUT_STAGES = ("shrink", "stub-partition", "partitions")
+# How long the run's own cleanup may take once it is asked to stop. It
+# unmounts through diskutil, which may be stuck on whatever the run was
+# stuck on; past this the engine ends where it is, so a Cancel or the
+# inspection's time limit always ends it.
+STOP_LIMIT = 30
 
 
 class Refusal(Exception):
@@ -68,7 +73,7 @@ class Terminated(BaseException):
     run is, so that its own cleanup (unmounting what it mounted, deleting
     its working folder and Apple's files in it) runs before it exits. Not an
     Exception: nothing that reports a stage's errors catches it, and nothing
-    more is written to the transcript."""
+    more is written to the transcript. The cleanup has STOP_LIMIT seconds."""
 
 
 class StageFailure(Exception):
@@ -189,8 +194,16 @@ class Engine:
             log.warning("asked to stop during the %s stage; stopping once it ends", self.stage)
             self.stop_asked = True
             return
-        # A second request while cleaning up stops at once.
+        self.stop()
+
+    def stop(self):
+        """Raise Terminated, with STOP_LIMIT seconds for the cleanup on the
+        way out. A second SIGTERM then, or SIGALRM once they pass, ends the
+        process at once, wherever it is: neither is handled in Python, so
+        nothing the cleanup waits for can hold it."""
         signal.signal(signal.SIGTERM, signal.SIG_DFL)
+        signal.signal(signal.SIGALRM, signal.SIG_DFL)
+        signal.alarm(STOP_LIMIT)
         raise Terminated()
 
     # inspect -----------------------------------------------------------------
@@ -277,7 +290,7 @@ class Engine:
         for stage in stages:
             if self.stop_asked:
                 # Asked during the last stage: nothing more starts.
-                raise Terminated()
+                self.stop()
             seq = self.t.intent(stage, self.plan_digest)
             try:
                 self.t.wait_ack(seq)
