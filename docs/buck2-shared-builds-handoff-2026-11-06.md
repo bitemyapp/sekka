@@ -14,7 +14,9 @@ over long benchmark matrices. Builds, tests and measurements go to
 ## State
 
 - `feat/buck2-shared-builds` (PR #291, draft) is pushed with the lost-writes
-  and contention fixes and the paused-gateway restart (`251253d7`).
+  and contention fixes, the paused-gateway restart (`251253d7`) and stale
+  cleaning (`1356dfba`). Its CI trust check passes; the build job is
+  skipped.
 - `feat/buck2-single-cas` is rebased onto it and pushed; it has no PR yet.
   It makes NativeLink's CAS the only store on the CAS host:
   - hits are cloned from it (`local-cas-downloads.patch`);
@@ -30,9 +32,10 @@ over long benchmark matrices. Builds, tests and measurements go to
   - the engine's index of the CAS directory rescans outside its lock, and
     misses wait for a scan in progress (`4f41ec88`);
   - Buck2's daily stale cleaning is on in `.buckconfig` (7 days, or 12
-    hours under 10% free), with the deferred write actions it requires. An
-    edit's superseded content-based outputs otherwise stayed in buck-out
-    for good.
+    hours under 10% free), with the deferred write actions it requires. It
+    landed on PR #291. An edit's superseded content-based outputs otherwise
+    stayed in buck-out for good. Cleaned artifacts come back from a cache,
+    or are rebuilt without one.
 - `build-service autosize` sizes the CAS to free disk space above a floor,
   and `dedupe` shares the CAS with a content store. `autosize` waits for an
   idle service before resizing, unless the disk is under half its floor.
