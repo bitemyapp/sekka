@@ -1,0 +1,169 @@
+Subject: [PATCH] Fail a ByteStream upload whose source is empty but its digest is not
+
+Base: facebook/buck2 9a1876786f32806f6b65fc51f4c1c3077efc38a5 plus the
+preceding Sekka patches.
+
+upload_bytestream returned success without sending anything whenever its
+source read as empty, a shortcut carried over from upstream's segment
+adapter. Only blobs at least the batch limit in size take this path, so
+an empty read there means the file was truncated after it was hashed.
+The cache uploader then believed the blob was uploaded and wrote an
+action-cache entry naming a blob the CAS never received. The function
+now takes the digest's size: an empty digest still sends nothing, and an
+empty source for a non-empty digest fails the upload. A shorter
+non-empty source was already rejected by the server's hash check.
+
+diff --git a/remote_execution/oss/re_grpc/src/client.rs b/remote_execution/oss/re_grpc/src/client.rs
+index b80bd1e..a124eaa 100644
+--- a/remote_execution/oss/re_grpc/src/client.rs
++++ b/remote_execution/oss/re_grpc/src/client.rs
+@@ -1758,6 +1758,7 @@ where
+ /// must wait for source EOF (or a read error) before this attempt can succeed.
+ async fn upload_bytestream<Byt>(
+     resource_name: String,
++    expected_size: i64,
+     mut reader: Box<dyn AsyncBufRead + Unpin + Send>,
+     compressor: Option<Compressor>,
+     max_chunk_size: usize,
+@@ -1768,7 +1769,15 @@ where
+ {
+     // Check before compression, which can emit a header even for empty input.
+     if reader.fill_buf().await?.is_empty() {
+-        return Ok(());
++        // Only an empty blob may send nothing. A source that is empty while its
++        // digest is not changed after it was hashed: reporting it uploaded would
++        // let an action-cache entry name a blob the CAS never received.
++        if expected_size == 0 {
++            return Ok(());
++        }
++        return Err(anyhow::anyhow!(
++            "Upload source for `{resource_name}` is empty, but its digest has {expected_size} bytes"
++        ));
+     }
+     let mut reader: Pin<Box<dyn AsyncRead + Unpin + Send>> = match compressor {
+         None => Pin::new(Box::new(reader)),
+@@ -1885,9 +1894,10 @@ where
+     // https://github.com/bazelbuild/remote-apis/blob/main/build/bazel/remote/execution/v2/remote_execution.proto#L205
+     let mut batched_blob_updates = BatchUploadReqAggregator::new(max_total_batch_size);
+ 
+-    let bystream_fut = |resource_name, reader| {
++    let bystream_fut = |resource_name, expected_size, reader| {
+         upload_bytestream(
+             resource_name,
++            expected_size,
+             reader,
+             bystream_compressor,
+             max_total_batch_size,
+@@ -1915,7 +1925,7 @@ where
+         );
+         let fut = async move {
+             retry(|| async {
+-                bystream_fut(resource_name.clone(), Box::new(Cursor::new(data.clone()))).await?;
++                bystream_fut(resource_name.clone(), size, Box::new(Cursor::new(data.clone()))).await?;
+                 Ok(vec![hash.clone()])
+             })
+             .await
+@@ -1946,7 +1956,7 @@ where
+                     .await
+                     .with_context(|| format!("Opening `{name}` for reading failed"))?;
+ 
+-                bystream_fut(resource_name.clone(), Box::new(BufReader::new(file))).await?;
++                bystream_fut(resource_name.clone(), size, Box::new(BufReader::new(file))).await?;
+                 Ok(vec![hash.clone()])
+             })
+             .await
+@@ -2210,6 +2220,7 @@ mod tests {
+             };
+             upload_bytestream(
+                 "uploads/test".to_owned(),
++                128,
+                 Box::new(BufReader::with_capacity(4, reader)),
+                 None,
+                 4,
+@@ -2296,6 +2307,7 @@ mod tests {
+             let read_bytes_ref = &read_bytes;
+             upload_bytestream(
+                 "uploads/test".to_owned(),
++                size as i64,
+                 Box::new(BufReader::with_capacity(4, reader)),
+                 None,
+                 4,
+@@ -2341,6 +2353,7 @@ mod tests {
+             };
+             let error = upload_bytestream(
+                 "uploads/test".to_owned(),
++                128,
+                 Box::new(BufReader::with_capacity(4, reader)),
+                 None,
+                 4,
+@@ -2367,6 +2380,7 @@ mod tests {
+         };
+         let error = upload_bytestream(
+             "uploads/test".to_owned(),
++            128,
+             Box::new(BufReader::with_capacity(4, reader)),
+             None,
+             4,
+@@ -2394,6 +2408,7 @@ mod tests {
+         };
+         let mut upload = Box::pin(upload_bytestream(
+             "uploads/test".to_owned(),
++            128,
+             Box::new(BufReader::with_capacity(4, reader)),
+             None,
+             4,
+@@ -2423,6 +2438,7 @@ mod tests {
+         };
+         let error = upload_bytestream(
+             "uploads/test".to_owned(),
++            128,
+             Box::new(BufReader::with_capacity(4, reader)),
+             None,
+             4,
+@@ -2447,6 +2463,7 @@ mod tests {
+             let expected = &data;
+             upload_bytestream(
+                 "uploads/test".to_owned(),
++                data.len() as i64,
+                 Box::new(Cursor::new(data.clone())),
+                 compressor,
+                 13,
+@@ -2484,10 +2501,38 @@ mod tests {
+         Ok(())
+     }
+ 
++    #[tokio::test]
++    async fn test_upload_stream_empty_source() -> anyhow::Result<()> {
++        // An empty blob needs no RPC.
++        upload_bytestream(
++            "uploads/test".to_owned(),
++            0,
++            Box::new(Cursor::new(Vec::new())),
++            None,
++            4,
++            |_requests| async { Err::<WriteResponse, _>(anyhow::anyhow!("an empty blob needs no RPC")) },
++        )
++        .await?;
++        // A source emptied after it was hashed fails rather than claiming the upload.
++        let error = upload_bytestream(
++            "uploads/test".to_owned(),
++            128,
++            Box::new(Cursor::new(Vec::new())),
++            None,
++            4,
++            |_requests| async { Err::<WriteResponse, _>(anyhow::anyhow!("nothing may be sent")) },
++        )
++        .await
++        .unwrap_err();
++        assert!(error.to_string().contains("is empty, but its digest has 128 bytes"), "{error}");
++        Ok(())
++    }
++
+     #[tokio::test]
+     async fn test_upload_stream_zero_batch_limit() -> anyhow::Result<()> {
+         upload_bytestream(
+             "uploads/test".to_owned(),
++            4,
+             Box::new(Cursor::new(b"data".to_vec())),
+             None,
+             0,
