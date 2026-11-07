@@ -39,11 +39,25 @@ let
   inherit (nixpkgs) lib;
 
   name = "sekka-j514s-${revision}";
-  # The FAT serial the installer gives the EFI system partition
-  # (newfs_msdos -I), and its /dev/disk/by-uuid name.
-  espVolumeId = "0x5ecca5e1";
-  rootLabel = "sekka-root";
-  rootUuid = "5ecca000-0000-4000-8000-000000000001";
+  # Each image's root filesystem label and UUID and the FAT serial the
+  # installer gives its EFI system partition (newfs_msdos -I; its
+  # /dev/disk/by-uuid name). A developer install mounts by its own
+  # (developer.nix, and the original J514S installation's configuration),
+  # so the product image shares none of them: its root has another label
+  # and UUID, and its ESP no fixed serial (newfs_msdos picks one per
+  # installation). Installed beside a developer install, neither system
+  # can then mount the other's partitions. The product finds its own by GPT
+  # partition UUID (identity.nix).
+  identities = lib.importJSON ./identities.json;
+  checkedIdentities =
+    let
+      d = identities.developer;
+      p = identities.product;
+    in
+    assert lib.assertMsg (
+      p.root_label != d.root_label && p.root_uuid != d.root_uuid && p.esp_volume_id == null
+    ) "nix/apple-silicon/identities.json: the product image must share no identity with the developer image's";
+    identities;
   # The installer's ESP for UEFI-only installs is 500 MB; NixOS keeps a
   # kernel and initrd per generation there, so this one is larger
   # (installer/genkan/macos, plan.rs ESP_BYTES).
@@ -106,6 +120,7 @@ let
       title,
     }:
     rec {
+      identity = checkedIdentities.${variant};
       nixos =
         assert checked;
         ((import (dir + "/flake.nix")).outputs {
@@ -181,8 +196,8 @@ let
       closureInfo = pkgs.closureInfo { rootPaths = storePaths; };
       rootImage = pkgs.callPackage "${nixpkgs}/nixos/lib/make-ext4-fs.nix" {
         inherit storePaths;
-        volumeLabel = rootLabel;
-        uuid = rootUuid;
+        volumeLabel = identity.root_label;
+        uuid = identity.root_uuid;
         populateImageCommands = ''
           mkdir -p ./files/etc/nixos ./files/nix/var/nix/gcroots
           cp ${etcNixos}/* ./files/etc/nixos/
@@ -251,7 +266,7 @@ let
           ''
             python3 ${./release/check_image.py} \
               --image ${rootImage} --closure-info ${closureInfo} --etc-nixos ${etcNixos} \
-              --label ${rootLabel} --uuid ${rootUuid} --report $out
+              --label ${identity.root_label} --uuid ${identity.root_uuid} --report $out
           '';
 
       payload =
@@ -290,16 +305,18 @@ let
                   # and display drivers were tested with.
                   supported_fw = [ "14.8.3" ];
                   partitions = [
-                    {
-                      name = "EFI";
-                      type = "EFI";
-                      size = "${toString espSize}B";
-                      format = "fat";
-                      volume_id = espVolumeId;
-                      copy_firmware = true;
-                      copy_installer_data = true;
-                      source = "esp";
-                    }
+                    (
+                      {
+                        name = "EFI";
+                        type = "EFI";
+                        size = "${toString espSize}B";
+                        format = "fat";
+                        copy_firmware = true;
+                        copy_installer_data = true;
+                        source = "esp";
+                      }
+                      // lib.optionalAttrs (identity.esp_volume_id != null) { volume_id = identity.esp_volume_id; }
+                    )
                     {
                       name = "Root";
                       type = "Linux";
@@ -361,8 +378,8 @@ let
           --nar-hash ${self.narHash} --update-ref ${installed.ref} \
           --lock ${lockFile} --toplevel ${product.toplevel} --closure-info ${product.closureInfo} \
           --seeds ${pkgs.writeText "seeds" (lib.concatLines seeds)} \
-          --root-image ${product.rootImage} --root-label ${rootLabel} --root-uuid ${rootUuid} \
-          --esp ${product.esp} --esp-bytes ${toString espSize} --esp-volume-id ${espVolumeId} \
+          --root-image ${product.rootImage} --identities ${./identities.json} \
+          --esp ${product.esp} --esp-bytes ${toString espSize} \
           --generations ${toString product.nixos.config.boot.loader.systemd-boot.configurationLimit} \
           --payload $out/os/${name}.zip --installer-data $out/installer_data.json \
           --stub-bytes ${toString stubBytes} \

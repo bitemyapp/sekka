@@ -1,8 +1,10 @@
 # Run inside the product image's test VM (boot-image-in-vm.sh), as root, from
 # the test disk it attaches: bash guest-checks.sh PHASE. The test disk also
 # holds expect.env, written by the harness: the GPT partition UUIDs it gave
-# disk A (the installation) and disk B (a byte copy with other GPT UUIDs),
-# the image's toplevel and lock digest, and the registration's path count.
+# disk A (the installation), disk B (a byte copy with other GPT UUIDs) and
+# disk D (a stand-in for a developer install), both images' root labels,
+# UUIDs and ESP serials, the image's toplevel and lock digest, and the
+# registration's path count.
 #
 # Each check prints `ok NAME: detail` or `FAIL NAME: detail`; the last line
 # is `result PHASE pass|fail`. Nothing here repairs anything.
@@ -83,10 +85,26 @@ first)
 		check "b-present-not-mounted-${u:0:8}" "disk B's $dev ($u) is present and not mounted" \
 			bash -c "[ -b '$dev' ] && ! findmnt -n -S '$dev' >/dev/null"
 	done
-	labels=$(blkid -t LABEL=sekka-root -o device | sort | tr '\n' ' ')
-	fsuuids=$(blkid -t UUID=5ECC-A5E1 -o device | sort | tr '\n' ' ')
-	check labels-are-ambiguous "label sekka-root is on: $labels; volume ID 5ECC-A5E1 on: $fsuuids; /dev/disk/by-label/sekka-root -> $(readlink -f /dev/disk/by-label/sekka-root)" \
+	# A and B share the product image's root label and filesystem UUID
+	# (byte copies), and so their ESPs' serial, which no developer install
+	# mounts by.
+	labels=$(blkid -t "LABEL=$PRODUCT_LABEL" -o device | sort | tr '\n' ' ')
+	fsuuids=$(blkid -t "UUID=$PRODUCT_UUID" -o device | sort | tr '\n' ' ')
+	check product-names-shared "label $PRODUCT_LABEL is on: $labels; filesystem UUID $PRODUCT_UUID on: $fsuuids" \
 		test "$(echo "$labels" | wc -w):$(echo "$fsuuids" | wc -w)" = "2:2"
+	# Disk D, a stand-in for a developer install beside this one: its names
+	# lead to its own partitions only, as its system mounts them, and this
+	# system's partitions carry none of them.
+	dev_root=$(readlink -f "/dev/disk/by-partuuid/$ROOT_D")
+	dev_esp=$(readlink -f "/dev/disk/by-partuuid/$ESP_D")
+	check developer-root-label "label $DEVELOPER_LABEL is only on disk D's root ($dev_root): $(blkid -t "LABEL=$DEVELOPER_LABEL" -o device | tr '\n' ' ')" \
+		test "$(blkid -t "LABEL=$DEVELOPER_LABEL" -o device):$(readlink -f "/dev/disk/by-label/$DEVELOPER_LABEL")" = "$dev_root:$dev_root"
+	check developer-esp-serial "volume ID $DEVELOPER_SERIAL is only on disk D's ESP ($dev_esp): $(blkid -t "UUID=$DEVELOPER_SERIAL" -o device | tr '\n' ' ')" \
+		test "$(blkid -t "UUID=$DEVELOPER_SERIAL" -o device):$(readlink -f "/dev/disk/by-uuid/$DEVELOPER_SERIAL")" = "$dev_esp:$dev_esp"
+	check developer-root-uuid "filesystem UUID $DEVELOPER_UUID is only on disk D's root" \
+		test "$(blkid -t "UUID=$DEVELOPER_UUID" -o device)" = "$dev_root"
+	check d-not-mounted "disk D's partitions are not mounted" \
+		bash -c "! findmnt -n -S '$dev_root' >/dev/null && ! findmnt -n -S '$dev_esp' >/dev/null"
 	loader=$(python3 -c 'import glob,sys
 for f in glob.glob("/sys/firmware/efi/efivars/LoaderDevicePartUUID-*"):
     print(open(f,"rb").read()[4:].decode("utf-16-le").strip("\0").lower())' 2>/dev/null)

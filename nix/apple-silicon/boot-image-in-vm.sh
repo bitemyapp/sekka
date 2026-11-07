@@ -28,10 +28,13 @@
 #    whose placeholders were never filled, and one naming a missing partition;
 # 2. the first boot, with disk B attached: disk A's bytes with other GPT
 #    UUIDs (same labels, same filesystem UUIDs; both are overlays of one base
-#    disk, and B's own data is only its two GPT copies). It must mount disk A's
-#    root and ESP only, register the store, grow the root, hand over the
-#    firmware, write identity.nix, and evaluate and rebuild /etc/nixos
-#    offline (there is no network device) to the image's own system;
+#    disk, and B's own data is only its two GPT copies), and disk D, a
+#    stand-in for a developer install (a FAT ESP and an ext4 root with the
+#    developer image's serial, label and UUID). It must mount disk A's root
+#    and ESP only, leave the developer names to disk D's partitions alone,
+#    register the store, grow the root, hand over the firmware, write
+#    identity.nix, and evaluate and rebuild /etc/nixos offline (there is no
+#    network device) to the image's own system;
 # 3. the second boot: nothing registered again; identity.nix kept; boot.bin's
 #    replacement on this FAT filesystem; a controlled update built offline;
 # 4. the updated generation boots; it rolls back;
@@ -41,8 +44,10 @@
 # change to the VM's disk only. guest-checks.sh (vm/) runs the checks inside.
 #
 # The developer image is laid out as the unmodified Asahi installer lays it
-# out (its labels and volume ID) and is checked as before, logging in as
-# sekka/sekka on the console.
+# out (its labels and volume ID) and checked as before, logging in as
+# sekka/sekka on the console; its first boot has a stand-in for a product
+# install attached (the product image's label, UUID and some ESP serial), and
+# its names must lead to its own partitions only.
 set -euo pipefail
 
 result=$(cd "$1" && pwd)
@@ -59,6 +64,7 @@ sgdisk=$(tool gptfdisk)/bin/sgdisk
 unzip=$(tool unzip)/bin/unzip
 python=$(tool python3)/bin/python3
 cpio=$(tool cpio)/bin/cpio
+mkfs_ext4=$(tool e2fsprogs.bin)/bin/mkfs.ext4
 memory=4096
 case $(uname -s) in
 Darwin) accel=(-machine virt,accel=hvf,acpi=off -cpu host) ;;
@@ -81,6 +87,30 @@ blank() { rm -f "$1"; dd if=/dev/zero of="$1" bs=1 count=0 seek="$2" 2>/dev/null
 size_of() { "$python" -c 'import os, sys; print(os.path.getsize(sys.argv[1]))' "$1"; }
 # Write a file into a disk image at a byte offset (a multiple of 1 MiB).
 put() { dd if="$1" of="$2" bs=$mib seek=$(($3 / mib)) conv=notrunc,sparse 2>/dev/null; }
+# Both images' names (identities.json): ident developer|product FIELD.
+ident() { "$python" -c 'import json, sys
+v = json.load(open(sys.argv[1]))[sys.argv[2]][sys.argv[3]]
+print("" if v is None else v)' "$here/identities.json" "$1" "$2"; }
+# A FAT serial as blkid and /dev/disk/by-uuid write it: 0x5ecca5e1 -> 5ECC-A5E1.
+serial_name() { local h; h=$(printf '%08X' "$(($1))"); echo "${h:0:4}-${h:4:4}"; }
+random_serial() { "$python" -c 'import secrets; print("0x" + secrets.token_hex(4))'; }
+# standin DISK SERIAL LABEL UUID: a small disk with another installation's
+# names, a FAT ESP with that serial and an empty ext4 root with that label
+# and UUID: the partitions that installation's system mounts by name.
+standin() {
+	local part=$((64 * mib))
+	blank "$work/standin-esp.img" "$part"
+	"$mtools/bin/mformat" -i "$work/standin-esp.img" -N "${2#0x}" -v EFI ::
+	blank "$work/standin-root.img" "$part"
+	"$mkfs_ext4" -q -F -L "$3" -U "$4" "$work/standin-root.img"
+	blank "$1" $((2 * part + 2 * mib))
+	"$sgdisk" -Z "$1" >/dev/null
+	"$sgdisk" -n "1:$((mib / 512)):+$((part / 512 - 1))" -t 1:EF00 -c 1:EFI \
+		-n "2:$(((mib + part) / 512)):+$((part / 512 - 1))" -t 2:8300 -c 2:Root "$1" >/dev/null
+	put "$work/standin-esp.img" "$1" "$mib"
+	put "$work/standin-root.img" "$1" $((mib + part))
+	rm -f "$work/standin-esp.img" "$work/standin-root.img"
+}
 
 vm=
 stop() {
@@ -176,7 +206,11 @@ if [ ! -e "$result/manifest.json" ]; then
 		-n "2:$((root_start / 512)):+$(((root_bytes + extra) / 512 - 1))" -t 2:8300 -c 2:Root "$disk" >/dev/null
 	put "$esp" "$disk" "$esp_start"
 	put "$work/pkg/root.img" "$disk" "$root_start"
-	log "booting, twice: the first boot and an ordinary one"
+	log "a stand-in for a product install beside it, with the product image's names"
+	standin "$work/product.img" "$(random_serial)" "$(ident product root_label)" "$(ident product root_uuid)"
+	label=$(ident developer root_label)
+	serial=$(serial_name "$volume_id")
+	log "booting, twice: the first boot (the stand-in attached) and an ordinary one"
 	checks=(
 		"systemctl is-system-running --wait"
 		"systemctl --failed --no-legend --plain"
@@ -184,9 +218,14 @@ if [ ! -e "$result/manifest.json" ]; then
 		"test -e /nix-path-registration && echo unregistered || readlink /nix/var/nix/profiles/system"
 		"findmnt -n -o FSTYPE /lib/firmware/vendor; ls /lib/firmware/vendor"
 		"findmnt -n -o SOURCE,FSTYPE /boot; findmnt -n -o SIZE /"
+		# Its names lead to its own partitions only (udev's database, as
+		# lsblk reads it without root).
+		"echo \"names: label \$(lsblk -rno LABEL | grep -cx $label) \$(readlink -f /dev/disk/by-label/$label) serial \$(lsblk -rno UUID | grep -cx $serial) \$(readlink -f /dev/disk/by-uuid/$serial) root \$(findmnt -n -o SOURCE /)\""
 	)
 	for run in first second; do
-		start "$run" disk.img
+		disks=(disk.img)
+		[ "$run" != first ] || disks+=(product.img)
+		start "$run" "${disks[@]}"
 		if ! wait_for "$run" 'sekka login:' 300; then
 			echo "== the $run boot never reached a login prompt"
 			tail -c 2000 "$work/console-$run.log"
@@ -200,9 +239,10 @@ if [ ! -e "$result/manifest.json" ]; then
 		grep -qx 'tmpfs' "$work/checks-$run.txt"
 		grep -qx 'sekka-vm-test.txt' "$work/checks-$run.txt"
 		grep -qE '^/dev/vda1 +vfat$' "$work/checks-$run.txt"
+		grep -qx 'names: label 1 /dev/vda2 serial 1 /dev/vda1 root /dev/vda2' "$work/checks-$run.txt"
 		stop
 	done
-	log "booted twice: running, no failed units, graphical, firmware handed over"
+	log "booted twice: running, no failed units, graphical, firmware handed over, its own partitions by name"
 	exit 0
 fi
 
@@ -214,7 +254,10 @@ print(v)' "$manifest" "$1"; }
 payload=$result/os/$(field payload.name)
 esp_bytes=$(field image.esp_bytes)
 root_bytes=$(field image.root_image.size)
+# The product image fixes no ESP serial: newfs_msdos picks one per
+# installation, as this does.
 volume_id=$(field esp.volume_id)
+[ "$volume_id" != None ] || volume_id=$(random_serial)
 entry=$(field esp.boot_entry)
 extra=$((4 * 1024 * mib))
 stub_bytes=$((16 * mib))
@@ -372,6 +415,13 @@ assert own == [(0, mib), (size - mib, mib)], own
 print("disk B differs from disk A only in its first and last MiB (the GPT copies); its partitions are byte-identical")
 ' "$disk_bytes"
 
+log "disk D: a stand-in for a developer install, with the developer image's names"
+d=$work/developer.img
+standin "$d" "$(ident developer esp_volume_id)" "$(ident developer root_label)" "$(ident developer root_uuid)"
+ESP_D=$(partuuid "$d" 1)
+ROOT_D=$(partuuid "$d" 2)
+[ "$(ident product root_label)" = "$(field root.label)" ] && [ "$(ident product root_uuid)" = "$(field root.filesystem_uuid)" ]
+
 log "the test disk: the checks, their expectations and the update"
 t=$work/test.img
 blank "$t" $((64 * mib))
@@ -381,6 +431,13 @@ ROOT_A=$ROOT_A
 ESP_A=$ESP_A
 ROOT_B=$ROOT_B
 ESP_B=$ESP_B
+ROOT_D=$ROOT_D
+ESP_D=$ESP_D
+PRODUCT_LABEL=$(ident product root_label)
+PRODUCT_UUID=$(ident product root_uuid)
+DEVELOPER_LABEL=$(ident developer root_label)
+DEVELOPER_UUID=$(ident developer root_uuid)
+DEVELOPER_SERIAL=$(serial_name "$(ident developer esp_volume_id)")
 INSTALLATION=$INSTALLATION
 TOPLEVEL=$(field system.toplevel)
 LOCK_SHA256=$(field source.lock | sed 's/^sha256://')
@@ -418,7 +475,7 @@ boot() { # NAME DISK...
 	echo "$run: login prompt $((SECONDS - started))s after QEMU started"
 	guest "$run"
 }
-boot first "$a" "$b" "$t" || true
+boot first "$a" "$b" "$d" "$t" || true
 boot second "$a" "$t" || true
 boot updated "$a" "$t" || true
 boot rolled-back "$a" "$t" || true

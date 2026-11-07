@@ -98,13 +98,26 @@ def main() -> int:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     for arg in [
         "release", "profile", "variant", "revision", "clean", "nar-hash", "update-ref", "lock",
-        "toplevel", "closure-info", "seeds", "root-image", "root-label", "root-uuid", "esp",
-        "esp-bytes", "esp-volume-id", "generations", "payload", "installer-data", "stub-bytes", "out",
+        "toplevel", "closure-info", "seeds", "root-image", "identities", "esp",
+        "esp-bytes", "generations", "payload", "installer-data", "stub-bytes", "out",
     ]:
         p.add_argument(f"--{arg}", required=True)
     a = p.parse_args()
     esp, root_image = Path(a.esp), Path(a.root_image)
     esp_bytes, stub = int(a.esp_bytes), int(a.stub_bytes)
+    # The image's root label and UUID and its ESP's fixed serial, if any
+    # (identities.json). A developer install mounts by the developer
+    # image's, so a product image must share none of them.
+    identities = json.loads(Path(a.identities).read_text())
+    identity = identities[a.variant]
+    if a.variant == "product":
+        developer = identities["developer"]
+        if (
+            identity["root_label"] == developer["root_label"]
+            or identity["root_uuid"] == developer["root_uuid"]
+            or identity["esp_volume_id"] is not None
+        ):
+            fail("the product image shares an identity with the developer image, whose installs mount by it")
 
     files = inventory(esp)
     by_path = {f["path"]: f for f in files}
@@ -156,8 +169,8 @@ def main() -> int:
     parts = {p["name"]: p for p in os_entry["partitions"]}
     if os_entry["package"] != payload.name or parts["EFI"]["size"] != f"{esp_bytes}B" or parts["Root"]["size"] != f"{root_size}B":
         fail(f"installer_data.json doesn't describe this payload: {os_entry}")
-    if parts["EFI"]["volume_id"] != a.esp_volume_id:
-        fail("installer_data.json gives the ESP another volume ID")
+    if parts["EFI"].get("volume_id") != identity["esp_volume_id"]:
+        fail(f"installer_data.json gives the ESP volume ID {parts['EFI'].get('volume_id')}, not {identity['esp_volume_id']}")
     data_digest, data_size = digest_file(data_path)
 
     closure_paths = len((Path(a.closure_info) / "store-paths").read_text().split())
@@ -196,12 +209,12 @@ def main() -> int:
             "esp_bytes": esp_bytes,
         },
         "root": {
-            "label": a.root_label,
-            "filesystem_uuid": a.root_uuid,
+            "label": identity["root_label"],
+            "filesystem_uuid": identity["root_uuid"],
             "registered_paths": closure_paths,
         },
         "esp": {
-            "volume_id": a.esp_volume_id,
+            "volume_id": identity["esp_volume_id"],
             "files": files,
             "used_bytes": used,
             "boot_files": [{"role": r, "path": p} for r, p in BOOT_FILES],

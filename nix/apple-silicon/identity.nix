@@ -1,11 +1,12 @@
 # This installation's own root and EFI system partition (ESP), for systems
 # installed from Sekka's Mac image (calamares.appleSilicon.identity).
 #
-# Every image is the same bytes, so its root filesystem and ESP have the same
-# label and filesystem UUIDs on every Mac: two installations on one computer,
-# or an external disk with a copy, can't be told apart by them. Only the GPT
-# partition UUIDs the installer creates are this installation's own. The
-# installer (installer/genkan/macos, handoff.rs) writes them:
+# Every image is the same bytes, so its root filesystem has the same label and
+# filesystem UUID on every Mac (image.nix; none of them a developer image's):
+# two product installations on one computer, or an external disk with a copy,
+# can't be told apart by them. Only the GPT partition UUIDs the installer
+# creates are this installation's own. The installer (installer/genkan/macos,
+# handoff.rs) writes them:
 # - into the first generation's boot entry, in place of the image's
 #   placeholders: sekka.root=PARTUUID=… sekka.esp=PARTUUID=…;
 # - into sekka/install.json on the ESP (sekka.mac.handoff/1).

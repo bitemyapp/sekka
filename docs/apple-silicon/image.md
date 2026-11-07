@@ -17,6 +17,7 @@ Both images are built from one installed-system configuration:
 | Installed by | Sekka's macOS installer (not yet built) | `install-sekka.sh`: the unmodified Asahi installer v0.9.2 |
 | Accounts | none; root has no password (`!`) | `sekka`, password `sekka` |
 | Root and ESP | the GPT partition UUIDs the installer hands off | label `sekka-root`, FAT volume ID `5ECC-A5E1` |
+| Root label, root UUID, ESP serial | `sekka-system`, `5ecca000-…-000000000002`, a new one per installation | `sekka-root`, `5ecca000-…-000000000001`, `5ECC-A5E1` |
 | Release set | payload, `installer_data.json`, `manifest.json`, `nixos/`, `checks/` | payload, `installer_data.json`, `install-sekka.sh` |
 
 The product image has no usable password and no account: root's password
@@ -119,10 +120,21 @@ PC fixture.
 
 ## Per-install identity
 
-Every image is the same bytes, so the root filesystem's label and UUID and
-the ESP's volume ID are the same on every Mac. Only the GPT partition UUIDs
-the installer creates identify an installation. The handoff
-(`installer/genkan/macos/crates/contract/src/handoff.rs`) is:
+Every image is the same bytes, so the root filesystem's label and UUID are
+the same on every Mac the product image is installed on. Only the GPT
+partition UUIDs the installer creates identify an installation.
+
+The product image shares no name with the developer image
+(`identities.json`, checked by `image.nix` and `manifest.py`): a developer
+install, like the original J514S installation, mounts `/` by the label
+`sekka-root` and `/boot` by the FAT serial `5ECC-A5E1`, so a product image
+with the same names, installed beside it, would make udev's
+`/dev/disk/by-label` and `by-uuid` links name either installation's
+partitions. Its root is `sekka-system` with another filesystem UUID, and its
+`installer_data.json` gives the ESP no `volume_id`, so Asahi's
+`partition_disk` lets `newfs_msdos` choose a serial for each installation.
+
+The handoff (`installer/genkan/macos/crates/contract/src/handoff.rs`) is:
 
 1. The installer partitions the disk, writes the ESP from the payload and
    `root.img`, then replaces `@SEKKA_ROOT_PARTUUID@` and
@@ -354,8 +366,8 @@ payload against what it was built from. `source` (`repository`,
 | `image.root_image` | `root.img`'s `size` and `digest` |
 | `image.esp_inventory` | SHA-256 of the canonical JSON array `esp.files` |
 | `image.esp_bytes` | the ESP partition size (1 GiB) |
-| `root.label`, `.filesystem_uuid`, `.registered_paths` | the ext4 image's fixed identity, shared by every installation |
-| `esp.volume_id` | the FAT volume ID in `installer_data.json` |
+| `root.label`, `.filesystem_uuid`, `.registered_paths` | the ext4 image's fixed identity, shared by every installation of the image (`identities.json`) |
+| `esp.volume_id` | the FAT volume ID in `installer_data.json`: null for the product image, whose ESPs get their own |
 | `esp.files` | every file in the payload's `esp/`: `path`, `size`, `digest`, sorted by path bytes |
 | `esp.used_bytes`, `.generation_bytes`, `.generations` | ESP use, one generation's kernel and initrd, and the retained-generation limit the capacity check used |
 | `esp.boot_files` | roles: `m1n1-stage2`, `removable-loader`, `systemd-boot`, `kernel`, `initrd`, `loader-config`, `entry`, `boot-bin-record` |
@@ -409,8 +421,12 @@ address space (`highmem=off`, so 3 GiB): on this 16 KiB-page host, with
 memory fragmented by the page cache, KVM couldn't allocate the stage-2 table
 of the default 40-bit space (`KVM_CREATE_VM: Cannot allocate memory`).
 Given the developer bundle (`mac-installer-j514s`) it lays the disk out as
-the unmodified Asahi installer does and checks two boots as before. Given
-the product release set it:
+the unmodified Asahi installer does and checks two boots as before; the first
+has a stand-in for a product install attached (a FAT ESP with another serial
+and an ext4 root with the product image's label and UUID), and both require
+`/dev/disk/by-label/sekka-root` and `/dev/disk/by-uuid/5ECC-A5E1` to be the
+only such names and to lead to the developer disk's own root and ESP, which
+are the ones mounted. Given the product release set it:
 
 1. verifies the payload and `root.img` against the manifest;
 2. lays out a base disk as Sekka's installer would: random GPT UUIDs, a
@@ -424,8 +440,10 @@ the product release set it:
 4. makes disks A and B as qcow2 overlays of the base; B's overlay holds
    only its two GPT copies with new UUIDs (`qemu-img map` confirms), so its
    partitions are byte-identical to A's: the same labels, filesystem UUIDs,
-   boot entry and handoff;
-5. boots disks A and B together (first boot), then A alone three times
+   boot entry and handoff; and disk D, a stand-in for a developer install
+   (a FAT ESP and an empty ext4 root with the developer image's serial,
+   label and UUID);
+5. boots disks A, B and D together (first boot), then A alone three times
    (ordinary boot with a controlled update, the updated generation with a
    rollback, the image's generation again), running `vm/guest-checks.sh`
    from a small test disk through systemd's debug shell on `hvc1`. The
@@ -436,7 +454,7 @@ The checks in each boot (`vm/guest-checks.sh`):
 
 | Boot | Checks |
 | --- | --- |
-| first (A and B) | systemd `running`, no failed units, graphical target and display manager active; the command line names A; `/` and `/boot` are A's partitions by GPT UUID; `by-sekka` links are A's; B's partitions present and unmounted; labels and volume IDs ambiguous; store registered (path count equals the registration); root grew; stand-in firmware on its tmpfs; `identity.nix` written; shipped lock unchanged; the shipped flake evaluates offline to the image's toplevel; `nixos-rebuild build` offline gives it; the flake with `identity.nix` evaluates; no account with a login shell, root locked; setup waiting and the flake with setup's sample `setup.nix` evaluating under its host name (when setup is in the image); `boot.bin` matches its record |
+| first (A, B and D) | systemd `running`, no failed units, graphical target and display manager active; the command line names A; `/` and `/boot` are A's partitions by GPT UUID; `by-sekka` links are A's; B's partitions present and unmounted; the product label and UUID on A and B only; the developer label, UUID and serial on D's partitions only, which their `by-label` and `by-uuid` links name, and D unmounted; store registered (path count equals the registration); root grew; stand-in firmware on its tmpfs; `identity.nix` written; shipped lock unchanged; the shipped flake evaluates offline to the image's toplevel; `nixos-rebuild build` offline gives it; the flake with `identity.nix` evaluates; no account with a login shell, root locked; setup waiting and the flake with setup's sample `setup.nix` evaluating under its host name (when setup is in the image); `boot.bin` matches its record |
 | second (A) | registration not repeated; `identity.nix` checked, not rewritten; `boot_bin.py` replace, no-op and restore on the VM's FAT filesystem (a scratch directory, not the real `boot.bin`); an update (a module imported from `configuration.nix`) built offline with `nixos-rebuild boot`; every entry filled, naming A, firmware first |
 | updated (A) | generation 2 booted; the update applied; mounts by partition UUID; no first-start identity service; `nixos-rebuild boot --rollback` |
 | rolled-back (A) | generation 1 booted again, the update gone, `by-sekka` mounts |
