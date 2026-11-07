@@ -2879,9 +2879,10 @@ installations it keeps a record of: one it knows comes first, and while it
 can't say (it can't read a record, doesn't answer, is turned off in Login
 Items, or isn't set up while Sekka is on the disk) the app stops on a page
 saying so, with Check Again and Copy Diagnostics, and plans nothing. A
-helper that was never set up has nothing from this Mac; then the app asks
-it, once it is set up and allowed at Install, before the password. The person chooses Sekka's size by dragging the divider on a
-picture of the disk (or with the arrow keys; VoiceOver sees a slider). The
+helper that was never set up has nothing from this Mac, so the plan is
+offered; at Install, once the helper is set up and allowed, the app asks
+it before the password. The person chooses Sekka's size by dragging the
+divider on a picture of the disk (or with the arrow keys; VoiceOver sees a slider). The
 app downloads the release's files into
 `~/Library/Application Support/Sekka Installer/Staging`, inspects the Mac
 again (the downloads took space) and derives the plan exactly as the helper
@@ -2955,16 +2956,16 @@ installer/genkan/macos/packaging/build-app.sh --engine ENGINE.tar.gz --icon AppI
 `startup-disk-refused`, `startup-disk-fails-again`,
 `waiting-for-recovery`, `recovery-finished`, `removed-by-hand`,
 `stopped-early`, `existing`, `needs-approval`, `record-unreadable`,
-`helper-off`). Its helper answers as the
-real one does: asked to reconcile, it looks at the Mac and records
-Recovery's steps (`recovery-finished`) or that nothing of an installation
-is left (`removed-by-hand`); it cancels a run only while it is in a stage
-that changes nothing; and it retries only the startup disk, adding the
-retry's records after the failure, or refusing with nothing recorded when
-the installation isn't as it was left. The model's tests also give it the
+`helper-off`). Its helper answers as the real one does: asked to
+reconcile, it looks at the Mac and records Recovery's steps
+(`recovery-finished`) or that nothing of an installation is left
+(`removed-by-hand`); it cancels a run only while it is in a stage that
+changes nothing; and it retries only the startup disk, adding the retry's
+records after the failure, or refusing with nothing recorded when the
+installation isn't as it was left. The model's tests also give it the
 real helper's refusals to reconcile (busy, or the Mac couldn't be
-inspected). `--screenshots DIR` renders
-every screen of every scenario in light and dark through AppKit. Production builds refuse both.
+inspected). `--screenshots DIR` renders every screen of every scenario
+in light and dark through AppKit. Production builds refuse both.
 Development builds also read their catalog from `SEKKA_INSTALLER_CATALOG`
 (a file, still verified with the development key). A release
 (`build-app.sh --release`) needs a clean checkout, `SEKKA_TEAM_ID`,
