@@ -6,6 +6,7 @@ import os
 import shutil
 import subprocess
 import sys
+import textwrap
 import unittest
 
 import support as S
@@ -152,6 +153,33 @@ class CommandLine(unittest.TestCase):
             self.assertEqual(written, [])
         finally:
             t.cleanup()
+
+    def test_a_diagnostic_log_nobody_reads_stops_nothing(self):
+        """The helper reading standard error goes away: what the engine
+        prints, logs or writes there after that is dropped, and it carries
+        on, its transcript still written."""
+        code = textwrap.dedent(
+            f"""
+            import logging, os, sys
+            sys.path.insert(0, {S.ENGINE!r})
+            from sekka_engine.host import take_standard_streams
+            transcript, _ = take_standard_streams()
+            logging.basicConfig(stream=sys.stderr)
+            for i in range(2000):
+                print("Asahi's progress", "x" * 100)
+                sys.stdout.write("\\r100.00% ")
+                sys.stdout.flush()
+                logging.warning("a warning")
+            os.write(1, b"a tool's line\\n")
+            transcript.write(b"finished\\n")
+            """
+        )
+        env = {"PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "LC_ALL": "C"}
+        p = subprocess.Popen([sys.executable, "-I", "-c", code], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
+        p.stderr.close()
+        p.stderr = None
+        out, _ = p.communicate(timeout=60)
+        self.assertEqual((p.returncode, out), (0, b"finished\n"))
 
     def test_the_diagnostic_log_names_no_administrator(self):
         """Asahi's OSEnum logs every administrator's name; the helper keeps

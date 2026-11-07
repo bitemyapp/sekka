@@ -821,7 +821,15 @@ class Engine:
         last = self.progress_state.get(stage, -PROGRESS_STEP)
         if done - last >= PROGRESS_STEP or done >= total:
             self.progress_state[stage] = done
-            self.t.progress(stage, done, total)
+            try:
+                self.t.progress(stage, done, total)
+            except OSError:
+                # Nothing reads the transcript (the helper stopped). A stage
+                # that changes the disk goes on to its end regardless, and
+                # the checkpoint after it, which can't be written either,
+                # stops the run before another starts.
+                if not self.changing_disk:
+                    raise
 
     def refreshed(self):
         self.view.refresh()

@@ -2,6 +2,8 @@
 """execute: one plan carried out on a fake Mac, stage by stage, and every
 way the engine refuses or stops."""
 
+import errno
+import io
 import json
 import logging
 import os
@@ -431,9 +433,9 @@ class ExecuteTests(unittest.TestCase):
         self.t = S.TempDir()
         self.addCleanup(self.t.cleanup)
 
-    def stopped(self, channel=S.Channel, before=None, mode="execute"):
+    def stopped(self, channel=S.Channel, before=None, mode="execute", stops=Terminated, **kw):
         """Execute (or inspect) in a working folder of the engine's own, as
-        a real run does, until SIGTERM stops it."""
+        a real run does, until SIGTERM (or `stops`) stops it."""
         mac = S.j514s_clean(self.t.sub("mac"))
         asahi, host = S.load_asahi(mac)
         _, doc, _ = S.inspect(mac, asahi, host, self.t.sub("w0"))
@@ -443,8 +445,8 @@ class ExecuteTests(unittest.TestCase):
             before(mac)
         state = mac.state_digest()
         channel = channel(mac)
-        with self.assertRaises(Terminated):
-            S.run_engine(mode, mac, asahi, host, None, plan=plan, release=release, channel=channel)
+        with self.assertRaises(stops):
+            S.run_engine(mode, mac, asahi, host, None, plan=plan, release=release, channel=channel, **kw)
         return Run({"mac": mac, "channel": channel, "plan": plan, "state_before": state})
 
     def test_a_cancel_while_apples_files_download_cleans_up(self):
@@ -577,6 +579,72 @@ class ExecuteTests(unittest.TestCase):
                 self.assertNotIn("failure", run.types())
                 self.assertNotIn("intent", run.types())
                 self.assertEqual(run.mac.state_digest(), run.state_before)
+
+    def test_a_stage_that_changes_the_disk_finishes_when_the_helper_goes_away(self):
+        """The helper stops while Sekka's startup volume is set up (Asahi
+        prints its progress to the diagnostic log) or while Sekka is written
+        (progress goes in the transcript): nothing reads either any more,
+        and neither stops the stage. It ends verified, and the checkpoint
+        the engine then can't write stops the run before another starts."""
+
+        class Gone(S.Channel):
+            """The helper, until it has acknowledged `at`. After that what
+            the engine writes is kept here for the test, and raises."""
+
+            at = None
+
+            def __init__(self, mac):
+                super().__init__(mac)
+                self.gone = False
+                self.lost = []
+
+            def read(self, n):
+                out = super().read(n)
+                stage = json.loads(self.lines[-1])["message"]["payload"]["stage"]
+                if stage == self.at and not self.pending:
+                    self.gone = True
+                return out
+
+            def write(self, data):
+                if not self.gone:
+                    return super().write(data)
+                self.lost += [json.loads(line)["message"] for line in data.splitlines()]
+                raise BrokenPipeError(errno.EPIPE, "Broken pipe")
+
+        class Log(io.StringIO):
+            """Standard error, read by the helper until it goes."""
+
+            channel = None
+            dropped = 0
+
+            def write(self, text):
+                if self.channel is not None and self.channel.gone:
+                    self.dropped += 1
+                    raise BrokenPipeError(errno.EPIPE, "Broken pipe")
+                return super().write(text)
+
+        for stage, verification in (("stub-system", "inspected"), ("root", "read-back")):
+            with self.subTest(stage=stage):
+                self.fresh()
+                log = Log()
+
+                class GoneAt(Gone):
+                    at = stage
+
+                    def __init__(self, mac):
+                        super().__init__(mac)
+                        log.channel = self
+
+                run = self.stopped(GoneAt, stops=BrokenPipeError, printing=log)
+                self.assertEqual(run.payloads("intent")[-1]["stage"], stage)
+                lost = [m for m in run.channel.lost if m["type"] != "progress"]
+                self.assertEqual([(m["type"], m["payload"]["stage"]) for m in lost], [("checkpoint", stage)])
+                self.assertEqual(lost[0]["payload"]["verification"], verification)
+                if stage == "root":
+                    self.assertIn("progress", [m["type"] for m in run.channel.lost])
+                else:
+                    self.assertGreater(log.dropped, 0)
+                self.assertEqual(run.mac.mounted_now(), [])
 
     def test_apple_inputs_fetch_only_what_the_stub_needs(self):
         run = self.run_plan()

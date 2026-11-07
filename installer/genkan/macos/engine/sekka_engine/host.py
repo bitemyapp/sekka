@@ -252,13 +252,51 @@ class SubprocessShim:
         return subprocess.CompletedProcess(list(args), result.returncode, out, err)
 
 
+class DiagnosticLog:
+    """Standard error, the diagnostic log, as Python writes to it: Asahi's
+    progress printing, logging and tracebacks. The log decides nothing, so
+    once nothing reads it (the helper stopped while a stage was changing
+    the disk) what is written is dropped, not raised where it was printed,
+    and `descriptors` (standard output and error) are pointed at /dev/null
+    so that nothing written there later fails either. The stage goes on to
+    its end."""
+
+    def __init__(self, stream, descriptors=(1, 2)):
+        self.stream = stream
+        self.descriptors = descriptors
+
+    def write(self, text):
+        try:
+            return self.stream.write(text)
+        except OSError:
+            self.lost()
+            return len(text)
+
+    def flush(self):
+        try:
+            self.stream.flush()
+        except OSError:
+            self.lost()
+
+    def lost(self):
+        devnull = os.open(os.devnull, os.O_WRONLY)
+        try:
+            for fd in self.descriptors:
+                os.dup2(devnull, fd)
+        finally:
+            os.close(devnull)
+
+    def __getattr__(self, name):
+        return getattr(self.stream, name)
+
+
 def take_standard_streams():
     """Keep the transcript and acknowledgement channels for the engine alone.
 
     Returns private (transcript, acks) file objects. Afterwards standard
     output is standard error and standard input is empty, so neither Asahi's
     progress printing nor any child process can write into the transcript or
-    read an acknowledgement.
+    read an acknowledgement; and both are a DiagnosticLog.
     """
     transcript = os.fdopen(os.dup(1), "wb", buffering=0)
     acks = os.fdopen(os.dup(0), "rb", buffering=0)
@@ -266,7 +304,7 @@ def take_standard_streams():
     os.dup2(2, 1)
     os.dup2(devnull, 0)
     os.close(devnull)
-    sys.stdout = sys.stderr
+    sys.stdout = sys.stderr = DiagnosticLog(sys.stderr)
     sys.stdin = open(os.devnull, "r")
     return transcript, acks
 

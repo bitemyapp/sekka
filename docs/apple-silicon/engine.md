@@ -63,10 +63,17 @@ of that run's Esp checkpoint from the journal, and only that stage (below).
   acknowledgements. Standard error is a diagnostic log: the helper and the
   app drain it as it is written and keep its last 500 lines, the helper for
   Copy Diagnostics (with the owner's name and home folders taken out, and
-  Asahi's list of administrators left out by the engine). In `execute`,
-  `startup-disk` and `inspect --owner`, file descriptor 3 carries the owner's
-  password, read once to end of file and closed; it is kept in a `bytearray`
-  only until `bless` has it (or the check has passed), then overwritten.
+  Asahi's list of administrators left out by the engine). The log decides
+  nothing: once nothing reads it (the helper stopped), what the engine
+  writes there is dropped and standard output and error point at
+  `/dev/null`. Nor does the transcript's progress decide whether a stage
+  that changes the disk ends: such a stage goes on to its end whether or
+  not its progress can be written, and the checkpoint after it, which then
+  can't be written either, ends the run before another stage starts. In
+  `execute`, `startup-disk` and `inspect --owner`, file descriptor 3 carries
+  the owner's password, read once to end of file and closed; it is kept in a
+  `bytearray` only until `bless` has it (or the check has passed), then
+  overwritten.
   (Python may hold other copies, such as the bytes handed to `bless`'s
   standard input; no complete erasure is claimed.)
   Descriptor 4 is the helper's install lock, a `flock` the engine holds by

@@ -1406,11 +1406,14 @@ class Channel:
         return [json.loads(line) for line in self.lines]
 
 
-def run_engine(mode, mac, asahi, host, workdir, plan=None, release=None, password=PASSWORD, owner=OWNER, installation="1f7d9c62-4a1b-4c8e-9d3f-2b6a8e0c5d47", channel=None, privileged=True, restore=None, esp_inventory=None, inspect_owner=None):
+def run_engine(mode, mac, asahi, host, workdir, plan=None, release=None, password=PASSWORD, owner=OWNER, installation="1f7d9c62-4a1b-4c8e-9d3f-2b6a8e0c5d47", channel=None, privileged=True, restore=None, esp_inventory=None, inspect_owner=None, printing=None):
     """One run of the engine; an inspection names `inspect_owner` (with
     `password`), as the helper's before an installation does, if given.
-    A run that is stopped leaves `channel.stop_limit`: the seconds its
-    cleanup had left of STOP_LIMIT, then cancelled here."""
+    Asahi's printing goes to `printing`, a text stream, through the
+    DiagnosticLog a real run has (which leaves this process's descriptors
+    alone). A run that is stopped leaves `channel.stop_limit`: the seconds
+    its cleanup had left of STOP_LIMIT, then cancelled here."""
+    from sekka_engine.host import DiagnosticLog
     from sekka_engine.engine import Engine
 
     channel = channel or Channel(mac)
@@ -1428,7 +1431,8 @@ def run_engine(mode, mac, asahi, host, workdir, plan=None, release=None, passwor
     served = []
     channel.served = served
     channel.engine = engine
-    quiet = io.StringIO()  # Asahi's progress printing; a real run sends it to stderr
+    # Asahi's progress printing; a real run sends it to stderr.
+    quiet = DiagnosticLog(printing if printing is not None else io.StringIO(), descriptors=())
     # SIGTERM stops it as it does a real run, which raises Terminated here.
     previous = engine.handle_sigterm()
     previous_alarm = signal.getsignal(signal.SIGALRM)
