@@ -134,7 +134,7 @@ for f in glob.glob("/sys/firmware/efi/efivars/LoaderDevicePartUUID-*"):
 	check shipped-lock "flake.lock is the image's ($LOCK_SHA256)" \
 		test "$(sha256sum /etc/nixos/flake.lock | cut -d' ' -f1)" = "$LOCK_SHA256"
 	rm -rf /tmp/shipped && mkdir /tmp/shipped
-	cp /etc/nixos/flake.nix /etc/nixos/flake.lock /etc/nixos/configuration.nix /tmp/shipped/
+	cp /etc/nixos/flake.nix /etc/nixos/flake.lock /etc/nixos/configuration.nix /etc/nixos/imports.nix /tmp/shipped/
 	export XDG_CACHE_HOME=/tmp/empty-cache
 	rm -rf "$XDG_CACHE_HOME"
 	start=$SECONDS
@@ -168,7 +168,7 @@ for f in glob.glob("/sys/firmware/efi/efivars/LoaderDevicePartUUID-*"):
 		# What setup checks before it finishes: the flake, with the setup.nix
 		# it writes, evaluates offline under the new host name.
 		rm -rf /tmp/with-setup && mkdir /tmp/with-setup
-		cp /etc/nixos/flake.nix /etc/nixos/flake.lock /etc/nixos/configuration.nix /etc/nixos/identity.nix /tmp/with-setup/
+		cp /etc/nixos/flake.nix /etc/nixos/flake.lock /etc/nixos/configuration.nix /etc/nixos/imports.nix /etc/nixos/identity.nix /tmp/with-setup/
 		sed -e "s/63d89be1-72f7-4aff-9679-09cafa7e0c2d/$ROOT_A/" -e "s/910de5ca-7390-4716-9a54-8028916e4d78/$ESP_A/" \
 			"$here/setup.nix" >/tmp/with-setup/setup.nix
 		start=$SECONDS
@@ -216,7 +216,7 @@ second)
 	# configuration.nix, built offline with identity.nix as the next
 	# generation. (Setup itself builds no generation.)
 	cp "$here/vm-update.nix" /etc/nixos/vm-update.nix
-	sed -i 's|^    ./developer.nix$|&\n    ./vm-update.nix|' /etc/nixos/configuration.nix
+	sed -i 's|^    ./imports.nix$|&\n    ./vm-update.nix|' /etc/nixos/configuration.nix
 	check update-imported "configuration.nix imports vm-update.nix" grep -q '^    ./vm-update.nix$' /etc/nixos/configuration.nix
 	start=$SECONDS
 	nixos-rebuild boot --flake /etc/nixos#sekka --no-update-lock-file --offline >/tmp/update.log 2>&1

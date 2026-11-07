@@ -77,6 +77,9 @@ let
     assert same "developer/configuration.nix" (builtins.readFile ./developer/configuration.nix) (
       builtins.readFile ./product/configuration.nix
     );
+    assert same "developer/imports.nix" (builtins.readFile ./developer/imports.nix) (
+      builtins.readFile ./product/imports.nix
+    );
     true;
 
   # The sources evaluating /etc/nixos reads, by their path in the lock (from
@@ -341,6 +344,7 @@ let
     etcFiles = [
       "flake.nix"
       "configuration.nix"
+      "imports.nix"
     ];
     title = "image";
   };
@@ -351,6 +355,7 @@ let
     etcFiles = [
       "flake.nix"
       "configuration.nix"
+      "imports.nix"
       "developer.nix"
     ];
     title = "developer image";

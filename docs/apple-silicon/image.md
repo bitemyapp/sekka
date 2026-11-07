@@ -28,8 +28,17 @@ login screen ask for the owner's account and choices
 `/etc/nixos/setup.nix`, which the shipped configuration imports when it
 exists, as it does `identity.nix`. The configuration therefore leaves
 everything setup chooses to setup's module and `setup.nix`: the host name,
-time zone, locale, keyboard layout and installing user are not set, and
-the default desktop is only a default. The VM harness, which doesn't drive
+time zone, locale, keyboard layout and installing user are not set. The
+default desktop is a plain `calamares.defaultDesktop = "aizome";`, which
+Yukimi's Default desktop choice rewrites in place (`edit::set_string`
+accepts only a string literal); setup is to change the same line rather
+than set it in `setup.nix`, where a second definition of the enum would
+conflict. The optional files are imported by `imports.nix`, so that
+`configuration.nix`'s own `imports` is a plain list, which Yukimi appends
+`./yukimi.nix` to when it installs for everyone. `mac-image-tests` runs
+Yukimi's own `packages::import_into` and `edit::set_string` on the shipped
+file (`yukimi-edits.rs`), with the former forms as the failing control. The
+VM harness, which doesn't drive
 setup's screens, logs in through systemd's debug shell, enabled only on the
 VM's copy of the boot entries.
 
@@ -69,11 +78,11 @@ Other outputs:
 
 ## The shipped /etc/nixos
 
-The image ships `flake.nix`, its exact `flake.lock` and `configuration.nix`
-(and `developer.nix` in the developer image) in `/etc/nixos`. The image's
-system is evaluated by calling that same `flake.nix`'s `outputs` with the
-inputs its lock pins, so evaluating `/etc/nixos` with the shipped lock gives
-the image's toplevel exactly, and a no-change rebuild is a no-op.
+The image ships `flake.nix`, its exact `flake.lock`, `configuration.nix` and
+`imports.nix` (and `developer.nix` in the developer image) in `/etc/nixos`.
+The image's system is evaluated by calling that same `flake.nix`'s `outputs`
+with the inputs its lock pins, so evaluating `/etc/nixos` with the shipped
+lock gives the image's toplevel exactly, and a no-change rebuild is a no-op.
 
 - **flake.nix** is Genkan's own template, `templates/flake.nix.in`, rendered
   by `installed-flake.nix` for `aarch64-linux` and the branch
@@ -83,7 +92,9 @@ the image's toplevel exactly, and a no-change rebuild is a no-op.
   exact number of times. The rendered file is tracked as
   `product/flake.nix` (and `developer/flake.nix`); evaluation fails if
   either differs from the rendering, or if `developer/configuration.nix`
-  differs from `product/configuration.nix`.
+  or `developer/imports.nix` differs from the product's.
+- **configuration.nix** and **imports.nix**, which imports `identity.nix`,
+  `setup.nix` and `developer.nix` when they exist.
 - **flake.lock** comes from `nix/installed-lock.nix`, now parameterized by
   `ref`; its default (`nightly`) gives the PC lock byte for byte. A clean
   build pins Sekka as `github:bitemyapp/sekka` at the image's own commit

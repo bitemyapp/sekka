@@ -9,7 +9,8 @@
 # - the initrd's identity check and udev helper (identity/test-check.sh);
 # - that the product image shares no name with the developer image;
 # - the release manifest against the engine's own reader
-#   (release/test_manifest.py).
+#   (release/test_manifest.py);
+# - Yukimi's own edits on the shipped configuration.nix (yukimi-edits.rs).
 {
   pkgs,
   lib,
@@ -120,6 +121,46 @@ let
         mkdir $out
         cp manifest.log work/manifest.json $out/
       '';
+  # Yukimi's own edit code on the shipped configuration.nix (yukimi-edits.rs,
+  # added to yukimi-config as an integration test): installing for
+  # everyone, and the Default desktop choice. Only yukimi-config is built.
+  yukimi = pkgs.stdenv.mkDerivation {
+    name = "apple-installed-yukimi";
+    # Yukimi's workspace, as its helper's package takes it (apps/yukimi/nix).
+    src = lib.fileset.toSource {
+      root = ../..;
+      fileset = lib.fileset.unions [
+        ../../apps/yukimi/Cargo.toml
+        ../../apps/yukimi/Cargo.lock
+        ../../apps/yukimi/crates
+        ../../apps/yukimi/yukimi-helper
+        ../../desktop/aizome/Cargo.toml
+        ../../desktop/aizome/crates/aizome-ipc
+        ../../desktop/aizome/session/aizome-session
+      ];
+    };
+    sourceRoot = "source/apps/yukimi";
+    cargoDeps = pkgs.rustPlatform.importCargoLock { lockFile = ../../apps/yukimi/Cargo.lock; };
+    nativeBuildInputs = [
+      pkgs.rustPlatform.cargoSetupHook
+      pkgs.cargo
+      pkgs.rustc
+    ];
+    postUnpack = ''
+      chmod -R u+w $sourceRoot
+      mkdir -p $sourceRoot/crates/yukimi-config/tests
+      cp ${./yukimi-edits.rs} $sourceRoot/crates/yukimi-config/tests/sekka_mac.rs
+    '';
+    buildPhase = ''
+      SEKKA_MAC_CONFIGURATION=${./product/configuration.nix} \
+        cargo test --offline --frozen -p yukimi-config --test sekka_mac 2>&1 | tee test.log
+      grep -q 'test result: ok. 3 passed' test.log
+    '';
+    installPhase = ''
+      mkdir $out
+      cp test.log $out/
+    '';
+  };
 in
 {
   inherit
@@ -127,6 +168,7 @@ in
     template
     scripts
     manifest
+    yukimi
     ;
   all = pkgs.linkFarm "mac-image-tests" [
     {
@@ -140,6 +182,10 @@ in
     {
       name = "manifest";
       path = manifest;
+    }
+    {
+      name = "yukimi";
+      path = yukimi;
     }
   ];
 }

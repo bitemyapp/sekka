@@ -2,7 +2,7 @@
 # was built from exactly this file with the flake.nix and flake.lock beside
 # it, so rebuilding them unchanged gives the system the image installed.
 #
-# Files beside this one that are imported when they exist:
+# imports.nix imports these files beside this one when they exist:
 # - identity.nix: this installation's own root and EFI system partition,
 #   written once at the first start from the installer's handoff
 #   (sekka-install-identity.service);
@@ -10,12 +10,11 @@
 #   (calamares.firstBootSetup, below);
 # - developer.nix: only in developer images (the `sekka` account, no setup,
 #   and the Asahi installer's fixed partition labels).
-{ lib, pkgs, ... }:
+# `imports` here stays a plain list, so Yukimi can add its own file to it.
+{ pkgs, ... }:
 {
-  imports = builtins.filter builtins.pathExists [
-    ./identity.nix
-    ./setup.nix
-    ./developer.nix
+  imports = [
+    ./imports.nix
   ];
 
   calamares = {
@@ -24,8 +23,8 @@
       "aizome"
       "tatami"
     ];
-    # setup.nix names the owner's choice.
-    defaultDesktop = lib.mkDefault "aizome";
+    # A plain string, which first-boot setup and Yukimi change in place.
+    defaultDesktop = "aizome";
     loginScreen = "aizome";
     tuning.enable = true;
     bootSplash.enable = true;
