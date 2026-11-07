@@ -408,6 +408,23 @@ fn only_the_startup_disk_is_retried() {
     assert!(j.model.authorization.as_ref().unwrap().retry);
     j.password("right");
     assert_eq!(j.model.screen, Screen::Recovery);
+    // The retry's records follow the failure's, as the helper's journal
+    // keeps them: the stage failed, and then it was done.
+    let sequences: Vec<u64> = j.model.records.iter().map(|r| r.sequence).collect();
+    assert_eq!(sequences, (1..=sequences.len() as u64).collect::<Vec<_>>());
+    let tail: Vec<&sekka_mac_contract::Event> = j.model.records.iter().rev().take(3).map(|r| &r.event).collect();
+    assert!(
+        matches!(
+            tail.as_slice(),
+            [
+                sekka_mac_contract::Event::Completed { stage: Stage::StartupDisk, .. },
+                sekka_mac_contract::Event::Intent { stage: Stage::StartupDisk },
+                sekka_mac_contract::Event::Failed { stage: Stage::StartupDisk, .. },
+            ]
+        ),
+        "{tail:?}"
+    );
+    assert!(j.model.stages().iter().all(|(_, s)| *s == CheckState::Good));
 }
 
 #[test]

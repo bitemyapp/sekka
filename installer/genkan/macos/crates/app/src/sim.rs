@@ -40,6 +40,12 @@ pub enum Scenario {
     InstallFails,
     /// Setting the startup disk fails once.
     StartupDiskFails,
+    /// Setting the startup disk fails, and the retry is refused before
+    /// anything is tried: the installation's ESP changed since.
+    StartupDiskRefused,
+    /// Setting the startup disk fails, and fails again the first time it
+    /// is retried.
+    StartupDiskFailsAgain,
     /// The app reopens with macOS's part done.
     WaitingForRecovery,
     /// The app reopens after Recovery finished; the helper's record waits
@@ -60,7 +66,7 @@ pub enum Scenario {
 }
 
 impl Scenario {
-    pub const ALL: [Scenario; 18] = [
+    pub const ALL: [Scenario; 20] = [
         Scenario::Normal,
         Scenario::Unsupported,
         Scenario::NotReady,
@@ -73,6 +79,8 @@ impl Scenario {
         Scenario::ResizeFails,
         Scenario::InstallFails,
         Scenario::StartupDiskFails,
+        Scenario::StartupDiskRefused,
+        Scenario::StartupDiskFailsAgain,
         Scenario::WaitingForRecovery,
         Scenario::RecoveryFinished,
         Scenario::RemovedByHand,
@@ -95,6 +103,8 @@ impl Scenario {
             Scenario::ResizeFails => "resize-fails",
             Scenario::InstallFails => "install-fails",
             Scenario::StartupDiskFails => "startup-disk-fails",
+            Scenario::StartupDiskRefused => "startup-disk-refused",
+            Scenario::StartupDiskFailsAgain => "startup-disk-fails-again",
             Scenario::WaitingForRecovery => "waiting-for-recovery",
             Scenario::RecoveryFinished => "recovery-finished",
             Scenario::RemovedByHand => "removed-by-hand",
@@ -128,7 +138,8 @@ struct SimState {
     password_tries: u32,
     approved_at: Option<Instant>,
     installation: Option<(Uuid, Instant)>,
-    startup_retried: bool,
+    /// What retrying the startup disk added after its failure.
+    retried: Vec<Event>,
     /// The release's files are "staged".
     downloaded: bool,
     /// The helper looked at the Mac and brought its record up to date.
@@ -384,13 +395,16 @@ impl Simulation {
         let failing = match self.scenario {
             Scenario::ResizeFails => Some(Stage::Shrink),
             Scenario::InstallFails => Some(Stage::Root),
-            Scenario::StartupDiskFails if !self.state.lock().unwrap().startup_retried => Some(Stage::StartupDisk),
+            Scenario::StartupDiskFails | Scenario::StartupDiskRefused | Scenario::StartupDiskFailsAgain => {
+                Some(Stage::StartupDisk)
+            }
             _ => None,
         };
         if let Some(f) = failing
             && done >= at(f)
         {
-            let (records, state) = self.records(Some((at(f), Some(f))), Vec::new());
+            let retried = self.state.lock().unwrap().retried.clone();
+            let (records, state) = self.records(Some((at(f), Some(f))), retried);
             return Events {
                 records,
                 state,
@@ -663,17 +677,42 @@ impl Environment for Simulation {
             }),
         }
     }
-    fn retry_startup_disk(&self, id: Uuid, _: Secret) -> Result<Events, HelperRefusal> {
+    /// As the helper answers: only after setting the startup disk failed,
+    /// and only that stage again, its records added after the failure; or
+    /// refused with the engine's reason and nothing recorded, when the
+    /// installation isn't as it was left.
+    fn retry_startup_disk(&self, _: Uuid, _: Secret) -> Result<Events, HelperRefusal> {
         self.wait(800);
-        self.state.lock().unwrap().startup_retried = true;
-        let (records, _) = self.records(None, Vec::new());
-        let _ = id;
-        Ok(Events {
-            records,
-            state: InstallState::WaitingForRecovery,
-            running: false,
-            progress: None,
-        })
+        let refused = |message: &str| HelperRefusal {
+            code: HelperRefusalCode::State,
+            message: message.parse().unwrap(),
+        };
+        if self.current().state != InstallState::StartupDiskFailed {
+            return Err(refused("Only setting the startup disk can be tried again, and only after it failed."));
+        }
+        let mut state = self.state.lock().unwrap();
+        let outcome = match (self.scenario, state.retried.is_empty()) {
+            (Scenario::StartupDiskRefused, _) => {
+                return Err(refused(
+                    "This installation isn't as it was left: its ESP's files differ from what was installed and verified. Setting the startup disk again isn't safe.",
+                ));
+            }
+            (Scenario::StartupDiskFailsAgain, true) => failed(
+                Stage::StartupDisk,
+                "startup-disk-not-selected",
+                "macOS accepted the startup disk, but reading it back names another volume.",
+                None,
+                DiskChanged::No,
+            ),
+            _ => Event::Completed {
+                stage: Stage::StartupDisk,
+                facts: vec![],
+                verification: Verification::Inspected,
+            },
+        };
+        state.retried.extend([Event::Intent { stage: Stage::StartupDisk }, outcome]);
+        drop(state);
+        Ok(self.current())
     }
     /// As the helper answers: never while its engine runs; with the record
     /// as it stands when it lets another installation begin; otherwise
