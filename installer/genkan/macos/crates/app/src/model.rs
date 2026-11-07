@@ -1322,10 +1322,11 @@ impl Model {
     /// it no longer stands in the way. Its record knows nothing of what
     /// Recovery did, or of partitions removed by hand, and this Mac's own
     /// inspection, run as the person using the app, can't read the boot
-    /// policy. So the helper is asked (once) to look as root and bring the
-    /// record up to date when the record waits for Recovery, or names an
-    /// installation the inspection doesn't find, and this is decided again
-    /// from its answer. If it can't, the inspection decides what it can.
+    /// policy or tell what is in the space the plan gave Sekka. So the
+    /// helper is asked (once in each check) to look as root and bring the
+    /// record up to date, for any installation it would look at
+    /// ([`helper_looks`]), and this is decided again from its answer. If it
+    /// can't, the inspection decides what it can.
     fn reconnect(&mut self, summary: &Summary) -> Option<Vec<Effect>> {
         let id = summary.installation;
         let Some(inspection) = &self.inspection else { return Some(Vec::new()) };
@@ -1339,16 +1340,11 @@ impl Model {
         match self.reconciling {
             Some(Reconciling::Asked(asked)) if asked == id => return Some(Vec::new()),
             Some(Reconciling::Answered(answered) | Reconciling::Refused(answered)) if answered == id => {}
-            _ => {
-                let recovery = matches!(
-                    summary.state,
-                    InstallState::WaitingForRecovery | InstallState::EnrollmentUncertain
-                ) && found.is_some_and(|s| s != InstallationState::Partial);
-                if recovery || absent {
-                    self.reconciling = Some(Reconciling::Asked(id));
-                    return Some(vec![Effect::Reconcile(id)]);
-                }
+            _ if helper_looks(&summary.state) => {
+                self.reconciling = Some(Reconciling::Asked(id));
+                return Some(vec![Effect::Reconcile(id)]);
             }
+            _ => {}
         }
         // Finished, then removed by hand: nothing of it stands in the way.
         if summary.state == InstallState::WaitingForSetup && gone {
@@ -1545,6 +1541,17 @@ impl Model {
             _ => None,
         }
     }
+}
+
+/// Whether the helper is asked to look at the Mac for an installation
+/// stopped in this state: any that stands in the way of another. It judges
+/// by what lies in the space the plan gave Sekka, not by what names the
+/// installation, so it can close one that never named itself on the disk,
+/// and it records nothing while anything is there. One that never started a
+/// stage that changes the disk is cancelled instead; one that lets another
+/// begin, finished or not, it doesn't look at again.
+fn helper_looks(state: &InstallState) -> bool {
+    !state.allows_new_installation() && !matches!(state, InstallState::Planned | InstallState::AssetsVerified)
 }
 
 /// Whether an installation's record shows it got far enough to name itself

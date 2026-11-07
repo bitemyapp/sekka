@@ -838,13 +838,15 @@ fn stopped(m: &Model, p: &mut Page) {
         }
     }
     p.left("Copy Diagnostics", || Msg::CopyDiagnostics);
+    // Checking again asks the helper to look at the disk for itself, which
+    // closes the record once nothing of the installation is left.
     if actions.contains(&NextAction::RetryStartupDisk) {
+        p.right("Check Again", || Msg::CheckAgain);
         p.primary("Set Startup Disk Again…", || Msg::RetryStartupDisk);
     } else if cancel {
         p.primary("Cancel This Installation", || Msg::CancelInstallation);
-    } else if actions.contains(&NextAction::Reinspect) {
-        p.primary("Check This Mac Again", || Msg::CheckAgain);
     } else {
         p.quit();
+        p.primary("Check This Mac Again", || Msg::CheckAgain);
     }
 }

@@ -429,7 +429,7 @@ pub const RETRY_FAILED: &str = "Setting the startup disk didn't work again. What
 /// What the stopped page offers, by what the record permits.
 pub const CANCEL_STOPPED: &str = "Cancel this installation, then choose a size again. Nothing on your disk changed, so there's nothing to undo.";
 pub const REINSPECT: &str = "Check this Mac again and review a new plan. If the same step fails again, copy the diagnostics and ask for help.";
-pub const INSPECT_ACTUAL_STATE: &str = "Don't start another installation. Copy the diagnostics and ask for help: the disk needs to be looked at as it is now, and Sekka Installer won't guess.";
+pub const INSPECT_ACTUAL_STATE: &str = "Don't start another installation. Copy the diagnostics and ask for help: the disk needs to be looked at as it is now, and Sekka Installer won't guess. Checking this Mac again asks its helper to look at the disk for itself; it closes the record once nothing of this installation is left.";
 pub const RETRY_STARTUP_DISK: &str = "Set the startup disk again. Only that step is repeated, after checking that everything else is still in place.";
 /// After the helper refused a retry: the cause may be one the owner can
 /// change (starting up from the internal disk, say) or one that lasts.

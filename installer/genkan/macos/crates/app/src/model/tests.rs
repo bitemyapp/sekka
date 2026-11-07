@@ -684,11 +684,16 @@ fn an_installation_removed_by_hand_is_named_when_the_helper_cant_close_it() {
 }
 
 #[test]
-fn an_installation_that_stopped_before_naming_itself_on_the_disk_is_never_called_removed() {
+fn every_installation_that_stands_in_the_way_is_looked_at_by_the_helper() {
     let env = Simulation::new(Scenario::Normal, 0.0);
+    // One that never started changing the disk is cancelled instead.
+    for state in [InstallState::Planned, InstallState::AssetsVerified] {
+        let (m, effects) = hear(&env, known(state.clone()), env.inspect());
+        assert!(effects.iter().all(|e| !matches!(e, Effect::Reconcile(_))), "{state:?}: {effects:?}");
+        assert_eq!(m.screen, Screen::Stopped, "{state:?}");
+        assert!(m.stopped_actions().contains(&sekka_mac_contract::NextAction::Cancel));
+    }
     for state in [
-        InstallState::Planned,
-        InstallState::AssetsVerified,
         InstallState::MutationStarted { stage: Stage::Shrink },
         InstallState::MutationStarted { stage: Stage::StubPartition },
         InstallState::MutationStarted { stage: Stage::Esp },
@@ -705,11 +710,37 @@ fn an_installation_that_stopped_before_naming_itself_on_the_disk_is_never_called
             disk_changed: DiskChanged::Unknown,
         },
     ] {
-        // Nothing on the disk names it, as nothing would yet.
-        let (m, effects) = hear(&env, known(state.clone()), env.inspect());
-        assert!(effects.iter().all(|e| !matches!(e, Effect::Reconcile(_))), "{state:?}: {effects:?}");
+        // Nothing on the disk names it, as nothing would yet: the helper
+        // judges by what is in the plan's space, which the app can't.
+        let (mut m, effects) = hear(&env, known(state.clone()), env.inspect());
+        assert!(matches!(effects.as_slice(), [Effect::Reconcile(_)]), "{state:?}: {effects:?}");
+        // It finds something there, or can't tell: the installation stops
+        // the way, and isn't called gone.
+        let unchanged = Events {
+            records: Vec::new(),
+            state: state.clone(),
+            running: false,
+            progress: None,
+        };
+        m.update(Msg::Reconciled(Ok(unchanged)));
         assert_eq!(m.screen, Screen::Stopped, "{state:?}");
+        assert!(m.stopped_actions().contains(&sekka_mac_contract::NextAction::InspectActualState));
+        // Only the helper closes it, when nothing of it is in its space.
+        let (mut m, _) = hear(&env, known(state.clone()), env.inspect());
+        let removed = Events {
+            records: Vec::new(),
+            state: InstallState::Removed,
+            running: false,
+            progress: None,
+        };
+        m.update(Msg::Reconciled(Ok(removed)));
+        assert_eq!(m.screen, Screen::Plan, "{state:?}");
+        assert_eq!(m.notice.as_deref(), Some(crate::text::REMOVED));
     }
+    // A finished one lets another begin, and the helper doesn't look at it
+    // again.
+    let (_, effects) = hear(&env, known(InstallState::WaitingForSetup), env.inspect());
+    assert!(effects.iter().all(|e| !matches!(e, Effect::Reconcile(_))), "{effects:?}");
 }
 
 #[test]
@@ -722,16 +753,14 @@ fn a_finished_installation_this_mac_cant_identify_is_not_offered_a_second() {
         i.installations.push(on_disk(InstallationKind::OtherLinux, InstallationState::Unknown, None));
         Ok(i)
     };
-    let (mut m, effects) = hear(&env, known(InstallState::WaitingForSetup), unread());
-    assert!(matches!(effects.as_slice(), [Effect::Reconcile(_)]), "the helper is asked: {effects:?}");
-    m.update(Msg::Reconciled(Err(inspection_failed())));
+    let (m, effects) = hear(&env, known(InstallState::WaitingForSetup), unread());
+    assert!(effects.is_empty(), "{effects:?}");
     assert_eq!(m.screen, Screen::Existing);
     assert!(m.installed());
 
     // On a disk the inspection accounts for, a finished installation that
-    // is gone doesn't stand in the way, whatever the helper says.
-    let (mut m, _) = hear(&env, known(InstallState::WaitingForSetup), env.inspect());
-    m.update(Msg::Reconciled(Err(inspection_failed())));
+    // is gone doesn't stand in the way.
+    let (m, _) = hear(&env, known(InstallState::WaitingForSetup), env.inspect());
     assert_eq!(m.screen, Screen::Plan);
 
     // Nor is an unfinished one called gone beside something unidentified.
@@ -760,12 +789,15 @@ fn the_helper_is_asked_about_recovery_once_in_each_check() {
     let effects = j.model.update(Msg::CheckAgain);
     j.settle(effects);
     assert_eq!(j.model.screen, Screen::Recovery);
-    // A partial installation has nothing Recovery could have finished.
+    assert_eq!(j.model.reconciling, Some(Reconciling::Answered(SIM_ID)));
+    // Partial, as this Mac's own look found it, is still the helper's to
+    // judge: that look, as the person using the app, misses what it can't
+    // open.
     let env = Simulation::new(Scenario::WaitingForRecovery, 0.0);
     let mut partial = env.inspect().unwrap();
     partial.installations[0].state = InstallationState::Partial;
     let (_, effects) = hear(&env, env.helper_status(), Ok(partial));
-    assert!(effects.iter().all(|e| !matches!(e, Effect::Reconcile(_))), "{effects:?}");
+    assert!(matches!(effects.as_slice(), [Effect::Reconcile(_)]), "{effects:?}");
 }
 
 #[test]
