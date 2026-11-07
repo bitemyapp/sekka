@@ -2,6 +2,10 @@
 //! (trashing, restoring, deleting from it): see the module above for the
 //! rules they keep.
 
+// Typestate code: every state and every case is named, so a new one
+// added later can't fall into an arm written for others.
+#![deny(clippy::wildcard_enum_match_arm)]
+
 use std::ffi::OsStr;
 use std::fs::{self, File, FileTimes, OpenOptions};
 use std::io;
@@ -10,9 +14,11 @@ use std::path::{Path, PathBuf};
 
 use super::delete;
 use super::names;
+use super::place::{self, InPlace, Item as CopyItem, Move};
+use super::replace::{self, Answer, NotSetAside, Occupant, Replaced, SetAside};
 use super::sys;
 use super::trash::{self, Trash};
-use super::{Cancelled, Conflict, Env, ErrorChoice, Failure, Report, Resolution, is_within};
+use super::{Cancelled, Conflict, Env, ErrorChoice, Failure, Report, is_within};
 
 /// Copy, or move.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -29,9 +35,26 @@ pub struct Item {
 }
 
 /// Copy or move `sources` into the folder `dest`, each under its own
-/// name. Replaced items go to `trash` when there is one (else they're
-/// deleted once their replacements are in place).
-pub fn transfer(sources: &[PathBuf], dest: &Path, mode: Mode, env: &mut Env, trash: Option<&Trash>) -> Report {
+/// name. Replaced items go to `trash`, once their replacements are in
+/// place. No caller can have them deleted instead:
+///
+/// ```compile_fail,E0432
+/// // What the bug amounted to, as a choice: delete what's replaced.
+/// use hako::fsops::replace::Displaced;
+/// use hako::fsops::transfer::{Mode, transfer};
+/// fn put_back_like(sources: &[std::path::PathBuf], dest: &std::path::Path, env: &mut hako::fsops::Env) {
+///     let _ = transfer(sources, dest, Mode::Move, env, Displaced::DeleteForGood);
+/// }
+/// ```
+///
+/// ```
+/// use hako::fsops::transfer::{Mode, transfer};
+/// use hako::fsops::trash::Trash;
+/// fn put_back_like(sources: &[std::path::PathBuf], dest: &std::path::Path, env: &mut hako::fsops::Env, trash: &Trash) {
+///     let _ = transfer(sources, dest, Mode::Move, env, trash);
+/// }
+/// ```
+pub fn transfer(sources: &[PathBuf], dest: &Path, mode: Mode, env: &mut Env, trash: &Trash) -> Report {
     let items: Vec<Item> = sources
         .iter()
         .map(|s| Item { source: s.clone(), target: dest.join(s.file_name().unwrap_or(OsStr::new("item"))) })
@@ -39,8 +62,9 @@ pub fn transfer(sources: &[PathBuf], dest: &Path, mode: Mode, env: &mut Env, tra
     transfer_items(&items, mode, env, trash)
 }
 
-/// Copy each of `sources` beside itself, as "name copy".
-pub fn duplicate(sources: &[PathBuf], env: &mut Env) -> Report {
+/// Copy each of `sources` beside itself, as "name copy" (free, unless
+/// another program takes the name meanwhile).
+pub fn duplicate(sources: &[PathBuf], env: &mut Env, trash: &Trash) -> Report {
     let items: Vec<Item> = sources
         .iter()
         .filter_map(|s| {
@@ -49,11 +73,11 @@ pub fn duplicate(sources: &[PathBuf], env: &mut Env) -> Report {
             Some(Item { source: s.clone(), target: dir.join(names::duplicate_name(dir, s.file_name()?, is_dir)) })
         })
         .collect();
-    transfer_items(&items, Mode::Copy, env, None)
+    transfer_items(&items, Mode::Copy, env, trash)
 }
 
 /// Copy or move each item to its target.
-pub fn transfer_items(items: &[Item], mode: Mode, env: &mut Env, trash: Option<&Trash>) -> Report {
+pub fn transfer_items(items: &[Item], mode: Mode, env: &mut Env, trash: &Trash) -> Report {
     let mut report = Report::default();
     let mut w = Worker { env, mode, trash, problems: Vec::new() };
     if w.count(items).is_err() {
@@ -128,7 +152,8 @@ pub fn trash_items(paths: &[PathBuf], trash: &Trash, env: &mut Env) -> (Report, 
 }
 
 /// Put trashed items back where they came from (making the folders on
-/// the way if they've gone), asking about conflicts there.
+/// the way if they've gone), asking about conflicts there. What a Put
+/// Back replaces goes to `trash`, as the conflict sheet says.
 pub fn restore(entries: &[trash::Entry], trash: &Trash, env: &mut Env) -> Report {
     let mut report = Report::default();
     let mut items = Vec::new();
@@ -138,7 +163,7 @@ pub fn restore(entries: &[trash::Entry], trash: &Trash, env: &mut Env) -> Report
             None => report.failed.push((e.file.clone(), "where it came from isn't known".into())),
         }
     }
-    let mut w = Worker { env, mode: Mode::Move, trash: None, problems: Vec::new() };
+    let mut w = Worker { env, mode: Mode::Move, trash, problems: Vec::new() };
     let plain: Vec<Item> = items.iter().map(|(_, i)| i.clone()).collect();
     if w.count(&plain).is_err() {
         report.cancelled = true;
@@ -162,7 +187,15 @@ pub fn restore(entries: &[trash::Entry], trash: &Trash, env: &mut Env) -> Report
         }
         match w.place_top(&item.source, &item.target) {
             Ok(Placed::Done(to)) => {
-                trash.forget(entry);
+                // A folder merged in part (a conflict in it skipped) is
+                // still in the can with what's left: it keeps its info.
+                match entry.gone() {
+                    Some(gone) => trash.forget(gone),
+                    None => w.problems.push((
+                        item.target.clone(),
+                        "some of what it held is still in the Trash, where it can be put back from".into(),
+                    )),
+                }
                 report.done.push((item.source.clone(), to));
             }
             Ok(Placed::Skipped) => report.skipped.push(item.source.clone()),
@@ -207,14 +240,14 @@ pub fn erase(entries: &[trash::Entry], trash: &Trash, env: &mut Env) -> Report {
             reporter.report(progress);
         });
         match r {
-            Ok(r) if r.failed.is_empty() => {
-                trash.forget(e);
-                report.done.push((e.file.clone(), e.file.clone()));
-            }
-            Ok(r) => {
-                let (p, why) = r.failed[0].clone();
-                report.failed.push((e.file.clone(), format!("{}: {why}", p.display())));
-            }
+            Ok(r) => match (r.failed.first(), e.gone()) {
+                (None, Some(gone)) => {
+                    trash.forget(gone);
+                    report.done.push((e.file.clone(), e.file.clone()));
+                }
+                (Some((p, why)), _) => report.failed.push((e.file.clone(), format!("{}: {why}", p.display()))),
+                (None, None) => report.failed.push((e.file.clone(), "it's still in the Trash".into())),
+            },
             Err(Cancelled) => {
                 report.cancelled = true;
                 break;
@@ -229,22 +262,7 @@ pub fn empty_trash(trash: &Trash, env: &mut Env) -> Report {
     let entries = trash.list();
     let report = erase(&entries, trash, env);
     if !report.cancelled {
-        for can in trash.cans() {
-            if let Ok(rd) = fs::read_dir(can.info()) {
-                for e in rd.flatten() {
-                    let name = e.file_name();
-                    let n = name.as_encoded_bytes();
-                    if let Some(stem) = n.strip_suffix(b".trashinfo") {
-                        // SAFETY: a prefix of an OsStr's encoded bytes,
-                        // cut at an ASCII suffix, is valid encoded bytes.
-                        let stem = unsafe { OsStr::from_encoded_bytes_unchecked(stem) };
-                        if fs::symlink_metadata(can.files().join(stem)).is_err() {
-                            let _ = fs::remove_file(e.path());
-                        }
-                    }
-                }
-            }
-        }
+        trash.forget_ghosts();
     }
     report
 }
@@ -264,19 +282,11 @@ enum Stop {
 
 type Step<T> = Result<T, Stop>;
 
-/// The sources a move across filesystems may delete once their copies
-/// are in place: files and links copied whole, then folders (which are
-/// removed only if they're empty by then).
-#[derive(Default)]
-struct Arrived {
-    leaves: Vec<PathBuf>,
-    dirs: Vec<PathBuf>,
-}
-
 struct Worker<'x, 'a> {
     env: &'x mut Env<'a>,
     mode: Mode,
-    trash: Option<&'x Trash>,
+    /// Where the items replacements displace go.
+    trash: &'x Trash,
     problems: Vec<(PathBuf, String)>,
 }
 
@@ -335,7 +345,7 @@ impl Worker<'_, '_> {
         let Some(dir) = target.parent() else { return false };
         match (sys::device(source), fs::metadata(dir)) {
             (Ok(a), Ok(b)) => a == b.dev(),
-            _ => false,
+            (Err(_), _) | (_, Err(_)) => false,
         }
     }
 
@@ -374,7 +384,7 @@ impl Worker<'_, '_> {
             // Its files live on another disk: moving them would empty it.
             return Err(Stop::Skip("it's where a disk is mounted; unmount it, or copy what's on it".into()));
         }
-        let mut replace = false;
+        let mut occupant = None;
         if let Ok(tmeta) = fs::symlink_metadata(&target) {
             if same_file(&smeta, &tmeta) {
                 if self.mode == Mode::Move {
@@ -398,94 +408,96 @@ impl Worker<'_, '_> {
                     source_modified: smeta.modified().ok(),
                     target_modified: tmeta.modified().ok(),
                 };
-                match self.env.asker.conflict(&conflict) {
-                    Resolution::Skip => return Ok(Placed::Skipped),
-                    Resolution::Cancel => return Err(Stop::Cancel),
-                    Resolution::KeepBoth => {
+                match replace::ask(&mut *self.env.asker, &conflict, &tmeta) {
+                    Answer::Skip => return Ok(Placed::Skipped),
+                    Answer::Cancel => return Err(Stop::Cancel),
+                    Answer::KeepBoth => {
                         target =
                             dest.join(names::free_name(&dest, target.file_name().unwrap_or_default(), smeta.is_dir()));
                     }
-                    Resolution::Merge if conflict.can_merge() => {
+                    Answer::Merge => {
                         self.merge(source, &target)?;
                         return Ok(Placed::Done(target));
                     }
-                    Resolution::Replace | Resolution::Merge => {
+                    Answer::Replace(o) => {
                         if is_within(&src_n, &target) {
                             return Err(Stop::Skip("it can't replace a folder it's inside".into()));
                         }
-                        replace = true;
+                        occupant = Some(o);
                     }
                 }
             }
         }
-        let aside = if replace { Some(self.set_aside(&target)?) } else { None };
+        let aside = match occupant {
+            Some(o) => Some(self.set_aside(o)?),
+            None => None,
+        };
         match self.place(source, &target, &smeta) {
-            Ok(()) => {
-                if let Some(aside) = aside {
-                    self.dispose(&aside, &target);
+            Ok(placed) => {
+                match aside.map(|a| a.replaced(placed)) {
+                    Some(Ok(replaced)) => self.dispose(replaced),
+                    // Placed elsewhere than the item it was to replace
+                    // (which doesn't happen): that one goes back.
+                    Some(Err(aside)) => {
+                        if let Err(stranded) = aside.put_back() {
+                            self.problems.push(stranded.problem());
+                        }
+                    }
+                    None => {}
                 }
                 Ok(Placed::Done(target))
             }
             Err(stop) => {
                 if let Some(aside) = aside
-                    && let Err(e) = sys::rename_noreplace(&aside, &target)
+                    && let Err(stranded) = aside.put_back()
                 {
-                    self.problems.push((
-                        target.clone(),
-                        format!(
-                            "the item it was to replace is kept as “{}” ({})",
-                            aside.display(),
-                            super::describe(&e)
-                        ),
-                    ));
+                    self.problems.push(stranded.problem());
                 }
                 Err(stop)
             }
         }
     }
 
-    /// Move what's at `target` out of the way, under a hidden name beside
-    /// it, until its replacement is in place.
-    fn set_aside(&mut self, target: &Path) -> Step<PathBuf> {
-        let dir = target.parent().unwrap_or(Path::new("/"));
+    /// Move what's at the target out of the way, under a hidden name
+    /// beside it, until its replacement is in place.
+    fn set_aside(&mut self, mut occupant: Occupant) -> Step<SetAside> {
+        let name = names::display(occupant.target().file_name().unwrap_or_default());
         loop {
-            let aside = dir.join(names::aside_name(target.file_name().unwrap_or_default()));
-            match sys::rename_noreplace(target, &aside) {
-                Ok(()) => return Ok(aside),
-                Err(e) if e.kind() == io::ErrorKind::AlreadyExists => continue,
-                Err(e) => self.ask(Failure::new(target, "replace", &e))?,
+            match occupant.set_aside() {
+                Ok(aside) => return Ok(aside),
+                Err(NotSetAside::Changed(stranded)) => {
+                    if let Some(s) = stranded {
+                        self.problems.push(s.problem());
+                    }
+                    return Err(Stop::Skip(format!("“{name}” changed while you were asked, so it wasn't replaced")));
+                }
+                Err(NotSetAside::Failed(o, e)) => {
+                    let f = Failure::new(o.target(), "replace", &e);
+                    occupant = o;
+                    self.ask(f)?;
+                }
             }
         }
     }
 
-    /// A replaced item, set aside: to the Trash (as the item it was), or
-    /// deleted.
-    fn dispose(&mut self, aside: &Path, was: &Path) {
-        if let Some(trash) = self.trash
-            && trash.trash_as(aside, was).is_ok()
-        {
-            return;
-        }
-        let r = delete::remove_quietly(aside);
-        if let Some((p, why)) = r.failed.first() {
-            self.problems.push((
-                was.to_path_buf(),
-                format!("the item it replaced couldn't all be removed ({}: {why})", p.display()),
-            ));
+    /// A replaced item goes to the Trash.
+    fn dispose(&mut self, replaced: Replaced) {
+        if let Err(kept) = replaced.dispose(self.trash) {
+            self.problems.push(kept.problem());
         }
     }
 
     /// Bring `source` to `target`, where nothing is: a rename where it
     /// can be, else a copy (and, for a move, the source's deletion once
     /// the copy is safely in place).
-    fn place(&mut self, source: &Path, target: &Path, smeta: &fs::Metadata) -> Step<()> {
+    fn place(&mut self, source: &Path, target: &Path, smeta: &fs::Metadata) -> Step<InPlace> {
         if self.mode == Mode::Move {
             loop {
-                match self.rename_into(source, target, smeta) {
-                    Ok(()) => {
+                match place::rename_item(source, target, smeta) {
+                    Ok(placed) => {
                         self.env.progress.items_done += 1;
                         self.env.report();
-                        return Ok(());
+                        return Ok(placed);
                     }
                     Err(e) if sys::is_cross_device(&e) => {
                         // Counted as a rename: count it as the copy it is.
@@ -507,18 +519,20 @@ impl Worker<'_, '_> {
         }
         let dest = target.parent().unwrap_or(Path::new("/"));
         let partial = dest.join(names::partial_name(target.file_name().unwrap_or_default()));
-        let mut arrived = (self.mode == Mode::Move).then(Arrived::default);
-        let sync = self.mode == Mode::Move;
-        match self.copy_any(source, &partial, sync, &mut arrived) {
-            Ok(_) => {}
-            Err(stop) => {
-                delete::remove_quietly(&partial);
-                return Err(stop);
-            }
+        // A move records, in each folder its copy makes, the sources it may
+        // delete once they're committed.
+        let mut moving = (self.mode == Mode::Move).then(|| Move::new(source, &partial));
+        let item = match moving.as_mut() {
+            Some(m) => m.item(),
+            None => CopyItem::copying(source, &partial),
+        };
+        if let Err(stop) = self.copy_any(item) {
+            delete::remove_quietly(&partial);
+            return Err(stop);
         }
-        loop {
-            match sys::rename_noreplace(&partial, target) {
-                Ok(()) => break,
+        let placed = loop {
+            match place::rename(&partial, target) {
+                Ok(placed) => break placed,
                 Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
                     delete::remove_quietly(&partial);
                     return Err(Stop::Skip(format!(
@@ -533,50 +547,18 @@ impl Worker<'_, '_> {
                     }
                 }
             }
-        }
-        if sync && let Err(e) = sys::sync_dir(dest) {
-            // The copy may not be on the disk: keep the source.
-            self.problems.push((source.to_path_buf(), format!("the original is kept: {}", super::describe(&e))));
-            return Ok(());
-        }
-        if let Some(arrived) = arrived {
-            for leaf in &arrived.leaves {
-                if let Err(e) = fs::remove_file(leaf)
-                    && e.kind() != io::ErrorKind::NotFound
-                {
-                    self.problems.push((
-                        leaf.clone(),
-                        format!("arrived, but the original couldn't be removed: {}", super::describe(&e)),
-                    ));
+        };
+        // A move's sources go once the folder the copy is in is synced.
+        if let Some(moving) = moving {
+            match moving.commit(&placed) {
+                Ok(committed) => self.problems.extend(committed.delete_sources()),
+                // The copy may not be on the disk: keep the source.
+                Err(e) => {
+                    self.problems.push((source.to_path_buf(), format!("the original is kept: {}", super::describe(&e))))
                 }
             }
-            for dir in &arrived.dirs {
-                // Folders with things left in them (skipped) stay.
-                let _ = fs::remove_dir(dir);
-            }
         }
-        Ok(())
-    }
-
-    /// `rename` that refuses to overwrite, and moves a read-only folder
-    /// of ours (which a rename to another folder needs to write to).
-    fn rename_into(&self, source: &Path, target: &Path, smeta: &fs::Metadata) -> io::Result<()> {
-        match sys::rename_noreplace(source, target) {
-            Err(e)
-                if e.kind() == io::ErrorKind::PermissionDenied
-                    && smeta.is_dir()
-                    && smeta.uid() == sys::uid()
-                    && smeta.mode() & 0o200 == 0 =>
-            {
-                let mode = smeta.mode() & 0o7777;
-                fs::set_permissions(source, fs::Permissions::from_mode(mode | 0o200))?;
-                let r = sys::rename_noreplace(source, target);
-                let now = if r.is_ok() { target } else { source };
-                let _ = fs::set_permissions(now, fs::Permissions::from_mode(mode));
-                r
-            }
-            r => r,
-        }
+        Ok(placed)
     }
 
     /// Folders both: `source`'s contents into `target`, each placed (and
@@ -617,22 +599,21 @@ impl Worker<'_, '_> {
         }
     }
 
-    /// Copy whatever `source` is to `dest` (which isn't there): whether
-    /// all of it came.
-    fn copy_any(&mut self, source: &Path, dest: &Path, sync: bool, arrived: &mut Option<Arrived>) -> Step<bool> {
+    /// Copy whatever `item`'s source is to its copy (which isn't there).
+    fn copy_any(&mut self, item: CopyItem<'_>) -> Step<()> {
         self.checkpoint()?;
-        let meta = self.source_meta(source)?;
-        self.env.progress.current = Some(source.to_path_buf());
+        let meta = self.source_meta(item.source())?;
+        self.env.progress.current = Some(item.source().to_path_buf());
         let ft = meta.file_type();
         if ft.is_symlink() {
-            self.copy_link(source, dest, arrived)
+            self.copy_link(item)
         } else if ft.is_dir() {
-            self.copy_dir(source, dest, &meta, sync, arrived)
+            self.copy_dir(item, &meta)
         } else if ft.is_file() {
-            self.copy_file(source, dest, &meta, sync, arrived)
+            self.copy_file(item, &meta)
         } else {
             self.ask(Failure::because(
-                source,
+                item.source(),
                 "copy",
                 "it's a special file (a pipe, socket or device), which can't be copied",
             ))?;
@@ -640,58 +621,54 @@ impl Worker<'_, '_> {
         }
     }
 
-    fn copy_link(&mut self, source: &Path, dest: &Path, arrived: &mut Option<Arrived>) -> Step<bool> {
+    fn copy_link(&mut self, item: CopyItem<'_>) -> Step<()> {
         loop {
-            match fs::read_link(source).and_then(|to| std::os::unix::fs::symlink(to, dest)) {
+            match fs::read_link(item.source()).and_then(|to| std::os::unix::fs::symlink(to, item.copy())) {
                 Ok(()) => break,
-                Err(e) => self.ask(Failure::new(source, "copy the link", &e))?,
+                Err(e) => self.ask(Failure::new(item.source(), "copy the link", &e))?,
             }
         }
         self.env.progress.items_done += 1;
-        if let Some(a) = arrived {
-            a.leaves.push(source.to_path_buf());
+        if let Err(e) = item.link() {
+            return Err(Stop::Skip(super::describe(&e)));
         }
-        Ok(true)
+        Ok(())
     }
 
-    fn copy_file(
-        &mut self,
-        source: &Path,
-        dest: &Path,
-        meta: &fs::Metadata,
-        sync: bool,
-        arrived: &mut Option<Arrived>,
-    ) -> Step<bool> {
+    fn copy_file(&mut self, mut item: CopyItem<'_>, meta: &fs::Metadata) -> Step<()> {
         loop {
             let mut counted = 0u64;
-            match self.try_copy_file(source, dest, meta, sync, &mut counted) {
-                Ok(()) => break,
-                Err((action, e)) => {
-                    let _ = fs::remove_file(dest);
-                    self.env.progress.bytes_done = self.env.progress.bytes_done.saturating_sub(counted);
-                    if is_cancel(&e) {
-                        return Err(Stop::Cancel);
+            let (action, e) = match self.try_copy_file(item.source(), item.copy(), meta, &mut counted) {
+                // In a move, its data is synced too.
+                Ok(file) => match item.file(&file) {
+                    Ok(()) => break,
+                    Err((back, e)) => {
+                        item = back;
+                        ("write", e)
                     }
-                    self.ask(Failure::new(source, action, &e))?;
-                }
+                },
+                Err(failed) => failed,
+            };
+            let _ = fs::remove_file(item.copy());
+            self.env.progress.bytes_done = self.env.progress.bytes_done.saturating_sub(counted);
+            if is_cancel(&e) {
+                return Err(Stop::Cancel);
             }
+            self.ask(Failure::new(item.source(), action, &e))?;
         }
         self.env.progress.items_done += 1;
         self.env.report();
-        if let Some(a) = arrived {
-            a.leaves.push(source.to_path_buf());
-        }
-        Ok(true)
+        Ok(())
     }
 
+    /// Copy the file `source` to `dest`: the copy, its data not synced.
     fn try_copy_file(
         &mut self,
         source: &Path,
         dest: &Path,
         meta: &fs::Metadata,
-        sync: bool,
         counted: &mut u64,
-    ) -> Result<(), (&'static str, io::Error)> {
+    ) -> Result<File, (&'static str, io::Error)> {
         let mut from = File::open(source).map_err(|e| ("read", e))?;
         let mut to =
             OpenOptions::new().write(true).create_new(true).mode(0o600).open(dest).map_err(|e| ("write", e))?;
@@ -708,61 +685,54 @@ impl Worker<'_, '_> {
         if let (Ok(a), Ok(m)) = (meta.accessed(), meta.modified()) {
             let _ = to.set_times(FileTimes::new().set_accessed(a).set_modified(m));
         }
-        if sync {
-            to.sync_all().map_err(|e| ("write", e))?;
-        }
-        Ok(())
+        Ok(to)
     }
 
-    fn copy_dir(
-        &mut self,
-        source: &Path,
-        dest: &Path,
-        meta: &fs::Metadata,
-        sync: bool,
-        arrived: &mut Option<Arrived>,
-    ) -> Step<bool> {
+    fn copy_dir(&mut self, item: CopyItem<'_>, meta: &fs::Metadata) -> Step<()> {
         loop {
-            match fs::DirBuilder::new().mode(0o700).create(dest) {
+            match fs::DirBuilder::new().mode(0o700).create(item.copy()) {
                 Ok(()) => break,
-                Err(e) => self.ask(Failure::new(dest, "make the folder", &e))?,
+                Err(e) => self.ask(Failure::new(item.copy(), "make the folder", &e))?,
             }
         }
-        let names = match self.read_names(source) {
+        let names = match self.read_names(item.source()) {
             Ok(n) => n,
             Err(stop) => {
-                let _ = fs::remove_dir(dest);
+                let _ = fs::remove_dir(item.copy());
                 return Err(stop);
             }
         };
-        let mut complete = true;
+        let source = item.source().to_path_buf();
+        let mut folder = item.folder();
         for name in names {
-            let (s, d) = (source.join(&name), dest.join(&name));
-            match self.copy_any(&s, &d, sync, arrived) {
-                Ok(c) => complete &= c,
-                Err(Stop::Skip(why)) => {
-                    complete = false;
-                    self.problems.push((s, why));
-                }
+            let child = folder.child(&name);
+            let s = child.source().to_path_buf();
+            match self.copy_any(child) {
+                Ok(()) => {}
+                Err(Stop::Skip(why)) => self.problems.push((s, why)),
                 Err(Stop::Cancel) => return Err(Stop::Cancel),
             }
         }
         // The folder's own permissions and times, now that it's full.
-        if let Err(e) = fs::set_permissions(dest, fs::Permissions::from_mode(meta.mode() & 0o1777)) {
+        let dest = folder.copy().to_path_buf();
+        if let Err(e) = fs::set_permissions(&dest, fs::Permissions::from_mode(meta.mode() & 0o1777)) {
             self.problems
-                .push((source.to_path_buf(), format!("its permissions couldn't be copied: {}", super::describe(&e))));
+                .push((source.clone(), format!("its permissions couldn't be copied: {}", super::describe(&e))));
         }
-        if let (Ok(a), Ok(m), Ok(f)) = (meta.accessed(), meta.modified(), File::open(dest)) {
+        if let (Ok(a), Ok(m), Ok(f)) = (meta.accessed(), meta.modified(), File::open(&dest)) {
             let _ = f.set_times(FileTimes::new().set_accessed(a).set_modified(m));
         }
-        if sync && let Err(e) = sys::sync_dir(dest) {
+        if let Err(e) = folder.sync() {
+            // Its copy may not be on the disk: it doesn't come, and the
+            // sources of all it holds stay.
+            if let Some((p, why)) = delete::remove_quietly(&dest).failed.first() {
+                let msg = format!("part of its unsafe copy couldn't be removed ({}: {why})", p.display());
+                self.problems.push((source, msg));
+            }
             return Err(Stop::Skip(format!("it couldn't be written safely: {}", super::describe(&e))));
         }
         self.env.progress.items_done += 1;
-        if let Some(a) = arrived {
-            a.dirs.push(source.to_path_buf());
-        }
-        Ok(complete)
+        Ok(())
     }
 }
 
@@ -770,7 +740,7 @@ impl Worker<'_, '_> {
 mod tests {
     use super::*;
     use crate::fsops::testing::{TempDir, is_root, read};
-    use crate::fsops::{Always, Control, Progress};
+    use crate::fsops::{Always, Control, Progress, Resolution};
     use std::collections::VecDeque;
 
     /// Answers from a script, and remembers what it was asked.
@@ -793,12 +763,18 @@ mod tests {
         }
     }
 
+    /// A Trash inside `t` (no mount points looked at).
+    fn sandbox_trash(t: &TempDir) -> Trash {
+        Trash { home: t.join("Trash"), home_dir: Some(t.join("home")), uid: sys::uid(), topdirs: Some(Vec::new()) }
+    }
+
     fn run(sources: &[PathBuf], dest: &Path, mode: Mode, asker: &mut dyn crate::fsops::Asker) -> Report {
         let control = Control::new();
         let mut last = Progress::default();
         let mut reporter = |p: &Progress| last = p.clone();
         let mut env = Env::new(&control, asker, &mut reporter);
-        transfer(sources, dest, mode, &mut env, None)
+        let trash = TempDir::new("trash");
+        transfer(sources, dest, mode, &mut env, &sandbox_trash(&trash))
     }
 
     fn quiet(sources: &[PathBuf], dest: &Path, mode: Mode) -> Report {
@@ -855,6 +831,7 @@ mod tests {
         let r = duplicate(
             std::slice::from_ref(&f),
             &mut Env::new(&Control::new(), &mut Always(Resolution::Cancel, ErrorChoice::Cancel), &mut ()),
+            &sandbox_trash(&t),
         );
         assert_eq!(r.done, vec![(f, t.join("doc copy 2.txt"))]);
     }
@@ -934,13 +911,67 @@ mod tests {
         let mut asker = Always(Resolution::Replace, ErrorChoice::Cancel);
         let mut quiet = ();
         let mut env = Env::new(&control, &mut asker, &mut quiet);
-        let r = transfer(&[src.parent().unwrap().to_path_buf()], &dest, Mode::Copy, &mut env, Some(&trash));
+        let r = transfer(&[src.parent().unwrap().to_path_buf()], &dest, Mode::Copy, &mut env, &trash);
         assert!(r.is_clean(), "{r:?}");
         assert_eq!(read(dest.join("folder/new.txt")), "new");
         assert!(!dest.join("folder/old-only.txt").exists(), "a folder replaced is replaced, not merged");
         let entry = trash.list().into_iter().next().expect("the old folder in the Trash");
         assert_eq!(entry.original.as_deref(), Some(dest.join("folder").as_path()));
         assert_eq!(read(entry.file.join("old-only.txt")), "kept in the trash");
+        no_temporaries(&dest);
+    }
+
+    #[test]
+    fn a_replaced_item_the_trash_refuses_is_kept() {
+        let t = TempDir::new("replace-kept");
+        // A Trash that can't be made: its folder would be under a file.
+        t.file("blocker", "not a folder");
+        let trash = Trash {
+            home: t.join("blocker/Trash"),
+            home_dir: Some(t.join("home")),
+            uid: sys::uid(),
+            topdirs: Some(Vec::new()),
+        };
+        let dest = t.dir("dest");
+        t.file("dest/a.txt", "old a");
+        let a = t.file("new/a.txt", "new a");
+        let control = Control::new();
+        let mut asker = Always(Resolution::Replace, ErrorChoice::Cancel);
+        let mut quiet = ();
+        let mut env = Env::new(&control, &mut asker, &mut quiet);
+        let r = transfer(std::slice::from_ref(&a), &dest, Mode::Copy, &mut env, &trash);
+        assert_eq!(r.done, vec![(a, dest.join("a.txt"))]);
+        assert_eq!(read(dest.join("a.txt")), "new a");
+        assert_eq!(r.problems.len(), 1, "{r:?}");
+        assert!(r.problems[0].1.contains("kept beside it as “a (replaced).txt”"), "{r:?}");
+        assert!(r.problems[0].1.contains("Trash"), "{r:?}");
+        assert_eq!(read(dest.join("a (replaced).txt")), "old a", "the old item is kept, where it can be seen");
+        no_temporaries(&dest);
+    }
+
+    #[test]
+    fn a_target_that_changed_while_asked_is_not_replaced() {
+        /// Answers Replace, after another program swapped what's there.
+        struct Swap;
+        impl crate::fsops::Asker for Swap {
+            fn conflict(&mut self, c: &Conflict) -> Resolution {
+                let fresh = c.target.with_extension("fresh");
+                fs::write(&fresh, "newest").unwrap();
+                fs::rename(&fresh, &c.target).unwrap();
+                Resolution::Replace
+            }
+            fn error(&mut self, _: &Failure) -> ErrorChoice {
+                ErrorChoice::Cancel
+            }
+        }
+        let t = TempDir::new("replace-changed");
+        let dest = t.dir("dest");
+        t.file("dest/a.txt", "old a");
+        let a = t.file("new/a.txt", "new a");
+        let r = run(std::slice::from_ref(&a), &dest, Mode::Copy, &mut Swap);
+        assert_eq!(r.failed.len(), 1, "{r:?}");
+        assert!(r.failed[0].1.contains("changed while you were asked"), "{r:?}");
+        assert_eq!(read(dest.join("a.txt")), "newest", "what the person didn't see stays");
         no_temporaries(&dest);
     }
 
@@ -1059,7 +1090,7 @@ mod tests {
             }
         };
         let mut env = Env::new(&control, &mut asker, &mut reporter);
-        let r = transfer(std::slice::from_ref(&big), &dest, Mode::Copy, &mut env, None);
+        let r = transfer(std::slice::from_ref(&big), &dest, Mode::Copy, &mut env, &sandbox_trash(&t));
         assert!(r.cancelled);
         assert_eq!(fs::read_dir(&dest).unwrap().count(), 0, "the partial file is gone");
         assert!(big.exists(), "the source stays");
@@ -1090,7 +1121,7 @@ mod tests {
         let mut seen = Vec::new();
         let mut reporter = |p: &Progress| seen.push(p.clone());
         let mut env = Env::new(&control, &mut asker, &mut reporter);
-        transfer(&[src], &t.dir("dest"), Mode::Copy, &mut env, None);
+        transfer(&[src], &t.dir("dest"), Mode::Copy, &mut env, &sandbox_trash(&t));
         let last = seen.last().unwrap();
         assert_eq!(last.bytes_total, 5 + 5 + 7);
         assert_eq!(last.bytes_done, last.bytes_total);

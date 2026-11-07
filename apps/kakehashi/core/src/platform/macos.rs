@@ -1,17 +1,11 @@
-//! macOS: drives from diskutil and the I/O Registry, written through the
-//! raw device.
+//! macOS: drives from diskutil and the I/O Registry.
 
-use super::{Device, run};
+use super::sys::run;
 use crate::drive::Drive;
-use anyhow::{Context, Result, ensure};
+use anyhow::{Context, Result};
 use plist::Value;
 use std::collections::HashMap;
-use std::fs;
 use std::path::Path;
-
-mod authopen;
-
-pub(crate) type Held = ();
 
 fn plist(args: &[&str]) -> Result<Value> {
     let out = run(args[0], &args[1..])?;
@@ -26,18 +20,17 @@ fn flag(dict: &plist::Dictionary, key: &str) -> bool {
     dict.get(key).and_then(Value::as_boolean).unwrap_or(false)
 }
 
-/// USB vendor, product and serial for each whole disk, from the I/O
-/// Registry: the nearest USB device above each disk's media.
-fn usb_details() -> HashMap<String, (String, String, String)> {
+/// A USB device's vendor, product, serial and location ID (its port).
+type Usb = (String, String, String, String);
+
+/// USB vendor, product, serial and location ID for each whole disk, from
+/// the I/O Registry: the nearest USB device above each disk's media.
+fn usb_details() -> HashMap<String, Usb> {
     let mut found = HashMap::new();
     let Ok(tree) = plist(&["/usr/sbin/ioreg", "-p", "IOService", "-l", "-a"]) else {
         return found;
     };
-    fn walk(
-        node: &Value,
-        usb: Option<(String, String, String)>,
-        found: &mut HashMap<String, (String, String, String)>,
-    ) {
+    fn walk(node: &Value, usb: Option<Usb>, found: &mut HashMap<String, Usb>) {
         let Some(dict) = node.as_dictionary() else {
             if let Some(list) = node.as_array() {
                 for child in list {
@@ -55,6 +48,11 @@ fn usb_details() -> HashMap<String, (String, String, String)> {
                 pick(&["USB Vendor Name", "kUSBVendorString"]),
                 pick(&["USB Product Name", "kUSBProductString"]),
                 serial,
+                // The port, as macOS names it (System Information shows it).
+                dict.get("locationID")
+                    .and_then(Value::as_unsigned_integer)
+                    .map(|id| format!("{id:#010x}"))
+                    .unwrap_or_default(),
             ))
         };
         if flag(dict, "Whole")
@@ -111,7 +109,7 @@ pub(crate) fn drives() -> Result<Vec<Drive>> {
             ["Size", "TotalSize"].iter().find_map(|k| info.get(k).and_then(Value::as_unsigned_integer)).unwrap_or(0);
         let bus = text(info, "BusProtocol");
         let points = mounts.remove(&name).unwrap_or_default();
-        let (vendor, product, serial) = usb.get(&name).cloned().unwrap_or_default();
+        let (vendor, product, serial, location) = usb.get(&name).cloned().unwrap_or_default();
         drives.push(Drive {
             bytes,
             vendor,
@@ -128,6 +126,7 @@ pub(crate) fn drives() -> Result<Vec<Drive>> {
             mounts: points,
             bus,
             name,
+            port: Some(location).filter(|l| !l.is_empty()),
         });
     }
     Ok(drives)
@@ -143,109 +142,4 @@ pub(crate) fn image_drive(image: &Path) -> Option<String> {
     let line = String::from_utf8_lossy(&out).lines().nth(1)?.to_owned();
     let device = line.split_whitespace().next()?;
     device.starts_with("/dev/").then(|| parent(device)).flatten()
-}
-
-pub(crate) fn unmount(drive: &Drive) -> Result<()> {
-    run("/usr/sbin/diskutil", &["unmountDisk", &format!("/dev/{}", drive.name)])?;
-    Ok(())
-}
-
-/// The raw device, locked exclusively and uncached, with its size and
-/// block size.
-pub(crate) fn open(drive: &Drive, cancelled: &dyn Fn() -> bool) -> Result<Device> {
-    use std::os::unix::fs::{FileTypeExt, MetadataExt};
-    use std::os::unix::io::AsRawFd;
-    let path = format!("/dev/r{}", drive.name);
-    let before = fs::symlink_metadata(&path)?;
-    ensure!(before.file_type().is_char_device(), "{path} is not a raw disk device");
-    let file = authopen::open(Path::new(&path), cancelled)?;
-    let after = file.metadata()?;
-    ensure!(after.file_type().is_char_device() && after.rdev() == before.rdev(), "{path} changed while opening it");
-    let fd = file.as_raw_fd();
-    let (mut block, mut count) = (0u32, 0u64);
-    // DKIOCGETBLOCKSIZE and DKIOCGETBLOCKCOUNT.
-    // SAFETY: each ioctl writes one integer of the size passed.
-    unsafe {
-        ensure!(libc::ioctl(fd, 0x40046418, &mut block) == 0, "could not read the block size");
-        ensure!(libc::ioctl(fd, 0x40086419, &mut count) == 0, "could not read the block count");
-        libc::fcntl(fd, libc::F_NOCACHE, 1);
-    }
-    ensure!(block == 512 || block == 4096, "unexpected block size {block}");
-    Ok(Device { file, bytes: block as u64 * count, sector: block as u64, held: () })
-}
-
-/// Flush the storage device's write cache. F_FULLFSYNC (File::sync_all)
-/// operates on filesystems and returns ENOTTY on /dev/rdiskN. A plain fsync
-/// is not a substitute for flushing the device's own cache.
-pub(crate) fn sync(file: &std::fs::File) -> Result<()> {
-    use std::os::fd::AsRawFd;
-    // <sys/disk.h>: _IO('d', 22). This ioctl takes no data argument.
-    const DKIOCSYNCHRONIZECACHE: libc::c_ulong = 0x20006416;
-    loop {
-        // SAFETY: file owns a live descriptor; the ioctl takes no pointer.
-        if unsafe { libc::ioctl(file.as_raw_fd(), DKIOCSYNCHRONIZECACHE) } == 0 {
-            return Ok(());
-        }
-        let error = std::io::Error::last_os_error();
-        if error.kind() != std::io::ErrorKind::Interrupted {
-            return Err(error).context("could not flush the drive's write cache before verification");
-        }
-    }
-}
-
-/// The raw device is uncached already.
-pub(crate) fn drop_cache(_device: &Device) {}
-
-pub(crate) fn eject(drive: &Drive) -> Result<()> {
-    run("/usr/sbin/diskutil", &["eject", &format!("/dev/{}", drive.name)])?;
-    Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn device_sync_preserves_an_unsupported_ioctl_error() {
-        // A temporary regular file supports filesystem sync, but not device
-        // sync. Do not silently fall back or treat a failed flush as success.
-        let file = tempfile::tempfile().unwrap();
-        file.sync_all().unwrap();
-        let error = sync(&file).unwrap_err();
-        assert_eq!(error.downcast_ref::<std::io::Error>().unwrap().raw_os_error(), Some(libc::ENOTTY));
-        assert!(error.to_string().contains("write cache before verification"));
-    }
-
-    #[test]
-    #[ignore = "requires KAKEHASHI_CHECK_USB naming a USB disk and macOS authorization; flushes existing cache only"]
-    fn flush_authorized_usb_without_writing() {
-        let name = std::env::var("KAKEHASHI_CHECK_USB").expect("set KAKEHASHI_CHECK_USB to the selected disk name");
-        let drive = drives().unwrap().into_iter().find(|d| d.name == name).expect("selected disk not found");
-        assert_eq!(drive.bus, "USB");
-        assert!(drive.excluded(None, true).is_none(), "selected disk is excluded");
-        let device = open(&drive, &|| false).unwrap();
-        assert_eq!(device.bytes, drive.bytes);
-        // Reproduce the original failure and exercise the production replacement.
-        assert_eq!(device.file.sync_all().unwrap_err().raw_os_error(), Some(libc::ENOTTY));
-        crate::platform::sync(&device).unwrap();
-        eprintln!("{}: filesystem sync rejected; device cache flush succeeded; no bytes written", drive.name);
-    }
-
-    /// Explicit opt-in only: obtain and inspect the real production handle,
-    /// then close it. No unmount, writes, seeks, or ejects are performed.
-    #[test]
-    #[ignore = "requires KAKEHASHI_CHECK_USB naming a USB disk and macOS authorization"]
-    fn inspect_authorized_usb_handle_without_writing() {
-        let name = std::env::var("KAKEHASHI_CHECK_USB").expect("set KAKEHASHI_CHECK_USB to the selected disk name");
-        let drive = drives().unwrap().into_iter().find(|d| d.name == name).expect("selected disk not found");
-        assert_eq!(drive.bus, "USB");
-        assert!(drive.excluded(None, true).is_none(), "selected disk is excluded");
-        let device = open(&drive, &|| false).unwrap();
-        assert_eq!(device.bytes, drive.bytes);
-        assert!(matches!(device.sector, 512 | 4096));
-        eprintln!(
-            "{}: authorized {} bytes, {}-byte sectors; no bytes written",
-            drive.name, device.bytes, device.sector
-        );
-    }
 }

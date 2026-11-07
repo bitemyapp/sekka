@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! LUKS2 containers. Secrets are passed on stdin, never saved in the target.
 use crate::{
+    disk::Device,
     filesystem,
     process::{output, output_secret},
+    storage::Program,
 };
 use anyhow::{Context, Result, ensure};
 use std::path::Path;
@@ -25,9 +27,9 @@ pub fn validate_passphrase(value: &str) -> Result<()> {
 }
 
 pub(crate) fn preflight() -> Result<()> {
-    output("cryptsetup", &["--version"], 15)
+    output(Program::CRYPTSETUP, &["--version"], 15)
         .context("The installation media is missing cryptsetup; no disk writes were made")?;
-    output("modprobe", &["dm-crypt"], 120)
+    output(Program::MODPROBE, &["dm-crypt"], 120)
         .context("Could not load disk encryption support; no disk writes were made")?;
     Ok(())
 }
@@ -37,23 +39,25 @@ pub(crate) fn preflight() -> Result<()> {
 #[derive(Default)]
 pub(crate) struct Mappings(Vec<String>);
 impl Mappings {
+    /// Formats `partition` as LUKS2 with `uuid` and opens it: the mapping.
     pub(crate) fn format_open(
         &mut self,
-        device: &str,
+        partition: &Device,
         uuid: &str,
         passphrase: &str,
-    ) -> Result<String> {
+    ) -> Result<Device> {
+        let device = partition.path();
         filesystem::check_uuid(uuid, "crypto_LUKS")?;
         validate_passphrase(passphrase)?;
         let name = format!("genkan-{uuid}");
-        let path = format!("/dev/mapper/{name}");
+        let mapping = partition.mapping(&name);
         ensure!(
-            !Path::new(&path).exists(),
+            !Path::new(mapping.path()).exists(),
             "Encryption mapping already exists: {name}"
         );
-        output("wipefs", &["--all", "--force", device], 60)?;
+        output(Program::WIPEFS, &["--all", "--force", device], 60)?;
         output_secret(
-            "cryptsetup",
+            Program::CRYPTSETUP,
             &[
                 "luksFormat",
                 "--batch-mode",
@@ -79,7 +83,7 @@ impl Mappings {
         // Register before spawning: a timed-out open can still have made a mapping.
         self.0.push(name.clone());
         output_secret(
-            "cryptsetup",
+            Program::CRYPTSETUP,
             &[
                 "open",
                 "--type",
@@ -93,7 +97,7 @@ impl Mappings {
             passphrase.as_bytes(),
             120,
         )?;
-        Ok(path)
+        Ok(mapping)
     }
     pub(crate) fn paths(&self) -> Vec<String> {
         self.0
@@ -103,7 +107,7 @@ impl Mappings {
     }
     pub(crate) fn close(&mut self) -> Result<()> {
         while let Some(name) = self.0.last() {
-            output("cryptsetup", &["close", name], 60)?;
+            output(Program::CRYPTSETUP, &["close", name], 60)?;
             self.0.pop();
         }
         Ok(())
@@ -113,7 +117,7 @@ impl Drop for Mappings {
     fn drop(&mut self) {
         // Never force removal of a mapping that is still mounted.
         for name in self.0.iter().rev() {
-            let _ = output("cryptsetup", &["close", name], 60);
+            let _ = output(Program::CRYPTSETUP, &["close", name], 60);
         }
     }
 }

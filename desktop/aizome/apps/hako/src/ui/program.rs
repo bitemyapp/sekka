@@ -444,15 +444,15 @@ impl Program for Hako {
                 self.after_change(cx, w);
             }
             Msg::Undo => {
-                if let Some(step) = self.history.take_undo() {
+                if let Some(inversion) = self.history.begin_undo() {
                     let w = self.any_window();
-                    self.start_job(cx, w, Work::Invert { step, redo: false });
+                    self.start_job(cx, w, Work::Invert(inversion));
                 }
             }
             Msg::Redo => {
-                if let Some(step) = self.history.take_redo() {
+                if let Some(inversion) = self.history.begin_redo() {
                     let w = self.any_window();
-                    self.start_job(cx, w, Work::Invert { step, redo: true });
+                    self.start_job(cx, w, Work::Invert(inversion));
                 }
             }
             Msg::OpenWith(_w, path, app) => {

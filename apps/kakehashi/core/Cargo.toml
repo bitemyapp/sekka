@@ -1,6 +1,6 @@
 [package]
 name = "kakehashi-core"
-description = "Drives, images, nightly builds and the write that Kakehashi's window and helper share"
+description = "Drives, images, nightly builds and the write plan that Kakehashi's window and helper share"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,10 +8,13 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+aizome-typestate.workspace = true
 anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
+# The job's private directory.
+tempfile = "3"
 
 # TLS for downloads: rustls on Linux; the system's own on macOS and Windows,
 # with its certificate store and no C library to build.
@@ -37,6 +40,3 @@ features = [
     "Win32_System_Ioctl",
     "Win32_System_SystemInformation",
 ]
-
-[dev-dependencies]
-tempfile = "3"

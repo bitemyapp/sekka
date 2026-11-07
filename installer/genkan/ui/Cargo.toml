@@ -23,6 +23,8 @@ aizome-kit = { path = "../../../desktop/aizome/crates/aizome-kit" }
 # The compositor's IPC: the keyboard step asks it for the key beside the
 # space bar, as Settei's keyboard setup does.
 aizome-ipc = { path = "../../../desktop/aizome/crates/aizome-ipc" }
+# Sekka's typestate support: the review's and the memory read's machines.
+aizome-typestate = { path = "../../../desktop/aizome/crates/aizome-typestate" }
 anyhow = "=1.0.100"
 # Local times in the time zone being chosen, read from the media's tzdata.
 jiff = "=0.2.38"

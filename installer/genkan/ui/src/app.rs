@@ -8,10 +8,13 @@
 //! Polkit) and the helper's events come from threads of their own through
 //! the kit's message stream. Answers from an older request (its epoch or
 //! generation) are dropped, as are stale sessions, which cancels them.
+use crate::flow::{Flow, FlowAny, FlowState, HelperAnswer, ReviewAnswer, ReviewRequest, Said};
+use crate::ram::{Memory, MemoryAnswer, SwapSize};
 use crate::{format::size, media, zone};
 use aizome_ipc::{KeyboardInfo, setup::Beside};
 use aizome_kit::cx::MsgSender;
 use aizome_kit::prelude::*;
+use aizome_typestate::{Answer, Fresh, Generation, Ticket};
 use calamares_nixos::{
     Desktop, Filesystem, Firmware, Hostname, InstallPlan, KEYBOARDS, LOCALES, RawRequest, Settings,
     SuperKey, Username, applications,
@@ -20,7 +23,7 @@ use calamares_nixos::{
     install::{Event, Summary},
     memory::{self, MemInfo},
     precache,
-    session::{Session, Update},
+    session::{Ready, Session, Update},
     timezone::{self, Source},
     zonemap::Zones,
 };
@@ -277,6 +280,8 @@ impl<T> std::fmt::Debug for Handoff<T> {
 #[derive(Clone, Debug)]
 pub enum Helper {
     Event(Event),
+    /// It prepared the installation: the proof the confirmation needs.
+    Prepared(Ready),
     /// The helper exited: `Ok` when its exit status was success.
     Finished(Result<(), String>),
 }
@@ -284,6 +289,7 @@ impl From<Update> for Helper {
     fn from(update: Update) -> Self {
         match update {
             Update::Event(event) => Self::Event(event),
+            Update::Prepared(ready) => Self::Prepared(ready),
             Update::Finished(result) => Self::Finished(result),
         }
     }
@@ -298,8 +304,8 @@ pub enum Msg {
     ClearNote(u64),
     // Disk.
     Rescan,
-    Scanned(Result<(Vec<Disk>, Firmware), String>),
-    Memory(Result<MemInfo, String>),
+    Scanned(ScanAnswer),
+    Memory(MemoryAnswer),
     SelectDisk(usize),
     Filesystem(usize),
     Swap(bool),
@@ -355,8 +361,8 @@ pub enum Msg {
         done: bool,
     },
     // Review and installation.
-    Reviewed(u64, Handoff<Result<(Box<Review>, Session), String>>),
-    Session(u64, Helper),
+    Reviewed(Handoff<ReviewAnswer>),
+    Session(HelperAnswer),
     Erase(String),
     Consent(bool),
     Tick,
@@ -438,6 +444,11 @@ impl Review {
             ),
         }
     }
+
+    /// What the person types to confirm erasing its disk.
+    pub fn phrase(&self) -> String {
+        format!("ERASE {}", self.disk.path)
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -447,16 +458,57 @@ pub enum PrepState {
     Failed,
 }
 
-/// The Review page's line about preparation in the background.
+/// The Review page's line about preparation in the background. Whether
+/// it's working, done or failed is the review's state ([`Genkan::prep_state`]).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Preparation {
-    pub state: PrepState,
     pub title: String,
     pub subtitle: String,
     /// Reading the prepared system into memory, as a fraction.
     pub progress: Option<f64>,
     pub failure: Option<String>,
 }
+
+/// Why swap can't be had when installed memory couldn't be read.
+fn swap_unsized(error: &str) -> String {
+    format!(
+        "Installed memory could not be read ({error}), so a swap partition can't be sized. Turn swap off to continue."
+    )
+}
+
+/// The stage a transition reached, or the one it refused to leave.
+fn either<'s>(reached: Result<impl Into<FlowAny<'s>>, impl Into<FlowAny<'s>>>) -> FlowAny<'s> {
+    match reached {
+        Ok(stage) => stage.into(),
+        Err(stage) => stage.into(),
+    }
+}
+
+/// How the helper stopped.
+enum Stop {
+    Cancelled,
+    Failed(String),
+    Exited(Result<(), String>),
+}
+
+/// Names a disk scan: its answer carries the ticket.
+pub enum DiskScan {}
+
+/// A disk scan's answer: the disks and the firmware, or why there are none.
+#[derive(Clone, Debug)]
+pub struct ScanAnswer {
+    ticket: Ticket<DiskScan>,
+    result: Result<(Vec<Disk>, Firmware), String>,
+}
+
+impl Answer<DiskScan> for ScanAnswer {
+    fn ticket(&self) -> Ticket<DiskScan> {
+        self.ticket
+    }
+}
+
+const UNPREPARED: &str =
+    "No disk was written. Go back to change your choices, or copy the details below.";
 
 /// Each installation step's state on the Install page.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -492,8 +544,11 @@ pub struct Genkan {
     pub disks: Vec<Disk>,
     pub firmware: Firmware,
     pub selected_disk: Option<usize>,
-    pub memory: Option<MemInfo>,
-    pub scanning: bool,
+    /// Installed memory, which sizes the swap partition.
+    memory: Memory,
+    scans: Generation<DiskScan>,
+    /// The scan under way.
+    scan: Option<Ticket<DiskScan>>,
     pub filesystem: Filesystem,
     pub swap: bool,
     pub encrypt: bool,
@@ -565,28 +620,19 @@ pub struct Genkan {
     /// What the installed system makes of that key.
     pub super_key: SuperKey,
 
-    // Review.
-    pub reviewing: bool,
-    generation: u64,
-    session: Option<Session>,
-    pub review: Option<Review>,
+    // Review and installation: where they are (`flow`), the latest review's
+    // ticket, and what the pages show of them.
+    flow: Flow,
+    review_ticket: Option<Ticket<ReviewRequest>>,
     pub phrase: String,
     pub erase: String,
     pub consent: bool,
-    pub prepared: bool,
     pub preparation: Preparation,
-
-    // Installation.
-    pub installing: bool,
     started: Option<Instant>,
     pub elapsed: u64,
-    pub install_step: u8,
-    pub steps: [StepState; 6],
     pub copy_fraction: f64,
     pub copied: Option<String>,
     pub install_message: String,
-    pub completed: bool,
-    pub failed: bool,
     pub failure: Option<String>,
     pub total_seconds: Option<f64>,
     pub log: Rc<VecDeque<String>>,
@@ -629,8 +675,9 @@ impl Genkan {
             disks: Vec::new(),
             firmware: Firmware::Bios,
             selected_disk: None,
-            memory: None,
-            scanning: false,
+            memory: Memory::new(Generation::new()),
+            scans: Generation::new(),
+            scan: None,
             filesystem: Filesystem::default(),
             swap: true,
             encrypt: false,
@@ -683,31 +730,22 @@ impl Genkan {
             key_error: None,
             key_waits: Arc::default(),
             super_key: SuperKey::AsIs,
-            reviewing: false,
-            generation: 0,
-            session: None,
-            review: None,
+            flow: Flow::new(Generation::new()),
+            review_ticket: None,
             phrase: String::new(),
             erase: String::new(),
             consent: false,
-            prepared: false,
             preparation: Preparation {
-                state: PrepState::Working,
                 title: "Waiting for authorization…".into(),
                 subtitle: String::new(),
                 progress: None,
                 failure: None,
             },
-            installing: false,
             started: None,
             elapsed: 0,
-            install_step: 0,
-            steps: [StepState::Pending; 6],
             copy_fraction: 0.0,
             copied: None,
             install_message: "Starting…".into(),
-            completed: false,
-            failed: false,
             failure: None,
             total_seconds: None,
             log: Rc::default(),
@@ -770,7 +808,90 @@ impl Genkan {
 
     /// Review and installation can't be left through the sidebar.
     pub fn locked(&self) -> bool {
-        self.reviewing || self.installing || self.step >= Step::Review
+        self.reviewing() || self.installing() || self.step >= Step::Review
+    }
+
+    // ---- Where the review and the installation are --------------------------
+
+    /// The review worker is checking the settings and starting the helper.
+    pub fn reviewing(&self) -> bool {
+        matches!(self.flow.stored(), FlowState::Checking(()))
+    }
+
+    /// The person confirmed and the helper hasn't finished: the window stays
+    /// open.
+    pub fn installing(&self) -> bool {
+        match self.flow.stored() {
+            FlowState::Queued(_) | FlowState::Installing(_) => true,
+            FlowState::Failed(failure) => failure.helper_running(),
+            _ => false,
+        }
+    }
+
+    pub fn completed(&self) -> bool {
+        matches!(self.flow.stored(), FlowState::Installed(()))
+    }
+
+    pub fn failed(&self) -> bool {
+        matches!(self.flow.stored(), FlowState::Failed(_))
+    }
+
+    /// The helper has prepared, and waits for the confirmation.
+    pub fn prepared(&self) -> bool {
+        matches!(self.flow.stored(), FlowState::Ready(_))
+    }
+
+    /// The plan on the Review page.
+    pub fn review(&self) -> Option<&Review> {
+        match self.flow.stored() {
+            FlowState::Preparing(pending) | FlowState::Queued(pending) => Some(pending.review()),
+            FlowState::Ready(primed) => Some(primed.review()),
+            FlowState::Unprepared(review) => Some(review.as_ref()),
+            _ => None,
+        }
+    }
+
+    pub fn prep_state(&self) -> PrepState {
+        match self.flow.stored() {
+            FlowState::Ready(_) => PrepState::Done,
+            FlowState::Unprepared(_) => PrepState::Failed,
+            _ => PrepState::Working,
+        }
+    }
+
+    /// The last step the helper reported: 0 before the first, 7 once done.
+    pub fn install_step(&self) -> u8 {
+        match self.flow.stored() {
+            FlowState::Installing(running) => running.step().unwrap_or(0),
+            FlowState::Failed(failure) => failure.step().unwrap_or(0),
+            FlowState::Installed(()) => 7,
+            _ => 0,
+        }
+    }
+
+    /// Whether the installation reached the disk: the helper reported a
+    /// step, and the first starts by erasing it.
+    pub fn disk_written(&self) -> bool {
+        self.install_step() > 0
+    }
+
+    /// Each step's state on the Install page: the steps before the last
+    /// reported are done, and that one is going on or failed.
+    pub fn steps(&self) -> [StepState; 6] {
+        let step = self.install_step();
+        let failed = self.failed();
+        std::array::from_fn(|index| match (index as u8 + 1).cmp(&step) {
+            std::cmp::Ordering::Less => StepState::Done,
+            std::cmp::Ordering::Equal if failed => StepState::Failed,
+            std::cmp::Ordering::Equal => StepState::Current,
+            std::cmp::Ordering::Greater => StepState::Pending,
+        })
+    }
+
+    /// The latest review's ticket, for previews and tests, which stand in
+    /// for the helper's events.
+    pub fn review_ticket(&self) -> Option<Ticket<ReviewRequest>> {
+        self.review_ticket
     }
 
     /// Whether the sidebar's row for `step` can be chosen.
@@ -785,14 +906,14 @@ impl Genkan {
     }
 
     pub fn finished(&self) -> bool {
-        self.completed || (self.failed && !self.installing)
+        self.completed() || (self.failed() && !self.installing())
     }
 
     /// Next's label, and whether it's the destructive one.
     pub fn next_label(&self) -> &'static str {
         match self.step {
             Step::Welcome => "Get Started",
-            Step::Keyboard if self.reviewing => "Checking…",
+            Step::Keyboard if self.reviewing() => "Checking…",
             Step::Keyboard => "Review",
             Step::Review => "Erase Disk and Install",
             Step::Install => "Close Installer",
@@ -804,7 +925,7 @@ impl Genkan {
         match self.step {
             Step::Review => self.confirmation_ready(),
             Step::Install => self.finished(),
-            _ => !self.reviewing,
+            _ => !self.reviewing(),
         }
     }
 
@@ -849,19 +970,35 @@ impl Genkan {
     }
 
     fn backward(&mut self, cx: &mut Cx<Msg>) {
-        if self.reviewing {
+        if self.reviewing() {
             return;
         }
         match self.step {
             Step::Welcome | Step::Install => {}
             Step::Review => {
                 // Withdraw the unconfirmed request; nothing was written.
-                self.session.take();
-                self.generation += 1;
+                self.withdraw();
                 self.go(Step::Keyboard, cx);
                 self.schedule_warm(cx);
             }
             step => self.go(Step::ALL[step.index() - 1], cx),
+        }
+    }
+
+    /// Leaves the review, dropping its helper, which withdraws the
+    /// unconfirmed request. Nothing once the person has confirmed.
+    fn withdraw(&mut self) {
+        self.flow.with_typed(|state| {
+            let state = match state {
+                FlowAny::Preparing(preparing) => preparing.withdraw().into(),
+                FlowAny::Ready(ready) => ready.withdraw().into(),
+                FlowAny::Unprepared(unprepared) => unprepared.withdraw().into(),
+                other => other,
+            };
+            (state, ())
+        });
+        if matches!(self.flow.stored(), FlowState::Editing(())) {
+            self.review_ticket = None;
         }
     }
 
@@ -875,33 +1012,92 @@ impl Genkan {
     // ---- Disk -------------------------------------------------------------
 
     fn rescan(&mut self, cx: &mut Cx<Msg>) {
-        if self.scanning {
+        if self.scanning() {
             return;
         }
-        self.scanning = true;
-        cx.spawn(|| {
-            Msg::Scanned(
-                disk::discover()
+        let ticket = self.scans.issue();
+        self.scan = Some(ticket);
+        cx.spawn(move || {
+            Msg::Scanned(ScanAnswer {
+                ticket,
+                result: disk::discover()
                     .map(|d| (d, Firmware::current()))
                     .map_err(|e| format!("{e:#}")),
-            )
+            })
         });
     }
 
-    fn read_memory(&mut self, cx: &mut Cx<Msg>) {
-        cx.spawn(|| Msg::Memory(memory::read().map_err(|e| format!("{e:#}"))));
+    /// A disk scan is under way.
+    pub fn scanning(&self) -> bool {
+        self.scan.is_some()
     }
 
-    pub fn show_disks(&mut self, found: Vec<Disk>, firmware: Firmware) {
-        self.selected_disk = None;
-        self.firmware = firmware;
-        self.disks = found;
+    /// The scan answered, bound to the proof that it's the latest scan's:
+    /// its disks, or why there are none.
+    fn scanned(&mut self, answer: Fresh<DiskScan, ScanAnswer>, cx: &mut Cx<Msg>) {
+        self.scan = None;
+        match answer.into_answer().result {
+            Ok((found, firmware)) => {
+                self.selected_disk = None;
+                self.firmware = firmware;
+                self.disks = found;
+            }
+            Err(error) => self.note(&format!("Could not list disks: {error}"), cx),
+        }
+    }
+
+    /// A preview's sample disks, as if a scan had found them.
+    pub(crate) fn sample_disks(&mut self, found: Vec<Disk>, firmware: Firmware, cx: &mut Cx<Msg>) {
+        let ticket = self.scans.issue();
+        self.scan = Some(ticket);
+        let result = Ok((found, firmware));
+        self.update(Msg::Scanned(ScanAnswer { ticket, result }), cx);
+    }
+
+    fn read_memory(&mut self, cx: &mut Cx<Msg>) {
+        if let Some(ticket) = self.memory.ask() {
+            cx.spawn(move || {
+                let result = memory::read().map_err(|e| format!("{e:#}"));
+                Msg::Memory(MemoryAnswer::new(ticket, result))
+            });
+        }
+    }
+
+    /// A preview's sample in place of the read.
+    pub(crate) fn sample_memory(&mut self, result: Result<MemInfo, String>, cx: &mut Cx<Msg>) {
+        if let Some(ticket) = self.memory.ask() {
+            self.update(Msg::Memory(MemoryAnswer::new(ticket, result)), cx);
+        }
+    }
+
+    /// The read answered. A failure turns swap off: nothing can size it.
+    fn memory_read(&mut self, answer: MemoryAnswer, cx: &mut Cx<Msg>) {
+        self.memory.answer(answer);
+        if let SwapSize::Unreadable(error) = self.memory.swap_size(true) {
+            self.swap = false;
+            self.note(&format!("Could not read installed memory: {error}"), cx);
+        }
+    }
+
+    /// Installed memory, which sizes the swap partition.
+    pub fn memory(&self) -> &Memory {
+        &self.memory
+    }
+
+    /// Swap on or off. On needs installed memory, which sizes it: refused
+    /// when it couldn't be read.
+    fn set_swap(&mut self, on: bool, cx: &mut Cx<Msg>) {
+        match self.memory.swap_size(on) {
+            SwapSize::Unreadable(error) => self.note(&swap_unsized(&error), cx),
+            SwapSize::Off | SwapSize::Known(_) | SwapSize::Reading => self.swap = on,
+        }
     }
 
     pub fn swap_bytes(&self) -> Option<u64> {
-        self.swap
-            .then(|| self.memory.map(|m| memory::swap_bytes(m.total)))
-            .flatten()
+        match self.memory.swap_size(self.swap) {
+            SwapSize::Known(bytes) => Some(bytes),
+            SwapSize::Off | SwapSize::Reading | SwapSize::Unreadable(_) => None,
+        }
     }
 
     pub fn selected(&self) -> Option<&Disk> {
@@ -913,16 +1109,14 @@ impl Genkan {
         let Some(disk) = self.selected() else {
             return Err("Select a disk to preview its new partitions.".into());
         };
-        if self.swap && self.memory.is_none() {
-            return Err("Reading installed memory…".into());
-        }
-        Layout::for_install(
-            disk.identity.bytes,
-            self.firmware,
-            self.swap_bytes(),
-            self.encrypt,
-        )
-        .map_err(|error| format!("{error:#}"))
+        let swap = match self.memory.swap_size(self.swap) {
+            SwapSize::Off => None,
+            SwapSize::Known(bytes) => Some(bytes),
+            SwapSize::Reading => return Err("Reading installed memory…".into()),
+            SwapSize::Unreadable(error) => return Err(swap_unsized(&error)),
+        };
+        Layout::for_install(disk.identity.bytes, self.firmware, swap, self.encrypt)
+            .map_err(|error| format!("{error:#}"))
     }
 
     pub fn passphrase_error(&self) -> Option<String> {
@@ -948,8 +1142,12 @@ impl Genkan {
         if let Some(reason) = &disk.blocked {
             return Err(reason.clone());
         }
-        if self.swap && self.memory.is_none() {
-            return Err("Still reading installed memory; try again in a moment.".into());
+        match self.memory.swap_size(self.swap) {
+            SwapSize::Off | SwapSize::Known(_) => {}
+            SwapSize::Reading => {
+                return Err("Still reading installed memory; try again in a moment.".into());
+            }
+            SwapSize::Unreadable(error) => return Err(swap_unsized(&error)),
         }
         self.layout().map(|_| ())
     }
@@ -1477,7 +1675,7 @@ impl Genkan {
     /// Warm the page cache with the media's reference closures for the
     /// current selection, a couple of seconds after it stops changing.
     fn schedule_warm(&mut self, cx: &mut Cx<Msg>) {
-        if self.preview.is_some() || self.step >= Step::Review || self.reviewing {
+        if self.preview.is_some() || self.step >= Step::Review || self.reviewing() {
             return;
         }
         self.stop_warm(cx);
@@ -1528,7 +1726,7 @@ impl Genkan {
     // ---- Review -----------------------------------------------------------
 
     fn start_review(&mut self, cx: &mut Cx<Msg>) {
-        if self.reviewing {
+        if !matches!(self.flow.stored(), FlowState::Editing(())) {
             return;
         }
         // In order, stopping at the first that fails, so the field it points
@@ -1599,9 +1797,15 @@ impl Genkan {
             git_email,
         };
         self.stop_warm(cx);
-        self.reviewing = true;
-        self.generation += 1;
-        let generation = self.generation;
+        let ticket = self.flow.with_typed(|state| match state {
+            FlowAny::Editing(editing) => {
+                let (checking, ticket) = editing.review();
+                (checking.into(), ticket)
+            }
+            // Only from the pages, as the check above says.
+            _ => unreachable!(),
+        });
+        self.review_ticket = Some(ticket);
         self.activity = Some(Activity {
             text: "Checking your settings…".into(),
             busy: true,
@@ -1610,28 +1814,92 @@ impl Genkan {
         thread::spawn(move || {
             let result = (|| -> anyhow::Result<(Box<Review>, Session)> {
                 let plan = request.parse(&Settings::load()?)?;
-                disk::revalidate(plan.disk())?;
+                disk::Reviewed::of(&plan).revalidate()?;
                 let plan = plan.snapshot_wifi()?;
                 let review = Box::new(Review::of(&plan));
                 let events = send.clone();
                 let session = Session::start(plan, move |update| {
-                    events.send(Msg::Session(generation, update.into()));
+                    events.send(Msg::Session(HelperAnswer::new(ticket, update.into())));
                 })?;
                 Ok((review, session))
             })()
             .map_err(|e| format!("{e:#}"));
-            send.send(Msg::Reviewed(generation, Handoff::new(result)));
+            send.send(Msg::Reviewed(Handoff::new(ReviewAnswer::new(
+                ticket, result,
+            ))));
         });
     }
 
-    pub fn show_review(&mut self, review: Review) {
-        self.phrase = format!("ERASE {}", review.disk.path);
-        self.review = Some(review);
+    /// The review worker answered: the Review page, while the helper
+    /// prepares, or back to the pages with what failed.
+    fn reviewed(&mut self, answer: Fresh<ReviewRequest, ReviewAnswer>, cx: &mut Cx<Msg>) {
+        self.activity = None;
+        let (moved, refused) = self.moved(|state| match state {
+            FlowAny::Checking(checking) => match checking.answered(answer) {
+                Ok(preparing) => (preparing.into(), None),
+                Err((editing, error)) => (editing.into(), Some(error)),
+            },
+            // A current answer comes only while checking; its helper is
+            // dropped with it otherwise.
+            FlowAny::Editing(s) => (s.into(), None),
+            FlowAny::Preparing(s) => (s.into(), None),
+            FlowAny::Ready(s) => (s.into(), None),
+            FlowAny::Unprepared(s) => (s.into(), None),
+            FlowAny::Queued(s) => (s.into(), None),
+            FlowAny::Installing(s) => (s.into(), None),
+            FlowAny::Installed(s) => (s.into(), None),
+            FlowAny::Failed(s) => (s.into(), None),
+        });
+        if !moved {
+            return;
+        }
+        match self.flow.stored() {
+            FlowState::Preparing(pending) => {
+                let review = pending.review().clone();
+                self.show_review(&review);
+                self.go(Step::Review, cx);
+            }
+            FlowState::Editing(()) => {
+                self.review_ticket = None;
+                self.note(&refused.unwrap_or_default(), cx);
+                self.schedule_warm(cx);
+            }
+            _ => {}
+        }
+    }
+
+    /// Runs `transition` on the review: whether it moved to another stage,
+    /// and what the transition said. The pages follow the stage reached.
+    fn moved<R>(
+        &mut self,
+        transition: impl for<'s> FnOnce(FlowAny<'s>) -> (FlowAny<'s>, R),
+    ) -> (bool, R) {
+        let before = std::mem::discriminant(self.flow.stored());
+        let said = self.flow.with_typed(transition);
+        (std::mem::discriminant(self.flow.stored()) != before, said)
+    }
+
+    /// A preview's sample review, with no helper behind it.
+    pub(crate) fn show_sample_review(&mut self, review: Review) {
+        self.show_review(&review);
+        let ticket = self.flow.with_typed(|state| match state {
+            FlowAny::Editing(editing) => {
+                let (preparing, ticket) = editing.sample(Box::new(review));
+                (preparing.into(), Some(ticket))
+            }
+            other => (other, None),
+        });
+        if ticket.is_some() {
+            self.review_ticket = ticket;
+        }
+    }
+
+    /// The Review page's fields, for a new review.
+    fn show_review(&mut self, review: &Review) {
+        self.phrase = review.phrase();
         self.erase.clear();
         self.consent = false;
-        self.prepared = false;
         self.preparation = Preparation {
-            state: PrepState::Working,
             title: "Waiting for authorization…".into(),
             subtitle: "The installation helper repeats every safety check before any disk write."
                 .into(),
@@ -1642,8 +1910,10 @@ impl Genkan {
 
     pub fn confirmation_ready(&self) -> bool {
         self.consent
-            && self.preparation.state != PrepState::Failed
-            && (self.session.is_some() || self.preview.is_some())
+            && matches!(
+                self.flow.stored(),
+                FlowState::Preparing(_) | FlowState::Ready(_)
+            )
             && !self.phrase.is_empty()
             && self.erase == self.phrase
     }
@@ -1676,6 +1946,40 @@ impl Genkan {
         )
     }
 
+    /// Preparation finished: the Review page says so.
+    fn show_prepared(&mut self, summary: &Summary) {
+        let (title, subtitle) = Self::prepared_text(summary);
+        self.preparation = Preparation {
+            title,
+            subtitle: subtitle.clone(),
+            progress: None,
+            failure: None,
+        };
+        self.append_log(&subtitle);
+    }
+
+    /// Preparation failed or was cancelled, or the helper stopped: the
+    /// Review page says so, and that nothing was written. A confirmation
+    /// queued meanwhile goes back to it.
+    fn show_unprepared(
+        &mut self,
+        title: &str,
+        subtitle: &str,
+        failure: Option<String>,
+        cx: &mut Cx<Msg>,
+    ) {
+        self.preparation = Preparation {
+            title: title.into(),
+            subtitle: subtitle.into(),
+            progress: None,
+            failure: failure.map(|message| message.chars().take(8000).collect()),
+        };
+        if self.step == Step::Install {
+            self.stop_tick(cx);
+            self.go(Step::Review, cx);
+        }
+    }
+
     // ---- Installation -----------------------------------------------------
 
     fn confirm_install(&mut self, cx: &mut Cx<Msg>) {
@@ -1686,32 +1990,51 @@ impl Genkan {
             );
             return;
         }
-        match &self.session {
-            Some(session) => session.confirm(&self.phrase),
-            None if self.preview.is_some() => {}
-            None => {
-                self.note(
-                    "The installation helper is no longer running. Go back and review again.",
-                    cx,
-                );
-                return;
+        let typed = self.erase.clone();
+        let (moved, ()) = self.moved(|state| {
+            let state = match state {
+                FlowAny::Ready(ready) => match ready.confirm(&typed) {
+                    Ok(installing) => installing.into(),
+                    Err(ready) => ready.into(),
+                },
+                FlowAny::Preparing(preparing) => match preparing.confirm(&typed) {
+                    Ok(queued) => queued.into(),
+                    Err(preparing) => preparing.into(),
+                },
+                FlowAny::Editing(s) => s.into(),
+                FlowAny::Checking(s) => s.into(),
+                FlowAny::Unprepared(s) => s.into(),
+                FlowAny::Queued(s) => s.into(),
+                FlowAny::Installing(s) => s.into(),
+                FlowAny::Installed(s) => s.into(),
+                FlowAny::Failed(s) => s.into(),
+            };
+            (state, ())
+        });
+        match self.flow.stored() {
+            FlowState::Installing(_) if moved => {
+                self.forget_secrets();
+                self.begin_install("Starting the installation…", cx);
             }
+            FlowState::Queued(_) if moved => self.begin_install(
+                "Finishing preparation; the installation starts as soon as it is ready.",
+                cx,
+            ),
+            _ => self.note(
+                "The installation helper is no longer running. Go back and review again.",
+                cx,
+            ),
         }
-        self.password = Zeroizing::default();
-        self.repeat = Zeroizing::default();
-        self.passphrase = Zeroizing::default();
-        self.passphrase_repeat = Zeroizing::default();
-        self.installing = true;
+    }
+
+    /// The Install page, from the moment the person confirms.
+    fn begin_install(&mut self, message: &str, cx: &mut Cx<Msg>) {
         self.started = Some(Instant::now());
         self.elapsed = 0;
-        self.install_step = 0;
         self.copy_fraction = 0.0;
-        self.install_message = if self.prepared {
-            "Starting the installation…"
-        } else {
-            "Finishing preparation; the installation starts as soon as it is ready."
-        }
-        .into();
+        self.copied = None;
+        self.failure = None;
+        self.install_message = message.into();
         // A preview's still picture keeps its sample time.
         if self.preview.is_none() {
             self.tick = Some(cx.every(Duration::from_millis(500), Msg::Tick));
@@ -1720,27 +2043,22 @@ impl Genkan {
         self.go(Step::Install, cx);
     }
 
-    pub fn set_install_step(&mut self, step: u8) {
-        for (index, state) in self.steps.iter_mut().enumerate() {
-            let number = index as u8 + 1;
-            *state = if number < step {
-                StepState::Done
-            } else if number == step {
-                StepState::Current
-            } else {
-                StepState::Pending
-            };
-        }
-        self.install_step = step;
+    /// The confirmation reached the helper, which has every secret it
+    /// needs: the window forgets them.
+    fn forget_secrets(&mut self) {
+        self.password = Zeroizing::default();
+        self.repeat = Zeroizing::default();
+        self.passphrase = Zeroizing::default();
+        self.passphrase_repeat = Zeroizing::default();
     }
 
     pub fn fraction(&self) -> f64 {
-        if self.completed {
+        if self.completed() {
             1.0
-        } else if self.install_step == 0 {
+        } else if self.install_step() == 0 {
             0.0
         } else {
-            overall_fraction(self.install_step, self.copy_fraction)
+            overall_fraction(self.install_step(), self.copy_fraction)
         }
     }
 
@@ -1763,33 +2081,16 @@ impl Genkan {
         }
     }
 
-    pub fn show_failure(&mut self, message: &str, cx: &mut Cx<Msg>) {
-        let message: String = message.chars().take(8000).collect();
-        if self.installing || self.step == Step::Install {
-            self.failed = true;
-            self.stop_tick(cx);
-            self.failure = Some(message);
-            self.install_message = "Installation failed. See the details below.".into();
-            let index = usize::from(self.install_step.max(1)) - 1;
-            if let Some(state) = self.steps.get_mut(index) {
-                *state = StepState::Failed;
-            }
-        } else {
-            self.preparation = Preparation {
-                state: PrepState::Failed,
-                title: "Preparation failed".into(),
-                subtitle: "No disk was written. Go back to change your choices, or copy the details below.".into(),
-                progress: None,
-                failure: Some(message),
-            };
-        }
-    }
-
-    pub fn show_done(&mut self, cx: &mut Cx<Msg>) {
-        self.installing = false;
-        self.completed = true;
-        self.set_install_step(7);
+    /// The installation failed: the Install page says how far it got.
+    fn show_install_failure(&mut self, message: &str, cx: &mut Cx<Msg>) {
         self.stop_tick(cx);
+        self.failure = Some(message.chars().take(8000).collect());
+        self.install_message = if self.disk_written() {
+            "Installation failed. See the details below."
+        } else {
+            "The installation stopped before writing to the disk. See the details below."
+        }
+        .into();
     }
 
     /// The installation's length as the done page gives it.
@@ -1800,62 +2101,25 @@ impl Genkan {
 
     /// What the helper said, as if it had (previews and tests).
     pub fn helper_event(&mut self, event: Event, cx: &mut Cx<Msg>) {
-        self.session_update(Helper::Event(event), cx);
+        if let Some(ticket) = self.review_ticket {
+            self.update(
+                Msg::Session(HelperAnswer::new(ticket, Helper::Event(event))),
+                cx,
+            );
+        }
     }
 
-    fn session_update(&mut self, update: Helper, cx: &mut Cx<Msg>) {
-        let installing = self.installing;
-        let failed = self.preparation.state == PrepState::Failed;
-        match update {
-            Helper::Event(Event::Preparing { message }) => {
-                if installing && self.install_step == 0 {
-                    self.install_message = format!("Finishing preparation: {message}");
-                } else if !failed {
-                    self.preparation.state = PrepState::Working;
-                    self.preparation.title = message.clone();
-                    self.preparation.subtitle.clear();
-                }
-                self.append_log(&message);
-            }
+    /// What the helper said, proven to be about the latest review: the
+    /// transitions read their payload from the answer itself.
+    fn session_update(&mut self, said: Said, cx: &mut Cx<Msg>) {
+        match crate::flow::heard(&said).clone() {
+            // What the helper is doing, the most frequent: the pages say it,
+            // and the review stays where it is.
             Helper::Event(Event::Log { line }) => {
-                if !installing && !self.prepared && !failed {
+                if matches!(self.flow.stored(), FlowState::Preparing(_)) {
                     self.preparation.subtitle = line.clone();
                 }
                 self.append_log(&line);
-            }
-            Helper::Event(Event::Timing { stage, seconds }) => {
-                if stage == "install" {
-                    self.total_seconds = Some(seconds);
-                }
-                self.append_log(&format!("{stage}: {seconds:.1} s"));
-            }
-            Helper::Event(Event::Caching { read, total }) => {
-                if !installing {
-                    self.preparation.progress = (total > 0).then(|| read as f64 / total as f64);
-                    self.preparation.subtitle =
-                        format!("{} of {} read into memory", size(read), size(total));
-                }
-            }
-            Helper::Event(Event::Prepared { summary }) => {
-                self.prepared = true;
-                let (title, subtitle) = Self::prepared_text(&summary);
-                self.preparation = Preparation {
-                    state: PrepState::Done,
-                    title,
-                    subtitle: subtitle.clone(),
-                    progress: None,
-                    failure: None,
-                };
-                if installing && self.install_step == 0 {
-                    self.install_message =
-                        "Preparation complete. Starting the installation…".into();
-                }
-                self.append_log(&subtitle);
-            }
-            Helper::Event(Event::Progress { step, message }) => {
-                self.set_install_step(step);
-                self.append_log(&message);
-                self.install_message = message;
             }
             Helper::Event(Event::Copying { bytes, total }) => {
                 if total > 0 {
@@ -1863,43 +2127,226 @@ impl Genkan {
                     self.copied = Some(format!("{} of {}", size(bytes.min(total)), size(total)));
                 }
             }
-            Helper::Event(Event::Complete) => self.show_done(cx),
-            Helper::Event(Event::Cancelled) => {
-                if !installing {
-                    self.preparation.state = PrepState::Failed;
-                    self.preparation.title = "Preparation cancelled".into();
+            Helper::Event(Event::Caching { read, total }) => {
+                if matches!(self.flow.stored(), FlowState::Preparing(_)) {
+                    self.preparation.progress = (total > 0).then(|| read as f64 / total as f64);
                     self.preparation.subtitle =
-                        "Nothing was written. Go back and review again to continue.".into();
+                        format!("{} of {} read into memory", size(read), size(total));
                 }
             }
-            Helper::Event(Event::Failed { message }) => self.show_failure(&message, cx),
-            Helper::Finished(result) => {
-                self.session.take();
-                let was_installing = std::mem::replace(&mut self.installing, false);
-                if self.completed {
-                    return;
+            Helper::Event(Event::Timing { stage, seconds }) => {
+                if stage == "install" {
+                    self.total_seconds = Some(seconds);
                 }
-                if was_installing || self.step == Step::Install {
-                    if !self.failed {
-                        self.show_failure(
-                            &result.err().unwrap_or_else(|| {
-                                "The installation helper exited without confirming completion."
-                                    .into()
-                            }),
-                            cx,
-                        );
+                self.append_log(&format!("{stage}: {seconds:.1} s"));
+            }
+            Helper::Event(Event::Preparing { message }) => {
+                match self.flow.stored() {
+                    FlowState::Queued(_) => {
+                        self.install_message = format!("Finishing preparation: {message}");
                     }
-                } else if self.preparation.state != PrepState::Failed {
-                    self.show_failure(
-                        &result.err().unwrap_or_else(|| {
-                            "The installation helper stopped before the installation was confirmed."
-                                .into()
-                        }),
-                        cx,
-                    );
+                    FlowState::Preparing(_) => {
+                        self.preparation.title = message.clone();
+                        self.preparation.subtitle.clear();
+                    }
+                    _ => {}
+                }
+                self.append_log(&message);
+            }
+            Helper::Prepared(ready) => {
+                let summary = ready.summary().clone();
+                let (moved, ()) = self.moved(|state| {
+                    let state = match state {
+                        FlowAny::Preparing(preparing) => match preparing.prepared(&said) {
+                            Ok(ready) => ready.into(),
+                            Err(preparing) => preparing.into(),
+                        },
+                        FlowAny::Queued(queued) => queued.prepared(&said).into(),
+                        // Ahead of the worker's answer: review again.
+                        FlowAny::Checking(checking) => either(checking.stopped(&said)),
+                        // The review moved on: late.
+                        FlowAny::Editing(s) => s.into(),
+                        FlowAny::Ready(s) => s.into(),
+                        FlowAny::Unprepared(s) => s.into(),
+                        FlowAny::Installing(s) => s.into(),
+                        FlowAny::Installed(s) => s.into(),
+                        FlowAny::Failed(s) => s.into(),
+                    };
+                    (state, ())
+                });
+                self.prepped(moved, &summary, cx);
+            }
+            // A preview's sample: a running helper's comes with its proof.
+            Helper::Event(Event::Prepared { summary }) => {
+                let (moved, ()) = self.moved(|state| {
+                    let state = match state {
+                        FlowAny::Preparing(preparing) => match preparing.sampled(&said) {
+                            Ok(ready) => ready.into(),
+                            Err(preparing) => preparing.into(),
+                        },
+                        FlowAny::Queued(queued) => match queued.sampled(&said) {
+                            Ok(installing) => installing.into(),
+                            Err(queued) => queued.into(),
+                        },
+                        FlowAny::Editing(s) => s.into(),
+                        FlowAny::Checking(s) => s.into(),
+                        FlowAny::Ready(s) => s.into(),
+                        FlowAny::Unprepared(s) => s.into(),
+                        FlowAny::Installing(s) => s.into(),
+                        FlowAny::Installed(s) => s.into(),
+                        FlowAny::Failed(s) => s.into(),
+                    };
+                    (state, ())
+                });
+                self.prepped(moved, &summary, cx);
+            }
+            Helper::Event(Event::Progress { message, .. }) => {
+                self.moved(|state| {
+                    let state = match state {
+                        FlowAny::Installing(installing) => installing.progress(&said).into(),
+                        FlowAny::Editing(s) => s.into(),
+                        FlowAny::Checking(s) => s.into(),
+                        FlowAny::Preparing(s) => s.into(),
+                        FlowAny::Ready(s) => s.into(),
+                        FlowAny::Unprepared(s) => s.into(),
+                        FlowAny::Queued(s) => s.into(),
+                        FlowAny::Installed(s) => s.into(),
+                        FlowAny::Failed(s) => s.into(),
+                    };
+                    (state, ())
+                });
+                self.append_log(&message);
+                self.install_message = message;
+            }
+            Helper::Event(Event::Complete) => {
+                let (moved, ()) = self.moved(|state| {
+                    let state = match state {
+                        FlowAny::Installing(installing) => either(installing.complete(&said)),
+                        FlowAny::Editing(s) => s.into(),
+                        FlowAny::Checking(s) => s.into(),
+                        FlowAny::Preparing(s) => s.into(),
+                        FlowAny::Ready(s) => s.into(),
+                        FlowAny::Unprepared(s) => s.into(),
+                        FlowAny::Queued(s) => s.into(),
+                        FlowAny::Installed(s) => s.into(),
+                        FlowAny::Failed(s) => s.into(),
+                    };
+                    (state, ())
+                });
+                if moved && self.completed() {
+                    self.stop_tick(cx);
                 }
             }
+            Helper::Event(Event::Cancelled) => self.stopped(&said, Stop::Cancelled, cx),
+            Helper::Event(Event::Failed { message }) => {
+                self.stopped(&said, Stop::Failed(message), cx);
+            }
+            Helper::Finished(result) => self.stopped(&said, Stop::Exited(result), cx),
         }
+    }
+
+    /// The pages, after the helper prepared: what the stage reached says.
+    fn prepped(&mut self, moved: bool, summary: &Summary, cx: &mut Cx<Msg>) {
+        if !moved {
+            return;
+        }
+        match self.flow.stored() {
+            FlowState::Ready(_) => self.show_prepared(summary),
+            FlowState::Installing(_) => {
+                self.show_prepared(summary);
+                self.forget_secrets();
+                self.install_message = "Preparation complete. Starting the installation…".into();
+            }
+            // The queued confirmation had no helper left to go to.
+            FlowState::Unprepared(_) => self.show_unprepared(
+                "The installation helper stopped",
+                "No disk was written. Go back and review again to continue.",
+                None,
+                cx,
+            ),
+            FlowState::Editing(()) => self.helper_left_early(None, cx),
+            FlowState::Checking(())
+            | FlowState::Preparing(_)
+            | FlowState::Queued(_)
+            | FlowState::Installed(())
+            | FlowState::Failed(_) => {}
+        }
+    }
+
+    /// The helper cancelled, failed or exited.
+    fn stopped(&mut self, said: &Said, why: Stop, cx: &mut Cx<Msg>) {
+        let exited = matches!(why, Stop::Exited(_));
+        let cancelled = matches!(why, Stop::Cancelled);
+        let (moved, ()) = self.moved(|state| {
+            let state = match state {
+                // The helper stopped before the review opened.
+                FlowAny::Checking(checking) => either(checking.stopped(said)),
+                FlowAny::Preparing(preparing) => either(preparing.stopped(said)),
+                FlowAny::Ready(ready) => either(ready.stopped(said)),
+                // Before the confirmation was sent: nothing was written (GEN-34).
+                FlowAny::Queued(queued) => either(queued.stopped(said)),
+                // The helper never cancels once it's confirmed.
+                FlowAny::Installing(installing) if cancelled => installing.into(),
+                FlowAny::Installing(installing) if exited => either(installing.exited(said)),
+                FlowAny::Installing(installing) => either(installing.failed(said)),
+                FlowAny::Failed(failed) if exited => either(failed.exited(said)),
+                FlowAny::Failed(s) => s.into(),
+                FlowAny::Editing(s) => s.into(),
+                FlowAny::Unprepared(s) => s.into(),
+                FlowAny::Installed(s) => s.into(),
+            };
+            (state, ())
+        });
+        if !moved {
+            return;
+        }
+        let message = match why {
+            Stop::Cancelled => None,
+            Stop::Failed(message) => Some(message),
+            Stop::Exited(result) => result.err(),
+        };
+        match self.flow.stored() {
+            FlowState::Editing(()) => self.helper_left_early(message, cx),
+            FlowState::Unprepared(_) if cancelled => self.show_unprepared(
+                "Preparation cancelled",
+                "Nothing was written. Go back and review again to continue.",
+                None,
+                cx,
+            ),
+            FlowState::Unprepared(_) => self.show_unprepared(
+                "Preparation failed",
+                UNPREPARED,
+                Some(message.unwrap_or_else(|| {
+                    "The installation helper stopped before the installation was confirmed.".into()
+                })),
+                cx,
+            ),
+            FlowState::Failed(_) => self.show_install_failure(
+                &message.unwrap_or_else(|| {
+                    "The installation helper exited without confirming completion.".into()
+                }),
+                cx,
+            ),
+            FlowState::Checking(())
+            | FlowState::Preparing(_)
+            | FlowState::Ready(_)
+            | FlowState::Queued(_)
+            | FlowState::Installing(_)
+            | FlowState::Installed(()) => {}
+        }
+    }
+
+    /// The helper stopped, or got ahead of the review worker, before the
+    /// review opened: back on the pages, with why.
+    fn helper_left_early(&mut self, message: Option<String>, cx: &mut Cx<Msg>) {
+        self.review_ticket = None;
+        self.activity = None;
+        let why = message.unwrap_or_else(|| "it got ahead of the review".into());
+        self.note(
+            &format!("The installation helper stopped before the review opened ({why}). Review again to continue."),
+            cx,
+        );
+        self.schedule_warm(cx);
     }
 
     fn power(&mut self, action: &'static str, cx: &mut Cx<Msg>) {
@@ -1977,20 +2424,12 @@ impl Program for Genkan {
             }
 
             Msg::Rescan => self.rescan(cx),
-            Msg::Scanned(result) => {
-                self.scanning = false;
-                match result {
-                    Ok((found, firmware)) => self.show_disks(found, firmware),
-                    Err(error) => self.note(&format!("Could not list disks: {error}"), cx),
+            Msg::Scanned(answer) => {
+                if let Ok(fresh) = self.scans.check_answer(answer) {
+                    self.scanned(fresh, cx);
                 }
             }
-            Msg::Memory(result) => match result {
-                Ok(info) => self.memory = Some(info),
-                Err(error) => {
-                    self.swap = false;
-                    self.note(&format!("Could not read installed memory: {error}"), cx);
-                }
-            },
+            Msg::Memory(answer) => self.memory_read(answer, cx),
             Msg::SelectDisk(index) => {
                 if self.disks.get(index).is_some_and(|d| d.blocked.is_none()) {
                     self.selected_disk = Some(index);
@@ -1999,7 +2438,7 @@ impl Program for Genkan {
             Msg::Filesystem(index) => {
                 self.filesystem = Filesystem::ALL.get(index).copied().unwrap_or_default();
             }
-            Msg::Swap(on) => self.swap = on,
+            Msg::Swap(on) => self.set_swap(on, cx),
             Msg::Encrypt(on) => {
                 self.encrypt = on;
                 if !on {
@@ -2194,7 +2633,9 @@ impl Program for Genkan {
             }
 
             Msg::WarmStart(generation) => {
-                if generation == self.warm_generation && self.step < Step::Review && !self.reviewing
+                if generation == self.warm_generation
+                    && self.step < Step::Review
+                    && !self.reviewing()
                 {
                     self.start_warm(generation);
                 }
@@ -2225,38 +2666,24 @@ impl Program for Genkan {
                 });
             }
 
-            Msg::Reviewed(generation, result) => {
-                // Dropping a stale session cancels it.
-                let Some(result) = result.take() else {
-                    return;
-                };
-                if generation != self.generation {
-                    return;
-                }
-                self.reviewing = false;
-                self.activity = None;
-                match result {
-                    Ok((review, session)) => {
-                        self.session = Some(session);
-                        self.show_review(*review);
-                        self.go(Step::Review, cx);
-                    }
-                    Err(error) => {
-                        self.note(&error, cx);
-                        self.schedule_warm(cx);
-                    }
+            Msg::Reviewed(answer) => {
+                // Dropping a stale answer drops its session, which cancels it.
+                if let Some(answer) = answer.take()
+                    && let Ok(fresh) = self.flow.ctx().check_answer(answer)
+                {
+                    self.reviewed(fresh, cx);
                 }
             }
-            Msg::Session(generation, update) => {
-                if generation == self.generation {
-                    self.session_update(update, cx);
+            Msg::Session(answer) => {
+                if let Ok(said) = self.flow.ctx().check_answer(answer) {
+                    self.session_update(said, cx);
                 }
             }
             Msg::Erase(text) => self.erase = text,
             Msg::Consent(on) => self.consent = on,
             Msg::Tick => {
                 if let Some(started) = self.started
-                    && self.installing
+                    && self.installing()
                 {
                     self.elapsed = started.elapsed().as_secs();
                 }
@@ -2288,7 +2715,7 @@ impl Program for Genkan {
     }
 
     fn close_requested(&mut self, _window: WindowKey, cx: &mut Cx<Msg>) -> bool {
-        if self.installing {
+        if self.installing() {
             // Through a message, so the window is drawn again with the note.
             cx.send(Msg::CloseRefused);
             return false;
@@ -2296,7 +2723,7 @@ impl Program for Genkan {
         self.stop_warm(cx);
         self.stop_listening();
         // Dropping an unconfirmed session withdraws its request.
-        self.session.take();
+        self.withdraw();
         true
     }
 }

@@ -3,8 +3,8 @@
 //! consent. Its documented -stdoutpipe interface transfers an owned descriptor
 //! over a private socket; only the writer helper ever receives it.
 
-use crate::image::Cancelled;
 use anyhow::{Context, Result, bail, ensure};
+use kakehashi_core::image::Cancelled;
 use std::fs::File;
 use std::io;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};

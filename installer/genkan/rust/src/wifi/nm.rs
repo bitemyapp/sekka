@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#![allow(unsafe_code)]
 //! Small libnm serialization boundary; D-Bus calls are read-only and bounded.
 //! libnm parses/validates NetworkManager's native format, not a homemade INI parser.
 use anyhow::{Result, ensure};

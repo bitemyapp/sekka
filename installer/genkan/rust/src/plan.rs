@@ -258,7 +258,10 @@ impl RawRequest {
     }
 
     /// The helper independently parses every byte received over stdin.
-    pub fn parse_confirmed(mut self, settings: &Settings) -> Result<ConfirmedInstall> {
+    /// Crate-private: the one-shot path (`install::install`) confirms its
+    /// own request with it, and nothing else may mint a confirmation from a
+    /// request.
+    pub(crate) fn parse_confirmed(mut self, settings: &Settings) -> Result<ConfirmedInstall> {
         let phrase = std::mem::take(&mut self.confirmation);
         self.parse(settings)?.confirm(&phrase)
     }
@@ -349,9 +352,12 @@ impl InstallPlan {
         request
     }
 
-    /// Pure, cheap comparison: safe in a GUI callback. This is not authorization
-    /// or a disk-state proof; the helper repeats parsing and the live checks.
-    pub fn confirm(self, phrase: &str) -> Result<ConfirmedInstall> {
+    /// Pure, cheap comparison. This is not authorization or a disk-state proof;
+    /// the helper repeats parsing and the live checks. Crate-private: a
+    /// session confirms its plan only through `session::Awaiting::confirm`,
+    /// once preparation has finished, and the one-shot path through
+    /// `RawRequest::parse_confirmed`, with the phrase its request carried.
+    pub(crate) fn confirm(self, phrase: &str) -> Result<ConfirmedInstall> {
         ensure!(
             phrase == format!("ERASE {}", self.disk.path),
             "Type ERASE followed by the selected device path to confirm"
@@ -360,10 +366,12 @@ impl InstallPlan {
     }
 }
 
-/// Only a matching erase phrase can produce this value.
+/// Only a matching erase phrase can produce this value: `session::Awaiting`
+/// makes one from the phrase the GUI sent after preparation, and
+/// `install::install` from a one-shot request's own.
 /// ```compile_fail
-/// use calamares_nixos::{InstallPlan, install::{self, InstallMode}};
-/// fn bypass(plan: InstallPlan) { install::install(plan, InstallMode::Execute).unwrap(); }
+/// use calamares_nixos::{InstallPlan, Settings, install::{self, InstallMode}};
+/// fn bypass(plan: InstallPlan, settings: &Settings) { install::install(plan, settings, InstallMode::Execute).unwrap(); }
 /// ```
 /// ```compile_fail
 /// use calamares_nixos::ConfirmedInstall;
@@ -373,6 +381,9 @@ pub struct ConfirmedInstall(InstallPlan);
 impl ConfirmedInstall {
     pub(crate) fn into_plan(self) -> InstallPlan {
         self.0
+    }
+    pub(crate) fn plan(&self) -> &InstallPlan {
+        &self.0
     }
 
     /// Downgrade at IPC: the receiver must parse and confirm it again. Secrets

@@ -4,16 +4,17 @@
 use super::{group, property, sections};
 use crate::app::{Genkan, Msg, PrepState, Review};
 use crate::format::size;
+use crate::ram::SwapSize;
 use aizome_kit::prelude::*;
 use aizome_kit::{column, row};
-use calamares_nixos::{Filesystem, Firmware, disk::Layout, memory};
+use calamares_nixos::{Filesystem, Firmware, disk::Layout};
 
 fn partitions(app: &Genkan, review: &Review) -> String {
     let disk = &review.disk;
-    let swap = review
-        .swap
-        .then(|| app.memory.map(|m| memory::swap_bytes(m.total)))
-        .flatten();
+    let swap = match app.memory().swap_size(review.swap) {
+        SwapSize::Known(bytes) => Some(bytes),
+        SwapSize::Off | SwapSize::Reading | SwapSize::Unreadable(_) => None,
+    };
     match Layout::for_install(disk.bytes, review.firmware, swap, review.encrypt) {
         Ok(layout) => {
             let mut parts = vec![
@@ -77,7 +78,7 @@ pub fn failure(message: &str) -> Element<Msg> {
 
 fn preparation(app: &Genkan) -> Element<Msg> {
     let prep = &app.preparation;
-    let status: Element<Msg> = match prep.state {
+    let status: Element<Msg> = match app.prep_state() {
         PrepState::Working => progress_indeterminate().width(40.0).into(),
         PrepState::Done => icon(Icon::CircleCheck)
             .size(18.0)
@@ -127,7 +128,7 @@ fn preparation(app: &Genkan) -> Element<Msg> {
 }
 
 pub fn page(app: &Genkan) -> Element<Msg> {
-    let Some(review) = &app.review else {
+    let Some(review) = app.review() else {
         return text("Checking your settings…").role(Role::Text3).into();
     };
     let disk = &review.disk;

@@ -804,11 +804,13 @@ impl Hako {
 
     pub(crate) fn finished(&mut self, cx: &mut Cx<Msg>, w: WindowKey, title: &str, done: &Done) {
         if let Some(step) = &done.step {
-            match done.inverted {
-                None => self.history.push(step.clone()),
-                Some(false) => self.history.undone(step.clone()),
-                Some(true) => self.history.redone(step.clone()),
-            }
+            self.history.push(step.clone());
+        }
+        // A step left out of the history after failing twice: the person
+        // is told, so the next ❖Z doesn't undo the one before it unasked.
+        let mut note = None;
+        if let Some(inverted) = &done.inverted {
+            self.history.finished(inverted.clone(), |why| note = Some(why));
         }
         // Select what came where the person is.
         let mut by_dir: HashMap<PathBuf, Vec<OsString>> = HashMap::new();
@@ -827,7 +829,7 @@ impl Hako {
         let r = &done.report;
         let mut problems: Vec<(PathBuf, String)> = r.failed.clone();
         problems.extend(r.problems.iter().cloned());
-        if !problems.is_empty() && self.windows.contains_key(&w) {
+        if (!problems.is_empty() || note.is_some()) && self.windows.contains_key(&w) {
             let n = problems.len();
             let shown: Vec<String> = problems
                 .iter()
@@ -841,14 +843,22 @@ impl Hako {
                     )
                 })
                 .collect();
-            let more = if n > 6 { format!("\n…and {} more.", n - 6) } else { String::new() };
-            let head =
-                if n == 1 { "An item couldn't be done.".to_owned() } else { format!("{n} items couldn't be done.") };
-            self.open_sheet(
-                cx,
-                w,
-                Sheet::Message { title: format!("{title}: {head}"), body: shown.join("\n") + &more },
-            );
+            let mut body = shown.join("\n");
+            if n > 6 {
+                body.push_str(&format!("\n…and {} more.", n - 6));
+            }
+            if let Some(note) = note {
+                if !body.is_empty() {
+                    body.push_str("\n\n");
+                }
+                body.push_str(&note);
+            }
+            let head = match n {
+                0 => "It's left out of the history.".to_owned(),
+                1 => "An item couldn't be done.".to_owned(),
+                _ => format!("{n} items couldn't be done."),
+            };
+            self.open_sheet(cx, w, Sheet::Message { title: format!("{title}: {head}"), body });
         }
     }
 

@@ -55,7 +55,7 @@ pub fn client(args: &[String]) -> Result<String> {
     let log = dir.join("progress.log");
     std::fs::File::create(&log)?;
     let mut log = std::fs::File::open(log)?;
-    let mut start = command("systemd-run");
+    let mut start = command(Program::SYSTEMD_RUN);
     start.args([
         "--quiet",
         "--collect",
@@ -72,7 +72,11 @@ pub fn client(args: &[String]) -> Result<String> {
     start.arg(format!("--setenv=PATH={PATH}"));
     start.arg(format!("--property=StandardOutput=append:{}/progress.log", dir.display()));
     start.arg(format!("--property=StandardError=append:{}/progress.log", dir.display()));
-    start.arg(std::env::current_exe()?).arg("__worker").arg(&dir).args(args);
+    let helper = std::env::current_exe()?;
+    // However the worker ends, SIGKILL included, systemd runs this after it:
+    // a clean-up killed before it rewrote the boot menu is finished.
+    start.arg(format!("--property=ExecStopPost={} __recover", helper.display()));
+    start.arg(&helper).arg("__worker").arg(&dir).args(args);
     let started = start.output()?;
     if !started.status.success() {
         return Err(Failure(format!(
@@ -88,12 +92,12 @@ pub fn client(args: &[String]) -> Result<String> {
             progress(&mut log);
             return Ok(result);
         }
-        if state().0 == Phase::Stopping && !cancelled {
+        if process::stop_requested() && !cancelled {
             // The worker handles this before commit; after commit it finishes.
-            let _ = command("systemctl").args(["kill", "--kill-whom=main", "--signal=SIGINT", &unit]).output();
+            let _ = command(Program::SYSTEMCTL).args(["kill", "--kill-whom=main", "--signal=SIGINT", &unit]).output();
             cancelled = true;
         }
-        let status = command("systemctl").args(["show", &unit, "--property=ActiveState", "--value"]).output()?;
+        let status = command(Program::SYSTEMCTL).args(["show", &unit, "--property=ActiveState", "--value"]).output()?;
         if !status.status.success()
             || !matches!(String::from_utf8_lossy(&status.stdout).trim(), "active" | "activating" | "deactivating")
         {

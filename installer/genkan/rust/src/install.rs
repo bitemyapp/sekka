@@ -8,13 +8,15 @@
 //! confirmation it partitions, formats, copies the prepared system to the
 //! target and installs the bootloader, so the time after clicking Install is
 //! dominated by writing the target disk.
+// Every stage and answer is matched by name: a new one forces a decision.
+#![deny(clippy::wildcard_enum_match_arm)]
 use crate::{
-    ConfirmedInstall, Firmware, InstallPlan, Settings,
+    ConfirmedInstall, Firmware, InstallPlan, RawRequest, Settings,
     config::{self, Template},
     disk::{self, Layout},
     filesystem::{self, Identities},
     memory, nixlog, precache,
-    process::{self, output, output_lines},
+    process::{self, Program, output, output_lines},
 };
 use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
@@ -23,7 +25,7 @@ use std::{
     cell::Cell,
     fs,
     io::Write,
-    os::{fd::AsRawFd, unix::fs::PermissionsExt},
+    os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     sync::Mutex,
     thread,
@@ -171,7 +173,7 @@ fn ram_live_guard() -> Result<()> {
         filesystems: Vec<LiveStoreMount>,
     }
     let mounts: Mounts = serde_json::from_str(&output(
-        "findmnt",
+        Program::FINDMNT,
         &[
             "--json",
             "--output",
@@ -194,7 +196,7 @@ fn ram_live_guard() -> Result<()> {
 
 pub fn live_guard(settings: &Settings) -> Result<()> {
     ensure!(
-        unsafe { libc::geteuid() } == 0,
+        crate::sys::is_root(),
         "The install helper requires root (use the GUI's authorization dialog)"
     );
     ensure!(
@@ -205,7 +207,7 @@ pub fn live_guard(settings: &Settings) -> Result<()> {
     );
     ensure!(
         output(
-            "findmnt",
+            Program::FINDMNT,
             &["--noheadings", "--output", "FSTYPE", "--mountpoint", "/"],
             15
         )?
@@ -214,7 +216,7 @@ pub fn live_guard(settings: &Settings) -> Result<()> {
         "Refusing to run on an installed host: root is not temporary"
     );
     let media = output(
-        "findmnt",
+        Program::FINDMNT,
         &["--noheadings", "--output", "FSTYPE", "--mountpoint", "/iso"],
         15,
     )?;
@@ -243,7 +245,11 @@ impl Target {
         ))
     }
     fn unmount(&self) -> Result<()> {
-        output("umount", &["--recursive", self.0.to_str().unwrap()], 60)?;
+        output(
+            Program::UMOUNT,
+            &["--recursive", self.0.to_str().unwrap()],
+            60,
+        )?;
         self.1.set(false);
         Ok(())
     }
@@ -251,7 +257,11 @@ impl Target {
 impl Drop for Target {
     fn drop(&mut self) {
         if self.1.get() {
-            let _ = output("umount", &["--recursive", self.0.to_str().unwrap()], 60);
+            let _ = output(
+                Program::UMOUNT,
+                &["--recursive", self.0.to_str().unwrap()],
+                60,
+            );
         }
         let _ = fs::remove_dir(&self.0);
     }
@@ -263,7 +273,9 @@ pub enum InstallMode {
     Execute,
 }
 
-/// Everything established before confirmation. Only `execute` consumes it.
+/// Everything established before confirmation. Only `execute` consumes it,
+/// and only the end of a preparation route makes it, with the proof that the
+/// root filesystem has room for the system ([`room::check`]).
 pub struct Prepared {
     // Held until the installation finishes: one installer at a time.
     _lock: fs::File,
@@ -276,10 +288,62 @@ pub struct Prepared {
     derivation: String,
     system: String,
     summary: Summary,
+    /// How step 4 puts the system on the target: the route that prepared it.
+    build: Build,
+    /// The plan it was prepared for: its disk and firmware. The layout and
+    /// the identities are that plan's, so no other plan may execute it.
+    disk: disk::Identity,
+    firmware: Firmware,
+    _room: room::Room,
 }
+
+/// How the installed system reaches the target.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Build {
+    /// Built in the live store: copied.
+    Copy,
+    /// Too big for memory: built on the target after formatting.
+    OnTarget,
+}
+
 impl Prepared {
     pub fn summary(&self) -> &Summary {
         &self.summary
+    }
+
+    /// What every stage established, once a route has found room for the
+    /// system. `summary` has what the route measured.
+    fn new(evaluated: Evaluated<'_>, room: room::Room, build: Build, mut summary: Summary) -> Self {
+        summary.deferred = build == Build::OnTarget;
+        let Evaluated {
+            configured,
+            derivation,
+            system,
+            ..
+        } = evaluated;
+        let Configured {
+            checked,
+            staging,
+            configuration,
+        } = configured;
+        summary.root_bytes = checked.layout.root_bytes();
+        summary.swap_bytes = checked.layout.swap_bytes().unwrap_or(0);
+        summary.seconds = checked.started.elapsed().as_secs_f64();
+        Self {
+            disk: checked.plan.disk().clone(),
+            firmware: checked.plan.firmware(),
+            build,
+            _lock: checked.lock,
+            staging,
+            template: checked.template,
+            ids: checked.ids,
+            layout: checked.layout,
+            configuration,
+            derivation,
+            system,
+            summary,
+            _room: room,
+        }
     }
 }
 
@@ -292,20 +356,26 @@ fn installer_lock() -> Result<fs::File> {
         .open("/run/calamares-nixos.lock")?;
     // A preparation the GUI just withdrew may still be exiting.
     let deadline = Instant::now() + Duration::from_secs(30);
-    while unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } != 0 {
+    while !crate::sys::try_lock_exclusive(&lock) {
         ensure!(
             Instant::now() < deadline,
             "Another installation is already running"
         );
-        ensure!(!process::cancelled(), "Preparation was cancelled");
+        if process::cancelled() {
+            return Err(process::Cancelled.into());
+        }
         thread::sleep(Duration::from_millis(200));
     }
     Ok(lock)
 }
 
 /// Replace a raw `--log-format internal-json` failure with Nix's own error
-/// messages and the last build output, when Nix reported them.
+/// messages and the last build output, when Nix reported them. A
+/// cancellation stays one.
 fn nix_failure(error: anyhow::Error, tracker: &Mutex<nixlog::Tracker>) -> anyhow::Error {
+    if process::is_cancellation(&error) {
+        return error;
+    }
     match tracker.lock().unwrap().failure_report() {
         Some(report) => anyhow::anyhow!("{report}"),
         None => error,
@@ -321,8 +391,33 @@ fn nix_activity(tracker: &Mutex<nixlog::Tracker>) -> impl Fn(&str) + Sync + '_ {
     }
 }
 
-/// Non-destructive preparation. No disk is written; the plan stays reviewable.
+/// Non-destructive preparation. No disk is written; the plan stays
+/// reviewable. Each stage's type has only its successor, and both routes
+/// after evaluation reach `Prepared` only by checking that the root
+/// filesystem has room for the system.
 pub fn prepare(plan: &InstallPlan) -> Result<Prepared> {
+    match check(plan)?.configure()?.evaluate()?.route()? {
+        Route::InMemory(build) => build.build(),
+        Route::Deferred(deferred) => deferred.check_room(),
+    }
+}
+
+/// Preparation's first stage: the live system, the selected disk and the
+/// tools are fit to install with, and the layout and filesystem identities
+/// are chosen.
+pub struct Checked<'p> {
+    plan: &'p InstallPlan,
+    started: Instant,
+    lock: fs::File,
+    layout: Layout,
+    ids: Identities,
+    template: Template,
+    ram_total: u64,
+}
+
+/// Checks the live system, the selected disk and the tools, and chooses
+/// the layout and the filesystem identities.
+pub fn check(plan: &InstallPlan) -> Result<Checked<'_>> {
     let started = Instant::now();
     let settings = plan.settings();
     let stage = Stage::start("checks");
@@ -339,12 +434,11 @@ pub fn prepare(plan: &InstallPlan) -> Result<Prepared> {
         "Firmware changed since review"
     );
     let lock = installer_lock()?;
-    disk::revalidate(plan.disk())?;
+    disk::Reviewed::of(plan).revalidate()?;
     preparing("Checking filesystem support before erasing the disk");
     plan.filesystem().preflight(plan.firmware())?;
     if plan.swap() {
-        output("mkswap", &["--version"], 15)
-            .context("The installation media is missing mkswap; no disk writes were made")?;
+        filesystem::swap_preflight()?;
     }
     let ram = memory::read()?;
     let swap_bytes = plan.swap().then(|| memory::swap_bytes(ram.total));
@@ -363,85 +457,149 @@ pub fn prepare(plan: &InstallPlan) -> Result<Prepared> {
     let ids = Identities::generate_for(plan.firmware(), plan.swap(), plan.encrypt())?;
     let template = Template::load(settings, plan.hostname())?;
     stage.done();
+    Ok(Checked {
+        plan,
+        started,
+        lock,
+        layout,
+        ids,
+        template,
+        ram_total: ram.total,
+    })
+}
 
-    let stage = Stage::start("configuration");
-    preparing("Detecting hardware and writing the pinned Determinate flake");
-    // Root-only (0700) staging directory: it receives no secrets, but its
-    // configuration must not be replaced by another local user.
-    let staging = tempfile::Builder::new()
-        .prefix("calamares-prepare-")
-        .tempdir_in("/run")?;
-    template.write(staging.path())?;
-    // Hardware detection does not depend on the target's future filesystems:
-    // they are declared explicitly in configuration.nix with chosen identities.
-    let hardware = output(
-        "nixos-generate-config",
-        &["--show-hardware-config", "--no-filesystems"],
-        120,
-    )?;
-    fs::write(staging.path().join("hardware-configuration.nix"), &hardware)?;
-    let configuration = config::configuration(plan, &ids)?;
-    fs::write(staging.path().join("configuration.nix"), &configuration)?;
-    stage.done();
+/// The second stage: the hardware configuration and the pinned flake,
+/// staged with the installed system's `configuration.nix`.
+pub struct Configured<'p> {
+    checked: Checked<'p>,
+    staging: tempfile::TempDir,
+    configuration: String,
+}
 
-    let stage = Stage::start("evaluation");
-    preparing("Evaluating the installed system");
-    let attribute = format!(
-        "path:{}#nixosConfigurations.{}.config.system.build.toplevel",
-        staging.path().display(),
-        plan.hostname().as_str()
-    );
-    // One evaluation answers both what to build and how much it downloads.
-    let report = Mutex::new(String::new());
-    let dry = output_lines(
-        "nix",
-        &[
-            "build",
-            "--dry-run",
-            "--json",
-            "--no-link",
-            "--no-write-lock-file",
-            &attribute,
-        ],
-        1800,
-        &|line: &str| {
-            let mut report = report.lock().unwrap();
-            if report.len() < 1 << 20 {
-                report.push_str(line);
-                report.push('\n');
-            }
-        },
-    )
-    .context(
-        "The selected configuration could not be evaluated; the target disk has not been erased",
-    )?;
-    let (derivation, system) = nixlog::build_result(&dry)?;
-    let missing = nixlog::dry_run(&report.into_inner().unwrap())?;
-    ensure!(
-        fs::read(staging.path().join("flake.lock"))? == template.lock,
-        "Nix modified the pinned lock"
-    );
-    stage.done();
+impl<'p> Checked<'p> {
+    /// Detects the hardware and writes the pinned Determinate flake.
+    pub fn configure(self) -> Result<Configured<'p>> {
+        let stage = Stage::start("configuration");
+        preparing("Detecting hardware and writing the pinned Determinate flake");
+        // Root-only (0700) staging directory: it receives no secrets, but its
+        // configuration must not be replaced by another local user.
+        let staging = tempfile::Builder::new()
+            .prefix("calamares-prepare-")
+            .tempdir_in("/run")?;
+        self.template.write(staging.path())?;
+        // Hardware detection does not depend on the target's future filesystems:
+        // they are declared explicitly in configuration.nix with chosen identities.
+        let hardware = output(
+            Program::NIXOS_GENERATE_CONFIG,
+            &["--show-hardware-config", "--no-filesystems"],
+            120,
+        )?;
+        fs::write(staging.path().join("hardware-configuration.nix"), &hardware)?;
+        let configuration = config::configuration(self.plan, &self.ids)?;
+        fs::write(staging.path().join("configuration.nix"), &configuration)?;
+        stage.done();
+        Ok(Configured {
+            checked: self,
+            staging,
+            configuration,
+        })
+    }
+}
 
-    // Downloads land in the live store, which is RAM. Build there only when
-    // the unpacked size leaves the memory reserve free; otherwise build on
-    // the target after formatting, where space is not memory.
-    let budget = memory::read()?
-        .available
-        .saturating_sub(memory::reserve(ram.total));
-    let deferred = missing.fetch_bytes > budget;
-    let mut summary = Summary {
-        root_bytes: layout.root_bytes(),
-        swap_bytes: layout.swap_bytes().unwrap_or(0),
-        deferred,
-        ..Summary::default()
-    };
-    if deferred {
-        preparing(&format!(
-            "The selection needs {:.1} GiB of downloads, more than fits in memory: the system will be built on the target disk after formatting",
-            missing.fetch_bytes as f64 / memory::GIB as f64
-        ));
-    } else {
+/// The third stage: what the installed system is, and what building it
+/// takes.
+pub struct Evaluated<'p> {
+    configured: Configured<'p>,
+    derivation: String,
+    system: String,
+    missing: nixlog::DryRun,
+}
+
+impl<'p> Configured<'p> {
+    /// Evaluates the installed system. One evaluation answers both what to
+    /// build and how much it downloads.
+    pub fn evaluate(self) -> Result<Evaluated<'p>> {
+        let stage = Stage::start("evaluation");
+        preparing("Evaluating the installed system");
+        let attribute = format!(
+            "path:{}#nixosConfigurations.{}.config.system.build.toplevel",
+            self.staging.path().display(),
+            self.checked.plan.hostname().as_str()
+        );
+        let report = Mutex::new(String::new());
+        let dry = output_lines(
+            Program::NIX,
+            &[
+                "build",
+                "--dry-run",
+                "--json",
+                "--no-link",
+                "--no-write-lock-file",
+                &attribute,
+            ],
+            1800,
+            &|line: &str| {
+                let mut report = report.lock().unwrap();
+                if report.len() < 1 << 20 {
+                    report.push_str(line);
+                    report.push('\n');
+                }
+            },
+        )
+        .context(
+            "The selected configuration could not be evaluated; the target disk has not been erased",
+        )?;
+        let (derivation, system) = nixlog::build_result(&dry)?;
+        let missing = nixlog::dry_run(&report.into_inner().unwrap())?;
+        ensure!(
+            fs::read(self.staging.path().join("flake.lock"))? == self.checked.template.lock,
+            "Nix modified the pinned lock"
+        );
+        stage.done();
+        Ok(Evaluated {
+            configured: self,
+            derivation,
+            system,
+            missing,
+        })
+    }
+}
+
+/// Where evaluation leads.
+pub enum Route<'p> {
+    /// The downloads fit in memory: build the system in the live store now.
+    InMemory(InMemory<'p>),
+    /// They don't: build it on the target after formatting.
+    Deferred(Deferred<'p>),
+}
+
+impl<'p> Evaluated<'p> {
+    /// Downloads land in the live store, which is RAM. Build there only when
+    /// the unpacked size leaves the memory reserve free; otherwise build on
+    /// the target after formatting, where space is not memory.
+    pub fn route(self) -> Result<Route<'p>> {
+        let budget = memory::read()?
+            .available
+            .saturating_sub(memory::reserve(self.configured.checked.ram_total));
+        Ok(if self.missing.fetch_bytes > budget {
+            Route::Deferred(Deferred(self))
+        } else {
+            Route::InMemory(InMemory(self))
+        })
+    }
+}
+
+/// The in-memory route: the system is built in the live store before
+/// confirmation.
+pub struct InMemory<'p>(Evaluated<'p>);
+
+impl InMemory<'_> {
+    /// Builds the system, checks that it fits on the root filesystem, and
+    /// reads it into the page cache.
+    pub fn build(self) -> Result<Prepared> {
+        let evaluated = self.0;
+        let staging = evaluated.configured.staging.path();
+        let missing = evaluated.missing;
         let stage = Stage::start("build");
         preparing(&format!(
             "Building the installed system ({} builds, {:.0} MiB to download)",
@@ -450,34 +608,172 @@ pub fn prepare(plan: &InstallPlan) -> Result<Prepared> {
         ));
         let tracker = Mutex::new(nixlog::Tracker::default());
         output_lines(
-            "nix",
+            Program::NIX,
             &[
                 "build",
                 "--log-format",
                 "internal-json",
                 "--out-link",
-                staging.path().join("system").to_str().unwrap(),
-                &format!("{derivation}^out"),
+                staging.join("system").to_str().unwrap(),
+                &format!("{}^out", evaluated.derivation),
             ],
             7200,
             &nix_activity(&tracker),
         )
         .map_err(|error| nix_failure(error, &tracker))
         .context("The installed system could not be built; the target disk has not been erased")?;
+        let system = &evaluated.system;
         ensure!(
-            fs::canonicalize(staging.path().join("system"))? == Path::new(&system),
+            fs::canonicalize(staging.join("system"))? == Path::new(system),
             "The built system differs from the evaluated system"
         );
-        summary.downloaded_bytes = missing.fetch_bytes;
         let closure_info: serde_json::Value = serde_json::from_str(&output(
-            "nix",
-            &["path-info", "--json", "--closure-size", &system],
+            Program::NIX,
+            &["path-info", "--json", "--closure-size", system],
             300,
         )?)?;
-        summary.closure_bytes = closure_size(&closure_info)?;
+        let closure_bytes = closure_size(&closure_info)?;
+        let room = room::check(&evaluated.configured.checked.layout, closure_bytes)?;
+        stage.done();
+
+        let stage = Stage::start("cache");
+        preparing("Caching the installed system in memory");
+        let closure: Vec<PathBuf> =
+            process::output_full(Program::NIX, &["path-info", "--recursive", system], 300)?
+                .lines()
+                .filter_map(precache::store_path)
+                .collect();
+        let outcome = precache::warm(&closure, process::LATCH.flag(), |read, total| {
+            event(Event::Caching { read, total })
+        })?;
+        if process::cancelled() {
+            return Err(process::Cancelled.into());
+        }
+        stage.done();
+        let summary = Summary {
+            closure_bytes,
+            cached_bytes: outcome.bytes,
+            cache_limited: outcome.limited,
+            downloaded_bytes: missing.fetch_bytes,
+            ..Summary::default()
+        };
+        Ok(Prepared::new(evaluated, room, Build::Copy, summary))
+    }
+}
+
+/// The deferred route: the downloads don't fit in memory, so the system is
+/// built on the target after formatting. Its size isn't known before then,
+/// but the downloads it needs are, and they must fit on the root filesystem
+/// too: it becomes `Prepared` only by checking that, as the in-memory route
+/// does with the built system. Executing it unchecked doesn't compile; the
+/// check was missing from this route (GEN-07):
+///
+/// ```compile_fail,E0308
+/// use calamares_nixos::{ConfirmedInstall, install::{self, Deferred}};
+/// fn skip_the_check(confirmed: ConfirmedInstall, deferred: Deferred<'_>) -> anyhow::Result<()> {
+///     install::execute(confirmed, deferred)
+/// }
+/// ```
+///
+/// ```
+/// use calamares_nixos::{ConfirmedInstall, install::{self, Deferred}};
+/// fn check_first(confirmed: ConfirmedInstall, deferred: Deferred<'_>) -> anyhow::Result<()> {
+///     install::execute(confirmed, deferred.check_room()?)
+/// }
+/// ```
+pub struct Deferred<'p>(Evaluated<'p>);
+
+impl Deferred<'_> {
+    /// Checks that the root filesystem has room for what building on it
+    /// will put in its store ([`target_store_bytes`]).
+    pub fn check_room(self) -> Result<Prepared> {
+        let evaluated = self.0;
+        let estimate = target_store_bytes(&evaluated.derivation, evaluated.missing)?;
+        let room = room::check(&evaluated.configured.checked.layout, estimate)?;
+        preparing(&format!(
+            "The selection needs {:.1} GiB of downloads, more than fits in memory: the system will be built on the target disk after formatting",
+            evaluated.missing.fetch_bytes as f64 / memory::GIB as f64
+        ));
+        // Also step 4's progress total.
+        let summary = Summary {
+            closure_bytes: estimate,
+            ..Summary::default()
+        };
+        Ok(Prepared::new(evaluated, room, Build::OnTarget, summary))
+    }
+}
+
+/// What each derivation built on the target adds, beyond what it fetches:
+/// most of an installed system's builds are generated configuration. The
+/// root filesystem's reserve covers the builds' workspace and the rare
+/// large local build.
+const PER_BUILD: u64 = 4 << 20;
+
+/// An estimate of what building `derivation` on the target puts in its
+/// store: the downloads, unpacked; every path of the build that the live
+/// store already has, which the build copies from it (the outputs and
+/// sources of the derivations it needs, `nix-store --query --requisites
+/// --include-outputs`); and an allowance per local build. It counts build
+/// inputs of derivations that are already built too, which errs towards
+/// refusing.
+fn target_store_bytes(derivation: &str, missing: nixlog::DryRun) -> Result<u64> {
+    let requisites = process::output_full(
+        Program::NIX_STORE,
+        &["--query", "--requisites", "--include-outputs", derivation],
+        300,
+    )?;
+    let paths: Vec<&str> = requisites
+        .lines()
+        .filter_map(|line| precache::store_path(line).map(|_| line.trim()))
+        .collect();
+    let mut live = 0u64;
+    for chunk in paths.chunks(1000) {
+        let mut args = vec!["path-info", "--json"];
+        args.extend(chunk);
+        live = live
+            .checked_add(nar_sizes(&serde_json::from_str(&process::output_full(
+                Program::NIX,
+                &args,
+                300,
+            )?)?)?)
+            .context("Store size overflow")?;
+    }
+    live.checked_add(missing.fetch_bytes)
+        .and_then(|bytes| bytes.checked_add(missing.builds.checked_mul(PER_BUILD)?))
+        .context("Store size overflow")
+}
+
+/// The sum of `narSize` in `nix path-info --json`, in either of its shapes.
+fn nar_sizes(value: &serde_json::Value) -> Result<u64> {
+    let entries: Vec<_> = match value {
+        serde_json::Value::Array(entries) => entries.iter().collect(),
+        serde_json::Value::Object(entries) => entries.values().collect(),
+        serde_json::Value::Null
+        | serde_json::Value::Bool(_)
+        | serde_json::Value::Number(_)
+        | serde_json::Value::String(_) => anyhow::bail!("Invalid path information"),
+    };
+    entries.iter().try_fold(0u64, |sum, entry| {
+        let size = entry["narSize"].as_u64().context("Missing path size")?;
+        sum.checked_add(size).context("Store size overflow")
+    })
+}
+
+/// The root filesystem's room for the installed system.
+mod room {
+    use super::{Layout, memory};
+    use anyhow::{Context, Result, ensure};
+
+    /// Proof that the root filesystem has room for the selected system, with
+    /// space left for updates and the installation's own work. Only
+    /// [`check`] makes one, and `Prepared` can't be made without one.
+    pub(super) struct Room(());
+
+    /// `system` is the installed system's store size or, on the deferred
+    /// route where it isn't built yet, the unpacked downloads it needs.
+    pub(super) fn check(layout: &Layout, system: u64) -> Result<Room> {
         // Reserve room for updates and the installation workspace.
-        let required = summary
-            .closure_bytes
+        let required = system
             .checked_add(8 * memory::GIB)
             .context("Disk requirement overflow")?;
         ensure!(
@@ -486,35 +782,8 @@ pub fn prepare(plan: &InstallPlan) -> Result<Prepared> {
             required as f64 / memory::GIB as f64,
             layout.root_bytes() as f64 / memory::GIB as f64
         );
-        stage.done();
-
-        let stage = Stage::start("cache");
-        preparing("Caching the installed system in memory");
-        let closure: Vec<PathBuf> =
-            process::output_full("nix", &["path-info", "--recursive", &system], 300)?
-                .lines()
-                .filter_map(precache::store_path)
-                .collect();
-        let outcome = precache::warm(&closure, &process::CANCEL, |read, total| {
-            event(Event::Caching { read, total })
-        })?;
-        ensure!(!process::cancelled(), "Preparation was cancelled");
-        summary.cached_bytes = outcome.bytes;
-        summary.cache_limited = outcome.limited;
-        stage.done();
+        Ok(Room(()))
     }
-    summary.seconds = started.elapsed().as_secs_f64();
-    Ok(Prepared {
-        _lock: lock,
-        staging,
-        template,
-        ids,
-        layout,
-        configuration,
-        derivation,
-        system,
-        summary,
-    })
 }
 
 /// The target's `/nix/var/nix/builds`, the installed system's own build
@@ -629,12 +898,13 @@ fn build_on_target(
     let installable = format!("{derivation}^out");
     retry_downloads(&DOWNLOAD_RETRY_DELAYS, tracker, |fallback| {
         let args = on_target_build_args(store, build_dir, &installable, fallback);
-        output_lines("nix", &args, 7200, on_line).map(drop)
+        output_lines(Program::NIX, &args, 7200, on_line).map(drop)
     })
 }
 
 /// Shared destructive storage phase; tests call this only on a marked VM disk.
 fn prepare_storage(
+    reviewed: &disk::Reviewed,
     request: &InstallPlan,
     ids: &Identities,
     layout: &Layout,
@@ -643,42 +913,22 @@ fn prepare_storage(
     mappings: &mut crate::encryption::Mappings,
 ) -> Result<()> {
     let firmware = request.firmware();
-    // Lock while editing the partition table. Re-probe its stable identity and
-    // all mount/holder state immediately before the first write.
-    let mut device = Some(
-        fs::OpenOptions::new()
-            .read(true)
-            .write(true)
-            .open(&request.disk().path)?,
-    );
-    ensure!(
-        unsafe {
-            libc::flock(
-                device.as_ref().unwrap().as_raw_fd(),
-                libc::LOCK_EX | libc::LOCK_NB,
-            )
-        } == 0,
-        "Disk is locked by another installer"
-    );
-    disk::revalidate(request.disk())?;
-    let dev = request.disk().path.as_str();
+    // Lock while editing the partition table. The lock re-reads the disk's
+    // stable identity and its mount and holder state immediately before the
+    // first write; every write acts on the locked disk, through the proof.
+    let locked = reviewed.lock()?;
+    // For diagnostics and udev only: every write takes the proof.
+    let path = locked.disk().path().to_owned();
     let mount = target.0.to_str().context("Target path encoding")?;
     let storage = (|| -> Result<()> {
         progress(
             1,
             "Erasing the selected disk and creating a GPT partition table",
         );
-        output("wipefs", &["--all", "--force", dev], 60)?;
-        let script = layout.parted_script(firmware, request.filesystem().name());
-        let mut args = vec!["--script", dev];
-        args.extend(script.iter().map(String::as_str));
-        output("parted", &args, 60)?;
-        // Keep udev from observing partially written superblocks. Partition nodes
-        // come from the kernel/devtmpfs; do not wait for udev while holding its lock.
-        output("blockdev", &["--rereadpt", dev], 30)?;
+        layout.write(&locked, firmware, request.filesystem())?;
         let deadline = Instant::now() + Duration::from_secs(30);
         loop {
-            match disk::verify_layout(request.disk(), layout) {
+            match disk::verify_layout(locked.disk().identity(), layout) {
                 Ok(()) => break,
                 Err(error) if Instant::now() >= deadline => {
                     return Err(error.context("Kernel partition layout did not become ready"));
@@ -686,11 +936,14 @@ fn prepare_storage(
                 Err(_) => thread::sleep(Duration::from_millis(100)),
             }
         }
-        disk::revalidate(request.disk())?;
+        // From here the disk is half written: only the target is read again,
+        // so another disk coming or going can't abandon it.
+        let locked = locked.recheck(&[])?;
+        let disk = locked.disk();
         progress(2, "Formatting, verifying and mounting the new filesystems");
-        let boot = disk::partition(dev, 1);
-        let root = disk::partition(dev, 2);
-        let swap = disk::partition(dev, 3);
+        let boot = disk.partition(1);
+        let root = disk.partition(2);
+        let swap = disk.partition(3);
         let root_device = match &ids.encryption {
             Some(encryption) => mappings.format_open(&root, &encryption.root, passphrase)?,
             None => root.clone(),
@@ -699,9 +952,7 @@ fn prepare_storage(
         match &ids.efi {
             Some(serial) => filesystem::format_efi(&boot, serial)?,
             // A BIOS boot partition must not retain an old filesystem signature.
-            None => {
-                output("wipefs", &["--all", "--force", &boot], 60)?;
-            }
+            None => filesystem::wipe(&boot)?,
         }
         if let Some(uuid) = &ids.swap {
             let swap_device = match &ids.encryption {
@@ -719,7 +970,7 @@ fn prepare_storage(
         }
         let bios_boot = layout
             .bios_boot_partition()
-            .map(|index| disk::partition(dev, index));
+            .map(|index| disk.partition(index));
         if let (Some(boot), Some(uuid)) = (&bios_boot, &ids.bios_boot) {
             crate::Filesystem::Ext4.format(boot, uuid)?;
         }
@@ -727,21 +978,25 @@ fn prepare_storage(
         // triggering. A fresh explicit change event updates UUID/type
         // information, including events skipped while locked. Never rely on
         // pre-format udev/blkid caches.
-        if let Some(device) = device.take() {
-            device.sync_all()?;
-        }
-        let mut changed = vec!["trigger", "--action=change", "--settle", &root, &boot];
+        let disk = locked.release()?;
+        let mut changed = vec![
+            "trigger",
+            "--action=change",
+            "--settle",
+            root.path(),
+            boot.path(),
+        ];
         if ids.swap.is_some() {
-            changed.push(&swap);
+            changed.push(swap.path());
         }
         if let Some(boot) = &bios_boot {
-            changed.push(boot);
+            changed.push(boot.path());
         }
         let mapping_paths = mappings.paths();
         changed.extend(mapping_paths.iter().map(String::as_str));
-        output("udevadm", &changed, 70)?;
+        output(Program::UDEVADM, &changed, 70)?;
         // Recheck identity and busy state, accepting only this install's own mappings.
-        disk::revalidate_with_mappings(request.disk(), &mappings.paths())?;
+        disk.recheck(&mappings.paths())?;
         request.filesystem().mount(&root_device, mount)?;
         target.1.set(true);
         if ids.efi.is_some() {
@@ -753,9 +1008,8 @@ fn prepare_storage(
         }
         Ok(())
     })();
-    // Also releases the lock if storage preparation failed while holding it.
-    drop(device);
-    storage.map_err(|error| filesystem::diagnose(error, dev))?;
+    // A failure while locked has released the lock with the Locked disk.
+    storage.map_err(|error| filesystem::diagnose(error, &path))?;
     Ok(())
 }
 
@@ -770,6 +1024,15 @@ pub fn execute(confirmed: ConfirmedInstall, prepared: Prepared) -> Result<()> {
         config::configuration(&request, &prepared.ids)? == prepared.configuration,
         "The confirmed plan differs from the prepared system"
     );
+    // Its layout and identities were chosen for one disk and firmware: the
+    // configuration names the disk only for BIOS.
+    ensure!(
+        *request.disk() == prepared.disk && request.firmware() == prepared.firmware,
+        "The confirmed plan is for another disk than the prepared system"
+    );
+    // Nothing cancels the installation from here on: a withdrawal that came
+    // first stops it here, before any write, and a later one is refused.
+    process::LATCH.commit()?;
     let params = Sha512Params::new(100_000)
         .map_err(|e| anyhow::anyhow!("Password hashing parameters: {e:?}"))?;
     let password = request.take_password();
@@ -785,6 +1048,7 @@ pub fn execute(confirmed: ConfirmedInstall, prepared: Prepared) -> Result<()> {
     let mount = target.0.to_str().context("Target path encoding")?;
     let stage = Stage::start("storage");
     prepare_storage(
+        &disk::Reviewed::of(&request),
         &request,
         &prepared.ids,
         &prepared.layout,
@@ -844,37 +1108,40 @@ pub fn execute(confirmed: ConfirmedInstall, prepared: Prepared) -> Result<()> {
             None => {}
         }
     };
-    if prepared.summary.deferred {
-        progress(
-            4,
-            "Downloading and building the system on the new disk (this can take a while)",
-        );
-        build_on_target(&target.0, &store, &prepared.derivation, &tracker, &on_line)
-            .context("Building the system on the new disk failed")?;
-    } else {
-        progress(4, "Copying the prepared system to the new disk");
-        // Measured against a direct parallel file copy with database
-        // registration: nix copy was faster both in VMs and on the host.
-        output_lines(
-            "nix",
-            &[
-                "copy",
-                "--no-check-sigs",
-                "--log-format",
-                "internal-json",
-                "--to",
-                &store,
-                &prepared.system,
-            ],
-            7200,
-            &on_line,
-        )
-        .map_err(|error| nix_failure(error, &tracker))
-        .context("Copying the system to the new disk failed")?;
-        event(Event::Copying {
-            bytes: total,
-            total,
-        });
+    match prepared.build {
+        Build::OnTarget => {
+            progress(
+                4,
+                "Downloading and building the system on the new disk (this can take a while)",
+            );
+            build_on_target(&target.0, &store, &prepared.derivation, &tracker, &on_line)
+                .context("Building the system on the new disk failed")?;
+        }
+        Build::Copy => {
+            progress(4, "Copying the prepared system to the new disk");
+            // Measured against a direct parallel file copy with database
+            // registration: nix copy was faster both in VMs and on the host.
+            output_lines(
+                Program::NIX,
+                &[
+                    "copy",
+                    "--no-check-sigs",
+                    "--log-format",
+                    "internal-json",
+                    "--to",
+                    &store,
+                    &prepared.system,
+                ],
+                7200,
+                &on_line,
+            )
+            .map_err(|error| nix_failure(error, &tracker))
+            .context("Copying the system to the new disk failed")?;
+            event(Event::Copying {
+                bytes: total,
+                total,
+            });
+        }
     }
     stage.done();
 
@@ -883,7 +1150,7 @@ pub fn execute(confirmed: ConfirmedInstall, prepared: Prepared) -> Result<()> {
     // The closure is already in the target store: nixos-install only sets the
     // system profile and installs the bootloader.
     output(
-        "nixos-install",
+        Program::NIXOS_INSTALL,
         &[
             "--root",
             mount,
@@ -922,7 +1189,7 @@ pub fn execute(confirmed: ConfirmedInstall, prepared: Prepared) -> Result<()> {
 
     let stage = Stage::start("flush");
     progress(6, "Flushing writes and unmounting the installed system");
-    output("sync", &["--file-system", mount], 300)?;
+    output(Program::SYNC, &["--file-system", mount], 300)?;
     target.unmount()?;
     mappings.close()?;
     stage.done();
@@ -935,10 +1202,41 @@ pub fn execute(confirmed: ConfirmedInstall, prepared: Prepared) -> Result<()> {
     Ok(())
 }
 
-/// One-shot preflight or installation of an already-confirmed request.
-pub fn install(confirmed: ConfirmedInstall, mode: InstallMode) -> Result<()> {
-    let plan = confirmed.into_plan();
-    let prepared = prepare(&plan)?;
+/// One-shot preflight or installation of a request that carries its own
+/// confirmation: the same preparation and execution as a session's. It
+/// parses and confirms the request itself, so nothing outside the crate can
+/// mint a confirmation from a request: the old session, which confirmed
+/// with a line read while preparing, doesn't compile that way either
+/// (GEN-06):
+///
+/// ```compile_fail,E0624
+/// use calamares_nixos::{InstallPlan, RawRequest, Settings, install, session::Confirmation};
+/// use std::{io::BufRead, sync::mpsc, thread};
+/// fn session(request: &[u8], settings: &Settings) -> anyhow::Result<()> {
+///     let plan: InstallPlan = serde_json::from_slice::<RawRequest>(request)?.parse(settings)?;
+///     let (send, confirmation) = mpsc::channel();
+///     thread::spawn(move || {
+///         let mut line = String::new();
+///         let read = std::io::stdin().lock().read_line(&mut line).unwrap_or(0);
+///         let _ = send.send((read > 0).then_some(line));
+///     });
+///     let prepared = install::prepare(&plan)?;
+///     let Ok(Some(line)) = confirmation.recv() else { return Ok(()) };
+///     let mut again: RawRequest = serde_json::from_slice(request)?;
+///     again.confirmation = serde_json::from_str::<Confirmation>(&line)?.confirmation;
+///     install::execute(again.parse_confirmed(settings)?, prepared)
+/// }
+/// ```
+///
+/// ```no_run
+/// use calamares_nixos::{RawRequest, Settings, install::{self, InstallMode}};
+/// fn one_shot(request: RawRequest) -> anyhow::Result<()> {
+///     install::install(request, &Settings::load()?, InstallMode::Preflight)
+/// }
+/// ```
+pub fn install(request: RawRequest, settings: &Settings, mode: InstallMode) -> Result<()> {
+    let confirmed = request.parse_confirmed(settings)?;
+    let prepared = prepare(confirmed.plan())?;
     event(Event::Prepared {
         summary: prepared.summary.clone(),
     });
@@ -946,15 +1244,17 @@ pub fn install(confirmed: ConfirmedInstall, mode: InstallMode) -> Result<()> {
         preparing("Preflight passed; no disk writes were made");
         return Ok(());
     }
-    let phrase = format!("ERASE {}", plan.disk().path);
-    execute(plan.confirm(&phrase)?, prepared)
+    execute(confirmed, prepared)
 }
 
 fn closure_size(value: &serde_json::Value) -> Result<u64> {
     let entries: Vec<_> = match value {
         serde_json::Value::Array(entries) => entries.iter().collect(),
         serde_json::Value::Object(entries) => entries.values().collect(),
-        _ => anyhow::bail!("Invalid closure information"),
+        serde_json::Value::Null
+        | serde_json::Value::Bool(_)
+        | serde_json::Value::Number(_)
+        | serde_json::Value::String(_) => anyhow::bail!("Invalid closure information"),
     };
     ensure!(entries.len() == 1, "Expected one system closure");
     entries[0]["closureSize"]
@@ -1016,6 +1316,21 @@ mod tests {
         ] {
             assert!(closure_size(&value).is_err());
         }
+    }
+    #[test]
+    fn store_sizes_sum_either_json_shape() {
+        assert_eq!(
+            nar_sizes(&serde_json::json!([{ "narSize": 2 }, { "narSize": 3 }])).unwrap(),
+            5
+        );
+        assert_eq!(
+            nar_sizes(&serde_json::json!({ "/nix/store/a": { "narSize": 7 } })).unwrap(),
+            7
+        );
+        assert!(nar_sizes(&serde_json::json!([{}])).is_err());
+        assert!(
+            nar_sizes(&serde_json::json!([{ "narSize": u64::MAX }, { "narSize": 1 }])).is_err()
+        );
     }
     #[test]
     fn cleanup_never_recursively_deletes_contents() {
@@ -1113,10 +1428,10 @@ mod tests {
         })
         .unwrap();
         assert!(text.starts_with(r#"{"kind":"prepared""#));
-        match serde_json::from_str(&text).unwrap() {
-            Event::Prepared { summary: parsed } => assert_eq!(parsed, summary),
-            other => panic!("{other:?}"),
-        }
+        let Event::Prepared { summary: parsed } = serde_json::from_str(&text).unwrap() else {
+            panic!("{text}")
+        };
+        assert_eq!(parsed, summary);
         assert_eq!(
             serde_json::to_string(&Event::Complete).unwrap(),
             r#"{"kind":"complete"}"#
@@ -1182,7 +1497,7 @@ mod encryption_tests {
         let firmware = match std::env::var("GENKAN_TEST_FIRMWARE").as_deref() {
             Ok("bios") => Firmware::Bios,
             Ok("uefi") => Firmware::Uefi,
-            _ => anyhow::bail!("Missing firmware choice"),
+            Ok(_) | Err(_) => anyhow::bail!("Missing firmware choice"),
         };
         // Ext4 last: the VM reboots onto this root after the matrix.
         for filesystem in [Filesystem::Btrfs, Filesystem::Xfs, Filesystem::Ext4] {
@@ -1204,12 +1519,20 @@ mod encryption_tests {
                 )?;
                 let mut mappings = encryption::Mappings::default();
                 let target = Target::new()?;
-                prepare_storage(&plan, &ids, &layout, PASSPHRASE, &target, &mut mappings)?;
+                prepare_storage(
+                    &disk::Reviewed::of(&plan),
+                    &plan,
+                    &ids,
+                    &layout,
+                    PASSPHRASE,
+                    &target,
+                    &mut mappings,
+                )?;
                 // The normal disk selector must still reject our open holders.
-                assert!(disk::revalidate(&identity).is_err());
+                assert!(disk::Reviewed::new(identity.clone()).revalidate().is_err());
                 fs::write(target.0.join("encrypted-sentinel"), b"written by Genkan")?;
                 let mount = target.0.to_str().unwrap();
-                output("fstrim", &["--verbose", mount], 30)?;
+                output(Program::TEST_FSTRIM, &["--verbose", mount], 30)?;
                 if swap {
                     let path = format!(
                         "/dev/mapper/genkan-{}",
@@ -1229,7 +1552,7 @@ mod encryption_tests {
                 drop(target);
                 drop(mappings);
                 assert!(mapping_paths.iter().all(|path| !Path::new(path).exists()));
-                disk::revalidate(&identity)?;
+                disk::Reviewed::new(identity.clone()).revalidate()?;
                 let target = Target::new()?;
                 let mount = target.0.to_str().unwrap();
                 let root = disk::partition(&identity.path, 2);
@@ -1237,7 +1560,7 @@ mod encryption_tests {
                 // recovers data after all installer mappings have been closed.
                 assert!(
                     process::output_secret(
-                        "cryptsetup",
+                        Program::TEST_CRYPTSETUP,
                         &["open", "--test-passphrase", "--key-file", "-", &root],
                         b"incorrect-passphrase",
                         30
@@ -1245,7 +1568,7 @@ mod encryption_tests {
                     .is_err()
                 );
                 process::output_secret(
-                    "cryptsetup",
+                    Program::TEST_CRYPTSETUP,
                     &[
                         "open",
                         "--allow-discards",
@@ -1257,7 +1580,7 @@ mod encryption_tests {
                     PASSPHRASE.as_bytes(),
                     60,
                 )?;
-                filesystem.mount("/dev/mapper/genkan-reopen", mount)?;
+                filesystem.mount(&disk::Device::for_test("/dev/mapper/genkan-reopen"), mount)?;
                 target.1.set(true);
                 assert_eq!(
                     fs::read(target.0.join("encrypted-sentinel"))?,
@@ -1266,11 +1589,11 @@ mod encryption_tests {
                 // Deletion and trim on an opened mapping must reach the disk.
                 fs::write(target.0.join("trim-me"), vec![1u8; 4 << 20])?;
                 fs::remove_file(target.0.join("trim-me"))?;
-                output("fstrim", &["--verbose", mount], 30)?;
+                output(Program::TEST_FSTRIM, &["--verbose", mount], 30)?;
                 target.unmount()?;
-                output("cryptsetup", &["close", "genkan-reopen"], 30)?;
+                output(Program::TEST_CRYPTSETUP, &["close", "genkan-reopen"], 30)?;
                 let dump: serde_json::Value = serde_json::from_str(&output(
-                    "cryptsetup",
+                    Program::TEST_CRYPTSETUP,
                     &["luksDump", "--dump-json-metadata", &root],
                     30,
                 )?)?;

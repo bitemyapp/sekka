@@ -230,6 +230,12 @@ rustPlatform.buildRustPackage {
     # One run: dependencies built once for all three packages.
     cargo test --offline --target ${target} --profile release-lto -p aizome-sys -p aizome-shell -p aizome-hako \
       --lib --test file_manager
+    # The doctests of every crate with one that must not compile, their
+    # error codes checked: what the typestate machines' types rule out.
+    source ${../../../nix/checked-doctests.sh}
+    for package in $(compile_fail_packages crates apps); do
+      cargo test --offline --target ${target} --profile release-lto --doc -p "$package"
+    done
     runHook postCheck
   '';
 

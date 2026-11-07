@@ -93,7 +93,7 @@ fn lookup(url: &str) -> Option<String> {
         args.extend(["--cacert", ca]);
     }
     args.extend(["--url", url]);
-    let body = crate::process::output("curl", &args, 8).ok()?;
+    let body = crate::process::output(crate::process::Program::CURL, &args, 8).ok()?;
     let body = body.trim();
     // geoip.kde.org answers {"time_zone": "…"}; ipinfo.io answers plain text.
     match serde_json::from_str::<serde_json::Value>(body) {
@@ -107,7 +107,7 @@ fn lookup(url: &str) -> Option<String> {
 /// clock was itself read from the hardware clock.
 fn clock_offset() -> Option<i32> {
     let synced = crate::process::output(
-        "timedatectl",
+        crate::process::Program::TIMEDATECTL,
         &["show", "--property=NTPSynchronized", "--value"],
         5,
     )
@@ -212,7 +212,7 @@ pub fn detect(
     offset_now: &dyn Fn(&str) -> Option<i32>,
 ) -> Result<Detection> {
     let local = crate::process::output(
-        "timedatectl",
+        crate::process::Program::TIMEDATECTL,
         &["show", "--property=Timezone", "--value"],
         5,
     )

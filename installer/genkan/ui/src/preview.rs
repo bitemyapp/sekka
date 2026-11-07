@@ -4,7 +4,8 @@
 //! and confirming it only shows the Install page.
 //!
 //! In debug builds, `CALAMARES_UI_PREVIEW=welcome|disk|account|github|
-//! desktop|applications|location|keyboard|review|ready|prepfail|install|done|failed`
+//! desktop|applications|location|keyboard|review|ready|prepfail|install|done|failed|
+//! memfail`
 //! opens the window on that page; `CALAMARES_UI_SIZE=800x600` sizes it.
 //! Release builds never read either.
 use crate::app::{Genkan, Msg, Review, Step};
@@ -60,41 +61,42 @@ pub fn apply(app: &mut Genkan, cx: &mut Cx<Msg>, page: &str) {
 /// Fill the program with the sample and go to `page`.
 pub fn show(app: &mut Genkan, cx: &mut Cx<Msg>, page: &str) {
     let gib = 1024u64.pow(3);
-    app.update(
-        Msg::Memory(Ok(MemInfo {
+    // "memfail": installed memory couldn't be read.
+    let memory = if page == "memfail" {
+        Err("/proc/meminfo: Permission denied (os error 13)".into())
+    } else {
+        Ok(MemInfo {
             total: 31 * gib + 400 * 1024 * 1024,
             available: 24 * gib,
             free: 20 * gib,
-        })),
-        cx,
-    );
-    app.update(
-        Msg::Scanned(Ok((
-            vec![
-                sample_disk(
-                    "/dev/nvme0n1",
-                    "Samsung SSD 990 PRO 1TB",
-                    931,
-                    "S7DNNJ0X123456",
-                    None,
-                ),
-                sample_disk(
-                    "/dev/nvme1n1",
-                    "WD Blue SN580 500GB",
-                    465,
-                    "23401A800123",
-                    None,
-                ),
-                sample_disk(
-                    "/dev/sda",
-                    "SanDisk 3.2Gen1",
-                    114,
-                    "0401be1c",
-                    Some("Contains a mounted filesystem or active swap (including live media)"),
-                ),
-            ],
-            Firmware::Uefi,
-        ))),
+        })
+    };
+    app.sample_memory(memory, cx);
+    app.sample_disks(
+        vec![
+            sample_disk(
+                "/dev/nvme0n1",
+                "Samsung SSD 990 PRO 1TB",
+                931,
+                "S7DNNJ0X123456",
+                None,
+            ),
+            sample_disk(
+                "/dev/nvme1n1",
+                "WD Blue SN580 500GB",
+                465,
+                "23401A800123",
+                None,
+            ),
+            sample_disk(
+                "/dev/sda",
+                "SanDisk 3.2Gen1",
+                114,
+                "0401be1c",
+                Some("Contains a mounted filesystem or active swap (including live media)"),
+            ),
+        ],
+        Firmware::Uefi,
         cx,
     );
     app.update(Msg::SelectDisk(0), cx);
@@ -146,7 +148,7 @@ pub fn show(app: &mut Genkan, cx: &mut Cx<Msg>, page: &str) {
     );
     app.reached = Step::Keyboard;
     let step = match page {
-        "disk" => Step::Disk,
+        "disk" | "memfail" => Step::Disk,
         "account" => Step::Account,
         "github" => Step::GitHub,
         "desktop" => Step::Desktop,
@@ -162,7 +164,7 @@ pub fn show(app: &mut Genkan, cx: &mut Cx<Msg>, page: &str) {
         return;
     }
     app.activity = None;
-    app.show_review(Review {
+    app.show_sample_review(Review {
         encrypt: false,
         disk: sample_disk(
             "/dev/nvme0n1",
