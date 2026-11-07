@@ -142,26 +142,35 @@ def share_journal(content_dirs, journal):
 
     The engine lists every produced output it found in or put into the CAS. The
     journal is renamed first, so new entries start a new file. An output that
-    changed or vanished since it was listed is skipped, not an error."""
+    changed or vanished since it was listed is skipped, not an error. One whose
+    blob is not visible yet is kept in JOURNAL.retry for exactly one more pass."""
     report = {"schema": 1, "entries": 0, "already_shared": 0, "deduplicated": 0, "deduplicated_bytes": 0,
               "skipped_small": 0, "missing_blob": 0, "changed": 0, "cross_filesystem": False, "errors": []}
     pending = Path(str(journal) + ".sharing")
+    retry = Path(str(journal) + ".retry")
     try:
         os.rename(journal, pending)
     except FileNotFoundError:
-        if not pending.exists():
+        if not pending.exists() and not retry.exists():
             return report  # Nothing listed; a leftover .sharing file is retried.
     entries = {}
-    for line in pending.read_text().splitlines():
-        parts = line.split(" ", 2)
-        if len(parts) == 3 and parts[1].isdigit():
-            entries[parts[2]] = (parts[0], int(parts[1]))  # The latest listing of a path wins.
+    retried = set()
+    for source, again in ((retry, True), (pending, False)):
+        if source.exists():
+            for line in source.read_text().splitlines():
+                parts = line.split(" ", 2)
+                if len(parts) == 3 and parts[1].isdigit():
+                    entries[parts[2]] = (parts[0], int(parts[1]))  # The latest listing of a path wins.
+                    (retried.add if again else retried.discard)(parts[2])
+    later = []
     index = cas_index(content_dirs)
     for path, (digest, size) in entries.items():
         report["entries"] += 1
         blob = index.get((digest, size))
         if blob is None:
             report["missing_blob"] += 1
+            if path not in retried:
+                later.append(f"{digest} {size} {path}\n")
             continue
         if size < BLOCK:
             report["skipped_small"] += 1
@@ -184,5 +193,11 @@ def share_journal(content_dirs, journal):
         else:
             report["deduplicated"] += 1
             report["deduplicated_bytes"] += size
-    pending.unlink()
+    if later:
+        temporary = Path(str(retry) + ".new")
+        temporary.write_text("".join(later))
+        os.replace(temporary, retry)
+    else:
+        retry.unlink(missing_ok=True)
+    pending.unlink(missing_ok=True)
     return report

@@ -86,6 +86,9 @@ def share_with_cas(content_dirs, store_changed, journal):
     store = os.environ.get("BUCK2_LOCAL_CONTENT_STORE")
     if store and store_changed:
         reports.append(cas_dedupe.dedupe(content_dirs, [Path(store)]))
+    if journal is not None and reports:
+        # The last pass, for inspection: nothing in it is secret.
+        journal.with_name("local-cas-report.json").write_text(json.dumps(reports, indent=2) + "\n")
     if any(report["cross_filesystem"] for report in reports):
         print("Local CAS is on another filesystem than this worktree; extents not shared.", file=sys.stderr)
         return 0
