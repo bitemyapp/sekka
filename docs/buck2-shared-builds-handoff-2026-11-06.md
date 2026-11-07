@@ -14,14 +14,16 @@ over long benchmark matrices. Builds, tests and measurements go to
 ## State
 
 - `feat/buck2-shared-builds` (PR #291, draft) is pushed with the lost-writes
-  and contention fixes (`5baedd7c`).
-- `feat/buck2-single-cas` branches from it and is pushed; it has no PR yet.
+  and contention fixes and the paused-gateway restart (`251253d7`).
+- `feat/buck2-single-cas` is rebased onto it and pushed; it has no PR yet.
   It makes NativeLink's CAS the only store on the CAS host:
   - hits are cloned from it (`local-cas-downloads.patch`);
   - produced outputs skip the content store, are journaled, and have their
     extents shared with their CAS blobs after each build
     (`local-cas-outputs.patch`, `build/buck2/cas_dedupe.py`);
-  - the client opts in with a `build-service client --local-cas` file.
+  - the client opts in with a `build-service client --local-cas` file;
+  - the post-build pass scans the CAS directory once, 0.6 s at 500,000
+    blobs. It had scanned twice at 3.2–4.5 s each.
 - `build-service autosize` sizes the CAS to free disk space above a floor,
   and `dedupe` shares the CAS with a content store. `autosize` waits for an
   idle service before resizing, unless the disk is under half its floor.
@@ -81,23 +83,29 @@ it. Incremental state is private per worktree (~0.7 GB after a dev build).
    form there; that form ran `autosize` cleanly. No timer is installed:
    the only long-lived services on wx are 2026-11-05's, which are not this
    work's to manage.
-3. **NativeLink fork**, only if needed: stable digest paths (dropping the
+3. **Next engine change, batched with any other:** the local-CAS index
+   (`local-cas-downloads.patch`) rescans under its mutex, at most once a
+   second and only on a miss. At 500,000 blobs, each rescan blocks other
+   clone lookups for a fraction of a second. That only matters after heavy
+   eviction, when lookups miss, so it does not justify an engine rebuild on
+   its own. Scanning into a new map outside the lock fixes it.
+4. **NativeLink fork**, only if needed: stable digest paths (dropping the
    client's index) and casita-style retention (roots, and action-cache-first
    eviction). Cloned blobs are already kept recent: `has()` touches each key
    in 1.8.3. Its evicting map also leases keys, but only the worker's input
    staging takes those leases. Free-space sizing is already covered by
    `autosize`.
-4. **Laptop phase.** On a host without the CAS, the content store and
+5. **Laptop phase.** On a host without the CAS, the content store and
    downloads work as before. runnymede is ext4, so it gets no reflinks.
-5. **CI.** Decide how PR CI's `build` job should exercise this work.
-6. **When PR 333 (per-application Aizome packages) lands:**
+6. **CI.** Decide how PR CI's `build` job should exercise this work.
+7. **When PR 333 (per-application Aizome packages) lands:**
    - move `nix/bazel/without-build-files.nix` into its `package-sources.nix`;
    - rerun `scripts/sekka-buck2 generate`;
    - point `checks.bazel-native-inputs` at `components.compositor`.
 
    It invalidates none of the 706 Buck2 actions. Details are in
    `/home/callen/sekka-work/pr333-combo-20261106/results/` on wx.
-7. **Scope decisions for the user:**
+8. **Scope decisions for the user:**
    - Does Bazel stay beside Buck2?
    - Does runnymede move to Btrfs? About 89 GiB of its 140 GiB of build state
      would be saved by compression alone.

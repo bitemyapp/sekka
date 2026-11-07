@@ -110,9 +110,20 @@ prime (706 actions, 90.8 s) was followed by two fresh worktrees, each with a
 held resize landing 3 s and 7 s in. Both built all 706 actions from the cache
 (8.6 s and 9.6 s). The first saw six requests retried once.
 
-The prime's post-build pass shared 5.4 GB of outputs with their CAS blobs in
-about 6.7 s, which is the kernel comparing the bytes. Fresh worktrees whose
-hits are clones journal nothing.
+**The post-build pass at that size.** The prime's pass, which shared 5.4 GB
+of outputs with their CAS blobs, took about 6.7 s. The kernel's byte
+comparison was not the cost: 2.73 GB of fresh pairs shared in 0.20 s. The
+cost was the client's index of the CAS directory, 3.2–4.5 s at 500,000
+names, which each pass built twice. One `os.scandir` pass now serves both and
+takes 0.62–0.66 s. On another disposable service with 500,000 synthetic
+entries, the client's own reports gave:
+
+| Build | Journal pass | Content-store pass |
+| --- | --- | --- |
+| Cold, 706 actions in 83.5 s | 1.96 s: 11,785 outputs, 5.4 GB shared | 0.25 s: 1,054 objects, 1.1 GB |
+| Shared-crate edit, 55 actions in 19.0 s | 1.40 s: 443 outputs, 3.0 GB shared; 15,375 already shared | 0.09 s |
+
+Fresh worktrees whose hits are clones journal nothing.
 
 Two things this repro turned up were not faults:
 - A primed build missed the cache entirely because its isolation directory

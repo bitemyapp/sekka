@@ -649,6 +649,12 @@ client file there with `client --domain trusted --access writer --format buck2
 - shares content-store objects that the CAS also holds, after builds that
   added any.
 
+Both passes share one scan of the CAS directory, which takes 0.6 s at about
+500,000 blobs (the 256 GiB maximum) on wx-workstation. The kernel's byte
+comparison is cheap for outputs still in the page cache: 2.7 GB shared in
+0.2 s. `buck-out/ISOLATION/local-cas-report.json` records each pass's
+seconds.
+
 A mismatched digest fails the command; a CAS on another filesystem is
 reported once and skipped. Read-only clients still clone hits but keep
 ingesting their own outputs. On wx-workstation, a fresh worktree whose 706
