@@ -103,13 +103,40 @@ identical output blobs are still one CAS object.
 
 ## Open findings
 
-- **Lost cache entries after a service restart.** `release-first` ran seconds
-  after `service-restore-capacity` restarted the backend. All 742 of its cache
-  uploads reported success, yet `release-fresh` executed 85 actions locally
-  (60 build-script runs, 25 compilations), 57 with action digests identical to
-  release-first's. 53 of the 85 had finished in release-first's first 30
-  seconds, while the client retried HTTP/2 errors from the restarted service.
-  The rebuilds were correct; the cost is repeated work.
+- **Lost cache entries after eviction (fixed afterwards).** `release-first`
+  reported 742 successful cache uploads, yet `release-fresh` executed 85
+  actions locally, 57 with identical action digests. The restart before
+  release-first was a red herring. The eviction stage had just evicted dev
+  outputs that release outputs share (build-script runs above all). Buck2
+  answered presence checks from expirations it remembered, which NativeLink's
+  LRU does not honour, so it skipped those uploads and wrote action results
+  naming evicted blobs; the completeness-checking action cache hid them. A
+  targeted repro (dev build, CAS shrunk to 1 GiB and restored, release build,
+  fresh release build) found 79 of 81 build-script results naming missing
+  blobs and 96 re-executed actions with this run's engine. With
+  `presence-consistent-hits.patch` every result was complete and the fresh
+  build executed none of its 742 actions. The rebuilds were always correct;
+  the cost was repeated work.
+- **Concurrent materialization (mostly fixed afterwards).** `dev-divergent-j4`'s
+  222 s per worktree was input materialization: five daemons took turns on
+  the content store's cross-process lock. Repros afterwards used fresh
+  worktrees primed from the cache, each rebuilding a shared-crate edit at
+  `-j4`; a fresh worktree materializes ~22,500 files for this, 18,768 of them
+  incremental state.
+
+  | Engine | Four at once, each | One alone |
+  | --- | --- | --- |
+  | This run's | 222 s (five at once) | — |
+  | Views published after the lock (`content-store-unlocked-views.patch`) | 125–137 s | 43 s |
+  | Advisory writes buffered (`content-store-advisory-writes.patch`) | 68–93 s (two runs) | 35.5 s |
+  | Content store off, for comparison | 37–38 s | — |
+
+  A worktree that needs no materialization takes 32–36 s, so one worktree
+  alone is back at that baseline. Lookups under a shared lock with writer
+  preference made no measurable difference (86–88 s) and were dropped. The
+  remaining cost under concurrency is ingesting new outputs, mostly
+  incremental state: their verified canonical staging and syncs run under
+  the exclusive lock.
 - **First fresh worktree latency.** 20.8 s against 13.8–15.2 s for the others,
   while the content store was evicting at its bound.
 
