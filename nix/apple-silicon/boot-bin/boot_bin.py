@@ -418,7 +418,11 @@ def finish(disk, record: dict) -> bool:
         # The copy being replaced is kept before anything replaces it.
         order.reverse()
     for rel, want in order:
-        if want is None or file_digest(disk, rel) == want["digest"]:
+        if want is None:
+            continue
+        if file_digest(disk, rel) == want["digest"]:
+            # Done already, or never needed: its staged copy goes now.
+            discard(disk, rel + ".new")
             continue
         tmp = rel + ".new"
         if not (disk.exists(tmp) and digest(disk.read(tmp)) == want["digest"]):
@@ -566,6 +570,11 @@ def install(esp, new: bytes, source=None, system=None, recover_from=(), say=prin
         if active_entry.get("booted") is False and kept is not None:
             # It never started this Mac: keep the copy that did.
             say(f"{ACTIVE} ({active_entry['digest']}) never booted; {PREVIOUS} stays as it is")
+        elif kept is not None and digest(kept) == digest(active):
+            # boot.bin.previous holds it already (after a rollback to an
+            # extraFiles generation, or `release` after a hold): nothing to
+            # stage, so no copy of it is left as a leftover.
+            pass
         else:
             previous, previous_entry = active, active_entry
     need_room(disk, len(new) + len(previous or b"") + MARGIN, missing=active is None)

@@ -110,6 +110,27 @@ class BootBin(unittest.TestCase):
         self.install(A)
         self.assertEqual((self.active(), self.previous()), (A, B))
 
+    def test_a_previous_copy_equal_to_boot_bin_is_not_staged(self):
+        # boot.bin.previous already holds boot.bin's copy: here after a
+        # rollback to a generation that installed boot.bin with extraFiles.
+        self.install(A)
+        self.booted()
+        self.install(B)
+        self.booted()
+        (self.esp / bb.ACTIVE).write_bytes(A)
+        (self.esp / bb.EXTRA_FILES_MARKER).parent.mkdir(parents=True, exist_ok=True)
+        (self.esp / bb.EXTRA_FILES_MARKER).write_bytes(b"")
+        self.booted()
+        self.assertEqual(self.previous(), A)
+        self.install(C)
+        self.assertEqual((self.active(), self.previous()), (C, A))
+        self.assertEqual(self.leftovers(), [])
+        # Without FIBMAP, a leftover with its target's bytes would count as
+        # sharing its clusters, and every installation would be refused.
+        with mock.patch.object(bb.Disk, "first_block", return_value=None):
+            self.install(B)
+        self.assertEqual((self.active(), self.previous()), (B, A))
+
     def test_restore_previous_swaps_and_holds(self):
         self.install(A)
         self.booted()
