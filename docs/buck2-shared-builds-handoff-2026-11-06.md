@@ -111,7 +111,13 @@ it. Incremental state is private per worktree (~0.7 GB after a dev build).
    `autosize`.
 4. **Laptop phase.** On a host without the CAS, the content store and
    downloads work as before. runnymede is ext4, so it gets no reflinks.
-5. **CI.** Decide how PR CI's `build` job should exercise this work.
+5. **CI.** PR CI's `build` job is skipped because #291 is a draft:
+   `scripts/check-pr-trust.py` admits no drafts. The workflow runs on
+   `pull_request_target`, so it comes from `main`, and `main`'s copy has
+   none of the shared-build jobs this branch adds to `pr.yml`. Marking #291
+   ready would run `main`'s build job (Uta and components); the shared-build
+   jobs first run on PRs after #291 merges. Both runner labels they need
+   (`sekka-builder` on wx, `sekka-build-client`) are online.
 6. **When PR 333 (per-application Aizome packages) lands:**
    - move `nix/bazel/without-build-files.nix` into its `package-sources.nix`;
    - rerun `scripts/sekka-buck2 generate`;

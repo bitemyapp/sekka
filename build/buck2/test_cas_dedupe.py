@@ -3,6 +3,7 @@ import errno
 import fcntl
 import hashlib
 import os
+import struct
 from pathlib import Path
 import sys
 import tempfile
@@ -89,6 +90,23 @@ def main():
         journal.write_text(lines[0] + "\n")
         repeat = cas_dedupe.share_journal([root / "cas"], journal)
         assert repeat["already_shared"] == 1 and repeat["deduplicated"] == 0, repeat
+        # A pair a killed pass shared only partway is finished, not "already" shared.
+        half = outputs / "half-shared"
+        half.write_bytes(shared[0].read_bytes())
+        request = bytearray(24 + 32)
+        source = os.open(shared[0], os.O_RDONLY)
+        target = os.open(half, os.O_RDONLY)
+        try:
+            struct.pack_into("=QQHHI", request, 0, 0, cas_dedupe.STEP, 1, 0, 0)
+            struct.pack_into("=qQQiI", request, 24, target, 0, 0, 0, 0)
+            fcntl.ioctl(source, cas_dedupe.FIDEDUPERANGE, request, True)
+        finally:
+            os.close(source)
+            os.close(target)
+        size = shared[0].stat().st_size
+        assert size > cas_dedupe.STEP
+        assert cas_dedupe.share(shared[0], half, size) == "shared"
+        assert cas_dedupe.share(shared[0], half, size) == "already"
         # A killed pass's renamed journal is taken up beside the new one, and a
         # line the engine appends during the pass is shared before it ends.
         fresh = []
