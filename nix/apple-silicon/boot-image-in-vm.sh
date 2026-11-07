@@ -121,6 +121,8 @@ stop() {
 }
 trap stop EXIT
 # start NAME DISK...: boot with these disks, console log console-NAME.log.
+# The transports are virtio 1.0: Linux's virtio-gpu driver refuses QEMU's
+# legacy virtio-mmio default without a word, leaving no /dev/dri.
 start() {
 	local run=$1 drives=() i=0 d
 	shift
@@ -142,6 +144,7 @@ start() {
 		-device virtconsole,chardev=console \
 		-chardev "socket,id=shell,path=shell.sock,server=on,wait=off,logfile=shell-$run.log" \
 		-device virtconsole,chardev=shell \
+		-global virtio-mmio.force-legacy=false \
 		-device virtio-rng-device -device virtio-gpu-device \
 		-display none -serial "file:firmware-$run.log" -monitor none) &
 	vm=$!
@@ -211,12 +214,17 @@ if [ ! -e "$result/manifest.json" ]; then
 	label=$(ident developer root_label)
 	serial=$(serial_name "$volume_id")
 	log "booting, twice: the first boot (the stand-in attached) and an ordinary one"
+	# The login screen first, before it waits out Plymouth and gives up on
+	# the Mac's GPU (vm/login-screen.sh, sent through the console as base64).
+	screen=$(base64 -w0 <"$here/vm/login-screen.sh")
 	checks=(
+		"echo $screen | base64 -d > /tmp/login-screen.sh; echo sekka | sudo -S -p '' bash /tmp/login-screen.sh"
 		"systemctl is-system-running --wait"
 		"systemctl --failed --no-legend --plain"
 		"systemctl is-active graphical.target display-manager.service"
 		"test -e /nix-path-registration && echo unregistered || readlink /nix/var/nix/profiles/system"
-		"findmnt -n -o FSTYPE /lib/firmware/vendor; ls /lib/firmware/vendor"
+		# command ls: the account's shell has ls as an alias for eza.
+		"findmnt -n -o FSTYPE /lib/firmware/vendor; command ls /lib/firmware/vendor"
 		"findmnt -n -o SOURCE,FSTYPE /boot; findmnt -n -o SIZE /"
 		# Its names lead to its own partitions only (udev's database, as
 		# lsblk reads it without root).
@@ -232,17 +240,26 @@ if [ ! -e "$result/manifest.json" ]; then
 			exit 1
 		fi
 		# The image's developer account (developer/developer.nix).
-		(cd "$work" && "$python" -I "$here/vm-console.py" con.sock sekka sekka "${checks[@]}") | tee "$work/checks-$run.txt"
+		(cd "$work" && "$python" -I "$here/vm-console.py" con.sock sekka sekka "${checks[@]}") | tee "$work/checks-$run.log"
+		# Without the terminal's escapes (the shell sets the cursor's shape
+		# before each command's output), so each line reads as printed.
+		sed 's/\x1b\[[0-9;? ]*[A-Za-z]//g; s/\r$//' "$work/checks-$run.log" >"$work/checks-$run.txt"
 		grep -qx 'running' "$work/checks-$run.txt"
 		[ "$(grep -cx active "$work/checks-$run.txt")" = 2 ]
 		grep -qx 'system-1-link' "$work/checks-$run.txt"
 		grep -qx 'tmpfs' "$work/checks-$run.txt"
 		grep -qx 'sekka-vm-test.txt' "$work/checks-$run.txt"
-		grep -qE '^/dev/vda1 +vfat$' "$work/checks-$run.txt"
-		grep -qx 'names: label 1 /dev/vda2 serial 1 /dev/vda1 root /dev/vda2' "$work/checks-$run.txt"
+		grep -qx 'login-screen: greetd active, 0 restarts in 15 s, greeter running' "$work/checks-$run.txt"
+		# QEMU names the disks in the order it finds them, so the developer
+		# disk is vda alone and may be vdb beside the stand-in; it is the
+		# disk whose root is mounted.
+		dev=$(sed -n 's|^names: .* root /dev/\(vd[a-z]\)2$|\1|p' "$work/checks-$run.txt")
+		[ -n "$dev" ]
+		grep -qE "^/dev/${dev}1 +vfat\$" "$work/checks-$run.txt"
+		grep -qx "names: label 1 /dev/${dev}2 serial 1 /dev/${dev}1 root /dev/${dev}2" "$work/checks-$run.txt"
 		stop
 	done
-	log "booted twice: running, no failed units, graphical, firmware handed over, its own partitions by name"
+	log "booted twice: login screen up, running, no failed units, graphical, firmware handed over, its own partitions by name"
 	exit 0
 fi
 
@@ -447,7 +464,7 @@ ROOT_IMAGE_BYTES=$root_bytes
 VM_ARGS="$vm_args"
 EOF
 "$mtools/bin/mcopy" -i "$t" "$work/expect.env" "$here/vm/guest-checks.sh" "$here/vm/vm-update.nix" \
-	"$here/boot-bin/boot_bin.py" ::/
+	"$here/vm/login-screen.sh" "$here/boot-bin/boot_bin.py" ::/
 # First-boot setup's own sample of the setup.nix it writes, if this source has it.
 sample=$repo/installer/genkan/first-boot/test-data/setup.nix
 [ ! -e "$sample" ] || "$mtools/bin/mcopy" -i "$t" "$sample" ::/setup.nix

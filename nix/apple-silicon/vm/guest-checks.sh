@@ -40,7 +40,14 @@ mounted_partuuid() { partuuid_of "$(findmnt -n -o SOURCE --target "$1")"; }
 nixq() { nix --extra-experimental-features 'nix-command flakes' "$@"; }
 
 running() {
-	local state
+	local state screen
+	# The login screen, with the VM's GPU standing in for the Mac's
+	# (login-screen.sh), before it waits out Plymouth and gives up.
+	if screen=$(bash "$here/login-screen.sh" 2>&1); then
+		ok login-screen "$(echo "$screen" | tr '\n' ' ')"
+	else
+		bad login-screen "$(echo "$screen" | tr '\n' ' ')"
+	fi
 	state=$(timeout 300 systemctl is-system-running --wait 2>&1)
 	check system-running "systemd reports '$state'" test "$state" = running
 	local failed
