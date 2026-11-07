@@ -348,6 +348,7 @@ fn the_whole_setup(light: Light) {
         Response::Failed(Failure {
             message: "Setup couldn't check the result: the configuration in /etc/nixos didn't evaluate. Try again. Your account is ready, so you can also log in now and setup finishes the next time it can.".into(),
             account_exists: true,
+            can_log_in: true,
             can_retry: true,
         }),
     );
@@ -455,6 +456,39 @@ trait Choices {
 
 impl Choices for Failure {
     fn default_choices(m: &str) -> Failure {
-        Failure { message: m.into(), account_exists: false, can_retry: false }
+        Failure { message: m.into(), account_exists: false, can_log_in: false, can_retry: false }
     }
+}
+
+/// Made, without its password yet (it failed to be set): no one can log
+/// in to it, so nothing but finishing is offered, and Escape doesn't go
+/// back to choices that can't change.
+#[test]
+fn an_account_without_its_password_offers_only_to_finish() {
+    let (mut h, w) = greeter(Light::Night);
+    heard(&mut h, Response::Status(status()));
+    {
+        let g = h.program_mut();
+        let s = g.setup.as_mut().unwrap();
+        s.page = Page::Review;
+        s.password = "correct horse battery".into();
+        s.repeat = "correct horse battery".into();
+    }
+    h.send(Msg::Setup(SetupMsg::SetUp));
+    heard(
+        &mut h,
+        Response::Failed(Failure {
+            message: "Setup couldn't make your account: chpasswd took longer than 60 s. Try again: setup finishes the account it began.".into(),
+            account_exists: true,
+            can_log_in: false,
+            can_retry: true,
+        }),
+    );
+    assert_eq!(page(&h), Page::Failed);
+    assert!(shows(&h, w, "Try Again"));
+    assert!(!h.texts(w).iter().any(|t| t == "Log In" || t == "Back"), "{:?}", h.texts(w));
+    h.named(w, NamedKey::Escape, Modifiers::NONE);
+    assert_eq!(page(&h), Page::Failed);
+    h.named(w, NamedKey::Enter, Modifiers::NONE);
+    assert_eq!(page(&h), Page::Working, "trying again");
 }

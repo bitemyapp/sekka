@@ -876,9 +876,11 @@ fn failed(s: &Setup) -> (Vec<Element<Msg>>, f64) {
     let (msg, mh) = para(&f.message, 14.0, NIGHT.red, 5, true);
     parts.push(msg);
     parts.push(gap(20.0));
-    let back = if f.account_exists {
+    // Logging in only once the account has its password; until then, made,
+    // it can only be finished.
+    let back = if f.can_log_in {
         Some(("setup-log-in", "Log In", m(SetupMsg::LogIn)))
-    } else if !f.can_retry {
+    } else if f.account_exists || !f.can_retry {
         None
     } else {
         Some(("setup-back", "Back", m(SetupMsg::Back)))

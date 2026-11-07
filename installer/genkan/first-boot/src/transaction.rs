@@ -10,10 +10,11 @@
 //!    hash (`credential`, 0600: never the password), then the choices
 //!    (`staged.json`, the intent: from here on setup finishes rather than
 //!    starts again), then the configuration it will write.
-//! 3. **Account**: made with the staged uid if it isn't there; given the
-//!    staged hash only while it has no password of its own; its groups
-//!    and home completed. An account of that name with another uid is
-//!    someone else's, and setup stops rather than touch it.
+//! 3. **Account**: made with the staged uid if it isn't there, its groups
+//!    and home completed, and only then given the staged hash, while it
+//!    has no password of its own: no one can log in to it before it's
+//!    whole. An account of that name with another uid is someone else's,
+//!    and setup stops rather than touch it.
 //! 4. **Settings**: host name, time zone, locale, and the login screen's
 //!    and the person's keyboard, each set only if it differs.
 //! 5. **Configuration**: `/etc/nixos/setup.nix`.
@@ -88,8 +89,8 @@ pub enum Point {
     Intent,
     Configuration,
     Account,
-    Password,
     Groups,
+    Password,
     Hostname,
     TimeZone,
     Locale,
@@ -106,8 +107,8 @@ impl Point {
         Point::Intent,
         Point::Configuration,
         Point::Account,
-        Point::Password,
         Point::Groups,
+        Point::Password,
         Point::Hostname,
         Point::TimeZone,
         Point::Locale,
@@ -233,6 +234,11 @@ pub fn account_made<S: System>(sys: &S, s: &Staged) -> Result<bool> {
     Ok(sys.account(&s.username)?.is_some_and(|a| a.uid == s.uid))
 }
 
+/// Whether `s`'s account exists and has a password to log in with.
+pub fn can_log_in<S: System>(sys: &S, s: &Staged) -> Result<bool> {
+    Ok(account_made(sys, s)? && !unset(&sys.password_hash(&s.username)?.unwrap_or_default()))
+}
+
 /// Remove what an unfinished stage left without an intent, and what a
 /// finished one left behind.
 fn tidy(config: &Config) -> Result<()> {
@@ -268,14 +274,17 @@ pub fn hash(password: &str) -> Result<Zeroizing<String>> {
 fn failed<S: System>(sys: &S, staged: Option<&Staged>, what: &str, e: anyhow::Error) -> Failure {
     eprintln!("setup: {what}: {e:#}");
     let account_exists = staged.is_some_and(|s| account_made(sys, s).unwrap_or(false));
+    let can_log_in = staged.is_some_and(|s| can_log_in(sys, s).unwrap_or(false));
     let mut message = format!("Setup couldn't {what}: {e:#}.");
     message = message.replace(".:", ":").replace("..", ".");
-    message.push_str(if account_exists {
+    message.push_str(if can_log_in {
         " Try again. Your account is ready, so you can also log in now and setup finishes the next time it can."
+    } else if account_exists {
+        " Try again: setup finishes the account it began."
     } else {
         " Try again; if it fails again, restart the computer and set it up once more."
     });
-    Failure { message, account_exists, can_retry: true }
+    Failure { message, account_exists, can_log_in, can_retry: true }
 }
 
 impl<S: System> Run<'_, S> {
@@ -296,10 +305,11 @@ impl<S: System> Run<'_, S> {
                 remove(&self.config.staged()).map_err(|e| failed(self.sys, None, "start", e))?;
                 remove(&self.config.credential()).map_err(|e| failed(self.sys, None, "start", e))?;
             }
-            (State::Interrupted, _) => {
+            (State::Interrupted, s) => {
                 return Err(Failure {
                     message: "Setup was already under way. Finish it first.".into(),
                     account_exists: true,
+                    can_log_in: s.as_ref().is_some_and(|s| can_log_in(self.sys, s).unwrap_or(false)),
                     can_retry: true,
                 });
             }
@@ -408,12 +418,7 @@ impl<S: System> Run<'_, S> {
                 a.uid
             ),
         };
-        let current = self.sys.password_hash(&s.username)?.unwrap_or_default();
-        if unset(&current) {
-            let hash = credential.context("the password given at setup is gone; set up the account again")?;
-            self.sys.set_password_hash(&s.username, hash)?;
-            (self.stop)(Point::Password)?;
-        }
+        // The account whole before anyone can log in to it.
         let has = self.sys.groups_of(&s.username)?;
         let missing: Vec<String> = s.groups.iter().filter(|g| !has.contains(g)).cloned().collect();
         if !missing.is_empty() {
@@ -421,6 +426,12 @@ impl<S: System> Run<'_, S> {
         }
         self.sys.ensure_home(&account)?;
         (self.stop)(Point::Groups)?;
+        let current = self.sys.password_hash(&s.username)?.unwrap_or_default();
+        if unset(&current) {
+            let hash = credential.context("the password given at setup is gone; set up the account again")?;
+            self.sys.set_password_hash(&s.username, hash)?;
+            (self.stop)(Point::Password)?;
+        }
         Ok(account)
     }
 
@@ -814,7 +825,7 @@ pub(crate) mod tests {
         std::fs::write(w.config.nixos_dir.join("flake.nix"), "{ }").unwrap();
         w.sys.fail = Some("evaluate");
         let f = w.begin(None).unwrap_err();
-        assert!(f.can_retry && f.account_exists, "{f:?}");
+        assert!(f.can_retry && f.account_exists && f.can_log_in, "{f:?}");
         assert!(f.message.starts_with("Setup couldn't check the result: evaluate failed"), "{}", f.message);
         assert_eq!(w.state(), State::Interrupted);
         w.sys.fail = None;
@@ -870,23 +881,25 @@ pub(crate) mod tests {
     }
 
     /// A failing operation leaves setup interrupted; a retry finishes it.
+    /// Log In is offered only once the account has its password.
     #[test]
     fn a_failed_step_is_retried() {
-        for op in [
-            "create_account",
-            "set_password_hash",
-            "ensure_home",
-            "set_hostname",
-            "set_time_zone",
-            "set_locale",
-            "set_greeter_keyboard",
-            "set_user_keyboard",
+        for (op, made, ready) in [
+            ("create_account", false, false),
+            ("ensure_home", true, false),
+            ("set_password_hash", true, false),
+            ("set_hostname", true, true),
+            ("set_time_zone", true, true),
+            ("set_locale", true, true),
+            ("set_greeter_keyboard", true, true),
+            ("set_user_keyboard", true, true),
         ] {
             let mut w = world();
             w.sys.fail = Some(op);
             let f = w.begin(None).unwrap_err();
             assert!(f.can_retry, "{op}");
-            assert_eq!(f.account_exists, op != "create_account", "{op}: {f:?}");
+            assert_eq!((f.account_exists, f.can_log_in), (made, ready), "{op}: {f:?}");
+            assert_eq!(f.message.contains("log in now"), ready, "{op}: {}", f.message);
             assert_eq!(w.state(), State::Interrupted, "{op}");
             w.sys.fail = None;
             w.resume(None).unwrap();
@@ -918,6 +931,7 @@ pub(crate) mod tests {
         w.sys.shadow.insert("ada".into(), "$6$theirs".into());
         let f = w.resume(None).unwrap_err();
         assert!(f.message.contains("already exists (user id 4242)"), "{}", f.message);
+        assert!(!f.account_exists && !f.can_log_in, "{f:?}");
         assert_eq!(w.sys.shadow["ada"], "$6$theirs");
         assert_eq!(w.sys.account("ada").unwrap().unwrap().uid, 4242);
     }
@@ -955,7 +969,7 @@ pub(crate) mod tests {
         let mut w = world();
         assert!(w.begin(Some(Point::Account)).is_err());
         let f = w.begin(None).unwrap_err();
-        assert!(f.account_exists && f.can_retry, "{f:?}");
+        assert!(f.account_exists && !f.can_log_in && f.can_retry, "{f:?}");
         w.resume(None).unwrap();
     }
 

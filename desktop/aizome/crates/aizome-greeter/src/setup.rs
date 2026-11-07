@@ -126,7 +126,10 @@ pub struct DesktopChoice {
 pub struct Interrupted {
     pub username: String,
     pub full_name: String,
+    /// Its account is made: setup can only be finished now.
     pub account_exists: bool,
+    /// And has its password: the person can log in with it.
+    pub can_log_in: bool,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize)]
@@ -171,7 +174,10 @@ pub struct Done {
 #[serde(default)]
 pub struct Failure {
     pub message: String,
+    /// The account is made: the choices can't go back.
     pub account_exists: bool,
+    /// It has its password: Log In is offered while setup waits to finish.
+    pub can_log_in: bool,
     pub can_retry: bool,
 }
 
@@ -530,7 +536,8 @@ pub enum SetupMsg {
     /// Review's Set Up.
     SetUp,
     Retry,
-    /// Leave a failed setup for the login screen (the account exists).
+    /// Leave a failed setup for the login screen (the account has its
+    /// password).
     LogIn,
     /// Ask the helper again (after losing it).
     Reconnect,
@@ -704,6 +711,7 @@ impl Greeter {
                     s.failure = Some(Failure {
                         message: format!("The setup service stopped ({why}). Try again: setup finishes what it began."),
                         account_exists: false,
+                        can_log_in: false,
                         can_retry: true,
                     });
                     s.page = Page::Failed;
@@ -1063,10 +1071,19 @@ mod tests {
         assert_eq!(c.problems[&Field::Username], "Reserved username.");
         let r: Response = serde_json::from_str(r#"{"progress":{"step":"account","index":1,"count":6}}"#).unwrap();
         assert_eq!(r, Response::Progress(Progress { step: "account".into(), index: 1, count: 6 }));
-        let r: Response = serde_json::from_str(r#"{"status":{"version":1,"state":"interrupted","device":"Mac","offer":{"locales":[],"keyboards":[],"time_zones":[],"desktops":[]},"suggested":{},"interrupted":{"username":"ada","full_name":"Ada","account_exists":true}}}"#).unwrap();
+        let r: Response = serde_json::from_str(r#"{"status":{"version":1,"state":"interrupted","device":"Mac","offer":{"locales":[],"keyboards":[],"time_zones":[],"desktops":[]},"suggested":{},"interrupted":{"username":"ada","full_name":"Ada","account_exists":true,"can_log_in":false}}}"#).unwrap();
         let Response::Status(s) = r else { panic!() };
         assert_eq!(s.state, State::Interrupted);
-        assert!(s.interrupted.unwrap().account_exists);
+        let i = s.interrupted.unwrap();
+        assert!(i.account_exists && !i.can_log_in);
+        let r: Response = serde_json::from_str(
+            r#"{"failed":{"message":"No.","account_exists":true,"can_log_in":true,"can_retry":true}}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            r,
+            Response::Failed(Failure { message: "No.".into(), account_exists: true, can_log_in: true, can_retry: true })
+        );
     }
 
     #[test]

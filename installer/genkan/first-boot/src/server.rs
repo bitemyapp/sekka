@@ -252,6 +252,7 @@ pub fn status<S: System>(config: &Config, sys: &S, hints: &Hints) -> Result<Stat
             username: s.username.clone(),
             full_name: s.full_name.clone(),
             account_exists: transaction::account_made(sys, s)?,
+            can_log_in: transaction::can_log_in(sys, s)?,
         }),
         None => None,
     };
@@ -387,6 +388,25 @@ mod tests {
         let answers = talk(&config, &mut sys, &[huge]);
         assert!(answers[0]["error"].as_str().unwrap().contains("longer than"), "{answers:?}");
         assert!(sys.calls.is_empty());
+    }
+
+    /// The login screen hears whether an interrupted setup's account exists,
+    /// and apart from that, whether it can be logged in to yet.
+    #[test]
+    fn an_interrupted_setup_says_whether_its_account_can_log_in() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = sample(dir.path());
+        std::fs::create_dir_all(&config.nixos_dir).unwrap();
+        let mut sys = Fake::image();
+        let plan = choices::plan(&config, &draft(), &zeroize::Zeroizing::new(PASSWORD.into()), &|_| false).unwrap();
+        let mut progress = |_| {};
+        let mut stop = |p| if p == transaction::Point::Account { anyhow::bail!("stopped") } else { Ok(()) };
+        assert!(Run { config: &config, sys: &mut sys, progress: &mut progress, stop: &mut stop }.begin(plan).is_err());
+        let interrupted = |sys: &Fake| status(&config, sys, &Hints::default()).unwrap().interrupted.unwrap();
+        let i = interrupted(&sys);
+        assert_eq!((i.username.as_str(), i.account_exists, i.can_log_in), ("ada", true, false), "made, without its password");
+        sys.shadow.insert("ada".into(), transaction::hash(PASSWORD).unwrap().to_string());
+        assert!(interrupted(&sys).can_log_in);
     }
 
     #[test]

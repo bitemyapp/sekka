@@ -159,8 +159,10 @@ pub struct Status {
 pub struct Interrupted {
     pub username: String,
     pub full_name: String,
-    /// Its account was made already: the person can log in with it.
+    /// Its account was made already: the choices can't change now.
     pub account_exists: bool,
+    /// The account has its password: the person can log in with it.
+    pub can_log_in: bool,
 }
 
 #[derive(Debug, Default, Serialize)]
@@ -244,15 +246,17 @@ pub struct Done {
 pub struct Failure {
     /// What happened and what to do, as a sentence or two.
     pub message: String,
-    /// The account exists: the person can log in while setup is retried.
+    /// The account exists: setup can only be finished now, not begun again.
     pub account_exists: bool,
+    /// It has its password: the person can log in while setup is retried.
+    pub can_log_in: bool,
     /// Trying again may help (nothing about the choices was wrong).
     pub can_retry: bool,
 }
 
 impl Failure {
     pub fn choices(message: impl Into<String>) -> Failure {
-        Failure { message: message.into(), account_exists: false, can_retry: false }
+        Failure { message: message.into(), account_exists: false, can_log_in: false, can_retry: false }
     }
 }
 
