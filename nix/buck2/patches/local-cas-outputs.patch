@@ -110,10 +110,10 @@ index 1593bc5..3f838d2 100644
              let digest_config = self.io.digest_config();
              tokio::task::spawn_blocking(move || {
 diff --git a/app/buck2_execute_impl/src/materializers/local_content_store.rs b/app/buck2_execute_impl/src/materializers/local_content_store.rs
-index bf84d82..bc98327 100644
+index e9d55e9..ea9ccc6 100644
 --- a/app/buck2_execute_impl/src/materializers/local_content_store.rs
 +++ b/app/buck2_execute_impl/src/materializers/local_content_store.rs
-@@ -2257,6 +2257,64 @@ pub(crate) fn artifact<D: ActionDirectory>(
+@@ -2296,6 +2296,64 @@ pub(crate) fn artifact<D: ActionDirectory>(
      Ok(())
  }
  
