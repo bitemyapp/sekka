@@ -362,8 +362,14 @@ class FatModel:
       syncfs writes;
     - a file whose last name is gone is evicted, freeing its clusters, when
       its last open descriptor closes;
-    - syncfs writes every inode and every sector: afterwards the disk holds
-      memory's content.
+    - the drive caches writes (the Mac's NVMe: queue/write_cache is "write
+      back"), and only a flush makes them durable. Every fsync ends in one
+      (fat_file_fsync, blkdev_issue_flush);
+    - syncfs writes every inode and every sector but flushes nothing (vfat
+      has no ->sync_fs; sync_blockdev only waits for the writes): what it
+      wrote may be lost, or stored after later writes, until the next
+      fsync's flush, after which the disk holds what it wrote or anything
+      memory had since.
 
     Every name takes one entry; `per_sector` entries share a directory
     sector (128 on a 4 KiB-sector ESP like the Mac's, 16 at 512 bytes; 1
@@ -376,6 +382,9 @@ class FatModel:
         self.dirs = {"": [[]]}  # directory -> memory variants of its entry list
         self.dir_disk = {}  # (directory, sector) -> [contents the disk may hold]
         self.dir_dirty = {}  # directory -> sectors on its list of metadata buffers
+        # (directory, sector) -> what syncfs wrote, then memory's later
+        # contents: what the disk may hold once the next flush comes.
+        self.cached = {}
         self.inodes = {}  # id -> {dir, pos, start, size, nlink, opens}
         self.names = {}  # (directory, name) -> inode id
         self.pending = set()  # inodes whose entry may not hold their values
@@ -404,6 +413,16 @@ class FatModel:
                 seen = self.dir_disk.setdefault((d, s), [(None,) * self.per_sector])
                 if content not in seen:
                     seen.append(content)
+                after = self.cached.get((d, s))
+                if after is not None and content not in after:
+                    after.append(content)
+
+    def _flush(self):
+        """blkdev_issue_flush: what syncfs wrote into the drive's cache is
+        durable, unless background writeback overwrote it since."""
+        for key, contents in self.cached.items():
+            self.dir_disk[key] = list(contents)
+        self.cached.clear()
 
     def _set_fat(self, c, value):
         self.fat[c] = value
@@ -507,13 +526,15 @@ class FatModel:
         self.inodes[i].update(start=chain[0] if chain else 0, size=len(data))
         self._dirty_inode(i)
         self._snap(f"write {rel}")
-        # fsync: data, the FAT, and the entry if the inode is still dirty.
+        # fsync: data, the FAT, and the entry if the inode is still dirty;
+        # then the flush.
         for c in chain:
             self.data_disk[c] = [self.data[c]]
         self._fat_durable()
         self.dirs[d] = self._dedup(self._apply(i))
         self.pending.discard(i)
         self._note_dir(d)
+        self._flush()
         self._snap(f"fsync {rel}")
 
     def hold(self, rel):
@@ -577,12 +598,18 @@ class FatModel:
         pass
 
     def sync_dir(self, d):
+        """fsync of a directory: its own changed sectors and the FAT, then
+        the flush."""
         for s in self.dir_dirty.pop(d, set()):
             self.dir_disk[(d, s)] = self._dedup([self._sector(v, s) for v in self.dirs[d]])
+            self.cached.pop((d, s), None)
         self._fat_durable()
+        self._flush()
         self._snap(f"fsync {d or '/'}/")
 
     def sync_all(self):
+        """syncfs: every inode into its entry and every sector written, into
+        the drive's cache; none of it durable before the next flush."""
         for i in list(self.pending):
             if self.inodes.get(i, {}).get("pos") is not None:
                 d = self.inodes[i]["dir"]
@@ -591,12 +618,24 @@ class FatModel:
         for d, variants in self.dirs.items():
             assert len(variants) == 1, variants
             for s in self._sectors(variants[0]):
-                self.dir_disk[(d, s)] = [self._sector(variants[0], s)]
+                content = self._sector(variants[0], s)
+                seen = self.dir_disk.setdefault((d, s), [(None,) * self.per_sector])
+                if content not in seen:
+                    seen.append(content)
+                self.cached[(d, s)] = [content]
         self.dir_dirty.clear()
+        # The FAT and the data: written too, and as uncertain as before
+        # until a flush (the model's values only ever grow until then).
+        self._snap("syncfs")
+
+    def quiesce(self):
+        """Long after the last change, with a flush since: the disk holds
+        memory's content (only to set a test's ESP up)."""
+        self.sync_all()
+        self._flush()
         self._fat_durable()
         for c, chunk in self.data.items():
             self.data_disk[c] = [chunk]
-        self._snap("syncfs")
 
     def free_bytes(self):
         return self.fat.count(0) * self.CLUSTER
@@ -693,7 +732,7 @@ class OnFat(unittest.TestCase):
         for data in booted:
             bb.install(None, data, say=lambda _: None, warn=lambda _: None, disk=m)
             bb.mark_booted(None, warn=lambda _: None, disk=m)
-        m.sync_all()
+        m.quiesce()
         self.assertEqual(m.read(bb.ACTIVE), active)
         if previous is not None:
             self.assertEqual(m.read(bb.PREVIOUS), previous)
@@ -799,6 +838,27 @@ class OnFat(unittest.TestCase):
                     bb.install(None, B, say=lambda _: None, warn=lambda _: None, disk=m)
                 with self.assertRaisesRegex(AssertionError, "isn't a complete copy"):
                     self.check(m, {A, B}, (B, A), "old procedure")
+
+    def test_the_model_catches_freeing_before_the_flush(self):
+        """The control for the drive's cache: closing the replaced file right
+        after syncfs, which flushes nothing, frees its clusters while the
+        entry syncfs wrote may not be on the disk yet."""
+        for per_sector in (128, 1):
+            with self.subTest(per_sector=per_sector):
+                m = self.esp(per_sector)
+
+                def unflushed_commit(disk, tmp, rel):
+                    held = disk.hold(rel) if disk.exists(rel) else None
+                    disk.rename(tmp, rel)
+                    disk.sync_dir(bb.parent(rel))
+                    disk.sync_all()
+                    if held is not None:
+                        disk.release(held)
+
+                with mock.patch.object(bb, "commit", unflushed_commit):
+                    bb.install(None, B, say=lambda _: None, warn=lambda _: None, disk=m)
+                with self.assertRaisesRegex(AssertionError, "isn't a complete copy|isn't certainly kept"):
+                    self.check(m, {A, B}, (B, A), "freed before the flush")
 
 
 if __name__ == "__main__":

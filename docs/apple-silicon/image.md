@@ -285,6 +285,12 @@ them back in no order it promises:
 - A file's `fsync` writes its entry only if its inode is still dirty;
   background writeback may already have copied it into a directory sector
   it hasn't written. Only `syncfs(2)` certainly writes every entry.
+- `syncfs` flushes nothing on vfat (`fat_sops` has no `sync_fs`, and
+  `sync_blockdev` only waits for the writes), and the Mac's NVMe caches
+  writes (`/sys/block/nvme0n1/queue/write_cache` is `write back`), so what
+  `syncfs` wrote can still be lost, or stored after later writes. Every
+  `fsync`, of a file or a directory, ends in a flush
+  (`fat_file_fsync`, `blkdev_issue_flush`).
 - The ESP is marked dirty in its boot sector while Linux has it mounted,
   and stays so after a power cut. m1n1's FAT reader (rust-fatfs 0.4)
   ignores the flag, and reads the first FAT.
@@ -292,7 +298,8 @@ them back in no order it promises:
 So a name is replaced (`commit`) by holding the replaced file open (its
 clusters stay allocated), renaming, `fsync`ing the directory (the source
 entry's removal reaches the disk first), `syncfs` (the target entry names
-the new clusters, however its inode was written), and only then closing
+the new clusters, however its inode was written), `fsync`ing the directory
+again (its flush makes what `syncfs` wrote durable), and only then closing
 the replaced file, which frees its clusters. At every instant the disk's
 entry names either the old clusters, allocated and intact, or the new
 ones, written, read back and flushed before the rename.
@@ -310,14 +317,17 @@ somewhere safe first.
 
 `boot-bin/test_boot_bin.py` runs the real procedure against `FatModel`, a
 model of these semantics (directory sectors, inode writeback at any moment,
-the FAT, eviction, `fsync` and `syncfs` as the kernel source has them). After
+the FAT, eviction, `fsync` and `syncfs` as the kernel source has them, and a
+drive that keeps what `syncfs` wrote in its cache until the next flush). After
 every system call it takes every state a power cut can leave, with 128, 16, 2
 or 1 entries per directory sector, and checks that `boot.bin` is certainly
 one complete copy, that once the new copy can be active the replaced one is
 certainly `boot.bin.previous`, and that only a file and its staged copy ever
 share clusters. It mounts every such state again and checks that the next
 run finishes with the new copy active and the old one kept, or refuses with
-`boot.bin` complete. The old procedure fails the same checks.
+`boot.bin` complete. The old procedure fails the same checks, and so does
+this one when it closes the replaced file right after `syncfs`, before the
+flush.
 
 On every boot loader installation:
 

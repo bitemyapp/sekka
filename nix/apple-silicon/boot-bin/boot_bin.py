@@ -24,12 +24,18 @@ order it promises:
   FAT, and its entry only if its inode is still dirty: background writeback
   may already have copied the inode into a directory sector it has not
   written;
-- syncfs(2) writes every inode, every dirty sector and the FAT.
+- syncfs(2) writes every inode, every dirty sector and the FAT, but flushes
+  nothing: vfat has no ->sync_fs, and sync_blockdev only waits for the
+  writes, which a drive with a write cache (the Mac's NVMe) holds in
+  volatile memory and may store in any order. Every fsync ends in a flush
+  (fat_file_fsync, blkdev_issue_flush), which makes everything written
+  before it durable.
 
 So replacing a name (`commit`) is: hold the replaced file open (its clusters
 stay allocated), rename, fsync the directory (the source entry's removal
 reaches the disk first), syncfs (the target entry now names the new
-clusters, however its inode was written), then close the replaced file (only
+clusters, however its inode was written), fsync the directory again (its
+flush makes what syncfs wrote durable), then close the replaced file (only
 now are its clusters freed). At every instant the disk's entry names either
 the old clusters, still allocated and intact, or the new ones, written and
 flushed before the rename. One state remains possible: a write-back of the
@@ -267,13 +273,16 @@ def commit(disk, tmp: str, rel: str) -> None:
     """Rename tmp over rel in the order FAT needs (the module's docstring):
     the disk names rel's old clusters or tmp's, never freed ones."""
     held = disk.hold(rel) if disk.exists(rel) else None
-    try:
-        disk.rename(tmp, rel)
-        disk.sync_dir(parent(rel))
-        disk.sync_all()
-    finally:
-        if held is not None:
-            disk.release(held)
+    disk.rename(tmp, rel)
+    disk.sync_dir(parent(rel))
+    disk.sync_all()
+    # syncfs flushes nothing on vfat: this fsync's flush makes the entry it
+    # wrote durable before the replaced copy's clusters are freed.
+    disk.sync_dir(parent(rel))
+    # Only once all of that succeeded; when anything failed, the replaced
+    # file stays open until the process exits.
+    if held is not None:
+        disk.release(held)
 
 
 def entry(data: bytes, source=None, system=None, installed=None, booted=None) -> dict:
