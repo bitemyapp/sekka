@@ -51,6 +51,7 @@ from pathlib import Path
 import secrets
 import shlex
 import shutil
+import signal
 import subprocess
 import sys
 import tarfile
@@ -170,6 +171,27 @@ def cas_content_dirs(m):
     # A tmpfs CI cache cannot share extents with the user's store.
     return [] if m.get("ephemeral_cache") else [
         Path(m["directory"]) / domain / "data/cas/content" for domain in m["domains"]]
+
+
+def cas_logical_bytes(m):
+    """Logical bytes of the persistent CAS, as NativeLink counts them.
+
+    Compression and shared extents make the physical cost smaller, so a floor
+    measured against this errs safe. Blobs evicted during the scan are skipped."""
+    total = 0
+    for content in cas_content_dirs(m):
+        if not content.is_dir():
+            continue
+        for folder in os.scandir(content):
+            if not folder.is_dir(follow_symlinks=False):
+                continue
+            for entry in os.scandir(folder.path):
+                try:
+                    if entry.is_file(follow_symlinks=False):
+                        total += entry.stat(follow_symlinks=False).st_size
+                except FileNotFoundError:
+                    continue
+    return total
 
 
 def autosize_target(current, configured, free, floor, minimum, maximum):
@@ -381,7 +403,8 @@ def run_container(m, domain, role, *args, network_generation=None):
     existing = inspect_owned(m, container)
     if existing:
         state = existing["State"]["Status"]
-        docker(m, "restart" if state == "restarting" else "start", container)
+        # A paused container is one an interrupted backend restart left held.
+        docker(m, {"restarting": "restart", "paused": "unpause"}.get(state, "start"), container)
         return
     labels = [] if network_generation is None else ["--label", NETWORK_LABEL + "=" + network_generation]
     docker(m, "run", "-d", "--name", container, "--label", LABEL + "=" + m["name"], *labels,
@@ -512,12 +535,17 @@ def restart_backends(m, timeout, reconfigure=lambda domain: None):
     flight to the old backend get UNAVAILABLE, which clients retry. Stop the
     workers first: draining them must not hold clients."""
     held = []
+
+    def interrupted(signum, frame):
+        raise SystemExit(128 + signum)  # So `finally` resumes the gateways.
+    handlers = {number: signal.signal(number, interrupted) for number in (signal.SIGTERM, signal.SIGHUP)}
     try:
         for domain in m["domains"]:
             gateway = inspect_owned(m, name(m, domain, "gateway"))
-            if gateway and gateway["State"]["Running"] and not gateway["State"]["Paused"]:
-                docker(m, "pause", name(m, domain, "gateway"))
-                held.append(domain)
+            if gateway and gateway["State"]["Running"]:
+                if not gateway["State"]["Paused"]:
+                    docker(m, "pause", name(m, domain, "gateway"))
+                held.append(domain)  # Also one an interrupted restart left paused.
         for domain in m["domains"]:
             backend = name(m, domain, "backend")
             assert_owned(m, backend)
@@ -537,8 +565,22 @@ def restart_backends(m, timeout, reconfigure=lambda domain: None):
                         raise SystemExit(f"The {domain} backend did not accept connections within {timeout} s")
                     time.sleep(0.1)
     finally:
+        # A signal now waits until every gateway is resumed.
+        pending = []
+        for number in handlers:
+            signal.signal(number, lambda signum, frame: pending.append(signum))
+        failures = []
         for domain in held:
-            docker(m, "unpause", name(m, domain, "gateway"))
+            try:
+                docker(m, "unpause", name(m, domain, "gateway"))
+            except subprocess.CalledProcessError as error:
+                failures.append(error)
+        for number, handler in handlers.items():
+            signal.signal(number, handler)
+        if pending:
+            raise SystemExit(128 + pending[0])
+        if failures:
+            raise failures[0]
 
 
 def up(m):
@@ -726,11 +768,7 @@ def main():
         free = stats.f_bavail * stats.f_frsize
         floor = (args.min_free_bytes if args.min_free_bytes is not None
                  else stats.f_blocks * stats.f_frsize // 10)
-        # Logical bytes, as NativeLink counts them; compression and shared
-        # extents make the physical cost smaller, so the floor errs safe.
-        current = sum(entry.stat().st_size for content in cas_content_dirs(m) if content.is_dir()
-                      for folder in os.scandir(content) if folder.is_dir(follow_symlinks=False)
-                      for entry in os.scandir(folder.path) if entry.is_file(follow_symlinks=False))
+        current = cas_logical_bytes(m)
         target = autosize_target(current, m["cas_bytes"], free, floor, args.min_cas_bytes, args.max_cas_bytes)
         busy = recent_requests(m, args.idle_seconds) if target else 0
         deferred = bool(target) and defer_resize(busy, free, floor)

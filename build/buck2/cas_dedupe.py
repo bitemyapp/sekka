@@ -10,11 +10,13 @@ pair. Only extents change; both owners keep their names and their eviction.
 import concurrent.futures
 import errno
 import fcntl
+import glob
 import os
 from pathlib import Path
 import re
 import stat
 import struct
+import time
 
 FIEMAP = 0xC020660B
 FIDEDUPERANGE = 0xC0189436
@@ -173,34 +175,73 @@ def cas_index(blobs):
     return {key: blob for key, (_, blob) in index.items()}
 
 
+def read_entries(path, offset, entries, retried, again):
+    """Read complete HASH SIZE PATH lines of `path` after `offset`; the new offset."""
+    try:
+        with open(path, "rb") as listing:
+            listing.seek(offset)
+            data = listing.read()
+    except FileNotFoundError:
+        return offset
+    complete = data[:data.rfind(b"\n") + 1]
+    for line in complete.decode(errors="surrogateescape").splitlines():
+        parts = line.split(" ", 2)
+        if len(parts) == 3 and parts[1].isdigit():
+            entries[parts[2]] = (parts[0], int(parts[1]))  # The latest listing of a path wins.
+            (retried.add if again else retried.discard)(parts[2])
+    return offset + len(complete)
+
+
 def share_journal(content_dirs, journal, blobs=None):
     """Share extents of journaled outputs (HASH SIZE PATH lines) with their CAS blobs.
 
-    The engine lists every produced output it found in or put into the CAS. The
-    journal is renamed first, so new entries start a new file. An output that
+    The engine lists every produced output it found in or put into the CAS. A
+    pass holds JOURNAL.lock, so clients in one worktree take turns, and renames
+    the journal to a name of its own, so new entries start a new file. Renamed
+    files a killed pass left behind are taken up by the next. An output that
     changed or vanished since it was listed is skipped, not an error. One whose
     blob is not visible yet is kept in JOURNAL.retry for exactly one more pass.
     `blobs` is as for dedupe()."""
     report = {"schema": 1, "entries": 0, "already_shared": 0, "deduplicated": 0, "deduplicated_bytes": 0,
               "skipped_small": 0, "missing_blob": 0, "changed": 0, "cross_filesystem": False, "errors": []}
-    pending = Path(str(journal) + ".sharing")
+    journal = Path(journal)
     retry = Path(str(journal) + ".retry")
-    try:
-        os.rename(journal, pending)
-    except FileNotFoundError:
-        if not pending.exists() and not retry.exists():
-            return report  # Nothing listed; a leftover .sharing file is retried.
-    entries = {}
-    retried = set()
-    for source, again in ((retry, True), (pending, False)):
-        if source.exists():
-            for line in source.read_text().splitlines():
-                parts = line.split(" ", 2)
-                if len(parts) == 3 and parts[1].isdigit():
-                    entries[parts[2]] = (parts[0], int(parts[1]))  # The latest listing of a path wins.
-                    (retried.add if again else retried.discard)(parts[2])
-    later = []
-    index = None
+    with open(str(journal) + ".lock", "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            os.rename(journal, f"{journal}.sharing.{os.getpid()}.{time.time_ns()}")
+        except FileNotFoundError:
+            pass
+        taken = sorted(journal.parent.glob(glob.escape(journal.name) + ".sharing*"),
+                       key=lambda path: path.stat().st_mtime_ns)
+        if not taken and not retry.exists():
+            return report
+        entries, retried, later = {}, set(), []
+        read_entries(retry, 0, entries, retried, True)
+        offsets = dict.fromkeys(taken, 0)
+        index = None
+        while True:
+            for path in taken:
+                offsets[path] = read_entries(path, offsets[path], entries, retried, False)
+            if not entries:
+                break
+            index = share_entries(content_dirs, blobs, entries, retried, index, report, later)
+            # An engine thread that opened the journal just before the rename
+            # appends to the renamed file; take up what it added meanwhile.
+            entries = {}
+        if later:
+            temporary = Path(str(retry) + ".new")
+            temporary.write_text("".join(later))
+            os.replace(temporary, retry)
+        else:
+            retry.unlink(missing_ok=True)
+        for path in taken:
+            path.unlink(missing_ok=True)
+    return report
+
+
+def share_entries(content_dirs, blobs, entries, retried, index, report, later):
+    """Share one batch of journal entries; returns the CAS index, built on first need."""
     work = []
     for path, (digest, size) in entries.items():
         report["entries"] += 1
@@ -218,8 +259,9 @@ def share_journal(content_dirs, journal, blobs=None):
             continue
         work.append((blob, path, size))
     for (_, path, size), outcome in zip(work, share_all(work)):
-        if isinstance(outcome, (FileNotFoundError, Changed)):
-            report["changed"] += 1
+        if isinstance(outcome, Changed) or (
+                isinstance(outcome, OSError) and outcome.errno in (errno.ENOENT, errno.ENOTDIR, errno.ELOOP)):
+            report["changed"] += 1  # Replaced, removed, or now a symlink or under one.
             continue
         if isinstance(outcome, OSError):
             if outcome.errno == errno.EXDEV:
@@ -234,11 +276,4 @@ def share_journal(content_dirs, journal, blobs=None):
         else:
             report["deduplicated"] += 1
             report["deduplicated_bytes"] += size
-    if later:
-        temporary = Path(str(retry) + ".new")
-        temporary.write_text("".join(later))
-        os.replace(temporary, retry)
-    else:
-        retry.unlink(missing_ok=True)
-    pending.unlink(missing_ok=True)
-    return report
+    return index
