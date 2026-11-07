@@ -777,9 +777,7 @@ impl Model {
             }
             Msg::Tick => match self.screen {
                 Screen::Approval => vec![Effect::CheckRegistration],
-                Screen::HelperUnknown if self.registration == Some(Registration::NeedsApproval) => {
-                    vec![Effect::CheckRegistration]
-                }
+                Screen::HelperUnknown if self.awaiting_approval() => vec![Effect::CheckRegistration],
                 _ => Vec::new(),
             },
             Msg::OpenLoginItems => vec![Effect::OpenLoginItems],
@@ -981,6 +979,13 @@ impl Model {
                 Vec::new()
             }
         }
+    }
+
+    /// Whether the helper waits for the owner to allow it in Login Items,
+    /// by what the status or macOS last said.
+    pub fn awaiting_approval(&self) -> bool {
+        self.registration == Some(Registration::NeedsApproval)
+            || matches!(self.helper, Some(Err(HelperProblem::NeedsApproval)))
     }
 
     /// Whether the helper's installations aren't known because macOS

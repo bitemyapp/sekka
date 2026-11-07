@@ -1096,6 +1096,7 @@ fn an_installation_is_found_again_once_its_helper_may_run() {
     // read, and nothing else is offered meanwhile.
     let mut j = Journey::start(Scenario::HelperOff);
     assert_eq!(j.model.screen, Screen::HelperUnknown);
+    assert!(j.model.awaiting_approval());
     assert!(j.model.installation.is_none() && j.model.plan.is_none());
     let effects = j.model.update(Msg::Tick);
     assert!(matches!(effects.as_slice(), [Effect::CheckRegistration]), "it waits for the owner: {effects:?}");

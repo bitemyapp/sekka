@@ -18,7 +18,7 @@ use sekka_mac_contract::{
 
 use sekka_mac_appkit::ui::{self, Targets, Weight};
 use sekka_mac_appkit::views::{DiskBar, DiskLayout, Mark, MarkView};
-use crate::env::{HelperProblem, Registration};
+use crate::env::HelperProblem;
 use crate::model::{CheckState, Model, Msg, Screen};
 use crate::text;
 
@@ -442,7 +442,7 @@ fn helper_unknown(m: &Model, p: &mut Page) {
     let problem = m.helper_problem();
     // Waiting for the owner to allow it: the page checks again by itself
     // once macOS lets it run.
-    if m.registration == Some(Registration::NeedsApproval) {
+    if m.awaiting_approval() {
         p.title(text::HELPER_OFF_TITLE);
         p.lede(if problem == Some(&HelperProblem::NotRegistered) { text::HELPER_ALLOW } else { text::HELPER_OFF });
         for (n, step) in text::APPROVAL_STEPS.iter().enumerate() {
