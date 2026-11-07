@@ -10,11 +10,15 @@
 # - that the product image shares no name with the developer image;
 # - the release manifest against the engine's own reader
 #   (release/test_manifest.py);
-# - Yukimi's own edits on the shipped configuration.nix (yukimi-edits.rs).
+# - Yukimi's own edits on the shipped configuration.nix (yukimi-edits.rs);
+# - with the image (nix/apple-silicon/default.nix passes it), the shipped
+#   configuration.nix as first-boot setup leaves it for every desktop it
+#   offers (image.nix, setups), evaluated, not built.
 {
   pkgs,
   lib,
   self,
+  image ? null,
 }:
 let
   installed = import ./installed-flake.nix { inherit lib self; };
@@ -154,13 +158,25 @@ let
     buildPhase = ''
       SEKKA_MAC_CONFIGURATION=${./product/configuration.nix} \
         cargo test --offline --frozen -p yukimi-config --test sekka_mac 2>&1 | tee test.log
-      grep -q 'test result: ok. 3 passed' test.log
+      grep -q 'test result: ok. 5 passed' test.log
     '';
     installPhase = ''
       mkdir $out
       cp test.log $out/
     '';
   };
+  # Each system setup leaves (image.nix, setups) evaluates, and image.nix
+  # asserts its default desktop is the one chosen, defined by
+  # configuration.nix alone; their toplevels, by derivation, are the result.
+  setups = pkgs.writeText "apple-image-setups.json" (
+    builtins.toJSON (
+      map (c: {
+        desktop = c.calamares.defaultDesktop;
+        locale = c.i18n.defaultLocale;
+        toplevel = builtins.unsafeDiscardStringContext c.system.build.toplevel.drvPath;
+      }) image.product.setups
+    )
+  );
 in
 {
   inherit
@@ -169,23 +185,30 @@ in
     scripts
     manifest
     yukimi
+    setups
     ;
-  all = pkgs.linkFarm "mac-image-tests" [
-    {
-      name = "template";
-      path = template;
+  all = pkgs.linkFarm "mac-image-tests" (
+    [
+      {
+        name = "template";
+        path = template;
+      }
+      {
+        name = "scripts";
+        path = scripts;
+      }
+      {
+        name = "manifest";
+        path = manifest;
+      }
+      {
+        name = "yukimi";
+        path = yukimi;
+      }
+    ]
+    ++ lib.optional (image != null) {
+      name = "setups";
+      path = setups;
     }
-    {
-      name = "scripts";
-      path = scripts;
-    }
-    {
-      name = "manifest";
-      path = manifest;
-    }
-    {
-      name = "yukimi";
-      path = yukimi;
-    }
-  ];
+  );
 }

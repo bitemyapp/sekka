@@ -31,13 +31,20 @@ everything setup chooses to setup's module and `setup.nix`: the host name,
 time zone, locale, keyboard layout and installing user are not set. The
 default desktop is a plain `calamares.defaultDesktop = "aizome";`, which
 Yukimi's Default desktop choice rewrites in place (`edit::set_string`
-accepts only a string literal); setup is to change the same line rather
-than set it in `setup.nix`, where a second definition of the enum would
-conflict. The optional files are imported by `imports.nix`, so that
-`configuration.nix`'s own `imports` is a plain list, which Yukimi appends
-`./yukimi.nix` to when it installs for everyone. `mac-image-tests` runs
-Yukimi's own `packages::import_into` and `edit::set_string` on the shipped
-file (`yukimi-edits.rs`), with the former forms as the failing control.
+accepts only a string literal); setup changes the same line with the same
+edit and leaves it out of `setup.nix`, where a second definition of the
+enum would conflict. The optional files are imported by `imports.nix`, so
+that `configuration.nix`'s own `imports` is a plain list, which Yukimi
+appends `./yukimi.nix` to when it installs for everyone. `mac-image-tests`
+runs Yukimi's own `packages::import_into` and `edit::set_string` on the
+shipped file (`yukimi-edits.rs`), with the former forms as the failing
+control, and holds `set_string`'s result, setup's edit and then Yukimi's,
+to the replacement `image.nix` makes: `image.nix` evaluates the shipped
+`configuration.nix` as setup leaves it for every desktop setup offers
+(`setups`: that line replaced, with `identity.nix` and `setup.nix` as they
+are written and nothing forced) and asserts that the chosen desktop is
+defined once, by `configuration.nix`, and `mac-image-tests` evaluates each
+of those systems.
 
 Setup builds no generation, so until the first update the running system is
 the image's, which configures no host name: hostnamed keeps setup's choice
@@ -147,8 +154,9 @@ PC fixture.
   packages, and the host name, language, keyboard and default desktop reach
   `/etc` (the login screen's configuration, the keyboard, Tatami's
   settings), units and checks (the keyboard's validation). `image.nix`
-  evaluates the system as setup leaves it for two owners (`afterSetup`:
-  `de_DE`/`de` with Aizome, `ja_JP`/`jp` with Tatami), takes every package
+  evaluates the system as setup leaves it for an owner of each desktop
+  setup offers (`setups`: `de_DE`/`de` with Aizome, `ja_JP`/`jp` with
+  Tatami), takes every package
   list, `/etc` file, unit, check and manual index whose derivation differs
   from the image's, and keeps those derivations' inputs (`setupInputs`):
   the tools that write `/etc`'s files (json2x, xsltproc), texinfo, the

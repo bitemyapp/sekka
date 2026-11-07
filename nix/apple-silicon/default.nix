@@ -23,7 +23,7 @@ let
       ;
   };
   tests = import ./tests.nix {
-    inherit pkgs self;
+    inherit pkgs self image;
     inherit (nixpkgs) lib;
   };
   system = "aarch64-linux";

@@ -163,50 +163,76 @@ let
       inputsOf =
         drv: pkgs.writeText "${drv.name}-inputs.json" (builtins.toJSON (removeAttrs drv.drvAttrs [ "name" ]));
 
-      # Systems as first-boot setup leaves them: setup.nix and identity.nix as
-      # render.rs and install_identity.py write them, for languages,
-      # keyboards and default desktops other than the image's. The owner's
-      # account (its shell), host name and choices reach the system's
-      # packages, /etc (the login screen's configuration, the keyboard, the
-      # host name, Tatami's settings), its units and its checks (the
-      # keyboard's validation): the first rebuild after setup rebuilds what
-      # differs from the image's own, with these inputs and other strings.
+      # configuration.nix as first-boot setup leaves it for `desktop`: its
+      # default desktop changed in place, setup's one edit of it (Yukimi's own
+      # yukimi_config::edit::set_string, first-boot-setup.md), which
+      # yukimi-edits.rs holds to this replacement. Its import of imports.nix
+      # is left out: what imports.nix would import on the Mac, identity.nix
+      # and setup.nix, comes with it (afterSetup).
+      configuredFor =
+        desktop:
+        let
+          shipped = builtins.readFile (dir + "/configuration.nix");
+          literal = d: "defaultDesktop = ${builtins.toJSON d};";
+          default = literal nixos.config.calamares.defaultDesktop;
+          once = text: lib.length (lib.splitString text shipped) == 2;
+        in
+        assert lib.assertMsg (
+          once default && once "./imports.nix"
+        ) "${variant}/configuration.nix must name its default desktop once, as ${default}, and import ./imports.nix once";
+        builtins.toFile "configuration.nix" (
+          builtins.replaceStrings [ default "./imports.nix" ] [ (literal desktop) "" ] shipped
+        );
+
+      # Systems as first-boot setup leaves them: configuration.nix edited,
+      # and identity.nix and setup.nix as install_identity.py and render.rs
+      # write them (setup.nix names no default desktop: configuration.nix
+      # does), for languages, keyboards and default desktops other than the
+      # image's. The owner's account (its shell), host name and choices reach
+      # the system's packages, /etc (the login screen's configuration, the
+      # keyboard, the host name, Tatami's settings), its units and its checks
+      # (the keyboard's validation): the first rebuild after setup rebuilds
+      # what differs from the image's own, with these inputs and other
+      # strings. Each evaluates the shipped configuration.nix as setup leaves
+      # it, so a desktop setup offers whose result doesn't evaluate fails the
+      # image, and mac-image-tests (tests.nix, setups).
       afterSetup =
         {
           locale,
           layout,
           desktop,
         }:
-        (nixos.extendModules {
+        nixos.extendModules {
           modules = [
-            (
-              { lib, ... }:
-              {
-                calamares.appleSilicon.identity = {
-                  root = "63d89be1-72f7-4aff-9679-09cafa7e0c2d";
-                  esp = "910de5ca-7390-4716-9a54-8028916e4d78";
-                };
-                calamares.firstBootSetup.applied = true;
-                calamares.installUser = "ada";
-                calamares.defaultDesktop = lib.mkForce desktop;
-                users.users.ada = {
-                  isNormalUser = true;
-                  uid = 1000;
-                  description = "Ada Lovelace";
-                  extraGroups = [
-                    "networkmanager"
-                    "wheel"
-                  ];
-                };
-                networking.hostName = "analytical";
-                i18n.defaultLocale = locale;
-                services.xserver.xkb.layout = layout;
-                fileSystems."/".device = lib.mkForce "/dev/disk/by-partuuid/63d89be1-72f7-4aff-9679-09cafa7e0c2d";
-                fileSystems."/boot".device = lib.mkForce "/dev/disk/by-partuuid/910de5ca-7390-4716-9a54-8028916e4d78";
-              }
-            )
+            { disabledModules = [ (dir + "/configuration.nix") ]; }
+            (configuredFor desktop)
+            # identity.nix
+            {
+              calamares.appleSilicon.identity = {
+                root = "63d89be1-72f7-4aff-9679-09cafa7e0c2d";
+                esp = "910de5ca-7390-4716-9a54-8028916e4d78";
+              };
+            }
+            # setup.nix
+            {
+              calamares.firstBootSetup.applied = true;
+              calamares.installUser = "ada";
+              users.users.ada = {
+                isNormalUser = true;
+                uid = 1000;
+                description = "Ada Lovelace";
+                extraGroups = [
+                  "networkmanager"
+                  "wheel"
+                ];
+                shell = "/run/current-system/sw/bin/bash";
+              };
+              networking.hostName = "analytical";
+              services.xserver.xkb.layout = layout;
+              i18n.defaultLocale = locale;
+            }
           ];
-        }).config;
+        };
       # What a system builds that can change with its configuration, by name.
       parts =
         c:
@@ -233,18 +259,34 @@ let
             n: d: lib.isDerivation d && !(lib.isDerivation (own.${n} or null) && own.${n}.drvPath == d.drvPath)
           ) (parts c)
         );
-      setups = lib.optionals nixos.config.calamares.firstBootSetup.enable [
-        (afterSetup {
-          locale = "de_DE.UTF-8";
-          layout = "de";
-          desktop = "aizome";
-        })
-        (afterSetup {
-          locale = "ja_JP.UTF-8";
-          layout = "jp";
-          desktop = "tatami";
-        })
-      ];
+      # An owner for every desktop setup offers, in turn with these
+      # languages and keyboards.
+      setups = lib.optionals nixos.config.calamares.firstBootSetup.enable (
+        let
+          others = [
+            {
+              locale = "de_DE.UTF-8";
+              layout = "de";
+            }
+            {
+              locale = "ja_JP.UTF-8";
+              layout = "jp";
+            }
+          ];
+        in
+        lib.imap0 (
+          i: desktop:
+          let
+            e = afterSetup (lib.elemAt others (lib.mod i (lib.length others)) // { inherit desktop; });
+          in
+          # The chosen desktop, defined once: by configuration.nix as setup
+          # edits it, and by nothing else.
+          assert lib.assertMsg (
+            map (d: d.value) e.options.calamares.defaultDesktop.definitionsWithLocations == [ desktop ]
+          ) "${variant}: after setup chose ${desktop}, configuration.nix alone must name it as the default desktop";
+          e.config
+        ) nixos.config.calamares.desktops
+      );
       setupInputs = pkgs.writeText "${name}-${variant}-after-setup-inputs.json" (
         builtins.toJSON (map (d: removeAttrs d.drvAttrs [ "name" ]) (lib.concatMap rebuiltAfterSetup setups))
       );
