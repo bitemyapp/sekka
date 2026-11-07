@@ -956,9 +956,10 @@ impl Model {
                 Vec::new()
             }
             // The owner says the finished installation this Mac can't find
-            // is gone: it no longer keeps a plan from being offered. (The
-            // helper would let another begin; it is what may be the
-            // unidentified system beside it that the owner decides about.)
+            // is gone: it no longer keeps a plan from being offered. (Its
+            // record would let another begin; it is what may be the
+            // unidentified system beside it that the owner decides about,
+            // until the helper's own look at the disk finds Sekka there.)
             Msg::InstallAgain => match self.installation {
                 Some(id) if self.screen == Screen::Existing && self.finished_unfound() && !self.install_again_refused() => {
                     self.set_aside = Some(id);
