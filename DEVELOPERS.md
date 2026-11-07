@@ -422,6 +422,9 @@ worktrees retain separate mutable daemon state. Defaults are 10 GiB and
 100,000 stored objects. `--local-content-store off` disables it;
 `--local-content-store PATH`, `--local-content-store-max-bytes N` and
 `--local-content-store-max-entries N` select an explicit store and bounds.
+A single output larger than the byte bound cannot be stored, so it fails to
+materialize while the store is on: raise the bound or turn the store off for
+such a build.
 Evicting store objects does not invalidate existing reflinked outputs.
 It does leave them as sole copies, including the old copies an edit leaves
 behind for each changed content-based output. `.buckconfig` therefore turns
