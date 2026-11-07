@@ -246,10 +246,10 @@ Nixpkgs). With `calamares.appleSilicon.identity.handoff` (`identity.nix`):
 later generation then mounts `/dev/disk/by-partuuid/<uuid>` and carries
 `sekka.root=`/`sekka.esp=` with the real UUIDs in its own kernel parameters,
 so the initrd check (including the device-tree cross-check) runs for every
-generation and no entry depends on the installer's edit. First-boot
-setup's `setup.nix` also names `/` and `/boot` by the same partition UUIDs
-(`mkForce`), from the handoff it believes only when the command line
-matches it; both come from the same checked arguments, so they agree.
+generation and no entry depends on the installer's edit. `identity.nix` is
+the only source of both the mounts and `sekka.root=`/`sekka.esp=`:
+first-boot setup's `setup.nix` says nothing about the disk, so the two can't
+disagree, and a `setup.nix` copied to another installation mounts nothing.
 
 NixOS's systemd-boot installer rewrites every generation's entry from its
 bootspec at each installation, generation 1's included, which brings the
