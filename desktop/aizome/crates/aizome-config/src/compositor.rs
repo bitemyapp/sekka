@@ -48,6 +48,11 @@ impl Touchpad {
     pub fn scroll_factor(&self) -> f64 {
         factor(&self.extra)
     }
+
+    /// Whether touchpads send events at all: `enabled` (default true).
+    pub fn enabled(&self) -> bool {
+        self.extra.get("enabled").and_then(toml::Value::as_bool).unwrap_or(true)
+    }
 }
 
 impl Keyboard {
@@ -282,6 +287,8 @@ mod tests {
         assert_eq!(s.windows.tab_double_click(), TabDoubleClick::Minimise);
         assert_eq!(s.input.pointer.scroll_factor(), 2.5);
         assert_eq!(s.input.touchpad.scroll_factor(), 1.0);
+        assert!(s.input.touchpad.enabled());
+        assert!(!Settings::from_toml("[input.touchpad]\nenabled = false\n").unwrap().input.touchpad.enabled());
         assert!(s.input.keyboard.sticky_keys());
         assert_eq!(s.input.keyboard.slow_keys(), Some(450));
         assert_eq!(s.renderer_choice(), RendererChoice::Software);

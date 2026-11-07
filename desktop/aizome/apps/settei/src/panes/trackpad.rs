@@ -39,6 +39,7 @@ pub fn touchpad_in(devices: &str) -> bool {
 
 #[derive(Clone, Debug)]
 pub enum Msg {
+    Enabled(bool),
     Speed(f64),
     Acceleration(bool),
     Tap(bool),
@@ -77,6 +78,7 @@ impl Pane for Trackpad {
 
     fn entries(&self) -> Vec<SettingEntry> {
         vec![
+            SettingEntry::new("enabled", "Use the trackpad").keywords(&["disable", "turn off", "enable"]),
             SettingEntry::new("tap", "Tap to click").keywords(&["touch", "tapping"]),
             SettingEntry::new("right-click", "Secondary click").keywords(&[
                 "right click",
@@ -107,6 +109,9 @@ impl Pane for Trackpad {
 
     fn update(&mut self, msg: Msg, cx: &mut PaneCx<Msg>) {
         match msg {
+            Msg::Enabled(on) => cx.change(|s| {
+                s.input.touchpad.extra.insert("enabled".into(), toml::Value::Boolean(on));
+            }),
             Msg::Speed(v) => cx.change(|s| s.input.touchpad.speed = (v * 20.0).round() / 20.0),
             Msg::Acceleration(on) => cx.change(|s| {
                 s.input.touchpad.accel_profile = if on { AccelProfile::Adaptive } else { AccelProfile::Flat }
@@ -129,6 +134,14 @@ impl Pane for Trackpad {
             ClickMethod::ButtonAreas => 1,
         };
         let mut sections = vec![
+            vcx.section(
+                "Trackpad",
+                vec![
+                    row("Use the trackpad", toggle(t.enabled()).on_toggle(Msg::Enabled))
+                        .entry("enabled")
+                        .help("When off, the trackpad doesn't move the pointer, click or scroll."),
+                ],
+            ),
             vcx.section(
                 "Clicking",
                 vec![

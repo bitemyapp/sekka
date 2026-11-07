@@ -18,6 +18,7 @@
 //! | `[palette]` | `scopes` (list), `exclude` (list) | the palette's scopes; folders the file index skips |
 //! | `[performance]` | `renderer` (`"auto"`, `"gpu"`, `"software"`) | the compositor's renderer at the next login |
 //! | `[input.pointer]`, `[input.touchpad]` | `scroll_factor` (float, 1.0) | scrolling distance |
+//! | `[input.touchpad]` | `enabled` (bool, true) | touchpads send events at all |
 //! | `[input.keyboard]` | `sticky_keys`, `slow_keys` (bool), `slow_keys_ms` | AccessX |
 //! | `[sound]` | `visual_alert` (bool), `alert_sound` (a sound theme name), `alert_volume` (0–1), `volume_feedback` (bool) | the alert the shell plays for the system bell (and notifications' sounds at its volume), the screen's edge flashing too; a sound at the new volume when the keys or the Sound panel change it |
 
