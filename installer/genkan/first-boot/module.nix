@@ -211,12 +211,18 @@ in
           config.networking.hostName == ""
         ) (lib.mkForce "/etc/hostname");
       }
-      (lib.optionalAttrs (has [ "calamares" "installUser" ]) {
-        # Before setup there's no person's account: the login screen's
-        # stands in, so modules that give the installer's account something
-        # name an account that exists. setup.nix names the person's.
-        calamares.installUser = lib.mkDefault "greeter";
-      })
+      (lib.optionalAttrs
+        (has [
+          "calamares"
+          "installUser"
+        ])
+        {
+          # Before setup there's no person's account: the login screen's
+          # stands in, so modules that give the installer's account something
+          # name an account that exists. setup.nix names the person's.
+          calamares.installUser = lib.mkDefault "greeter";
+        }
+      )
       (lib.mkIf waiting {
         # What setup needs until it is over; afterwards the owner's account
         # exists and these are theirs to choose.

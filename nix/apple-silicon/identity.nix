@@ -149,9 +149,7 @@ in
         # at each boot loader installation, the first generation's (with the
         # placeholders the installer filled) among them.
         boot.loader.systemd-boot.extraInstallCommands = ''
-          ${python} ${installIdentity} fill-entries --esp ${esp} ${
-            lib.optionalString configured "--root ${id.root} --esp-partuuid ${id.esp}"
-          }
+          ${python} ${installIdentity} fill-entries --esp ${esp} ${lib.optionalString configured "--root ${id.root} --esp-partuuid ${id.esp}"}
         '';
       }
 

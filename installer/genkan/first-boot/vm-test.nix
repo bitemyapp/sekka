@@ -135,7 +135,8 @@ pkgs.testers.runNixOSTest {
       ];
 
       # What the greeter shows, as files the test reads.
-      services.greetd.settings.default_session.command = lib.mkForce "env AIZOME_KIT_INSPECT=/run/greeter-inspect ${greeterPackage}/bin/aizome-greeter";
+      services.greetd.settings.default_session.command =
+        lib.mkForce "env AIZOME_KIT_INSPECT=/run/greeter-inspect ${greeterPackage}/bin/aizome-greeter";
 
       virtualisation = {
         memorySize = 4096;

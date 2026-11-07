@@ -74,11 +74,13 @@ let
     }
   ];
   # What Genkan's parser writes for a host name (config.rs, nix_string).
-  named = hostname: replace template {
-    from = "@HOSTNAME@";
-    to = builtins.toJSON hostname;
-    count = 1;
-  };
+  named =
+    hostname:
+    replace template {
+      from = "@HOSTNAME@";
+      to = builtins.toJSON hostname;
+      count = 1;
+    };
 in
 {
   inherit
@@ -88,26 +90,25 @@ in
     system
     ;
   # The parser's output for a stand-in name, then named by the configuration.
-  flake =
-    builtins.foldl' replace (named "@HOSTNAME@") [
-      {
-        from = "    nixosConfigurations.\"@HOSTNAME@\" = nixpkgs.lib.nixosSystem {";
-        to =
-          "    # Named after the host name the configuration sets (setup.nix, from\n"
-          + "    # first-boot setup), as Yukimi and nixos-rebuild look it up; before\n"
-          + "    # setup, while it is empty, ${lib.concatMapStringsSep " and " (n: ''"${n}"'') fallbacks}.\n"
-          + "    nixosConfigurations =\n"
-          + "      (c: if c.config.networking.hostName == \"\"\n"
-          + "        then { ${lib.concatMapStrings (n: "${n} = c; ") fallbacks}}\n"
-          + "        else { \${c.config.networking.hostName} = c; })\n"
-          + "      (nixpkgs.lib.nixosSystem {";
-        count = 1;
-      }
-      {
-        from = "      ];\n    };\n  };\n}";
-        to = "      ];\n    });\n  };\n}";
-        count = 1;
-      }
-    ];
+  flake = builtins.foldl' replace (named "@HOSTNAME@") [
+    {
+      from = "    nixosConfigurations.\"@HOSTNAME@\" = nixpkgs.lib.nixosSystem {";
+      to =
+        "    # Named after the host name the configuration sets (setup.nix, from\n"
+        + "    # first-boot setup), as Yukimi and nixos-rebuild look it up; before\n"
+        + "    # setup, while it is empty, ${lib.concatMapStringsSep " and " (n: ''"${n}"'') fallbacks}.\n"
+        + "    nixosConfigurations =\n"
+        + "      (c: if c.config.networking.hostName == \"\"\n"
+        + "        then { ${lib.concatMapStrings (n: "${n} = c; ") fallbacks}}\n"
+        + "        else { \${c.config.networking.hostName} = c; })\n"
+        + "      (nixpkgs.lib.nixosSystem {";
+      count = 1;
+    }
+    {
+      from = "      ];\n    };\n  };\n}";
+      to = "      ];\n    });\n  };\n}";
+      count = 1;
+    }
+  ];
   lock = import ../installed-lock.nix { inherit self ref; };
 }

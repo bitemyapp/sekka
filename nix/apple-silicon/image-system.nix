@@ -22,9 +22,9 @@ let
   i18n = config.i18n;
   # As nixos/modules/config/i18n.nix spells locales.
   sanitize = lib.replaceStrings [ "utf8" "utf-8" "UTF8" ] [ "UTF-8" "UTF-8" "UTF-8" ];
-  settings = lib.mapAttrsToList (role: lang: "${sanitize lang}/${i18n.localeCharsets.${role} or "UTF-8"}") (
-    lib.filterAttrs (_: lang: lang != "C") (removeAttrs i18n.extraLocaleSettings [ "LANGUAGE" ])
-  );
+  settings = lib.mapAttrsToList (
+    role: lang: "${sanitize lang}/${i18n.localeCharsets.${role} or "UTF-8"}"
+  ) (lib.filterAttrs (_: lang: lang != "C") (removeAttrs i18n.extraLocaleSettings [ "LANGUAGE" ]));
 in
 {
   options.calamares.appleSilicon.image.enable = lib.mkEnableOption ''

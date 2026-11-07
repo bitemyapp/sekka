@@ -117,7 +117,9 @@ in
     # chosen mustn't reorder it, or every choice but the first rebuilds it.
     assert check "every language setup offers keeps the image's glibc locales" (
       lib.all (
-        l: (installed [ { i18n.defaultLocale = l; } ]).i18n.glibcLocales.drvPath == before.i18n.glibcLocales.drvPath
+        l:
+        (installed [ { i18n.defaultLocale = l; } ]).i18n.glibcLocales.drvPath
+        == before.i18n.glibcLocales.drvPath
       ) offered.locales
     );
     assert check "the image's login screen asks the helper" (
@@ -159,7 +161,8 @@ in
     );
     assert check "the console's keymap is the configuration's, and follows setup.nix's keyboard" (
       before.environment.etc ? "vconsole.conf"
-      && toString before.environment.etc."vconsole.conf".source
+      &&
+        toString before.environment.etc."vconsole.conf".source
         != toString after.environment.etc."vconsole.conf".source
     );
     assert check "once applied, the helper and its socket are gone" (
@@ -169,13 +172,16 @@ in
       lib.elem "r /var/lib/sekka-setup/credential" after.systemd.tmpfiles.rules
       && !(lib.elem "r /var/lib/sekka-setup/credential" before.systemd.tmpfiles.rules)
     );
-    assert check "once applied, the module asserts nothing (the login screen and accounts are the owner's)" (
-      lib.length (ours (installed [ owners ])) == 3
-      && ours (installed [
-        ./test-data/setup.nix
-        owners
-      ]) == [ ]
-    );
+    assert check
+      "once applied, the module asserts nothing (the login screen and accounts are the owner's)"
+      (
+        lib.length (ours (installed [ owners ])) == 3
+        &&
+          ours (installed [
+            ./test-data/setup.nix
+            owners
+          ]) == [ ]
+      );
     # Both systems evaluated whole, to their derivations; neither is built.
     pkgs.writeText "first-boot-configuration-${system}" (
       builtins.unsafeDiscardStringContext ''
