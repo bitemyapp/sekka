@@ -703,7 +703,11 @@ impl Environment for Simulation {
                 message: format!("That password isn't right for {}.", begin.owner).parse().unwrap(),
             });
         }
+        // A new record, as the helper opens for every Begin: nothing of an
+        // earlier run's cancel or retry carries over.
         state.installation = Some((SIM_ID, Instant::now()));
+        state.cancelled_at = None;
+        state.retried.clear();
         state.owner = Some(begin.owner.to_string());
         Ok(SIM_ID)
     }

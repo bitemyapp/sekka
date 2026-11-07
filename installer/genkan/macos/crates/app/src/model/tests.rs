@@ -977,6 +977,10 @@ fn a_run_can_be_cancelled_until_the_disk_starts_to_change() {
     assert_eq!(j.model.screen, Screen::Plan);
     assert_eq!(j.model.notice.as_deref(), Some(crate::text::CANCELLED));
     assert!(j.model.installation.is_none());
+    // Installing again begins a run of its own, which isn't cancelled.
+    j.begin_unwatched();
+    assert_eq!(j.model.screen, Screen::Installing);
+    assert!(j.model.running && j.model.cancel_allowed());
 
     // Once the disk is changing, the helper doesn't stop it, and says why.
     let mut j = Journey::with(Simulation::new(Scenario::Normal, 0.0).holding_at(Stage::Shrink));
