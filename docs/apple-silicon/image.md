@@ -631,3 +631,16 @@ through its screens, and the developer image's bundle, which was evaluated
 and whose system and ESP were built, but whose payload was neither built
 nor booted here (disk space). The VM's clock was not the host's (no RTC
 driver for QEMU's), which only affects recorded times.
+
+**Since that run** (7 November 2026, on the same J514S): boot.bin's FAT
+order, booted copy and hold; the product image's own names; the manifest in
+the engine's shape and `Release::check`'s floor; `imports.nix` and the plain
+default desktop; the offline post-setup inputs, seed root and one
+glibc-locales; the install-time copy check; and the kept host name. Their
+script tests pass in `mac-image-tests` (the FAT model, the engine's reader on
+`manifest.py`'s output, Yukimi's edits on the shipped file), the Mac
+installer's workspace tests pass, and the product, developer and reference
+systems evaluate. Neither image was built and the VM run above was not
+repeated with them: the disk had about 13 GB free, less than a build of the
+release set takes. Its new checks (the developer stand-ins, the offline
+build with `de_DE`, the seed root, `sekka-boot-bin.service`) have not run.
