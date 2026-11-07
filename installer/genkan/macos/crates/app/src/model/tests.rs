@@ -438,7 +438,7 @@ fn a_refused_retry_says_why_instead_of_that_everything_is_in_place() {
     j.reach_review().confirm().send(Msg::Install).password("right");
     assert_eq!(j.model.state, Some(InstallState::StartupDiskFailed));
     let (_, before) = j.model.stopped_words().unwrap();
-    assert!(before.contains("Everything else is in place"), "{before}");
+    assert!(before.contains("Everything else was installed and checked"), "{before}");
     let recorded = j.model.records.len();
     j.send(Msg::RetryStartupDisk).password("right");
     assert!(j.model.authorization.is_none());
@@ -449,8 +449,24 @@ fn a_refused_retry_says_why_instead_of_that_everything_is_in_place() {
     // checked and is in place.
     let (_, after) = j.model.stopped_words().unwrap();
     assert!(after.contains("isn't as it was left"), "{after}");
-    assert!(!after.contains("Everything else is in place"), "{after}");
+    assert!(!after.contains("Everything else"), "{after}");
     assert!(j.model.report(&[]).contains("isn't as it was left"));
+    // Checking again doesn't check what a retry does: the helper finds the
+    // installation as its record left it, and its reason stands.
+    j.send(Msg::CheckAgain);
+    assert_eq!(j.model.screen, Screen::Stopped);
+    assert_eq!(j.model.stopped_words().unwrap().1, after);
+    // Not for another installation, though.
+    j.model.retry_refused = Some((Uuid::from_bytes([1; 16]), "elsewhere".into()));
+    assert_eq!(j.model.retry_refusal(), None);
+    // Reopened, the app knows only the record, which says nothing of the
+    // refusal; and the page doesn't say the rest is in place now.
+    let (mut m, effects) = Model::new("0.1.0".parse().unwrap(), j.env.user());
+    crate::sim::settle(&j.env, &mut m, effects);
+    assert_eq!(m.screen, Screen::Stopped);
+    let (_, reopened) = m.stopped_words().unwrap();
+    assert_eq!(reopened, before);
+    assert!(!reopened.contains("in place"), "{reopened}");
 }
 
 #[test]

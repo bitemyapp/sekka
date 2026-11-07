@@ -409,7 +409,7 @@ pub fn stopped(state: &InstallState) -> (String, String) {
         ),
         InstallState::StartupDiskFailed => (
             "Setting the startup disk didn't work".into(),
-            "Everything else is in place and was checked. Try setting the startup disk again with your password; nothing else will be repeated.".into(),
+            "Everything else was installed and checked before this step. Try setting the startup disk again with your password; nothing else will be repeated.".into(),
         ),
         InstallState::EnrollmentUncertain => (
             "The Recovery step didn't finish".into(),

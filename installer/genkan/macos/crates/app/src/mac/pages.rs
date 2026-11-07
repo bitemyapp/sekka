@@ -223,7 +223,7 @@ pub fn key(m: &Model) -> String {
         m.helper_problem(),
         // A retry that fails again, or is refused, changes what the page says.
         m.failed().map(|(sequence, _)| sequence),
-        m.retry_refused,
+        m.retry_refusal(),
         // The installing page's rows: the stages the plan runs, known once
         // the record of an installation reconnected to arrives.
         m.stages().len(),
@@ -857,7 +857,7 @@ fn stopped(m: &Model, p: &mut Page) {
             NextAction::InspectActualState => {
                 p.body(text::INSPECT_ACTUAL_STATE);
             }
-            NextAction::RetryStartupDisk if m.retry_refused.is_some() => {
+            NextAction::RetryStartupDisk if m.retry_refusal().is_some() => {
                 p.body(text::RETRY_AFTER_REFUSAL);
             }
             NextAction::RetryStartupDisk => {

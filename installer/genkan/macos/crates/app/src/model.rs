@@ -234,9 +234,11 @@ pub struct Model {
     pub reconciling: Option<Reconciling>,
     /// How many times in this check the helper was busy when asked.
     pub reconcile_busy: u8,
-    /// Why the helper didn't set the startup disk again, when it refused
-    /// before trying.
-    pub retry_refused: Option<String>,
+    /// Why the helper didn't set the startup disk again for an
+    /// installation, when it refused before trying. Nothing is recorded
+    /// then, and looking at the Mac again doesn't check what a retry
+    /// checks, so it stands until a retry gets further.
+    pub retry_refused: Option<(Uuid, String)>,
     /// A finished installation this Mac can't find, which the owner chose
     /// to install again past.
     pub set_aside: Option<Uuid>,
@@ -899,7 +901,7 @@ impl Model {
             Msg::Retried(Err(refusal)) if refusal.code == HelperRefusalCode::State => {
                 self.log(format!("The helper didn't set the startup disk again: {}", refusal.message));
                 self.authorization = None;
-                self.retry_refused = Some(refusal.message.to_string());
+                self.retry_refused = self.installation.map(|id| (id, refusal.message.to_string()));
                 self.notice = Some(text::RETRY_REFUSED.into());
                 Vec::new()
             }
@@ -990,7 +992,6 @@ impl Model {
         self.records.clear();
         self.state = None;
         self.reconciling = None;
-        self.retry_refused = None;
         vec![Effect::Inspect, Effect::LoadCatalog, Effect::HelperStatus]
     }
 
@@ -1257,11 +1258,22 @@ impl Model {
         })
     }
 
+    /// Why the helper last refused to set the startup disk again for the
+    /// installation shown, before trying, while setting it is still what
+    /// failed.
+    pub fn retry_refusal(&self) -> Option<&str> {
+        match (&self.retry_refused, &self.state) {
+            (Some((id, why)), Some(InstallState::StartupDiskFailed)) if self.installation == Some(*id) => Some(why),
+            _ => None,
+        }
+    }
+
     /// The stopped page's headline and explanation.
     pub fn stopped_words(&self) -> Option<(String, String)> {
-        Some(match (self.state.as_ref()?, &self.retry_refused) {
-            (InstallState::StartupDiskFailed, Some(why)) => text::retry_refused(why),
-            (state, _) => text::stopped(state),
+        let state = self.state.as_ref()?;
+        Some(match self.retry_refusal() {
+            Some(why) => text::retry_refused(why),
+            None => text::stopped(state),
         })
     }
 
