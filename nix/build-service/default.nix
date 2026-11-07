@@ -63,7 +63,9 @@ let
   inventoryTest = pkgs.runCommand "sekka-build-service-inventory-test" { } ''
     cp ${./inventory.py} inventory.py
     cp ${./test_inventory.py} test_inventory.py
+    cp ${./test_autosize.py} test_autosize.py
     ${pkgs.python3}/bin/python3 -m unittest -v test_inventory
+    SEKKA_BUILD_SERVICE=${../../scripts/build-service} ${pkgs.python3}/bin/python3 -m unittest -v test_autosize
     touch $out
   '';
   qualificationPython = pkgs.python3.withPackages (p: [ p.grpcio ]);
