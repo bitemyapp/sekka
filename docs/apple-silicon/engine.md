@@ -339,8 +339,14 @@ the run ends. Before fetching anything but the zip's directory, the stage
 compares what the members need with the room the plan left: above Asahi's
 minimum for the shrunk container (the helper's plan reserves the release's
 `apple_inputs` estimate there), or the macOS container's free space less 1 GiB
-for a free-space plan. If they don't fit it stops (`apple-inputs-no-room`,
-`disk_changed: no`). The shrink stage's recheck of Asahi's minimum then leaves
+for a free-space plan. That GiB is `plan.rs`'s `MACOS_MARGIN`, the engine's
+`contract.MACOS_MARGIN`, both held to `tests/vectors/expected.json`: a plan
+for free space needs the macOS container to have the downloads still to
+come, the `apple_inputs` estimate and that margin free, or there is none
+(`MacosNeedsRoom`). If they don't fit it stops (`apple-inputs-no-room`,
+`disk_changed: no`), saying to check this Mac again for a new plan after a
+shrink, and to free some space in macOS first beside free space, where a new
+plan would be the same. The shrink stage's recheck of Asahi's minimum then leaves
 out what the engine's own files occupy, since they are deleted when the run
 ends.
 

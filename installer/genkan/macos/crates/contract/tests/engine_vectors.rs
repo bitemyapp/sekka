@@ -87,6 +87,13 @@ fn the_profile_digest_is_the_recorded_one() {
 }
 
 #[test]
+fn free_space_plans_keep_the_room_in_macos_the_engine_keeps() {
+    // The engine's test_canonical.py holds its MACOS_MARGIN to the same
+    // number.
+    assert_eq!(expected()["macos_margin"], MACOS_MARGIN);
+}
+
+#[test]
 fn machine_bindings_are_the_recorded_ones() {
     let expected = expected();
     for (platform, binding) in expected["machine_bindings"].as_object().unwrap() {

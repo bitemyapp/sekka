@@ -606,12 +606,13 @@ class Engine:
         self.t.log("info", f"Asahi's installer gives the new system macOS {self.ipsw.version}'s OS firmware.")
         # Room for Apple's files, which the apple-inputs stage keeps in the
         # macOS container until the run ends: above Asahi's minimum when the
-        # container shrinks, its free space less 1 GiB otherwise.
+        # container shrinks, otherwise its free space less the margin a
+        # free-space plan keeps there (plan.rs MACOS_MARGIN).
         if self.shrink:
             self.apple_room = max(0, self.shrink["to"] - self.shrink_minimum)
         else:
             macos = [k for k in doc["disk"]["containers"] if k["partition"] == c.uuid_any(self.cur_os.partition.uuid)]
-            self.apple_room = max(0, macos[0]["free"] - c.GIB) if macos else 0
+            self.apple_room = max(0, macos[0]["free"] - c.MACOS_MARGIN) if macos else 0
         # The setup hints are read now, before any intent, from the owner's
         # own files: if reading them fails or stalls, nothing has changed.
         self.full_name = self.owner_full_name()
@@ -860,11 +861,18 @@ class Engine:
         try:
             r = apple_inputs.prepare(a, self.ins, self.ipsw, self.workdir, progress=progress, room=self.apple_room)
         except apple_inputs.NoRoom as error:
+            # A smaller Sekka leaves a shrunk macOS more room; macOS beside
+            # free space has only what it has free.
+            then = (
+                "check this Mac again for a new plan"
+                if self.shrink
+                else "free some space in macOS, then check this Mac again"
+            )
             raise StageFailure(
                 "apple-inputs-no-room",
                 f"Apple's startup files for the new system need {error.needed} bytes on macOS's volume while "
                 f"Sekka installs, more than this plan leaves room for ({error.room} bytes). Nothing on the "
-                "disk changed; check this Mac again for a new plan.",
+                f"disk changed; {then}.",
             )
         except Exception as error:
             log.exception("Apple's inputs")

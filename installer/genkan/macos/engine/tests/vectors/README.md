@@ -10,6 +10,9 @@ Rust contract crate computes for the same documents.
   transcripts, byte for byte.
 - `crates/contract/tests/engine_vectors.rs` checks the documents with the
   Rust types and feeds every transcript to the helper's `Transcript`.
+- `macos_margin` in `expected.json` isn't computed: it is the room a
+  free-space plan keeps in macOS, which `plan.rs` and the engine's
+  `contract.py` each check theirs against.
 
 To regenerate after a deliberate change (from `installer/genkan/macos`):
 

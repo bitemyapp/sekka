@@ -6,6 +6,7 @@ charges that folder to the macOS container's free space, as a Mac would."""
 
 import logging
 import os
+import re
 import unittest
 
 import support as S
@@ -94,6 +95,42 @@ class AppleInputsRoom(unittest.TestCase):
         to = plan["actions"][0]["to"]
         self.assertLess(to - container["resize"]["minimum"], 16 * S.MIB, "the minimum did rise above the plan's size")
         self.assertEqual(mac.ordered()[1].size, to)
+
+
+class FreeSpaceRoom(unittest.TestCase):
+    """A free-space plan doesn't shrink macOS, so Apple's files go in what
+    the macOS container has free, less MACOS_MARGIN: the room plan.rs's
+    derive_plan keeps there beside them."""
+
+    def run_with_free(self, free):
+        t = S.TempDir()
+        self.addCleanup(t.cleanup)
+        mac = S.j514s_free_space(t.sub("mac"))
+        [macos] = [k for k in mac.containers.values() if mac.is_macos_container(k)]
+        macos.free = free
+        asahi, host = S.load_asahi(mac)
+        _, doc, _ = S.inspect(mac, asahi, host, t.sub("w0"))
+        release = S.make_release(t.sub("assets"))
+        plan = S.derive_plan(doc, release, 150 * S.GIB, place="free-space")
+        before = mac.state_digest()
+        outcome, channel = S.run_engine(
+            "execute", mac, asahi, host, t.sub("work"), plan=plan, release=release, restore=S.make_restore_zip(BASESYSTEM)
+        )
+        failures = [m["message"]["payload"] for m in channel.messages() if m["message"]["type"] == "failure"]
+        return outcome, (failures[0] if failures else None), mac.state_digest() == before
+
+    def test_apples_files_fit_beside_the_margin_or_nothing_changes(self):
+        # What the members need, as the engine counts it, from a run with no
+        # room at all.
+        outcome, failure, unchanged = self.run_with_free(c.MACOS_MARGIN)
+        self.assertEqual((outcome, failure["failure"]["code"], unchanged), ("failed", "apple-inputs-no-room", True))
+        needed = int(re.search(r"need (\d+) bytes", failure["failure"]["message"]).group(1))
+        outcome, failure, unchanged = self.run_with_free(c.MACOS_MARGIN + needed - 1)
+        self.assertEqual((failure["stage"], failure["failure"]["code"], failure["failure"]["disk_changed"]), ("apple-inputs", "apple-inputs-no-room", "no"))
+        self.assertIn("free some space in macOS", failure["failure"]["message"])
+        self.assertTrue(unchanged)
+        outcome, failure, _ = self.run_with_free(c.MACOS_MARGIN + needed)
+        self.assertEqual(outcome, "waiting-for-recovery", failure)
 
 
 if __name__ == "__main__":

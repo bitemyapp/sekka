@@ -211,6 +211,11 @@ pub fn plan_error(e: &PlanError) -> String {
         PlanError::PlaceGone => "The space Sekka was going to use isn't there any more: the disk changed. Check this Mac again.".into(),
         PlanError::TooSmall { minimum } => format!("Sekka needs at least {} here.", bytes(*minimum)),
         PlanError::TooLarge { maximum } => format!("This disk can give Sekka at most {} now.", bytes(*maximum)),
+        PlanError::MacosNeedsRoom { needed, free } => format!(
+            "macOS needs {} free while Sekka installs, for the downloads and Apple's startup files, and has {}. Free some space in macOS, then check this Mac again.",
+            bytes(*needed),
+            bytes(*free)
+        ),
         PlanError::NotAdmitted(_) => "This release doesn't support this Mac.".into(),
         PlanError::Blocked(_) => "Something on this Mac stops installation. Check this Mac again to see what.".into(),
         PlanError::UnknownRelease(_) | PlanError::Invalid(_) => format!(

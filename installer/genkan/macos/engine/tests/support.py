@@ -1219,9 +1219,10 @@ def make_release(directory, root_image_size=3 * MIB, recovery_members=None, tamp
     }
 
 
-def derive_plan(inspection, release, sekka, place="shrink", profile=None):
+def derive_plan(inspection, release, sekka, place="shrink", profile=None, reserved=0):
     """A port of plan.rs derive_plan for the tests (the helper derives the
-    real one in Rust; the vectors test checks they agree on bytes)."""
+    real one in Rust; the vectors test checks they agree on bytes), with
+    nothing left to download and `reserved` for Apple's inputs."""
     profile = profile or c.load_profile(profile_bytes())[0]
     align = c.ALIGN
     sekka = sekka // align * align
@@ -1240,6 +1241,10 @@ def derive_plan(inspection, release, sekka, place="shrink", profile=None):
     else:
         cand = [k for k in inspection["candidates"] if k["kind"] == "free-space"][0]
         offset = -(-cand["extent"]["offset"] // align) * align
+        group = inspection["macos"]["volume_group"]
+        macos = [k for k in inspection["disk"]["containers"] if any(g["uuid"] == group for g in k["volume_groups"])]
+        if (macos[0]["free"] if macos else 0) < reserved + c.MACOS_MARGIN:
+            raise ValueError("MacosNeedsRoom: plan.rs derive_plan keeps macOS room for Apple's files")
         actions = []
         after = None
     actions += [

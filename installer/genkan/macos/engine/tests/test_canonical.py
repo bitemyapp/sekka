@@ -155,6 +155,10 @@ class Vectors(unittest.TestCase):
             self.assertEqual(c.machine_binding(platform), binding)
             self.assertEqual(c.machine_binding(platform.lower()), binding)
 
+    def test_free_space_plans_and_the_engine_keep_the_same_room_in_macos(self):
+        # engine_vectors.rs holds plan.rs's MACOS_MARGIN to the same number.
+        self.assertEqual(c.MACOS_MARGIN, self.expected["macos_margin"])
+
 
 if __name__ == "__main__":
     unittest.main()

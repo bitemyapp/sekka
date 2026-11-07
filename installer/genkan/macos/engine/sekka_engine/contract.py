@@ -37,6 +37,10 @@ ALIGN = 1024 * 1024
 STUB_BYTES = 2_500_000_000 // ALIGN * ALIGN
 ESP_BYTES = GIB
 VOLUME_NAME = "Sekka"
+# What a free-space plan keeps free in the macOS container beside Apple's
+# files; derive_plan reserves it, and the engine fetches into no more than
+# the container's free space less it.
+MACOS_MARGIN = GIB
 
 # recovery.rs
 RECOVERY_DATA_DIR = "Sekka/InstallData"

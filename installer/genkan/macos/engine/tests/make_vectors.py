@@ -152,7 +152,14 @@ def write_expected(rust, out):
     report = json.loads(subprocess.run([rust], input=S.profile_bytes(), capture_output=True, check=True).stdout)
     pretty(
         os.path.join(out, "expected.json"),
-        {"documents": documents, "machine_bindings": bindings, "profile_digest": report["digest"]},
+        {
+            "documents": documents,
+            "machine_bindings": bindings,
+            # Not computed: the one number plan.rs and the engine each check
+            # theirs against.
+            "macos_margin": c.MACOS_MARGIN,
+            "profile_digest": report["digest"],
+        },
     )
 
 

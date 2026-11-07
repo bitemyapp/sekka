@@ -30,6 +30,12 @@ pub const STUB_BYTES: u64 = 2_500_000_000 / ALIGN * ALIGN;
 pub const ESP_BYTES: u64 = crate::GIB;
 /// The name the new volume has in Startup Disk and the startup options.
 pub const VOLUME_NAME: &str = "Sekka";
+/// What a plan for free space leaves free in the macOS container beside
+/// the downloads and Apple's inputs, which go there while Sekka installs:
+/// the engine fetches Apple's files only into the container's free space
+/// less this. The engine's `contract.MACOS_MARGIN` is the same number
+/// (both are held to `tests/vectors/expected.json`).
+pub const MACOS_MARGIN: u64 = crate::GIB;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -165,6 +171,10 @@ pub enum PlanError {
     TooSmall { minimum: u64 },
     #[error("at most {maximum} bytes are available here")]
     TooLarge { maximum: u64 },
+    /// Free space can take Sekka, but macOS, which isn't resized, has too
+    /// little free for what goes there while Sekka installs.
+    #[error("macOS needs {needed} bytes free while Sekka installs and has {free}")]
+    MacosNeedsRoom { needed: u64, free: u64 },
     #[error("{0}")]
     Invalid(String),
 }
@@ -346,6 +356,19 @@ pub fn derive_plan(
                 return Err(PlanError::TooLarge {
                     maximum: (extent.end().saturating_sub(offset)) / ALIGN * ALIGN,
                 });
+            }
+            // Nothing is taken from macOS, so what goes there meanwhile (the
+            // downloads still to come, then Apple's files) must fit in what
+            // it has free, with the room the engine keeps beside them.
+            let free = inspection
+                .disk
+                .containers
+                .iter()
+                .find(|k| k.volume_groups.iter().any(|g| g.uuid == inspection.macos.volume_group))
+                .map_or(0, |k| k.free);
+            let needed = staging + release.reserved() + MACOS_MARGIN;
+            if free < needed {
+                return Err(PlanError::MacosNeedsRoom { needed, free });
             }
             (Vec::new(), Extent { offset, size: sekka }, None)
         }
@@ -577,5 +600,46 @@ mod tests {
         assert_eq!(plan.actions.len(), 3);
         assert_eq!(plan.target.offset % ALIGN, 0);
         assert!(plan.target.offset >= 524312576 + 300 * GIB);
+    }
+
+    #[test]
+    fn free_space_keeps_room_in_macos_for_what_goes_there_meanwhile() {
+        // macOS keeps what the engine needs beside Apple's files, as the
+        // engine counts it: the downloads still to come, Apple's inputs and
+        // MACOS_MARGIN.
+        let c = sample_catalog();
+        let reserved = c.releases[0].reserved();
+        let mut s = sample();
+        s.disk.partitions[1].size = 300 * GIB;
+        s.disk.containers[0].size = 300 * GIB;
+        s.candidates = vec![Candidate::FreeSpace {
+            extent: Extent {
+                offset: 524312576 + 300 * GIB,
+                size: 194 * GIB,
+            },
+        }];
+        s.layout_digest = s.disk.layout_digest().unwrap();
+        let r = PlanRequest {
+            release: "sekka-j514s-4882dc33".parse().unwrap(),
+            place: Place::FreeSpace {
+                offset: 524312576 + 300 * GIB,
+            },
+            sekka: 100 * GIB,
+        };
+        let staging = 6 * GIB;
+        let enough = staging + reserved + MACOS_MARGIN;
+        s.disk.containers[0].free = enough;
+        assert!(derive_plan(&s, &c, &r, staging).is_ok());
+        s.disk.containers[0].free = enough - 1;
+        assert_eq!(
+            derive_plan(&s, &c, &r, staging),
+            Err(PlanError::MacosNeedsRoom { needed: enough, free: enough - 1 })
+        );
+        // Once downloaded, the downloads are in what macOS uses.
+        s.disk.containers[0].free = reserved + MACOS_MARGIN;
+        assert!(derive_plan(&s, &c, &r, 0).is_ok());
+        // With no container holding the running macOS, nothing is known free.
+        s.macos.volume_group = "0d4e3e3b-0b3a-4b0a-9a0a-000000000001".parse().unwrap();
+        assert!(matches!(derive_plan(&s, &c, &r, 0), Err(PlanError::MacosNeedsRoom { free: 0, .. })));
     }
 }
