@@ -505,7 +505,13 @@ CAS download paths remain singleton operations; grouped tree ingestion does
 not establish a fresh-worktree download performance improvement.
 Private cache configuration, TLS material and store settings participate in
 daemon startup identity so a long-lived daemon does not silently retain old
-credentials or settings. Keep the same `--isolation-dir` across cooperating
+credentials or settings. Pass credentials only in private `--config-file`
+files, never as `-c`/`--config` or `--setting` values. The engine redacts
+command-line config values in events and telemetry, but not on every path:
+- argument errors before a command starts;
+- `buck2 clean`, `kill` and `log`;
+- `--reuse-current-config` warnings;
+- `buck2 audit config`. Keep the same `--isolation-dir` across cooperating
 remote-cache clients because it enters action paths.
 
 Native engine changes are maintained in
