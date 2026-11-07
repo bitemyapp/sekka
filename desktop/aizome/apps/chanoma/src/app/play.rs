@@ -13,7 +13,7 @@ use aizome_media::{AudioChoice, Cues, Event as FilmEvent, MediaInfo, Options, Pl
 
 use super::state::{Item, Languages, Pick, Subtitles};
 use super::typing::{Typing, Why};
-use super::{Chanoma, FILM, GAME, Input, Modal, Msg, Screen};
+use super::{Chanoma, FILM, GAME, Input, MenuKind, Modal, Msg, Screen};
 use crate::browser::{self, Action, Browser};
 use crate::pad::{Button, Dir, Family};
 use crate::retro::{CoreSource, Event as GameEvent, Launch, Session};
@@ -22,6 +22,8 @@ use crate::ui::{self, Chrome, Overlay, Scene, View};
 
 /// A game being played.
 pub struct Game {
+    /// Which start it is: its session's words carry this.
+    pub id: u64,
     pub key: String,
     pub title: String,
     pub session: Session,
@@ -91,6 +93,51 @@ pub enum FilmItem {
 /// How long the film's bar stays after a press.
 const BAR_STAYS: Duration = Duration::from_secs(4);
 
+/// How long a game starts before Chanoma asks whether to keep waiting. A
+/// core reads its game and sets up in a second or two, from a slow drive
+/// in a few more; Back and Home call it off before then and after.
+pub const START_WAIT: Duration = Duration::from_secs(15);
+
+/// Games starting: their numbers, the one waited for, and one given up on.
+#[derive(Default)]
+pub struct Starts {
+    /// Games started so far.
+    count: u64,
+    /// The start waited for, and the timer that asks about it.
+    wait: Option<(u64, TimerHandle)>,
+    /// The start waited for took too long (and was asked about).
+    slow: bool,
+    /// A start given up on whose core hasn't let go: no game starts until
+    /// it has, since two of one core in a process don't mix.
+    given_up: Option<(u64, std::thread::JoinHandle<()>)>,
+    /// A game waiting for that.
+    queued: Option<Queued>,
+}
+
+impl Starts {
+    /// Whether a start given up on still holds its core.
+    pub fn stuck(&self) -> bool {
+        self.given_up.is_some()
+    }
+
+    /// Whether the game starting is taking too long.
+    pub fn slow(&self) -> bool {
+        self.slow
+    }
+
+    /// Whether the game starting waits for one given up on.
+    pub fn behind(&self) -> bool {
+        self.queued.is_some()
+    }
+}
+
+struct Queued {
+    id: u64,
+    key: String,
+    title: String,
+    launch: Launch,
+}
+
 impl Chanoma {
     /// Whether kids may start something now; if not, the closed screen.
     fn may_start(&mut self, cx: &mut Cx<Msg>) -> bool {
@@ -153,9 +200,23 @@ impl Chanoma {
 
     /// Start `launch` (also tests', with a core of their own).
     pub fn start_launch(&mut self, key: &str, title: &str, launch: Launch, cx: &mut Cx<Msg>) {
+        self.give_up(cx);
         if let Some(old) = self.game.take() {
             old.session.stop(true);
         }
+        self.starts.count += 1;
+        let id = self.starts.count;
+        self.wait_for(id, cx);
+        if self.starts.stuck() {
+            // It starts when the one given up on lets go of its core.
+            self.starts.queued = Some(Queued { id, key: key.to_owned(), title: title.to_owned(), launch });
+        } else {
+            self.launch(id, key, title, launch, cx);
+        }
+        self.go(Screen::Starting(title.to_owned()), cx);
+    }
+
+    fn launch(&mut self, id: u64, key: &str, title: &str, launch: Launch, cx: &mut Cx<Msg>) {
         let sink = cx.video_sink(self.window, GAME);
         let tx = self.sender.clone();
         // Rumble goes straight to the controllers' thread, until the core
@@ -167,22 +228,97 @@ impl Chanoma {
         });
         let session = Session::start(launch, sink, self.shared.clone(), rumble, move |e| {
             if let Some(t) = &tx {
-                t.send(Msg::Game(e));
+                t.send(Msg::Game(id, e));
             }
         });
         self.game =
-            Some(Game { key: key.to_owned(), title: title.to_owned(), session, aspect: 4.0 / 3.0, started: false });
-        self.recent.touch(Item::Game { key: key.to_owned() });
-        self.recent.save(&self.config.dirs);
-        self.go(Screen::Starting(title.to_owned()), cx);
+            Some(Game { id, key: key.to_owned(), title: title.to_owned(), session, aspect: 4.0 / 3.0, started: false });
     }
 
-    pub fn game_event(&mut self, e: GameEvent, cx: &mut Cx<Msg>) {
+    /// Ask about the game if it hasn't started in a while.
+    fn wait_for(&mut self, id: u64, cx: &mut Cx<Msg>) {
+        self.calm(cx);
+        if let Some((_, t)) = self.starts.wait.replace((id, cx.after(START_WAIT, Msg::StartWait(id)))) {
+            cx.cancel(t);
+        }
+    }
+
+    fn done_waiting(&mut self, cx: &mut Cx<Msg>) {
+        self.calm(cx);
+        if let Some((_, t)) = self.starts.wait.take() {
+            cx.cancel(t);
+        }
+    }
+
+    /// Not slow any more: the question goes if it's up.
+    fn calm(&mut self, cx: &mut Cx<Msg>) {
+        self.starts.slow = false;
+        if matches!(self.modal, Some(Modal::Menu { kind: MenuKind::Slow, .. })) {
+            self.modal = None;
+            self.sync_hud(cx);
+        }
+    }
+
+    /// Stop waiting for a game still starting, without waiting for its
+    /// core either: told to end, it does when it can ([`Session::abandon`]).
+    fn give_up(&mut self, cx: &mut Cx<Msg>) {
+        self.done_waiting(cx);
+        self.starts.queued = None;
+        if let Some(g) = self.game.take_if(|g| !g.started) {
+            log::warn!("chanoma: gave up on {} starting", g.title);
+            if let Some(thread) = g.session.abandon() {
+                self.starts.given_up = Some((g.id, thread));
+            }
+        }
+    }
+
+    /// Back or Home while a game starts, or Stop it now: it's called off.
+    /// One that took too long leaves Keep playing too, so that a kid
+    /// doesn't come back to it first.
+    pub fn stop_starting(&mut self, cx: &mut Cx<Msg>) {
+        if self.starts.slow
+            && let Some(g) = &self.game
+        {
+            self.recent.forget(&Item::Game { key: g.key.clone() });
+            self.recent.save(&self.config.dirs);
+        }
+        self.give_up(cx);
+        self.go(Screen::Home, cx);
+    }
+
+    /// The game hasn't started in a while: stop it now, or keep waiting
+    /// (with Back and Home to stop it later).
+    pub fn start_waited(&mut self, id: u64, cx: &mut Cx<Msg>) {
+        if self.starts.wait.as_ref().is_none_or(|(w, _)| *w != id) {
+            return;
+        }
+        self.starts.wait = None;
+        self.starts.slow = true;
+        log::warn!("chanoma: a game is taking a long time to start");
+        if matches!(self.screen, Screen::Starting(_)) && self.modal.is_none() {
+            self.open_menu(MenuKind::Slow, cx);
+        }
+    }
+
+    pub fn game_event(&mut self, id: u64, e: GameEvent, cx: &mut Cx<Msg>) {
+        if self.starts.given_up.as_ref().is_some_and(|(g, _)| *g == id) {
+            if matches!(e, GameEvent::Ended { .. } | GameEvent::Failed(_)) {
+                self.let_go(cx);
+            }
+            return;
+        }
+        // Words from a session already put away.
+        if self.game.as_ref().is_none_or(|g| g.id != id) {
+            return;
+        }
         match e {
             GameEvent::Started { aspect, resumed, .. } => {
+                self.done_waiting(cx);
                 if let Some(g) = &mut self.game {
                     g.aspect = aspect;
                     g.started = true;
+                    self.recent.touch(Item::Game { key: g.key.clone() });
+                    self.recent.save(&self.config.dirs);
                 }
                 self.go(Screen::Playing, cx);
                 cx.hide_cursor_until_moved();
@@ -197,7 +333,11 @@ impl Chanoma {
             }
             GameEvent::Failed(why) => {
                 log::warn!("chanoma: a game didn't start: {why}");
-                self.game = None;
+                self.done_waiting(cx);
+                if let Some(g) = self.game.take() {
+                    self.recent.forget(&Item::Game { key: g.key });
+                    self.recent.save(&self.config.dirs);
+                }
                 self.go(Screen::Problem("This game didn't start".into(), why), cx);
             }
             GameEvent::Ended { .. } => {
@@ -210,6 +350,19 @@ impl Chanoma {
         }
     }
 
+    /// The start given up on let go of its core at last: a game waiting
+    /// for that starts.
+    fn let_go(&mut self, cx: &mut Cx<Msg>) {
+        if let Some((_, thread)) = self.starts.given_up.take() {
+            // Its last word comes just before it ends.
+            let _ = thread.join();
+        }
+        if let Some(q) = self.starts.queued.take() {
+            self.wait_for(q.id, cx);
+            self.launch(q.id, &q.key, &q.title, q.launch, cx);
+        }
+    }
+
     pub fn pause_game(&self, on: bool) {
         if let Some(g) = &self.game {
             g.session.pause(on);
@@ -219,6 +372,8 @@ impl Chanoma {
     /// Stop the game, keeping where it was left; back to Home (or the
     /// closed screen).
     pub fn stop_game(&mut self, keep: bool, cx: &mut Cx<Msg>) {
+        // One still starting isn't waited for.
+        self.give_up(cx);
         if let Some(g) = self.game.take() {
             g.session.stop(keep);
             // Its picture of where it was left changed.

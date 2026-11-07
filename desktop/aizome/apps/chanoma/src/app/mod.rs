@@ -130,7 +130,10 @@ pub enum Msg {
     PinChecked(bool),
     /// A new PIN's hash, made off the interface thread.
     PinMade(crate::rules::PinHash),
-    Game(crate::retro::Event),
+    /// What the game of a start (by its number) says.
+    Game(u64, crate::retro::Event),
+    /// A start (by its number) has gone on a while.
+    StartWait(u64),
     Browser(crate::browser::Event),
     Film(aizome_media::Event),
     /// What a film's subtitles show changes now.
@@ -249,6 +252,8 @@ pub enum MenuKind {
     NoController,
     /// A grown-up asked to remove something: asked again.
     Remove(Removal),
+    /// A game is taking a long time to start: stop it, or keep waiting.
+    Slow,
 }
 
 /// What a grown-up may remove from the settings.
@@ -403,6 +408,8 @@ pub struct Chanoma {
     /// Grown-up mode, and its last use.
     pub grownup: Option<Instant>,
     pub game: Option<play::Game>,
+    /// Games starting, and one given up on.
+    pub starts: play::Starts,
     pub page: Option<play::Page>,
     pub film: Option<play::Film>,
     /// Films on the desktop's media controls, which read the playing
@@ -501,6 +508,7 @@ impl Chanoma {
             toast: None,
             grownup: None,
             game: None,
+            starts: play::Starts::default(),
             page: None,
             film: None,
             mpris: None,
@@ -949,6 +957,7 @@ impl Chanoma {
             Screen::Home => self.home_input(i, cx),
             Screen::Games => self.games_input(i, cx),
             Screen::Episodes(s) => self.episodes_input(s, i, cx),
+            Screen::Starting(_) if i == Input::Back => self.stop_starting(cx),
             Screen::Starting(_) => {}
             // A controller's buttons are the game's and the page's, so
             // Back here is Esc on the keyboard (or a click): the menu, with
@@ -985,8 +994,9 @@ impl Chanoma {
                 self.leave_grownups(cx);
                 self.go(Screen::Home, cx);
             }
-            // A game starting is a moment: it would only come up over Home.
-            Screen::Welcome | Screen::Closed | Screen::Starting(_) => {}
+            // A game starting is called off, however long it takes.
+            Screen::Starting(_) => self.stop_starting(cx),
+            Screen::Welcome | Screen::Closed => {}
             _ => {
                 self.home_row = 0;
                 self.go(Screen::Home, cx);
@@ -1045,6 +1055,17 @@ impl Chanoma {
                     }
                 };
                 Menu::new(format!("Remove {name}?"), &["Keep it", "Remove it from Chanoma"]).with_subtitle(note)
+            }
+            // A start this long is more likely stuck than slow: stopping
+            // comes first. The game's name beside, where it fits.
+            MenuKind::Slow => {
+                let name = match &self.screen {
+                    Screen::Starting(what) => what.clone(),
+                    _ => String::new(),
+                };
+                let title =
+                    if self.starts.behind() { "The game before is stuck" } else { "Taking a long time to start" };
+                Menu::new(title, &["Stop it now", "Keep waiting"]).with_subtitle(name)
             }
         };
         log::info!("chanoma: the {kind:?} menu");
@@ -1119,6 +1140,11 @@ impl Chanoma {
                 self.close_modal(cx);
                 self.remove(what, cx);
             }
+            (MenuKind::Slow, 0) => {
+                self.modal = None;
+                self.stop_starting(cx);
+            }
+            (MenuKind::Slow, _) => self.close_modal(cx),
             (MenuKind::Film, c) => self.film_menu_chosen(c, cx),
             (MenuKind::Subtitles, c) => self.track_chosen(true, c, cx),
             (MenuKind::Audio, c) => self.track_chosen(false, c, cx),
@@ -1698,8 +1724,15 @@ impl Chanoma {
                 self.stage(self.scene(View::Grid(g), Some(self.chrome_titled(self.hints("Watch", Some("Back"))))))
             }
             Screen::Starting(what) => {
-                let m = ui::screens::Message::new(ui::screens::Art::Waiting, what.clone(), "Just a moment…");
-                let mut ch = self.chrome(Vec::new());
+                let body = match (self.starts.slow(), self.starts.behind()) {
+                    (false, _) => "Just a moment…",
+                    (true, false) => "It's taking a long time. Back or Home stops it.",
+                    (true, true) => {
+                        "The game before it is still stuck. If it never lets go, leave Chanoma and open it again."
+                    }
+                };
+                let m = ui::screens::Message::new(ui::screens::Art::Waiting, what.clone(), body);
+                let mut ch = self.chrome(vec![(self.back_button(self.family), "Back".to_owned())]);
                 ch.banner = None;
                 self.stage(self.scene(View::Message(m), Some(ch)))
             }
@@ -1974,7 +2007,8 @@ impl Program for Chanoma {
             }
             Msg::PinChecked(ok) => self.pin_checked(ok, cx),
             Msg::PinMade(hash) => self.pin_made(hash, cx),
-            Msg::Game(e) => self.game_event(e, cx),
+            Msg::Game(id, e) => self.game_event(id, e, cx),
+            Msg::StartWait(id) => self.start_waited(id, cx),
             Msg::Browser(e) => self.browser_event(e, cx),
             Msg::Film(e) => self.film_event(e, cx),
             Msg::CueTick => self.schedule_cues(cx),
@@ -2066,8 +2100,11 @@ impl Program for Chanoma {
 impl Chanoma {
     /// Put away what's playing before going (Leave, or the window closed).
     pub fn shutdown(&mut self) {
-        if let Some(g) = self.game.take() {
-            g.session.stop(true);
+        // One still starting may never come back to be stopped.
+        match self.game.take() {
+            Some(g) if g.started => g.session.stop(true),
+            Some(g) => drop(g.session.abandon()),
+            None => {}
         }
         if let Some(p) = self.page.take() {
             p.browser.close_and_wait();
