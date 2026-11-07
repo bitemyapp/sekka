@@ -64,6 +64,13 @@ def greeter_up():
     return machine.execute("pgrep -u greeter -x aizome-greeter")[0] == 0
 
 
+def user_units(user, args):
+    """What `user`'s own systemd says of `args`."""
+    return machine.succeed(
+        f"runuser -u {user} -- env XDG_RUNTIME_DIR=/run/user/$(id -u {user}) systemctl --user {args}"
+    ).strip()
+
+
 def pad(command):
     machine.succeed(f"echo {shlex.quote(command)} > /run/tv-pad")
     time.sleep(0.6)
@@ -118,6 +125,10 @@ with subtest("the controller types Alice's password on the on-screen keyboard"):
     machine.screenshot("tv-greeter-keyboard")
     pad("tap start")
     until("Alice's desktop", lambda: machine.execute("pgrep -u alice -x aizome")[0] == 0)
+    until(
+        "Alice's login starting what every account's does",
+        lambda: user_units("alice", "is-active desktop-errand.service") == "active",
+    )
     machine.succeed("loginctl terminate-user alice")
     until("the login screen again", greeter_up, timeout=60)
 
@@ -143,6 +154,13 @@ with subtest("the TV account's session is Chanoma alone"):
     until("Chanoma holds the controller", lambda: "is player 1" in session_log())
     assert machine.execute("pgrep -u tv -f aizome-shell")[0] != 0, "no shell"
     assert machine.execute("pgrep -u tv -x xwayland-satellite")[0] != 0, "no X11 bridge"
+    # Its systemd starts the bus and sound, not what every account's does.
+    print(user_units("tv", "list-units --state=active --no-legend --plain"))
+    assert user_units("tv", "show -p LoadState --value desktop-errand.service") == "masked"
+    until(
+        "the TV account's bus and sound",
+        lambda: user_units("tv", "is-active dbus.socket pipewire.socket pipewire-pulse.socket").split() == ["active"] * 3,
+    )
     time.sleep(2)
     machine.screenshot("tv-chanoma-welcome")
 

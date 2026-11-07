@@ -47,6 +47,12 @@ pub fn find(choice: Option<&str>) -> Option<PathBuf> {
     BROWSERS.iter().find_map(|b| which(b))
 }
 
+/// Whether `exe` is Google Chrome, which has the decoder for protected
+/// shows (Widevine); Chromium hasn't.
+pub fn is_chrome(exe: &Path) -> bool {
+    exe.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with("google-chrome") || n == "chrome")
+}
+
 /// Where programs are looked for: the PATH, then where NixOS installs
 /// them, which a session's unit (started by the user's systemd, with its
 /// own short PATH) wouldn't otherwise see.
@@ -623,6 +629,20 @@ fn keep_home(window: WindowId, stop: &AtomicBool, over: &AtomicBool, events: imp
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_google_chrome_plays_protected_shows() {
+        for chrome in [
+            "/run/current-system/sw/bin/google-chrome-stable",
+            "/nix/store/x-chrome/bin/google-chrome",
+            "/opt/google/chrome/chrome",
+        ] {
+            assert!(is_chrome(Path::new(chrome)), "{chrome}");
+        }
+        for other in ["/run/current-system/sw/bin/chromium", "/usr/bin/chromium-browser", "/tmp/browser"] {
+            assert!(!is_chrome(Path::new(other)), "{other}");
+        }
+    }
 
     #[test]
     fn the_browser_opens_full_screen_in_its_own_profile_steered_from_here() {
