@@ -16,8 +16,8 @@ over long benchmark matrices. Builds, tests and measurements go to
 - `feat/buck2-shared-builds` (PR #291, draft) is pushed with the lost-writes
   and contention fixes, the paused-gateway restart (`251253d7`), stale
   cleaning (`1356dfba`), a ByteStream upload fix (`ea3a1a5d`) and the
-  private config layer in the daemon identity (`61497353`). Its CI trust
-  check passes; the build job is skipped.
+  private config layer in the daemon identity (`61497353`) and atomic CI
+  leases (`5833b66f`). Its CI trust check passes; the build job is skipped.
 - Independent reviews (2026-11-06) read every #291 engine patch in the
   storage and upload paths, and the single-CAS code:
   - The content-store patches had no confirmed defects. One cliff is now
@@ -142,6 +142,16 @@ it. Incremental state is private per worktree (~0.7 GB after a dev build).
    ready would run `main`'s build job (Uta and components); the shared-build
    jobs first run on PRs after #291 merges. Both runner labels they need
    (`sekka-builder` on wx, `sekka-build-client`) are online.
+   - A security review of these jobs and the build service found nothing of
+     high or medium severity. Its one low finding, a lease file a killed run
+     could leave unreadable and so stop all CI retention, is fixed in
+     `5833b66f`, with `checks.pr-ci` and the `ci-cache` VM test passing.
+   - It also noted these, for later:
+     - the artifact upload runs in the same container right after candidate
+       code, so a main workflow that ever restored a GitHub Actions cache
+       could be poisoned through it;
+     - the client pool sees the whole host `/nix/store`;
+     - `issue-reader` cannot rotate an existing reader token.
 6. **When PR 333 (per-application Aizome packages) lands:**
    - move `nix/bazel/without-build-files.nix` into its `package-sources.nix`;
    - rerun `scripts/sekka-buck2 generate`;
