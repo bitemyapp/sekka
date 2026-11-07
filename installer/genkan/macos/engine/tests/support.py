@@ -120,8 +120,25 @@ class Part:
         self.volume_name = volume_name
         self.container = None
         self.fat = content == "EFI"
+        # A FAT volume's serial (newfs_msdos -I, or its own choice); this
+        # one is the partition's own, drawn from nothing else.
+        self.serial = int(puuid.replace("-", "")[-8:], 16) or 1
         self.mounted = False
         self.dir = None
+
+
+# msdosfs's kFSUUIDNamespaceSHA1 (msdosfs_vfsops.c).
+MSDOSFS_NAMESPACE = bytes.fromhex("b3e20f39f29211d697a400306543ecac")
+
+
+def msdosfs_uuid(serial, sectors):
+    """The VolumeUUID diskutil reports for a FAT volume, as Apple's msdosfs
+    derives it (msdosfs_generate_volume_uuid): MD5 of its namespace, the
+    boot sector's volume ID and total sector count, as version 3."""
+    d = bytearray(hashlib.md5(MSDOSFS_NAMESPACE + struct.pack("<II", serial, sectors)).digest())
+    d[6] = (d[6] & 0x0F) | 0x30
+    d[8] = (d[8] & 0x3F) | 0x80
+    return str(uuidlib.UUID(bytes=bytes(d))).upper()
 
 
 class FakeMac:
@@ -445,6 +462,8 @@ class FakeMac:
         label = args[args.index("-v") + 1]
         p.fat = True
         p.volume_name = label.upper()
+        if "-I" in args:
+            p.serial = int(args[args.index("-I") + 1], 0)
         shutil.rmtree(p.dir)
         os.makedirs(p.dir)
         return b""
@@ -651,6 +670,9 @@ class FakeMac:
             }
             if p.container is not None:
                 info["APFSContainerReference"] = p.container.ref
+            if p.fat and p.serial:
+                # newfs_msdos gives the volume every block of the partition.
+                info["VolumeUUID"] = msdosfs_uuid(p.serial, p.size // self.block)
             return info
         ct, v = self.volume_by_dev(target)
         if v is not None:
@@ -904,11 +926,13 @@ def add_stub(mac, offset, size, label, with_os=True, version="14.8.3"):
     return stub, ct, (system, data, group)
 
 
-def j514s_existing_sekka(root, enrolled=None, **kw):
+def j514s_existing_sekka(root, enrolled=None, esp_serial=None, **kw):
     """The reference J514S as it is now: Sekka installed beside macOS."""
     mac = base_mac(root, container_size=CONTAINER_AFTER, **kw)
     stub, ct, (system, data, group) = add_stub(mac, *STUB, "Sekka")
     esp = mac.add_part("EFI", *ESP, gpt_name="Untitled", volume_name="EFI - SEKKA")
+    if esp_serial is not None:
+        esp.serial = esp_serial
     root_part = mac.add_part("Linux Filesystem", *ROOT, gpt_name="Untitled")
     installation = "8e2f6c1a-6b3d-4c1e-9a55-0d4f2f2b7c11"
     config = {
@@ -959,6 +983,73 @@ def j514s_unknown(root, **kw):
     stub, ct, (system, data, group) = add_stub(mac, *STUB, "Mystery")
     mac.add_part("Linux Filesystem", ROOT[0], 20 * GIB, gpt_name="Untitled")
     mac.policies[group.upper()] = None
+    return mac
+
+
+# The developer image's FAT serial (nix/apple-silicon/identities.json), and
+# what an image's ESP holds once Asahi's installer v0.9.2 has written it:
+# the payload's files (image.nix), with Asahi's own installer data.
+DEVELOPER_SERIAL = 0x5ECCA5E1
+SEKKA_ESP_FILES = {
+    "m1n1/boot.bin": b"m1n1 stage 2 " * 100,
+    "EFI/BOOT/BOOTAA64.EFI": b"systemd-boot" * 100,
+    "EFI/nixos/kernel.efi": b"kernel" * 100,
+    "loader/loader.conf": b"timeout 3\ndefault nixos-generation-1.conf\n",
+    "loader/entries/nixos-generation-1.conf": b"title Sekka\nlinux /EFI/nixos/kernel.efi\noptions init=/nix/store/x/init quiet\n",
+    "sekka/boot-bin.json": b'{"history":[],"schema":"sekka.mac.boot-bin/1"}',
+    "asahi/stub_info.json": b'{"vgid":"00000000-0000-4000-8000-000000000000"}',
+}
+ASAHI_ESP_FILES = {
+    "m1n1/boot.bin": b"m1n1 stage 2 " * 100,
+    "EFI/BOOT/BOOTAA64.EFI": b"u-boot" * 100,
+    "asahi/stub_info.json": b'{"vgid":"00000000-0000-4000-8000-000000000000"}',
+}
+
+
+def add_asahi_system(mac, label, esp_name, files, serial=None, root_size=ROOT[1], enrolled="deadbeef", stub=True, root=True):
+    """A system Asahi's installer put beside macOS where Sekka is on the
+    reference J514S: its stub (unless gone, or "empty" when the installer
+    stopped before the stub's system), its FAT ESP with `files`, and its
+    Linux root (unless gone). Enrolled in Recovery unless `enrolled` is
+    None."""
+    group = None
+    if stub == "empty":
+        add_stub(mac, *STUB, label, with_os=False)
+    elif stub:
+        _, _, (system, _, group) = add_stub(mac, *STUB, label)
+        os.makedirs(os.path.join(system.dir, "Finish Installation.app", "Contents"))
+        mac.policies[group.upper()] = enrolled
+    esp = mac.add_part("EFI", *ESP, gpt_name="Untitled", volume_name=esp_name)
+    if serial is not None:
+        esp.serial = serial
+    for rel, data in files.items():
+        path = os.path.join(esp.dir, rel)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "wb") as f:
+            f.write(data)
+    root_part = mac.add_part("Linux Filesystem", ROOT[0], root_size, gpt_name="Untitled") if root else None
+    return esp, root_part, group
+
+
+def j514s_developer(directory, free_space=False, files=None, **kw):
+    """Sekka's developer image as install-sekka.sh leaves it, which is how
+    the reference J514S itself runs Sekka: Asahi's stub, an ESP with the
+    developer image's serial, and the root, with no handoff and no Recovery
+    configuration. With `free_space`, a smaller root leaves room after it;
+    `enrolled`, `stub`, `root` and `serial` are add_asahi_system's."""
+    system = {k: kw.pop(k) for k in ("enrolled", "stub", "root", "serial") if k in kw}
+    mac = base_mac(directory, container_size=CONTAINER_AFTER, **kw)
+    system.setdefault("serial", DEVELOPER_SERIAL)
+    size = 100 * GIB if free_space else ROOT[1]
+    add_asahi_system(mac, "Sekka", "EFI - SEKKA", SEKKA_ESP_FILES if files is None else files, root_size=size, **system)
+    return mac
+
+
+def j514s_asahi(root, **kw):
+    """Another system Asahi's installer put on the J514S: Asahi's ESP, with
+    a serial of its own and none of Sekka's files."""
+    mac = base_mac(root, container_size=CONTAINER_AFTER, **kw)
+    add_asahi_system(mac, "Asahi Linux", "EFI - ASAHI", ASAHI_ESP_FILES)
     return mac
 
 
@@ -1025,6 +1116,9 @@ def m1_pro_with_asahi(root, **kw):
     with open(path, "wb") as f:
         f.write(plist({"ProductVersion": "13.5", "ProductBuildVersion": "22G74"}))
     esp = mac.part_by_name("disk0s4")
+    # The serial whose msdosfs UUID is the recorded VolumeUUID (a search of
+    # every serial finds this one; test_inspect checks it).
+    esp.serial = 0xCEF8B598
     os.makedirs(os.path.join(esp.dir, "asahi"))
     shutil.copy(os.path.join(base, "legacy", "asahi_stub_info.json"), os.path.join(esp.dir, "asahi", "stub_info.json"))
     return mac

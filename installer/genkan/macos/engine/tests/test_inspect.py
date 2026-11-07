@@ -2,16 +2,27 @@
 """inspect: the contract's Inspection from Asahi's model of a fake Mac."""
 
 import logging
+import os
+import plistlib
 import unittest
 
 import support as S
 from sekka_engine import contract as c
+from sekka_engine import inspect as engine_inspect
 
 logging.disable(logging.CRITICAL)
 
 
 def codes(doc, blocking=None):
     return sorted(i["code"] for i in doc["issues"] if blocking is None or i["blocking"] == blocking)
+
+
+def details(doc, code):
+    return [i["detail"] for i in doc["issues"] if i["code"] == code]
+
+
+def developer(**kw):
+    return lambda directory, **more: S.j514s_developer(directory, **kw, **more)
 
 
 class InspectTests(unittest.TestCase):
@@ -96,7 +107,7 @@ class InspectTests(unittest.TestCase):
     def test_a_root_inspection_mounts_only_read_only_and_undoes_it(self):
         """As root too: other systems' volumes and ESPs (here an Asahi
         installation's) are mounted read-only, and nothing is left mounted."""
-        for builder in (S.j514s_clean, S.m1_pro_with_asahi, lambda root, **kw: S.j514s_existing_sekka(root, **kw)[0]):
+        for builder in (S.j514s_clean, S.m1_pro_with_asahi, S.j514s_developer, lambda root, **kw: S.j514s_existing_sekka(root, **kw)[0]):
             with self.subTest(builder=getattr(builder, "__name__", "existing")):
                 self.t.cleanup()
                 self.t = S.TempDir()
@@ -127,6 +138,151 @@ class InspectTests(unittest.TestCase):
                 self.assertEqual([p["kind"] for p in doc["disk"]["partitions"]], ["apple-isc", "apfs", "apfs", "efi", "linux", "apple-recovery"])
                 self.assertEqual(doc["disk"]["partitions"][3]["name"], "EFI - SEKKA")
                 self.assertEqual(doc["disk"]["partitions"][2]["offset"], S.STUB[0])
+
+    def test_a_product_install_is_identified_by_its_handoff(self):
+        """Its handoff and Recovery configuration name it, also on an ESP
+        with the developer image's serial, which a release whose installer
+        data names that serial gives it."""
+        for serial in (None, S.DEVELOPER_SERIAL):
+            with self.subTest(serial=serial):
+                self.t.cleanup()
+                self.t = S.TempDir()
+                outcome, doc = self.inspect(lambda root, **kw: S.j514s_existing_sekka(root, esp_serial=serial, **kw)[0])
+                [inst] = doc["installations"]
+                self.assertEqual((inst["kind"], inst["installation_id"]), ("sekka", "8e2f6c1a-6b3d-4c1e-9a55-0d4f2f2b7c11"))
+                [detail] = details(doc, "existing-sekka")
+                self.assertTrue(detail.startswith("Sekka is already installed on this Mac (Sekka)."), detail)
+                self.assertNotIn("developer", detail)
+
+    def test_msdosfs_uuids_are_the_ones_macos_reports(self):
+        """diskutil names a FAT volume by the UUID msdosfs derives from its
+        boot sector's serial and sector count, not by the serial. The
+        recorded M1 Pro's ESP (500 MB of 4 KiB blocks) has the UUID of serial
+        CEF8-B598: of every 32-bit serial, that one gives it, which no wrong
+        derivation would. The fake reports UUIDs the same way."""
+        path = os.path.join(S.FIXTURES, "omarchy-m1-pro-2026-09-28", "legacy", "info", "disk0s4.plist")
+        with open(path, "rb") as f:
+            recorded = plistlib.load(f)
+        sectors = recorded["Size"] // recorded["DeviceBlockSize"]
+        self.assertEqual(sectors, 128000)
+        self.assertEqual(engine_inspect.fat_volume_uuid(0xCEF8B598, sectors), c.uuid_any(recorded["VolumeUUID"]))
+        self.assertEqual(S.msdosfs_uuid(0xCEF8B598, sectors), recorded["VolumeUUID"])
+        mac = S.m1_pro_with_asahi(self.t.sub("mac"))
+        self.assertEqual(mac.info("disk0s4")["VolumeUUID"], recorded["VolumeUUID"])
+        # The developer image's serial, on a 1 GiB ESP of 4 KiB blocks.
+        self.assertEqual(engine_inspect.DEVELOPER_ESP_SERIAL, S.DEVELOPER_SERIAL)
+        self.assertEqual(engine_inspect.fat_volume_uuid(S.DEVELOPER_SERIAL, S.GIB // 4096), c.uuid_any(S.msdosfs_uuid(S.DEVELOPER_SERIAL, S.GIB // 4096)))
+
+    def test_a_developer_install_is_sekka_and_stops_installation(self):
+        """Sekka's developer image, installed by install-sekka.sh as on the
+        reference J514S, has no handoff and no Recovery configuration. Its
+        ESP's serial names it: it is Sekka, with no installation ID, and the
+        blocking existing-sekka issue says what it is and how to remove it,
+        older images without boot-bin's record too. Looking at it reads its
+        volumes read-only and changes nothing."""
+        cases = (
+            ({"enrolled": "deadbeef"}, True, "complete"),
+            ({"enrolled": None}, True, "waiting-for-recovery"),
+            ({"enrolled": "deadbeef"}, False, "unknown"),
+            ({"files": {k: v for k, v in S.SEKKA_ESP_FILES.items() if k != "sekka/boot-bin.json"}}, True, "complete"),
+        )
+        for kw, privileged, state in cases:
+            with self.subTest(kw=list(kw), privileged=privileged):
+                self.t.cleanup()
+                self.t = S.TempDir()
+                mac = S.j514s_developer(self.t.sub("mac"), privileged=privileged, **kw)
+                before = mac.state_digest()
+                outcome, doc = self.inspect(lambda root, **_: mac, privileged=privileged)
+                self.assertEqual(outcome, "inspected")
+                [inst] = doc["installations"]
+                self.assertEqual((inst["kind"], inst["state"], inst["installation_id"], inst["name"]), ("sekka", state, None, "Sekka"))
+                parts = {p["kind"]: p["uuid"] for p in doc["disk"]["partitions"] if p["kind"] in ("efi", "linux")}
+                self.assertEqual((inst["esp"], inst["root"]), (parts["efi"], parts["linux"]))
+                self.assertIsNotNone(inst["stub_group"])
+                self.assertIn("existing-sekka", codes(doc, blocking=True))
+                self.assertNotIn("partial-installation", codes(doc))
+                [detail] = details(doc, "existing-sekka")
+                self.assertTrue(detail.startswith("A developer installation of Sekka, as install-sekka.sh makes, is on this Mac (Sekka)"), detail)
+                self.assertIn("disk0s4 has the developer image's serial, 5ECC-A5E1", detail)
+                self.assertIn("delete disk0s3, disk0s4 and disk0s5 with diskutil", detail)
+                self.assertIn("docs/apple-silicon/removal-and-boards.md", detail)
+                self.assertEqual({mode for _, mode in mac.mount_log}, {"ro"})
+                self.assertEqual(mac.mounted_now(), [])
+                self.assertEqual(mac.state_digest(), before)
+
+    def test_a_developer_install_beside_free_space_still_stops_installation(self):
+        """The free space beside it is described, as any is, and not offered:
+        the developer installation stops installation."""
+        outcome, doc = self.inspect(developer(free_space=True))
+        [free] = [k for k in doc["candidates"] if k["kind"] == "free-space"]
+        root = [p for p in doc["disk"]["partitions"] if p["kind"] == "linux"][0]
+        self.assertEqual(free["extent"], {"offset": root["offset"] + root["size"], "size": S.RECOVERY[0] - root["offset"] - root["size"]})
+        [inst] = doc["installations"]
+        self.assertEqual((inst["kind"], inst["installation_id"]), ("sekka", None))
+        self.assertIn("existing-sekka", codes(doc, blocking=True))
+
+    def test_a_developer_install_missing_parts_is_partial(self):
+        cases = (
+            ({"root": False}, "no Linux partition follows it"),
+            ({"files": {}}, "disk0s4 holds none of its boot files"),
+        )
+        for kw, missing in cases:
+            with self.subTest(missing=missing):
+                self.t.cleanup()
+                self.t = S.TempDir()
+                outcome, doc = self.inspect(developer(**kw))
+                [inst] = doc["installations"]
+                self.assertEqual((inst["kind"], inst["state"], inst["installation_id"]), ("sekka", "partial", None))
+                self.assertEqual(codes(doc, blocking=True), ["partial-installation"])
+                [detail] = details(doc, "partial-installation")
+                self.assertIn("incomplete developer installation of Sekka", detail)
+                self.assertIn(missing, detail)
+
+    def test_a_developer_install_stopped_before_its_stub_is_partial(self):
+        """The stub's container holds no system; the ESP after it has the
+        developer image's serial, which the issue says."""
+        outcome, doc = self.inspect(lambda root, **kw: S.j514s_developer(root, stub="empty", **kw))
+        [inst] = doc["installations"]
+        self.assertEqual((inst["kind"], inst["state"], inst["installation_id"]), ("sekka", "partial", None))
+        self.assertEqual(codes(doc, blocking=True), ["partial-installation"])
+        [detail] = details(doc, "partial-installation")
+        self.assertIn("the EFI partition after it, disk0s4, has the developer image's serial, 5ECC-A5E1", detail)
+
+    def test_what_a_removed_developer_install_left_stops_installation(self):
+        """Its ESP, which no startup volume claims, still has the developer
+        image's serial. The root beside it can't be read from macOS and stays
+        unknown."""
+        outcome, doc = self.inspect(developer(stub=False))
+        kinds = sorted((i["kind"], i["state"]) for i in doc["installations"])
+        self.assertEqual(kinds, [("sekka", "partial"), ("unknown", "partial")])
+        self.assertEqual(codes(doc, blocking=True), ["partial-installation"])
+        [detail] = details(doc, "partial-installation")
+        self.assertIn("The EFI partition disk0s3 has the developer image's serial, 5ECC-A5E1", detail)
+        self.assertEqual(codes(doc, blocking=False).count("unrecognized-layout"), 1)
+
+    def test_sekkas_boot_record_without_an_identity_is_not_guessed(self):
+        """An ESP with Sekka's boot record but neither a handoff nor the
+        developer image's serial is Sekka's, but which installation it is
+        isn't guessed: its state is unknown, and installation stops."""
+        outcome, doc = self.inspect(developer(serial=0x12345678))
+        [inst] = doc["installations"]
+        self.assertEqual((inst["kind"], inst["state"], inst["installation_id"]), ("sekka", "unknown", None))
+        [detail] = details(doc, "existing-sekka")
+        self.assertIn("can't tell which Sekka installation it is", detail)
+        self.assertIn("existing-sekka", codes(doc, blocking=True))
+        self.t.cleanup()
+        self.t = S.TempDir()
+        outcome, doc = self.inspect(developer(serial=0x12345678, stub=False))
+        self.assertIn(("sekka", "partial"), [(i["kind"], i["state"]) for i in doc["installations"]])
+        self.assertEqual(codes(doc, blocking=True), ["partial-installation"])
+
+    def test_another_asahi_install_on_a_j514s_is_other_linux(self):
+        """Asahi's ESP, with a serial of its own and none of Sekka's files,
+        is another system: it stops nothing."""
+        outcome, doc = self.inspect(S.j514s_asahi)
+        [inst] = doc["installations"]
+        self.assertEqual((inst["kind"], inst["state"], inst["name"]), ("other-linux", "complete", "Asahi Linux"))
+        self.assertEqual(codes(doc, blocking=True), [])
 
     def test_a_partial_installation_stops_without_a_guess(self):
         outcome, doc = self.inspect(S.j514s_partial)

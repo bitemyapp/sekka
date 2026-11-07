@@ -369,6 +369,14 @@ class ExecuteTests(unittest.TestCase):
                 self.t = S.TempDir()
                 self.assert_refused(self.run_plan(run_kw=kw), code)
 
+    def test_a_plan_beside_a_developer_install_is_refused(self):
+        """A plan for the free space beside Sekka's developer image, which
+        the inspection described but stopped on: execute's own inspection
+        refuses it, and nothing changes."""
+        run = self.run_plan(builder=lambda root: S.j514s_developer(root, free_space=True), place="free-space", sekka=60 * S.GIB)
+        failure = self.assert_refused(run, "blocked")
+        self.assertIn("developer installation of Sekka", failure["failure"]["message"])
+
     def test_blocking_issues_are_refused(self):
         def before(mac, host, release):
             mac.pmset = "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=1)\t55%; discharging\n"

@@ -91,15 +91,19 @@ let
         bash ${./identity/test-check.sh} ${./identity} | tee check.log
         # A developer install mounts by the developer image's names
         # (developer.nix, as the original J514S installation's configuration
-        # does); the product image has other ones and mounts by none.
-        python3 - ${./identities.json} ${./developer/developer.nix} ${./product/configuration.nix} <<'EOF'
+        # does); the product image has other ones and mounts by none. The
+        # Mac installer's engine recognizes a developer install by its ESP's
+        # serial (sekka_engine/inspect.py).
+        python3 - ${./identities.json} ${./developer/developer.nix} ${./product/configuration.nix} \
+          ${../../installer/genkan/macos/engine/sekka_engine/inspect.py} <<'EOF'
         import json, sys
         ids = json.load(open(sys.argv[1]))
-        developer, product = open(sys.argv[2]).read(), open(sys.argv[3]).read()
+        developer, product, engine = (open(f).read() for f in sys.argv[2:5])
         d, p = ids["developer"], ids["product"]
         serial = "%04X-%04X" % divmod(int(d["esp_volume_id"], 16), 0x10000)
         assert f'"/dev/disk/by-label/{d["root_label"]}"' in developer, "developer.nix's root"
         assert f'"/dev/disk/by-uuid/{serial}"' in developer, "developer.nix's ESP"
+        assert f'\nDEVELOPER_ESP_SERIAL = {d["esp_volume_id"]}\n' in engine, "the engine's developer serial"
         assert p["root_label"] != d["root_label"] and p["root_uuid"] != d["root_uuid"], p
         assert p["esp_volume_id"] is None, p
         for name in (d["root_label"], d["root_uuid"], serial, p["root_label"], p["root_uuid"]):

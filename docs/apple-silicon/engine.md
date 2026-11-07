@@ -162,11 +162,51 @@ Installations are recognized, never repaired:
   agree; `partial` when parts are missing; `unknown` when the records disagree
   or the policy can't be read. Either way a blocking `existing-sekka` or
   `partial-installation` issue: the initial release installs once.
+- **Sekka, the developer image** (below): a stub without those records whose
+  ESP has the developer image's FAT serial. It is `sekka` with no
+  `installation_id`, its state Asahi's (`coih`, `Finish Installation.app`),
+  or `partial` when its root is missing or its ESP holds neither
+  `m1n1/boot.bin` nor `sekka/boot-bin.json`, `unknown` when the ESP can't be
+  mounted. A blocking `existing-sekka` (or `partial-installation`) issue says
+  that it is a developer installation and which partitions to delete in
+  macOS before installing ([removal](removal-and-boards.md#a-developer-installation)).
+- **Sekka, unidentified**: a stub without those records whose ESP holds
+  `sekka/boot-bin.json` (the record only Sekka's boot-bin writes) but not the
+  developer serial. It is Sekka's, but whether the developer image's or an
+  installation whose handoff is gone isn't guessed: `sekka`, `unknown`, no
+  `installation_id`, blocking `existing-sekka`.
 - **other-linux**: a stub with Asahi's marks (m1n1 version, `Finish
-  Installation.app`, an ESP with `asahi/`).
+  Installation.app`, an ESP with `asahi/`) and none of the above.
 - **unknown**: any other stub, an APFS container with no system (blocking
   `partial-installation` if it is named Sekka, otherwise a non-blocking
-  `unrecognized-layout`), and EFI or Linux partitions no stub claims.
+  `unrecognized-layout`), and EFI or Linux partitions no stub claims. An
+  empty container followed by an ESP with the developer serial, and an ESP
+  no stub claims that has a handoff, the developer serial or Sekka's boot
+  record, are `sekka` instead, `partial`, with a blocking
+  `partial-installation`.
+
+Sekka's developer image (`nix/apple-silicon/developer/`, installed by
+`install-sekka.sh` with the unmodified Asahi installer, as on the reference
+J514S) writes no handoff and no Recovery configuration, and mounts its root
+by the label `sekka-root` and its ESP by the FAT serial `5ECC-A5E1`
+(`identities.json`). Of those, macOS can see only the serial: diskutil has
+no ext4 support and reports no volume name or UUID for a Linux partition
+(the recorded M1 Pro's root has neither), and the inspection reads volumes
+only through diskutil and read-only mounts, never raw devices. Nor does
+diskutil report a FAT serial; it reports the `VolumeUUID` macOS's msdosfs
+derives from the boot sector (`msdosfs_generate_volume_uuid`: a version 3
+UUID, the MD5 of `kFSUUIDNamespaceSHA1`, the volume ID as stored and the
+total sector count, little-endian). The engine compares an ESP's
+`VolumeUUID` with that UUID for serial `0x5ecca5e1` and the partition's
+size in its 4 KiB blocks, which is how newfs_msdos counts it: the recorded
+M1 Pro's ESP, 128,000 blocks, has the UUID of serial `CEF8-B598`, the only
+32-bit serial that gives it (`test_msdosfs_uuids_are_the_ones_macos_reports`).
+The derivation is msdosfs's source and that recording; no developer
+installation's `diskutil info` has been recorded. An ESP whose sectors
+newfs_msdos counted otherwise wouldn't match, which is why Sekka's boot
+record alone still stops installation. A handoff wins over the serial: a
+release whose installer data names that serial gives it to an installation
+the handoff identifies, as the tests' release does.
 
 Issues come from the J514S profile's admission (board, chip, system firmware
 `block`, macOS minimum, the macOS 27.0 resize warning), Asahi's own device
@@ -427,14 +467,25 @@ update from memory through Asahi's URLCache class.
 
 Scenarios: a J514S as it was before Sekka (sizes from its GPT), with macOS
 already shrunk, with Sekka installed (the reference machine's layout today),
-with an interrupted stub, with unknown systems, and Omarchy's recorded M1 Pro
-with Asahi installed (MIT fixtures, see their NOTICE). They cover:
+with Sekka's developer image installed (the reference machine itself), with
+another system Asahi installed, with an interrupted stub, with unknown
+systems, and Omarchy's recorded M1 Pro with Asahi installed (MIT fixtures, see
+their NOTICE). The fake reports a FAT volume's `VolumeUUID` as msdosfs
+derives it from its serial, which `newfs_msdos -I` sets. They cover:
 
 - inspection of each, unprivileged and as root; issues for battery, FileVault
   converting, snapshots, missing resize limits, a second internal disk,
   untested firmware and another board; inspection never changes the fake, and
   as root too mounts only read-only (other systems' volumes and an Asahi
   ESP included) and leaves nothing mounted;
+- recognition: an installation by its handoff, also on an ESP with the
+  developer serial; the developer image alone (enrolled, waiting for
+  Recovery, unprivileged, and without boot-bin's record), beside free space
+  (described, not offered, and execute refusing a plan for it), without its
+  root or boot files, and as an ESP a removed stub left; Sekka's boot record
+  without an identity, not guessed; another Asahi system on the J514S and the
+  M1 Pro's, still `other-linux`; msdosfs's UUID for the M1 Pro's recorded
+  ESP;
 - the helper's inspection for an owner refusing exactly the owners and
   passwords execute and startup-disk refuse (`UNUSABLE_OWNERS`), with their
   codes, and otherwise reporting the same inspection;
@@ -529,6 +580,9 @@ On the J514S, with a backup and an owner's explicit authorization:
   `APFSContainerReference` and `PartitionMapPartition` for volumes and
   partitions, `diskutil unmount UUID`, and how much the spool under
   `/private/tmp` raises the container's used space;
+- the developer installation's ESP in `diskutil info`: its `VolumeUUID`
+  being msdosfs's for `5ECC-A5E1` and 262,144 blocks, and the inspection
+  stopping on it;
 - `diskutil apfs resizeContainer` to the plan's byte count, `addPartition`
   placing the stub exactly behind the shrunk container, `newfs_msdos` and
   diskutil's partition renumbering;

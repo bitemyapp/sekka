@@ -46,7 +46,11 @@ def main():
     finally:
         t.cleanup()
 
-    for name, builder in (("existing-sekka", lambda root, **kw: S.j514s_existing_sekka(root, **kw)[0]), ("m1-pro-asahi", S.m1_pro_with_asahi)):
+    for name, builder in (
+        ("existing-sekka", lambda root, **kw: S.j514s_existing_sekka(root, **kw)[0]),
+        ("developer-sekka", S.j514s_developer),
+        ("m1-pro-asahi", S.m1_pro_with_asahi),
+    ):
         t = S.TempDir()
         try:
             mac, asahi, host, outcome, doc, channel = scenarios.clean_inspection(t, builder=builder)

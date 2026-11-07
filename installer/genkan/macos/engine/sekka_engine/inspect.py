@@ -8,9 +8,12 @@ password), what only root can read (boot policies, the admin-user records) is
 reported as unavailable rather than guessed.
 """
 
+import hashlib
 import logging
 import os
 import re
+import struct
+import uuid as uuidlib
 
 from . import canonical
 from . import contract as c
@@ -30,9 +33,63 @@ PARTITION_KINDS = {
 RECOVERY_APP = "Sekka Recovery.app"
 ASAHI_STEP2_APP = "Finish Installation.app"
 
+# Sekka's developer image (nix/apple-silicon/developer/developer.nix), which
+# install-sekka.sh installs with the unmodified Asahi installer, leaves no
+# handoff and no Recovery configuration. It mounts its EFI system partition
+# by the fixed FAT serial its installer data gives newfs_msdos, 5ECC-A5E1
+# (nix/apple-silicon/identities.json, "developer"; tests.nix holds this to
+# it), and its root by the label sekka-root. macOS can't read ext4, so
+# diskutil reports no label or UUID for the root: the serial is the sign
+# macOS can see.
+DEVELOPER_ESP_SERIAL = 0x5ecca5e1
+DEVELOPER_ESP_NAME = "%04X-%04X" % divmod(DEVELOPER_ESP_SERIAL, 0x10000)
+# What every image's ESP holds: Asahi's second stage, and the record Sekka's
+# boot-bin keeps of it (nix/apple-silicon/boot-bin/boot_bin.py), which
+# nothing but Sekka writes. A developer image older than boot-bin has only
+# the first.
+BOOT_BIN = "m1n1/boot.bin"
+BOOT_BIN_RECORD = "sekka/boot-bin.json"
+REMOVAL_DOC = "docs/apple-silicon/removal-and-boards.md"
+# msdosfs's kFSUUIDNamespaceSHA1 (msdosfs_vfsops.c).
+FAT_UUID_NAMESPACE = uuidlib.UUID("b3e20f39-f292-11d6-97a4-00306543ecac").bytes
+
 
 class InspectionError(RuntimeError):
     """The Mac couldn't be described with confidence."""
+
+
+def fat_volume_uuid(serial, sectors):
+    """The VolumeUUID diskutil reports for a FAT volume, as macOS's msdosfs
+    derives it (msdosfs_generate_volume_uuid): a version 3 UUID, the MD5 of
+    kFSUUIDNamespaceSHA1, the boot sector's volume ID as stored and its total
+    sector count, both little-endian. Given the volume's size, the UUID says
+    which serial its boot sector has."""
+    digest = bytearray(
+        hashlib.md5(FAT_UUID_NAMESPACE + struct.pack("<II", serial, sectors), usedforsecurity=False).digest()
+    )
+    digest[6] = (digest[6] & 0x0F) | 0x30
+    digest[8] = (digest[8] & 0x3F) | 0x80
+    return str(uuidlib.UUID(bytes=bytes(digest)))
+
+
+def has_developer_serial(part):
+    """Whether diskutil's description of an EFI partition gives it the
+    developer image's FAT serial. newfs_msdos counts the whole partition in
+    the disk's blocks, as on the recorded M1 Pro's ESP. A partition with no
+    FAT UUID, or one whose size can't be counted that way, hasn't."""
+    info = part.info or {}
+    volume, size, block = info.get("VolumeUUID"), info.get("Size"), info.get("DeviceBlockSize")
+    if not isinstance(size, int) or not isinstance(block, int) or block <= 0 or size % block:
+        return False
+    try:
+        return c.uuid_any(volume) == fat_volume_uuid(DEVELOPER_ESP_SERIAL, size // block)
+    except c.Invalid:
+        return False
+
+
+def listed(names):
+    names = list(names)
+    return names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
 
 
 def walk(node):
@@ -290,6 +347,24 @@ class Inspector:
             log.info("couldn't mount %s to look at it: %s", part.name, error)
             return None
 
+    def boot_files(self, mountpoint):
+        """Which of every image's boot files an ESP mounted at `mountpoint`
+        holds, or None if it couldn't be mounted."""
+        if not mountpoint:
+            return None
+        return {rel: os.path.isfile(os.path.join(mountpoint, rel)) for rel in (BOOT_BIN, BOOT_BIN_RECORD)}
+
+    def asahi_state(self, o, bp_known, enrolled):
+        """A system Asahi's installer made, by its boot policy and its stub's
+        Recovery step."""
+        if not bp_known:
+            return "unknown"
+        if enrolled:
+            return "complete"
+        if os.path.isdir(os.path.join(o.system or "", ASAHI_STEP2_APP)):
+            return "waiting-for-recovery"
+        return "partial"
+
     def installations(self, cur_os):
         v = self.view
         found = []
@@ -338,7 +413,17 @@ class Inspector:
         vols = p.container.get("Volumes", [])
         nxt = self.view.parts[index + 1] if index + 1 < len(self.view.parts) else None
         esp = c.uuid_any(nxt.uuid) if nxt is not None and not nxt.free and nxt.type == "EFI" else None
-        if label == c.VOLUME_NAME and len(vols) <= 4:
+        developer = esp is not None and has_developer_serial(nxt)
+        if developer:
+            self.issue(
+                "partial-installation",
+                True,
+                f"The APFS container {p.name} ({label or 'unnamed'}) holds no system, and the EFI partition "
+                f"after it, {nxt.name}, has the developer image's serial, {DEVELOPER_ESP_NAME}: a developer "
+                "installation of Sekka may have stopped part way. The installer won't change it; remove it "
+                f"with diskutil before installing ({REMOVAL_DOC}).",
+            )
+        elif label == c.VOLUME_NAME and len(vols) <= 4:
             self.issue(
                 "partial-installation",
                 True,
@@ -354,7 +439,7 @@ class Inspector:
                 "recognizes. It will be left as it is.",
             )
         return {
-            "kind": "unknown",
+            "kind": "sekka" if developer else "unknown",
             "name": c.plain_text(label or p.name, limit=255, keep="start"),
             "state": "partial",
             "stub_group": None,
@@ -442,18 +527,69 @@ class Inspector:
                 "root": root,
                 "installation_id": next(iter(ids)) if len(ids) == 1 else None,
             }
+        # No installer's records: Sekka's developer image, by its ESP's
+        # serial, or Sekka's boot record on an ESP nothing else identifies.
+        files = self.boot_files(esp_mount)
+        developer = esp_part is not None and has_developer_serial(esp_part)
+        if developer or (files and files[BOOT_BIN_RECORD]):
+            parts = [x.name for x in (p, esp_part, root_part) if x is not None]
+            removal = (
+                f"To install Sekka here, copy off what you want to keep, then remove it in macOS: delete "
+                f"{listed(parts)} with diskutil and grow macOS's container into the space ({REMOVAL_DOC})."
+            )
+            if not developer:
+                # Sekka's, but the developer image's or the installer's whose
+                # handoff is gone? Neither is guessed.
+                state = "unknown"
+                self.issue(
+                    "existing-sekka",
+                    True,
+                    f"Sekka's boot record ({BOOT_BIN_RECORD}) is on {esp_part.name}, the EFI partition of {name}, "
+                    "with neither the installer's records nor the developer image's serial, so the installer "
+                    f"can't tell which Sekka installation it is. It won't install beside it or change it. {removal}",
+                )
+            else:
+                if files is None:
+                    state = "unknown"
+                elif root_part is None or not any(files.values()):
+                    state = "partial"
+                else:
+                    state = self.asahi_state(o, bp_known, enrolled)
+                serial = f"its EFI partition {esp_part.name} has the developer image's serial, {DEVELOPER_ESP_NAME}"
+                if state == "partial":
+                    if root_part is None:
+                        missing = "no Linux partition follows it"
+                    elif not any(files.values()):
+                        missing = f"{esp_part.name} holds none of its boot files"
+                    else:
+                        missing = "its startup volume was never set up to start it"
+                    self.issue(
+                        "partial-installation",
+                        True,
+                        f"An incomplete developer installation of Sekka is on this Mac ({name}): {serial}, but "
+                        f"{missing}. The installer won't repair it or install beside it. {removal}",
+                    )
+                else:
+                    self.issue(
+                        "existing-sekka",
+                        True,
+                        f"A developer installation of Sekka, as install-sekka.sh makes, is on this Mac ({name}): "
+                        f"{serial}. The installer won't install beside it or change it. {removal}",
+                    )
+            return {
+                "kind": "sekka",
+                "name": name,
+                "state": state,
+                "stub_group": stub_group,
+                "esp": esp,
+                "root": root,
+                "installation_id": None,
+            }
         asahi_markers = bool(o.m1n1_ver) or os.path.isdir(os.path.join(o.system or "", ASAHI_STEP2_APP))
         if not asahi_markers and esp_mount:
             asahi_markers = os.path.isdir(os.path.join(esp_mount, "asahi"))
         if asahi_markers:
-            if not bp_known:
-                state = "unknown"
-            elif enrolled:
-                state = "complete"
-            elif os.path.isdir(os.path.join(o.system or "", ASAHI_STEP2_APP)):
-                state = "waiting-for-recovery"
-            else:
-                state = "partial"
+            state = self.asahi_state(o, bp_known, enrolled)
             kind = "other-linux"
         else:
             kind, state = "unknown", "unknown"
@@ -475,21 +611,43 @@ class Inspector:
 
     def orphan(self, p):
         """An EFI or Linux partition that no startup volume claims."""
-        handoff = None
+        handoff = files = None
+        developer = False
         if p.type == "EFI":
-            raw = self.read_mounted(self.esp_mount(p), c.HANDOFF_PATH)
+            mountpoint = self.esp_mount(p)
+            raw = self.read_mounted(mountpoint, c.HANDOFF_PATH)
             if raw is not None:
                 try:
                     handoff = c.parse_handoff(raw)
                 except (c.Invalid, canonical.CanonicalError, KeyError, TypeError):
                     handoff = None
+            files = self.boot_files(mountpoint)
+            developer = has_developer_serial(p)
         is_efi = p.type == "EFI"
+        sekka = bool(handoff) or developer or bool(files and files[BOOT_BIN_RECORD])
         if handoff:
             self.issue(
                 "partial-installation",
                 True,
                 f"{p.name} holds Sekka's boot files but no startup volume goes with it: an "
                 "installation was interrupted or partly removed. Nothing will be changed.",
+            )
+        elif developer:
+            self.issue(
+                "partial-installation",
+                True,
+                f"The EFI partition {p.name} has the developer image's serial, {DEVELOPER_ESP_NAME}, but no "
+                "startup volume goes with it: a developer installation of Sekka was interrupted or partly "
+                f"removed. Nothing will be changed. To install Sekka here, delete it with diskutil first "
+                f"({REMOVAL_DOC}).",
+            )
+        elif sekka:
+            self.issue(
+                "partial-installation",
+                True,
+                f"{p.name} holds Sekka's boot record ({BOOT_BIN_RECORD}) but no startup volume goes with it, "
+                "and neither the installer's records nor the developer image's serial say which installation "
+                "it was. Nothing will be changed.",
             )
         else:
             self.issue(
@@ -499,7 +657,7 @@ class Inspector:
                 "left as it is.",
             )
         return {
-            "kind": "sekka" if handoff else "unknown",
+            "kind": "sekka" if sekka else "unknown",
             "name": c.plain_text((p.info or {}).get("VolumeName") or p.name, limit=255, keep="start"),
             "state": "partial",
             "stub_group": None,
