@@ -184,10 +184,11 @@ recorded as it's done:
    lowest from 1000 that no account has and `/var/lib/nixos/uid-map`
    hasn't given out), the groups present.
 2. **Stage** in `/var/lib/sekka-setup` (0700 root): `credential` (the hash,
-   0600, created exclusively), then `staged.json` (the choices, uid, shell
-   and groups, and the host name, time zone, locale, login screen keyboard
-   and setup.nix the system had then: the intent), then `setup.nix` as it
-   will be written.
+   0600, created exclusively), then `staged.json` (`sekka.setup.staged/2`:
+   the choices, uid, shell and groups, and the host name, time zone,
+   locale, login screen keyboard, setup.nix and configuration.nix's default
+   desktop the system had then: the intent), then `setup.nix` as it will
+   be written.
 3. **Account.** Made if absent; missing groups added and home made if
    missing; only then, the account whole, given the staged hash while its
    shadow entry is unset or locked. The credential is deleted once the
@@ -245,6 +246,16 @@ users, from 30001, have none; the login screen lists people the same way).
 An installation set up any
 other way, like the original developer image, is never put back into setup,
 and the helper refuses to stage there.
+
+The first helper's `staged.json` (`sekka.setup.staged/1`, on a test
+installation of an earlier image whose setup was interrupted and which was
+then updated) recorded no shell, earlier settings or parts, and named the
+partitions. This helper finishes it as that helper would have: the
+partitions are ignored (identity.nix names them), the shell is the
+configuration's, which that helper made the account with, and every part
+not yet the choice is done from the settings as they are. A kind it
+doesn't know is reported, never guessed at, and the helper's tidying as
+it starts leaves it and its credential in place.
 
 ## For the image (phase 1)
 
@@ -323,7 +334,9 @@ nix build .#legacyPackages.aarch64-linux.first-boot.vm-test -L
 - **Helper** (33): the protocol's bounds and strictness; Genkan's verdicts
   field by field and the whole parse; handoff hints kept and dropped;
   setup.nix (quoting, no secret, nothing about the disk or the desktop,
-  the golden example); the default desktop changed in configuration.nix by
+  the golden example); the first helper's staged setup finished, an
+  unknown kind refused and kept; the default desktop changed in
+  configuration.nix by
   Yukimi's edit (the golden example, only that string changed, a later
   edit by Yukimi, one added where none is named, one named by hand left
   alone, no configuration.nix); the transaction stopped at each of its 22 durable points (each

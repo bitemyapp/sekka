@@ -55,7 +55,10 @@ use crate::protocol::{Done, Failure, State, Step};
 use crate::render;
 use crate::system::{Account, NewAccount, System, UID_MAX, UID_MIN, unset, write_new};
 
-pub const STAGED_SCHEMA: &str = "sekka.setup.staged/1";
+/// `/2` records the parts done and the settings they replace; `/1`, an
+/// earlier helper's, is finished as it would have (`StagedV1`).
+pub const STAGED_SCHEMA: &str = "sekka.setup.staged/2";
+const STAGED_SCHEMA_1: &str = "sekka.setup.staged/1";
 pub const MARKER_SCHEMA: &str = "sekka.setup.complete/1";
 
 /// The choices staged, which setup finishes from, the settings they
@@ -86,6 +89,53 @@ pub struct Staged {
     pub applied: BTreeSet<Part>,
 }
 
+/// What the first helper staged (`sekka.setup.staged/1`), on test
+/// installations of earlier images, which an update may bring this helper
+/// to: no shell, no earlier settings and no parts recorded, and the
+/// partitions, which setup.nix no longer names (identity.nix does).
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct StagedV1 {
+    #[serde(rename = "schema")]
+    _schema: String,
+    username: String,
+    full_name: String,
+    uid: u32,
+    hostname: String,
+    locale: String,
+    keyboard: String,
+    time_zone: String,
+    desktop: String,
+    groups: Vec<String>,
+    groups_declared: Vec<String>,
+    #[serde(rename = "partitions")]
+    _partitions: Option<(String, String)>,
+}
+
+impl StagedV1 {
+    /// Finished as the helper that staged it would have: every part not yet
+    /// the choice is done, from the settings as they are now, with the shell
+    /// that helper made the account with (the configuration's).
+    fn upgrade<S: System>(self, config: &Config, sys: &S) -> Result<Staged> {
+        Ok(Staged {
+            schema: STAGED_SCHEMA.into(),
+            username: self.username,
+            full_name: self.full_name,
+            uid: self.uid,
+            shell: config.shell.clone(),
+            hostname: self.hostname,
+            locale: self.locale,
+            keyboard: self.keyboard,
+            time_zone: self.time_zone,
+            desktop: self.desktop,
+            groups: self.groups,
+            groups_declared: self.groups_declared,
+            before: Before::now(config, sys)?,
+            applied: BTreeSet::new(),
+        })
+    }
+}
+
 /// The settings setup replaces, as they were when it was staged: a part
 /// changes one only from this, so that a value set since (by the person,
 /// logged in while setup waited to finish) stays.
@@ -101,6 +151,20 @@ pub struct Before {
     /// The default desktop `/etc/nixos/configuration.nix` named, if it named
     /// one as a plain string.
     pub desktop: Option<String>,
+}
+
+impl Before {
+    /// The settings as the system has them now.
+    fn now<S: System>(config: &Config, sys: &S) -> Result<Before> {
+        Ok(Before {
+            hostname: sys.hostname()?,
+            time_zone: sys.time_zone()?,
+            locale: sys.locale()?,
+            greeter_keyboard: sys.greeter_keyboard()?,
+            setup_nix: read_text(&config.setup_nix())?,
+            desktop: read_text(&config.configuration_nix())?.as_deref().and_then(configured_desktop),
+        })
+    }
 }
 
 /// The parts of finishing setup that are each done once, and recorded.
@@ -261,15 +325,21 @@ fn read_text(path: &Path) -> Result<Option<String>> {
     }
 }
 
-fn read_staged(config: &Config) -> Result<Option<Staged>> {
-    match std::fs::read(config.staged()) {
-        Ok(bytes) => {
-            let s: Staged = serde_json::from_slice(&bytes).context("setup's staged choices are unreadable")?;
-            ensure!(s.schema == STAGED_SCHEMA, "setup's staged choices are of an unknown kind ({})", s.schema);
-            Ok(Some(s))
+fn read_staged<S: System>(config: &Config, sys: &S) -> Result<Option<Staged>> {
+    let bytes = match std::fs::read(config.staged()) {
+        Ok(bytes) => bytes,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(e.into()),
+    };
+    let unreadable = "setup's staged choices are unreadable";
+    let value: serde_json::Value = serde_json::from_slice(&bytes).context(unreadable)?;
+    match value.get("schema").and_then(|s| s.as_str()) {
+        Some(STAGED_SCHEMA) => Ok(Some(serde_json::from_value(value).context(unreadable)?)),
+        Some(STAGED_SCHEMA_1) => {
+            let v1: StagedV1 = serde_json::from_value(value).context(unreadable)?;
+            Ok(Some(v1.upgrade(config, sys)?))
         }
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(e) => Err(e.into()),
+        other => anyhow::bail!("setup's staged choices are of an unknown kind ({})", other.unwrap_or("none")),
     }
 }
 
@@ -304,7 +374,7 @@ pub fn state<S: System>(config: &Config, sys: &S) -> Result<(State, Option<Stage
     if read_marker(config)?.is_some() {
         return Ok((State::Complete, None));
     }
-    if let Some(s) = read_staged(config)? {
+    if let Some(s) = read_staged(config, sys)? {
         return Ok((State::Interrupted, Some(s)));
     }
     if people(sys)?.is_empty() { Ok((State::Needed, None)) } else { Ok((State::NotNeeded, None)) }
@@ -321,10 +391,11 @@ pub fn can_log_in<S: System>(sys: &S, s: &Staged) -> Result<bool> {
 }
 
 /// Remove what an unfinished stage left without an intent, and what a
-/// finished one left behind.
+/// finished one left behind. An intent is kept even if this helper can't
+/// read it.
 fn tidy(config: &Config) -> Result<()> {
     let done = read_marker(config)?.is_some();
-    if done || read_staged(config)?.is_none() {
+    if done || !config.staged().exists() {
         remove(&config.credential())?;
         remove(&config.staged_nix())?;
         if done {
@@ -444,7 +515,7 @@ impl<S: System> Run<'_, S> {
             let full_name = self.sys.account(&m.username).ok().flatten().map(|a| a.gecos).unwrap_or_default();
             return Ok(Done { username: m.username, full_name, uid: m.uid, desktop: m.desktop });
         }
-        match read_staged(self.config) {
+        match read_staged(self.config, self.sys) {
             Ok(Some(s)) => self.finish(s),
             Ok(None) => Err(Failure::choices("There's no setup to finish.")),
             Err(e) => Err(failed(self.sys, None, "read what was staged", e)),
@@ -470,14 +541,7 @@ impl<S: System> Run<'_, S> {
             desktop: plan.desktop.id().into(),
             groups: c.groups.clone(),
             groups_declared: c.declared_groups.clone(),
-            before: Before {
-                hostname: self.sys.hostname()?,
-                time_zone: self.sys.time_zone()?,
-                locale: self.sys.locale()?,
-                greeter_keyboard: self.sys.greeter_keyboard()?,
-                setup_nix: read_text(&c.setup_nix())?,
-                desktop: read_text(&c.configuration_nix())?.as_deref().and_then(configured_desktop),
-            },
+            before: Before::now(c, self.sys)?,
             applied: BTreeSet::new(),
         };
         let hash = hash(&plan.password)?;
@@ -978,7 +1042,7 @@ pub(crate) mod tests {
         }
 
         fn staged(&self) -> Staged {
-            read_staged(&self.config).unwrap().expect("staged choices")
+            read_staged(&self.config, &self.sys).unwrap().expect("staged choices")
         }
 
         /// Everything that isn't a secret or a time, for comparing runs.
@@ -1363,6 +1427,70 @@ pub(crate) mod tests {
         w.begin(None).unwrap();
         assert!(!w.config.configuration_nix().exists());
         assert_eq!(w.state(), State::Complete);
+    }
+
+    /// An earlier helper's staged choices (`sekka.setup.staged/1`), left by
+    /// a setup interrupted after it made the account and set its password,
+    /// on an installation since updated to this helper: finished as that
+    /// helper would have, setup.nix naming no partitions.
+    #[test]
+    fn an_earlier_helpers_staged_setup_is_finished() {
+        let mut w = world();
+        std::fs::create_dir_all(&w.config.state_dir).unwrap();
+        let v1 = serde_json::json!({
+            "schema": "sekka.setup.staged/1",
+            "username": "ada",
+            "full_name": "Ada Lovelace",
+            "uid": 1000,
+            "hostname": "analytical",
+            "locale": "de_DE.UTF-8",
+            "keyboard": "de",
+            "time_zone": "Europe/Berlin",
+            "desktop": "tatami",
+            "groups": ["networkmanager", "wheel", "render"],
+            "groups_declared": ["networkmanager", "wheel"],
+            "partitions": ["63d89be1-72f7-4aff-9679-09cafa7e0c2d", "910de5ca-7390-4716-9a54-8028916e4d78"],
+        });
+        std::fs::write(w.config.staged(), serde_json::to_vec_pretty(&v1).unwrap()).unwrap();
+        w.sys.create_account(&NewAccount {
+            name: "ada".into(),
+            uid: 1000,
+            full_name: "Ada Lovelace".into(),
+            primary_group: "users".into(),
+            groups: vec!["networkmanager".into(), "wheel".into(), "render".into()],
+            home: w.config.home_base.join("ada"),
+            shell: w.config.shell.clone(),
+        })
+        .unwrap();
+        let theirs = hash(PASSWORD).unwrap().to_string();
+        w.sys.shadow.insert("ada".into(), theirs.clone());
+        w.sys.hostname = "analytical".into();
+        // Settling as the helper starts keeps it, and the login screen
+        // offers to finish it.
+        settle(&w.config).unwrap();
+        assert_eq!(w.state(), State::Interrupted);
+        let staged = w.staged();
+        assert_eq!((staged.schema.as_str(), staged.shell.as_str()), (STAGED_SCHEMA, w.config.shell.as_str()));
+        w.resume(None).unwrap();
+        assert_eq!(w.state(), State::Complete);
+        assert_eq!(w.sys.shadow["ada"], theirs);
+        assert_eq!((w.sys.hostname.as_str(), w.sys.time_zone.as_str(), w.sys.locale.as_str()), ("analytical", "Europe/Berlin", "de_DE.UTF-8"));
+        assert_eq!(w.configuration(), CONFIGURATION_AFTER);
+        let setup = std::fs::read_to_string(w.config.setup_nix()).unwrap();
+        assert!(!setup.contains("63d89be1") && !setup.contains("fileSystems"), "{setup}");
+        assert_eq!(w.files(), ["complete", "lock"]);
+        // A kind of staged file this helper doesn't know: it says so, and
+        // settling leaves it and its credential alone.
+        let mut w = world();
+        std::fs::create_dir_all(&w.config.state_dir).unwrap();
+        std::fs::write(w.config.staged(), r#"{"schema":"sekka.setup.staged/9"}"#).unwrap();
+        std::fs::write(w.config.credential(), "$6$x\n").unwrap();
+        settle(&w.config).unwrap();
+        assert!(w.config.credential().exists());
+        let e = state(&w.config, &w.sys).unwrap_err();
+        assert!(format!("{e:#}").contains("unknown kind (sekka.setup.staged/9)"), "{e:#}");
+        let f = w.resume(None).unwrap_err();
+        assert!(f.message.contains("unknown kind"), "{}", f.message);
     }
 
     #[test]
