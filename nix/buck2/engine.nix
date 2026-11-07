@@ -27,6 +27,7 @@ platform.buildRustPackage {
     ./patches/content-store-unlocked-views.patch
     ./patches/content-store-advisory-writes.patch
     ./patches/bytestream-empty-source.patch
+    ./patches/startup-identity-config-layer.patch
   ];
   # Cargo loads Git patch manifests even when the lock records them as unused.
   # Remove this dead patch in both source and vendoring; no resolved dep changes.
