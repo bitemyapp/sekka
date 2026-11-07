@@ -41,6 +41,7 @@ pub mod render;
 pub mod requests;
 pub mod scales;
 pub mod slides;
+pub mod tiling;
 pub mod wm;
 
 use std::collections::{HashMap, HashSet};

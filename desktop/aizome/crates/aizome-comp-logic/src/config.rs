@@ -14,6 +14,12 @@ pub fn settings_changed(st: &mut State, old: &Settings) {
     if old.appearance != s.appearance {
         st.az.labels.clear();
     }
+    if old.windows.layout != s.windows.layout {
+        match crate::tiling::on(st) {
+            true => crate::tiling::retile(st),
+            false => crate::tiling::untile(st),
+        }
+    }
     let l = st.lg.m();
     if old.keys != s.keys {
         l.bindings = crate::bindings::Bindings::new(&s.keys.bindings);

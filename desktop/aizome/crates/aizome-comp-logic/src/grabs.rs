@@ -15,6 +15,7 @@ use smithay::input::pointer::{
     RelativeMotionEvent,
 };
 use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel;
+use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::utils::{Logical, Point, Serial};
 
 use crate::ResizeAnchor;
@@ -141,6 +142,8 @@ pub struct MoveGrab {
     /// A background tab, not yet torn out (a click shows it instead).
     pending_tear: bool,
     moved: bool,
+    /// A tiled window's free place, which the drag mustn't lose.
+    free: Option<Rect>,
 }
 
 pub fn start_move(
@@ -156,6 +159,7 @@ pub fn start_move(
     let rect = w.rect;
     let grouped = w.group.is_some();
     let active = state.lg.m().wm.is_group_active(win);
+    let free = crate::tiling::holds(state, win).then(|| state.lg.r().wm.get(win).and_then(|w| w.restore)).flatten();
     // ⌥-drag tears the showing tab out of its group too.
     let alt = state.az.seat.get_keyboard().is_some_and(|k| k.modifier_state().alt);
     let grab = MoveGrab {
@@ -165,6 +169,7 @@ pub fn start_move(
         tab,
         pending_tear: tab && grouped && (!active || alt),
         moved: false,
+        free,
     };
     if tab {
         state.lg.m().interactive.drag = Some(TabDrag { win, target: None, at: 0, slot: None });
@@ -234,6 +239,12 @@ impl PointerGrab<State> for MoveGrab {
             } else if self.moved {
                 // Dropped on another display: it joins the Desk there.
                 crate::actions::adopt_screen(data, self.win);
+            }
+            // A tiled window fills again where it was dropped, keeping
+            // its free place.
+            crate::tiling::retile(data);
+            if let Some(free) = self.free.filter(|_| drop.is_none_or(|d| d.target.is_none())) {
+                crate::tiling::keep_free_place(data, self.win, free);
             }
         }
         data.az.cursor_override = None;
@@ -336,9 +347,10 @@ pub fn start_resize(
     _time: u32,
 ) {
     let Some(w) = state.lg.m().wm.get(win) else { return };
-    if w.fullscreen() {
+    if w.fullscreen() || crate::tiling::holds(state, win) {
         return;
     }
+    let Some(w) = state.lg.m().wm.get(win) else { return };
     let start_rect = w.rect;
     for m in state.lg.m().wm.group_members(win) {
         if let Some(mm) = state.az.windows.get(&m) {
@@ -366,7 +378,12 @@ pub fn start_resize(
 /// The size limits a client set.
 pub fn size_limits(state: &State, win: WinId) -> ((i32, i32), (i32, i32)) {
     let Some(m) = state.az.windows.get(&win) else { return ((64, 32), (i32::MAX, i32::MAX)) };
-    let (min, max) = smithay::wayland::compositor::with_states(m.surface(), |s| {
+    surface_size_limits(m.surface())
+}
+
+/// The size limits a toplevel's surface has, mapped or not.
+pub fn surface_size_limits(surface: &WlSurface) -> ((i32, i32), (i32, i32)) {
+    let (min, max) = smithay::wayland::compositor::with_states(surface, |s| {
         let c = *s.cached_state.get::<smithay::wayland::shell::xdg::SurfaceCachedState>().current();
         (c.min_size, c.max_size)
     });
