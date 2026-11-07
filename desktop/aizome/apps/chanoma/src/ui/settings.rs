@@ -12,7 +12,7 @@ use aizome_kit::sidestep_ui::Canvas;
 use aizome_kit::theme::{Role, Theme};
 
 use super::look::*;
-use super::{Fit, Focus, H, HEAD_Y, MARGIN, TOP, Target, W};
+use super::{Fit, Focus, H, MARGIN, TOP, Target, W};
 
 /// What's at a row's right.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -201,11 +201,7 @@ impl Page {
         // The title where Home has its name.
         let head = Rect::new(0.0, 30.0, W, TOP - 10.0);
         if c.needs(head) {
-            let w = text_mid(c, theme, &self.title, MARGIN, HEAD_Y, font(HEADLINE - 4.0, BOLD), theme.text());
-            if !self.note.is_empty() {
-                let spec = font(SMALL + 2.0, REGULAR);
-                text_mid(c, theme, &self.note, MARGIN + w + 24.0, HEAD_Y + 3.0, spec, theme.text3());
-            }
+            super::head_title(c, theme, &self.title, &self.note);
         }
         // The sections, as Settei's side list: each with its icon on a
         // square of its colour, the current one lit.

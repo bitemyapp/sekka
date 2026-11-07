@@ -73,6 +73,31 @@ screens follow the lock screen. The clock follows the menu bar's 24- or
 12-hour setting, read at start. Chanoma's keyboard over a page is a
 floating panel along the foot of the screen, its keys square faces.
 
+**Nothing runs off the screen.** Whatever can outgrow the screen scrolls
+to keep the focus in sight:
+- Home's shelves, the focused tile with a neighbour showing; each shelf
+  that holds more than it shows starts with the way to all of it (*All
+  games*, *Everything*, *All of them*);
+- the grids, the settings' rows and the picker's lists;
+- the Games screen's tabs (`Grid::tab_rects`), the chosen system whole,
+  in the middle as near as the ends allow, the cut end fading with an
+  arrow in the margin (a tab can be clicked), and named beside the title
+  too ("PlayStation · 267");
+- menus longer than eight items (a film's many subtitle tracks), the
+  focus in the middle, arrows above and below.
+
+Text that can be long is cut with an ellipsis where it's drawn:
+- titles, and the notes after them, stop short of the header's right
+  side (`ui::head_title`);
+- toasts and the foot's banner keep within the margins, the banner short
+  of the hints;
+- a focused tile's name under it stops at the margin;
+- menu items stop short of their button.
+
+`ui::home`'s and `ui::menu`'s tests put every tab and every item of a long
+menu in focus and check it's on the screen; the flows go along every
+system's tab.
+
 ### Controllers
 
 Chanoma reads controllers' event devices itself (`crates/aizome-gamepad`,
@@ -486,9 +511,22 @@ settings written before kept games and videos folders apart, and are
 merged as they're read). *Settings › Folders* lists them, each with
 where it is ("On Extreme Pro", "In your home folder", said the same
 while its drive is out) and what it holds ("6509 games for 31 systems ·
-2 films"), how far a look through it has got ("Looking through it: 1204
-folders so far", from the files index's progress), or that its drive
-isn't plugged in, is being opened, or couldn't be opened. A folder opens
+2 films"), how far a look through it has got ("Looking through it: 12 of
+its 31 folders, 4,812 files", from the files index's progress), or that
+its drive isn't plugged in, is being opened, or couldn't be opened.
+
+**A look that takes a while shows on Home too**, quietly, in the header
+before the controllers and the clock: "Reading Extreme Pro", how far
+through its own folders it is ("12 of 31 folders", and a bar), and how
+many files so far, the number whose climbing says how fast it goes. It
+never guesses how long is left. How far is known because the index reads
+a folder depth first: each of its folders is read whole before the next,
+so the count of them done only grows (`library::Look`, from the index's
+`Report`, which counts files as well as folders). A folder without
+folders of its own shows the count alone. After the reading, "Recognising
+the games" until they show. A look the index answers at once (a folder
+read before and unchanged: its only word is that it's over) shows
+nothing, so starting Chanoma doesn't flash it. A folder opens
 a page to look again or remove it (which asks first, *Keep it* ready to
 press, as removing a website does; nothing on the disk is deleted).
 Games and Films and shows have *Your folders* and *Add a folder…* too.
@@ -841,7 +879,13 @@ cargo run --release -p aizome-chanoma --example library -- FOLDER… \
   Home stopping it after; a slow one starting under the question, which
   goes); a service that protects its shows saying it needs Google Chrome
   in a stand-in named `chromium` and opening in one named
-  `google-chrome-stable`, with PBS KIDS opening in Chromium; time running
+  `google-chrome-stable`, with PBS KIDS opening in Chromium; every
+  system's tab, one game for each of the systems Chanoma plays, *All
+  games* leading the shelf, RB along them all with the chosen tab whole
+  on the screen and named beside the title, LB round to the last, and a
+  tab clicked; a folder being read shown on Home (a look the index
+  answers at once not shown; 12 of 31 folders, 4,812 files and the bar;
+  then recognising the games; gone once they show); time running
   out mid-game, with the warning, the game kept, the closed
   screen, and a grown-up's grant; bedtime; a folder added with the
   controller alone (*Suggested* offering a drive's `roms` and home's
