@@ -224,6 +224,9 @@ pub struct Model {
     pub cancelling: bool,
     /// The installation the helper was asked to reconcile in this check.
     pub reconciling: Option<Reconciling>,
+    /// Why the helper didn't set the startup disk again, when it refused
+    /// before trying.
+    pub retry_refused: Option<String>,
 }
 
 impl Model {
@@ -264,6 +267,7 @@ impl Model {
             notice: None,
             cancelling: false,
             reconciling: None,
+            retry_refused: None,
         };
         (
             model,
@@ -787,12 +791,31 @@ impl Model {
                 }
             }
             Msg::RetryStartupDisk => {
+                // What came of the last try is said again when this one ends.
+                self.notice = None;
                 self.open_authorization(true);
                 Vec::new()
             }
             Msg::Retried(Ok(events)) => {
                 self.authorization = None;
-                self.events(events)
+                self.retry_refused = None;
+                let effects = self.events(events);
+                // Tried, and failed again: the failure on the page is this
+                // one's.
+                if self.state == Some(InstallState::StartupDiskFailed) {
+                    self.notice = Some(text::RETRY_FAILED.into());
+                }
+                effects
+            }
+            // Refused before trying (the installation isn't as it was left,
+            // say), so nothing was recorded: the page says why, and no
+            // longer that everything else is in place.
+            Msg::Retried(Err(refusal)) if refusal.code == HelperRefusalCode::State => {
+                self.log(format!("The helper didn't set the startup disk again: {}", refusal.message));
+                self.authorization = None;
+                self.retry_refused = Some(refusal.message.to_string());
+                self.notice = Some(text::RETRY_REFUSED.into());
+                Vec::new()
             }
             Msg::Retried(Err(refusal)) => self.refused(refusal),
             Msg::Reconciled(result) => {
@@ -859,6 +882,7 @@ impl Model {
         self.records.clear();
         self.state = None;
         self.reconciling = None;
+        self.retry_refused = None;
         vec![Effect::Inspect, Effect::LoadCatalog, Effect::HelperStatus]
     }
 
@@ -1106,9 +1130,23 @@ impl Model {
     }
 
     pub fn failure(&self) -> Option<&sekka_mac_contract::Failure> {
+        self.failed().map(|(_, f)| f)
+    }
+
+    /// The latest failure, with its place in the record: a retry that
+    /// fails again is a new one, though it may read the same.
+    pub fn failed(&self) -> Option<(u64, &sekka_mac_contract::Failure)> {
         self.records.iter().rev().find_map(|r| match &r.event {
-            sekka_mac_contract::Event::Failed { failure, .. } => Some(failure),
+            sekka_mac_contract::Event::Failed { failure, .. } => Some((r.sequence, failure)),
             _ => None,
+        })
+    }
+
+    /// The stopped page's headline and explanation.
+    pub fn stopped_words(&self) -> Option<(String, String)> {
+        Some(match (self.state.as_ref()?, &self.retry_refused) {
+            (InstallState::StartupDiskFailed, Some(why)) => text::retry_refused(why),
+            (state, _) => text::stopped(state),
         })
     }
 

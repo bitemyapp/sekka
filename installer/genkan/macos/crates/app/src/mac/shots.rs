@@ -96,6 +96,16 @@ fn states(scenario: Scenario) -> Vec<(&'static str, Vec<Msg>)> {
             Msg::Install,
         ]
     };
+    let authorize = || Msg::Authorize {
+        owner: "chris".into(),
+        password: crate::env::Secret::new(b"simulated".to_vec()),
+    };
+    // Installed until it stops.
+    let stop = || {
+        let mut m = install();
+        m.push(authorize());
+        m
+    };
     match scenario {
         Scenario::Normal => vec![
             ("checking", vec![]),
@@ -132,12 +142,12 @@ fn states(scenario: Scenario) -> Vec<(&'static str, Vec<Msg>)> {
         })],
         Scenario::DownloadFails => vec![("download-failed", vec![Msg::StartDownload])],
         Scenario::NeedsApproval => vec![("approval", install())],
-        Scenario::ResizeFails | Scenario::InstallFails | Scenario::StartupDiskFails => vec![("stopped", {
-            let mut m = install();
-            m.push(Msg::Authorize {
-                owner: "chris".into(),
-                password: crate::env::Secret::new(b"simulated".to_vec()),
-            });
+        Scenario::ResizeFails | Scenario::InstallFails | Scenario::StartupDiskFails => vec![("stopped", stop())],
+        // What a retry of the startup disk came to.
+        Scenario::StartupDiskRefused | Scenario::StartupDiskFailsAgain => vec![("stopped", stop()), ("retried", {
+            let mut m = stop();
+            m.push(Msg::RetryStartupDisk);
+            m.push(authorize());
             m
         })],
         _ => vec![("settled", vec![])],
@@ -229,6 +239,7 @@ fn clone_msg(m: &Msg) -> Msg {
         Msg::SetBackup(b) => Msg::SetBackup(*b),
         Msg::SetAcknowledged(a, b) => Msg::SetAcknowledged(*a, *b),
         Msg::Install => Msg::Install,
+        Msg::RetryStartupDisk => Msg::RetryStartupDisk,
         Msg::Authorize { owner, password } => Msg::Authorize {
             owner: owner.clone(),
             password: password.clone(),

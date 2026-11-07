@@ -202,7 +202,7 @@ impl<'a> Page<'a> {
 /// with them, and they move when what is left to download is measured.
 pub fn key(m: &Model) -> String {
     format!(
-        "{:?}|{:?}|{}|{}|{}|{}|{}|{:?}|{}|{}|{}|{:?}|{:?}|{}|{:?}|{}|{:?}|{:?}",
+        "{:?}|{:?}|{}|{}|{}|{}|{}|{:?}|{}|{}|{}|{:?}|{:?}|{}|{:?}|{}|{:?}|{:?}|{:?}|{:?}",
         m.screen,
         m.notice,
         m.download_error.is_some(),
@@ -221,6 +221,9 @@ pub fn key(m: &Model) -> String {
         m.recovery_unconfirmed(),
         m.registration,
         m.helper_problem(),
+        // A retry that fails again, or is refused, changes what the page says.
+        m.failed().map(|(sequence, _)| sequence),
+        m.retry_refused,
     )
 }
 
@@ -790,11 +793,10 @@ fn recovery(m: &Model, p: &mut Page) {
 }
 
 fn stopped(m: &Model, p: &mut Page) {
-    let Some(state) = &m.state else {
+    let Some((headline, explanation)) = m.stopped_words() else {
         p.title("The installation stopped");
         return;
     };
-    let (headline, explanation) = text::stopped(state);
     p.title(&headline);
     p.body(&explanation);
     if let Some(f) = m.failure() {
@@ -818,16 +820,19 @@ fn stopped(m: &Model, p: &mut Page) {
                 p.body(text::CANCEL_STOPPED);
             }
             NextAction::Reinspect => {
-                p.body("Check this Mac again and review a new plan. If the same step fails again, copy the diagnostics and ask for help.");
+                p.body(text::REINSPECT);
             }
             NextAction::InspectActualState => {
-                p.body("Don't start another installation. Copy the diagnostics and ask for help: the disk needs to be looked at as it is now, and Sekka Installer won't guess.");
+                p.body(text::INSPECT_ACTUAL_STATE);
+            }
+            NextAction::RetryStartupDisk if m.retry_refused.is_some() => {
+                p.body(text::RETRY_AFTER_REFUSAL);
             }
             NextAction::RetryStartupDisk => {
-                p.body("Set the startup disk again. Only that step is repeated, after checking that everything else is still in place.");
+                p.body(text::RETRY_STARTUP_DISK);
             }
             NextAction::ReadPolicy => {
-                p.body("Start up in Recovery again: hold the power button, choose Sekka, and Finish Installing Sekka picks up where it stopped.");
+                p.body(text::READ_POLICY);
             }
             _ => {}
         }

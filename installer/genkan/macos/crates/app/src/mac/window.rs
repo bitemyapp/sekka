@@ -47,6 +47,11 @@ pub struct Ui {
     /// Whether the installing page was last drawn, to tell VoiceOver what
     /// came of the installation when another page takes its place.
     installing: bool,
+    /// Whether a retry of the startup disk was waiting for the helper when
+    /// last drawn, to tell VoiceOver what came of it.
+    retrying: bool,
+    /// The notice VoiceOver was last told.
+    said: Option<String>,
     release: Retained<NSTextField>,
     document: Retained<FlippedView>,
     bar: Retained<NSStackView>,
@@ -224,6 +229,8 @@ impl Ui {
             steps,
             stages: Vec::new(),
             installing: false,
+            retrying: false,
+            said: None,
             release,
             document,
             bar,
@@ -490,12 +497,21 @@ impl Ui {
         }
     }
 
-    /// Tell VoiceOver when a stage starts or fails, and what came of the
-    /// installation when it stops: the page changes in place, away from the
-    /// person's focus.
+    /// Tell VoiceOver when a stage starts or fails, what came of the
+    /// installation when it stops or a retry of the startup disk ends, and
+    /// any notice: the page changes in place, away from the person's focus.
     fn announce_stages(&mut self) {
         let installing = matches!(self.model.screen, Screen::Installing);
-        let ended = std::mem::replace(&mut self.installing, installing) && !installing;
+        let retrying = self.model.authorization.as_ref().is_some_and(|a| a.retry && a.busy);
+        let stopped = std::mem::replace(&mut self.installing, installing) && !installing;
+        let retried = std::mem::replace(&mut self.retrying, retrying) && !retrying;
+        let ended = stopped || retried;
+        if self.model.notice != self.said {
+            self.said = self.model.notice.clone();
+            if let Some(notice) = &self.said {
+                ui::announce(self.mtm, notice);
+            }
+        }
         if self.model.installation.is_none() {
             self.stages.clear();
             return;

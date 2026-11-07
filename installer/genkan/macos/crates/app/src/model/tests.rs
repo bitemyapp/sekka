@@ -428,6 +428,49 @@ fn only_the_startup_disk_is_retried() {
 }
 
 #[test]
+fn a_refused_retry_says_why_instead_of_that_everything_is_in_place() {
+    let mut j = Journey::start(Scenario::StartupDiskRefused);
+    j.reach_review().confirm().send(Msg::Install).password("right");
+    assert_eq!(j.model.state, Some(InstallState::StartupDiskFailed));
+    let (_, before) = j.model.stopped_words().unwrap();
+    assert!(before.contains("Everything else is in place"), "{before}");
+    let recorded = j.model.records.len();
+    j.send(Msg::RetryStartupDisk).password("right");
+    assert!(j.model.authorization.is_none());
+    assert_eq!(j.model.screen, Screen::Stopped);
+    assert_eq!(j.model.records.len(), recorded, "nothing was tried, so nothing was recorded");
+    assert_eq!(j.model.notice.as_deref(), Some(crate::text::RETRY_REFUSED));
+    // The page gives the helper's reason, and no longer says the rest was
+    // checked and is in place.
+    let (_, after) = j.model.stopped_words().unwrap();
+    assert!(after.contains("isn't as it was left"), "{after}");
+    assert!(!after.contains("Everything else is in place"), "{after}");
+    assert!(j.model.report(&[]).contains("isn't as it was left"));
+}
+
+#[test]
+fn a_retry_that_fails_again_shows_this_failure() {
+    let mut j = Journey::start(Scenario::StartupDiskFailsAgain);
+    j.reach_review().confirm().send(Msg::Install).password("right");
+    let (first, _) = j.model.failed().map(|(at, f)| (at, f.clone())).unwrap();
+    j.send(Msg::RetryStartupDisk).password("right");
+    assert!(j.model.authorization.is_none());
+    assert_eq!(j.model.screen, Screen::Stopped);
+    assert_eq!(j.model.state, Some(InstallState::StartupDiskFailed));
+    // Said, and the page shows the failure it came to this time.
+    assert_eq!(j.model.notice.as_deref(), Some(crate::text::RETRY_FAILED));
+    let (again, failure) = j.model.failed().unwrap();
+    assert!(again > first);
+    assert!(failure.message.as_str().contains("reading it back"), "{}", failure.message);
+    // Trying once more works, and says nothing of the last time.
+    j.send(Msg::RetryStartupDisk);
+    assert!(j.model.notice.is_none());
+    j.password("right");
+    assert_eq!(j.model.screen, Screen::Recovery);
+    assert!(j.model.notice.is_none());
+}
+
+#[test]
 fn reopening_reconnects_to_an_installation() {
     let j = Journey::start(Scenario::WaitingForRecovery);
     assert_eq!(j.model.screen, Screen::Recovery);

@@ -411,8 +411,30 @@ pub fn stopped(state: &InstallState) -> (String, String) {
     }
 }
 
-/// What cancelling a stopped installation that changed nothing does.
+/// The stopped page, for a startup-disk retry the helper refused before
+/// trying, in its own words.
+pub fn retry_refused(why: &str) -> (String, String) {
+    (
+        "The startup disk wasn't set again".into(),
+        format!(
+            "Before setting the startup disk again, Sekka Installer's helper checks that everything else is as it was left. It stopped: {why}"
+        ),
+    )
+}
+/// The notice when a retry is refused.
+pub const RETRY_REFUSED: &str = "The startup disk wasn't set again. Nothing on your Mac's disk changed.";
+/// The notice when a retry fails again.
+pub const RETRY_FAILED: &str = "Setting the startup disk didn't work again. What happened this time is below.";
+
+/// What the stopped page offers, by what the record permits.
 pub const CANCEL_STOPPED: &str = "Cancel this installation, then choose a size again. Nothing on your disk changed, so there's nothing to undo.";
+pub const REINSPECT: &str = "Check this Mac again and review a new plan. If the same step fails again, copy the diagnostics and ask for help.";
+pub const INSPECT_ACTUAL_STATE: &str = "Don't start another installation. Copy the diagnostics and ask for help: the disk needs to be looked at as it is now, and Sekka Installer won't guess.";
+pub const RETRY_STARTUP_DISK: &str = "Set the startup disk again. Only that step is repeated, after checking that everything else is still in place.";
+/// After the helper refused a retry: the cause may be one the owner can
+/// change (starting up from the internal disk, say) or one that lasts.
+pub const RETRY_AFTER_REFUSAL: &str = "If that's something you can change, change it, then set the startup disk again. If it isn't, don't start another installation: copy the diagnostics and ask for help.";
+pub const READ_POLICY: &str = "Start up in Recovery again: hold the power button, choose Sekka, and Finish Installing Sekka picks up where it stopped.";
 
 /// Plain-English names for the bars on the disk picture.
 pub const MACOS: &str = "macOS";
