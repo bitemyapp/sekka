@@ -6,7 +6,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use crate::finish::Phase;
+use crate::finish::{Environment, Phase};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Screen {
@@ -17,6 +17,19 @@ pub enum Screen {
     Ready { error: Option<String> },
     Working(Phase),
     Done,
+}
+
+/// What the window shows once the installation and where the app runs
+/// have been checked. `done` is what the Mac says (`Finisher::done`), so a
+/// receipt that says every step is done never shows Sekka as ready.
+pub fn checked(result: Result<Environment, String>, done: bool) -> Screen {
+    match result {
+        Ok(_) if done => Screen::Done,
+        Ok(Environment::Ready) => Screen::Ready { error: None },
+        Ok(Environment::WrongRecovery) => Screen::WrongRecovery,
+        Ok(Environment::NotOneTrue) => Screen::NotOneTrue,
+        Err(e) => Screen::Broken(e),
+    }
 }
 
 /// Whether macOS is changing how the Mac starts up: `bputil`, `kmutil` or
@@ -135,6 +148,15 @@ mod tests {
     fn apply(view: &mut Vec<u16>, edit: &Edit) {
         view.drain(..edit.trim);
         view.extend(edit.append.encode_utf16());
+    }
+
+    #[test]
+    fn sekka_is_shown_as_ready_only_when_the_mac_says_so() {
+        assert_eq!(checked(Ok(Environment::Ready), false), Screen::Ready { error: None });
+        assert_eq!(checked(Ok(Environment::Ready), true), Screen::Done);
+        assert_eq!(checked(Ok(Environment::NotOneTrue), false), Screen::NotOneTrue);
+        assert_eq!(checked(Ok(Environment::WrongRecovery), false), Screen::WrongRecovery);
+        assert_eq!(checked(Err("gone".into()), true), Screen::Broken("gone".into()));
     }
 
     #[test]

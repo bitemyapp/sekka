@@ -6,9 +6,9 @@
 //! Each step is written as started before it runs and as completed (or
 //! failed) after, replaced atomically and synchronized, once the volume is
 //! writable. It is diagnostics, never authority: anyone who can write the
-//! stub can write it, so what the app repeats is decided by the Mac's
-//! actual policy, and a receipt that can't be read or saved never stops a
-//! step.
+//! stub can write it, so what the app repeats, and whether it says Sekka is
+//! ready, is decided by what the Mac says, and a receipt that can't be read
+//! or saved never stops a step.
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};

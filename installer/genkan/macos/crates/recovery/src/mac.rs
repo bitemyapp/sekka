@@ -160,13 +160,7 @@ impl Window {
             let mut s = self.state.borrow_mut();
             match event {
                 Event::Checked(result, finisher) => {
-                    s.screen = match result {
-                        Ok(_) if finisher.done() => Screen::Done,
-                        Ok(Environment::Ready) => Screen::Ready { error: None },
-                        Ok(Environment::WrongRecovery) => Screen::WrongRecovery,
-                        Ok(Environment::NotOneTrue) => Screen::NotOneTrue,
-                        Err(e) => Screen::Broken(e),
-                    };
+                    s.screen = screen::checked(result, finisher.done());
                     s.finisher = Some(*finisher);
                 }
                 Event::Phase(p) => s.screen = Screen::Working(p),

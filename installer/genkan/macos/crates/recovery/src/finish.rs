@@ -20,9 +20,10 @@
 //! `kmutil` has run, and remounts it then; this app keeps a receipt from the
 //! first step, so it remounts first, as omacom/omarchy-mac-installer's
 //! Recovery does before it writes its own state. What the Mac says decides
-//! what is repeated; the receipt only records it.
+//! what is repeated, and whether anything is left to do; the receipt only
+//! records it.
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use sekka_mac_contract::{Handoff, Text, Timestamp, Uuid};
 
@@ -87,13 +88,17 @@ pub fn allows(policy: &str) -> bool {
         .any(|l| l.starts_with("security mode") && l.contains("permissive"))
 }
 
+/// Where the stub's SystemVersion is while it is shown.
+pub fn system_version(volume: &Path) -> PathBuf {
+    volume.join("System/Library/CoreServices/SystemVersion.plist")
+}
+
 /// Show the stub's SystemVersion again, so that starting it starts Sekka:
 /// the installation hid it (Asahi's `prepare_for_step2`) so that starting
 /// it opened Recovery, and this app. Read back afterwards.
 pub fn show_system_version(volume: &Path) -> Result<(), String> {
-    let services = volume.join("System/Library/CoreServices");
-    let shown = services.join("SystemVersion.plist");
-    let hidden = services.join("SystemVersion-disabled.plist");
+    let shown = system_version(volume);
+    let hidden = shown.with_file_name("SystemVersion-disabled.plist");
     if hidden.exists() {
         fs::rename(&hidden, &shown).map_err(|e| e.to_string())?;
     }
@@ -111,6 +116,17 @@ pub fn disable_autolaunch(volume: &Path) -> Result<(), String> {
         fs::rename(&media, volume.join("IAPhysicalMedia-disabled.plist")).map_err(|e| e.to_string())?;
     }
     Ok(())
+}
+
+/// Whether `bless --getBoot`'s answer names the volume `device`
+/// (`disk3s1`) or its sealed snapshot (`disk3s1s1`), and not a volume
+/// whose identifier only starts the same (`disk3s10`).
+pub fn names_volume(selected: &str, device: &str) -> bool {
+    let snapshot = |n: &str| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit());
+    match selected.trim_start_matches("/dev/").strip_prefix(device) {
+        Some(rest) if !device.is_empty() => rest.is_empty() || rest.strip_prefix('s').is_some_and(snapshot),
+        _ => false,
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -138,6 +154,8 @@ pub struct Finisher<S: System> {
     set_aside: Option<String>,
     /// The policy last read already allows Sekka's startup software.
     allowed: bool,
+    /// The Mac, as last read, allows and starts Sekka: nothing is left.
+    done: bool,
     /// A save of the receipt has failed during this attempt.
     unrecorded: bool,
 }
@@ -164,6 +182,7 @@ impl<S: System> Finisher<S> {
             receipt,
             set_aside,
             allowed: false,
+            done: false,
             unrecorded: false,
         }
     }
@@ -173,8 +192,21 @@ impl<S: System> Finisher<S> {
         (o.short_name.as_str(), o.full_name.as_str())
     }
 
+    /// Whether the Mac, as `check` or `finish` last read it, allows Sekka's
+    /// startup software and starts Sekka next, so that nothing is left to
+    /// do. The receipt has no say: anyone who can write the stub can write
+    /// it.
     pub fn done(&self) -> bool {
-        matches!(self.receipt.selection, Step::Completed { .. })
+        self.done
+    }
+
+    /// What the Mac starts from next (`bless --getBoot`), and whether it
+    /// is the stub's volume.
+    fn startup(&self) -> Result<(String, bool), String> {
+        let expected = self.system.device(&self.install.volume)?;
+        let selected = self.system.startup_device()?;
+        let stub = names_volume(&selected, &expected);
+        Ok((selected, stub))
     }
 
     /// Save the receipt. It is diagnostics, never authority, so one that
@@ -235,6 +267,13 @@ impl<S: System> Finisher<S> {
         // Whether bputil has already run, after a crash part way or with a
         // receipt that couldn't be saved: believe the Mac, not the receipt.
         self.allowed = allows(&policy);
+        // Whether anything is left, from the Mac alone: these steps show
+        // the stub's SystemVersion only once kmutil has run, and the Mac
+        // must start from the stub next. A read that fails leaves Install
+        // offered, which repeats only these steps.
+        self.done = self.allowed
+            && system_version(&self.install.volume).is_file()
+            && self.startup().is_ok_and(|(_, stub)| stub);
         Ok(environment(&policy))
     }
 
@@ -340,12 +379,12 @@ impl<S: System> Finisher<S> {
             log(&format!("Recovery will still open this app at startup: {m}\n"));
         }
         self.select(Program::Bless, &["--mount", &volume, "--setBoot", "--user", &user], &user, password, log)?;
-        let expected = self.system.device(&self.install.volume).map_err(FinishError::Failed)?;
-        let selected = self.system.startup_device().map_err(FinishError::Failed)?;
-        if !selected.trim_start_matches("/dev/").starts_with(&expected) {
+        let (selected, stub) = self.startup().map_err(FinishError::Failed)?;
+        if !stub {
             let m = format!("macOS reported success, but the Mac will start from {selected}, not Sekka's volume.");
             return Err(self.selection_failed(FinishError::Failed(m), log));
         }
+        self.done = true;
         self.receipt.selection = Step::Completed { at: Timestamp::now() };
         self.record(log);
         Ok(())
@@ -470,10 +509,6 @@ mod tests {
         (dir, install)
     }
 
-    fn system_version(volume: &Path) -> std::path::PathBuf {
-        volume.join("System/Library/CoreServices/SystemVersion.plist")
-    }
-
     #[test]
     fn the_steps_run_once_each_and_are_recorded() {
         let (dir, install) = setup();
@@ -500,6 +535,66 @@ mod tests {
         assert!(!dir.path().join(".IAPhysicalMedia").exists());
         assert!(dir.path().join("IAPhysicalMedia-disabled.plist").is_file());
         assert_eq!(log, "", "nothing went wrong");
+        // Opened again, it reads the same from the Mac, receipt or none.
+        fs::remove_dir_all(dir.path().join(RECOVERY_STATE_DIR)).unwrap();
+        let mut again = Finisher::open(&f, Install::load(dir.path()).unwrap());
+        again.check().unwrap();
+        assert!(again.done());
+    }
+
+    #[test]
+    fn a_receipt_never_says_sekka_is_ready() {
+        let (dir, install) = setup();
+        let f = fake(&install);
+        let store = Store::at(dir.path());
+        let mut r = store.load(install.config.installation).unwrap();
+        r.enrollment = Step::Completed { at: Timestamp::from_unix(1) };
+        r.selection = Step::Completed { at: Timestamp::from_unix(1) };
+        store.save(&r).unwrap();
+        let mut finisher = Finisher::open(&f, install);
+        assert_eq!(finisher.check().unwrap(), Environment::Ready);
+        assert!(!finisher.done(), "the policy is Full Security and the stub still opens Recovery");
+        finisher.finish("right", &mut |_| {}, &mut |_| {}).unwrap();
+        assert_eq!(*f.calls.borrow(), [Program::Bputil, Program::Kmutil, Program::Bless]);
+        assert!(finisher.done());
+    }
+
+    #[test]
+    fn only_a_mac_that_allows_and_starts_sekka_is_done() {
+        let permissive = PAIRED_1TR.replace("Full Security", "Permissive Security");
+        for (policy, shown, startup, done) in [
+            (permissive.as_str(), true, "/dev/disk3s1", true),
+            (permissive.as_str(), true, "/dev/disk3s1s1", true),
+            (PAIRED_1TR, true, "/dev/disk3s1", false),
+            (permissive.as_str(), false, "/dev/disk3s1", false),
+            (permissive.as_str(), true, "/dev/disk1s1", false),
+            (permissive.as_str(), true, "/dev/disk3s10", false),
+        ] {
+            let (dir, install) = setup();
+            let mut f = fake(&install);
+            *f.policy.borrow_mut() = policy.into();
+            f.startup = startup.into();
+            if shown {
+                show_system_version(dir.path()).unwrap();
+            }
+            let mut finisher = Finisher::open(&f, install);
+            finisher.check().unwrap();
+            assert_eq!(finisher.done(), done, "{policy:?}, shown {shown}, {startup}");
+            assert_eq!(f.remounts.get(), 0, "checking changes nothing");
+        }
+    }
+
+    #[test]
+    fn only_the_stubs_volume_or_its_snapshot_is_the_stub() {
+        assert!(names_volume("/dev/disk3s1", "disk3s1"));
+        assert!(names_volume("disk3s1", "disk3s1"));
+        assert!(names_volume("/dev/disk3s1s1", "disk3s1"));
+        assert!(!names_volume("/dev/disk3s10", "disk3s1"));
+        assert!(!names_volume("/dev/disk3s1sx", "disk3s1"));
+        assert!(!names_volume("/dev/disk3s1s", "disk3s1"));
+        assert!(!names_volume("/dev/disk1s1", "disk3s1"));
+        assert!(!names_volume("/dev/disk3s1", ""));
+        assert!(!names_volume("", ""));
     }
 
     #[test]

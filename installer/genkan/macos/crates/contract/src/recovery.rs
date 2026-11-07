@@ -29,8 +29,9 @@ schema_tag!(RecoveryReceiptSchema, "sekka.mac.recovery-receipt/1");
 /// failed after, as diagnostics. Nothing trusts it as evidence, since
 /// anyone who can write the stub can write it: the helper never reads it,
 /// and learns how the Recovery step went from its own inspection as root
-/// (`Request::Reconcile`); the Recovery app itself reads the Mac's policy
-/// before deciding what to repeat.
+/// (`Request::Reconcile`); the Recovery app itself reads the Mac (its
+/// policy, the stub's SystemVersion and the startup disk) to decide what to
+/// repeat and whether Sekka is ready.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RecoveryReceipt {
@@ -67,7 +68,7 @@ impl RecoveryReceipt {
         crate::canonical::from_slice(bytes, 16 * 1024, RecoveryReceiptSchema::VALUE)
     }
 
-    /// Both steps finished: the Mac allows and starts Sekka.
+    /// Both steps recorded as finished.
     pub fn finished(&self) -> bool {
         matches!(self.enrollment, RecoveryStep::Completed { .. })
             && matches!(self.selection, RecoveryStep::Completed { .. })
