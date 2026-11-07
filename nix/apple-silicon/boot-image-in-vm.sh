@@ -256,7 +256,7 @@ esp_bytes=$(field image.esp_bytes)
 root_bytes=$(field image.root_image.size)
 # The product image fixes no ESP serial: newfs_msdos picks one per
 # installation, as this does.
-volume_id=$(field esp.volume_id)
+volume_id=$(field esp_layout.volume_id)
 [ "$volume_id" != None ] || volume_id=$(random_serial)
 entry=$(field esp.boot_entry)
 extra=$((4 * 1024 * mib))

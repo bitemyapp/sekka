@@ -6,7 +6,10 @@
 #   output;
 # - boot.bin's verified replacement (boot-bin/test_boot_bin.py);
 # - the identity record and boot-entry filling (identity/test_install_identity.py);
-# - the initrd's identity check and udev helper (identity/test-check.sh).
+# - the initrd's identity check and udev helper (identity/test-check.sh);
+# - that the product image shares no name with the developer image;
+# - the release manifest against the engine's own reader
+#   (release/test_manifest.py).
 {
   pkgs,
   lib,
@@ -101,9 +104,30 @@ let
         mkdir $out
         cp unittest.log check.log $out/
       '';
+  # release/manifest.py's output for a small release, read by the engine's
+  # own sekka_engine.assets (release/test_manifest.py): the manifest is
+  # the engine's contract, and only the engine's sources are copied in.
+  manifest =
+    pkgs.runCommand "apple-image-manifest"
+      {
+        nativeBuildInputs = [ pkgs.python3 ];
+      }
+      ''
+        mkdir engine work
+        cp -r ${../../installer/genkan/macos/engine/sekka_engine} engine/sekka_engine
+        python3 ${./release/test_manifest.py} ${./release/manifest.py} engine ${./identities.json} work \
+          | tee manifest.log
+        mkdir $out
+        cp manifest.log work/manifest.json $out/
+      '';
 in
 {
-  inherit templateCheck template scripts;
+  inherit
+    templateCheck
+    template
+    scripts
+    manifest
+    ;
   all = pkgs.linkFarm "mac-image-tests" [
     {
       name = "template";
@@ -112,6 +136,10 @@ in
     {
       name = "scripts";
       path = scripts;
+    }
+    {
+      name = "manifest";
+      path = manifest;
     }
   ];
 }

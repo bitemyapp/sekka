@@ -3,10 +3,16 @@ payload against what it is built from.
 
 The manifest is canonical JSON as the installer contract defines it
 (installer/genkan/macos, canonical.rs): keys in byte order, no whitespace,
-integers only. Its `source` (repository, revision, lock), `image` (ImageFacts)
-and `allocation` (AllocationPolicy) objects have the shapes the catalog's
-Release takes them in (catalog.rs); the rest says how they were derived.
-docs/apple-silicon/image.md describes every field.
+integers only. Two readers:
+- the engine (installer/genkan/macos/engine, assets.load_manifest) reads
+  `release`, `source_revision`, `root_image` (path, size, digest) and `esp`
+  (boot_entry and files, nothing else), and allows other top-level fields;
+- a catalog's Release takes `source` (SourceIdentity), `image` (ImageFacts,
+  whose esp_inventory is the engine's assets.esp_inventory_digest of
+  esp.files) and `allocation` (AllocationPolicy) as they are (catalog.rs).
+The rest says how they were derived. docs/apple-silicon/image.md describes
+every field; tests.nix runs the engine's own reader over this script's
+output.
 
 Checks, failing the build:
 - the payload zip holds exactly esp/ (every file of the ESP inventory, with
@@ -26,8 +32,12 @@ import zipfile
 from pathlib import Path
 
 SCHEMA = "sekka.mac.manifest/1"
+REPOSITORY = "bitemyapp/sekka"
 MIB = 1024 * 1024
 GIB = 1024 * MIB
+# The partitions the installer's plan makes (plan.rs STUB_BYTES, ESP_BYTES).
+STUB_BYTES = 2_500_000_000 // MIB * MIB
+ESP_BYTES = GIB
 # Yukimi doesn't start an update with less free space than this
 # (DEVELOPERS.md, installed-system updates).
 UPDATE_FLOOR = 10_000_000_000
@@ -63,6 +73,14 @@ def canonical(value) -> bytes:
 
 def digest_of(data: bytes) -> str:
     return "sha256:" + hashlib.sha256(data).hexdigest()
+
+
+def esp_inventory_digest(files: list) -> str:
+    """The engine's form (assets.esp_inventory_digest): the canonical digest
+    of the domain and every file's path, size and digest, sorted by path."""
+    items = sorted(({"path": f["path"], "size": f["size"], "digest": f["digest"]} for f in files),
+                   key=lambda f: f["path"].encode())
+    return digest_of(canonical({"domain": "sekka.mac.esp-inventory/1", "files": items}))
 
 
 def digest_file(path, f=None) -> tuple:
@@ -124,6 +142,11 @@ def main() -> int:
     for role, path in BOOT_FILES:
         if path not in by_path:
             fail(f"the ESP has no {path} ({role})")
+    # What the engine writes itself (the handoff, Apple's firmware); and FAT
+    # ignores case.
+    folded = [f["path"].casefold() for f in files]
+    if len(set(folded)) != len(folded) or any(p == "sekka/install.json" or p.startswith("vendorfw/") for p in folded):
+        fail("the ESP's files collide with each other or with what the installer writes")
     entry = (esp / ENTRY).read_text()
     placeholders = [ph for ph in PLACEHOLDERS if ph in entry]
     for ph in placeholders:
@@ -180,20 +203,34 @@ def main() -> int:
     reserve = max(root_size, UPDATE_FLOOR)
     minimum = align(stub + esp_bytes + root_size + reserve)
     recommended = align(minimum + reserve + DATA_ROOM)
+    lock_digest, lock_bytes = digest_file(a.lock)
 
     manifest = {
         "schema": SCHEMA,
         "release": a.release,
+        # What the engine reads (installer/genkan/macos/engine,
+        # assets.load_manifest), in exactly its shape: `esp` has these two
+        # keys and no others.
+        "source_revision": a.revision,
+        "root_image": {"path": "root.img", "size": root_size, "digest": root_digest},
+        "esp": {"boot_entry": ENTRY, "files": files},
+        # The catalog's Release takes these as they are (catalog.rs:
+        # SourceIdentity, ImageFacts, AllocationPolicy).
+        "source": {"repository": REPOSITORY, "revision": a.revision, "lock": lock_digest},
+        "image": {
+            "root_image": {"size": root_size, "digest": root_digest},
+            "esp_inventory": esp_inventory_digest(files),
+            "esp_bytes": esp_bytes,
+        },
+        "allocation": {"minimum": minimum, "recommended": recommended},
+        # How those were made.
         "profile": a.profile,
         "variant": a.variant,
-        "source": {
-            "repository": "bitemyapp/sekka",
-            "revision": a.revision,
+        "build": {
             "clean": a.clean == "true",
             "nar_hash": a.nar_hash,
             "update_ref": a.update_ref,
-            "lock": digest_file(a.lock)[0],
-            "lock_bytes": digest_file(a.lock)[1],
+            "lock_bytes": lock_bytes,
         },
         "system": {
             "toplevel": a.toplevel,
@@ -203,29 +240,21 @@ def main() -> int:
             "closure_nar_bytes": closure_bytes,
             "seeded_sources": sorted(Path(a.seeds).read_text().split()),
         },
-        "image": {
-            "root_image": {"size": root_size, "digest": root_digest},
-            "esp_inventory": digest_of(canonical(files)),
-            "esp_bytes": esp_bytes,
-        },
         "root": {
             "label": identity["root_label"],
             "filesystem_uuid": identity["root_uuid"],
             "registered_paths": closure_paths,
         },
-        "esp": {
+        "esp_layout": {
             "volume_id": identity["esp_volume_id"],
-            "files": files,
             "used_bytes": used,
             "boot_files": [{"role": r, "path": p} for r, p in BOOT_FILES],
-            "boot_entry": ENTRY,
             "placeholders": placeholders,
             "generation_bytes": generation_bytes,
             "generations": generations,
         },
         "payload": {"name": payload.name, "size": payload_size, "digest": payload_digest},
         "installer_data": {"size": data_size, "digest": data_digest},
-        "allocation": {"minimum": minimum, "recommended": recommended},
         "allocation_basis": {
             "stub": stub,
             "esp": esp_bytes,
@@ -241,10 +270,14 @@ def main() -> int:
         if placeholders
         else None,
     }
-    # The catalog's own consistency rules (catalog.rs, Release::check).
+    # The catalog's own consistency rules (catalog.rs, Release::check): the
+    # partitions the plan creates (plan.rs) are the stub, an ESP of exactly
+    # ESP_BYTES and a root partition that holds the root image.
     if not (0 < payload_size <= 64 * GIB and data_size <= MIB and root_size <= payload_size):
         fail("the artifact sizes break the catalog's limits")
-    if not (minimum >= root_size + esp_bytes and recommended >= minimum):
+    if stub != STUB_BYTES or esp_bytes != ESP_BYTES:
+        fail(f"the stub and ESP are {stub} and {esp_bytes} bytes; the installer's plan makes {STUB_BYTES} and {ESP_BYTES}")
+    if not (minimum >= STUB_BYTES + ESP_BYTES + align(root_size) and recommended >= minimum):
         fail("the allocation breaks the catalog's rules")
     out = canonical(manifest)
     if len(out) > 4 * MIB:

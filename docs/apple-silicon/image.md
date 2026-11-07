@@ -346,45 +346,70 @@ marker again, doesn't reopen the gap at the next forward one.
 
 `release/manifest.py` writes `manifest.json` in the contract's canonical
 JSON (keys in byte order, no whitespace, integers only), after checking the
-payload against what it was built from. `source` (`repository`,
-`revision`, `lock`), `image` (`ImageFacts`) and `allocation`
-(`AllocationPolicy`) have the shapes `catalog.rs`'s `Release` takes. Fields:
+payload against what it was built from. It has two readers, and each part
+has the shape its reader takes:
+
+- the engine (`installer/genkan/macos/engine`, `assets.load_manifest`)
+  reads `release`, `source_revision`, `root_image` and `esp`, refusing any
+  other key in `esp`, and allows the other top-level fields;
+- a catalog's `Release` (`catalog.rs`) takes `source` (`SourceIdentity`),
+  `image` (`ImageFacts`) and `allocation` (`AllocationPolicy`) as they are.
+
+`mac-image-tests` (`release/test_manifest.py`) runs `manifest.py` on a small
+release and feeds its output to the engine's own `load_manifest`,
+`check_payload`, `load_template` and `esp_inventory_digest`, checks the
+catalog objects' keys and the canonical bytes, and, as its failing control,
+has the engine refuse an `esp` with an extra key, as `manifest.py` once
+wrote it. Fields:
 
 | Field | Meaning |
 | --- | --- |
 | `schema` | `sekka.mac.manifest/1` |
 | `release` | `sekka-j514s-<short revision>` |
+| `source_revision` | the 40-digit commit (a dirty build's base commit), as the plan's `source_revision` |
+| `root_image` | `path` (`root.img`), `size` and `digest`; the plan's `root_image` is this digest |
+| `esp.boot_entry` | the entry the installer fills in |
+| `esp.files` | every file in the payload's `esp/`: `path`, `size`, `digest`, sorted by path bytes |
+| `source.repository`, `.revision`, `.lock` | `bitemyapp/sekka`, the commit, and the SHA-256 of the shipped `flake.lock` |
+| `image.root_image` | `root.img`'s `size` and `digest` |
+| `image.esp_inventory` | the engine's `esp_inventory_digest` of `esp.files`: the canonical digest of `{"domain":"sekka.mac.esp-inventory/1","files":[…]}` |
+| `image.esp_bytes` | the ESP partition size, 1 GiB: `plan.rs`'s `ESP_BYTES` |
+| `allocation.minimum`, `.recommended` | bytes for the whole Sekka allocation, 1 MiB-aligned |
 | `profile`, `variant` | `j514s`; `product` or `developer` |
-| `source.repository`, `.revision` | `bitemyapp/sekka` and the 40-digit commit (a dirty build's base commit) |
-| `source.clean` | false for a dirty development build, which must not be published |
-| `source.nar_hash` | Sekka's source NAR hash, as the lock pins it |
-| `source.update_ref` | the branch the installed flake follows |
-| `source.lock`, `.lock_bytes` | SHA-256 and size of the shipped `flake.lock` |
+| `build.clean` | false for a dirty development build, which must not be published |
+| `build.nar_hash` | Sekka's source NAR hash, as the lock pins it |
+| `build.update_ref` | the branch the installed flake follows |
+| `build.lock_bytes` | the size of the shipped `flake.lock` |
 | `system.toplevel`, `.label`, `.kernel_params` | the NixOS system and its bootspec label and parameters (with the placeholders) |
 | `system.closure_paths`, `.closure_nar_bytes` | the root image's registered closure |
 | `system.seeded_sources` | the source paths among them, for offline evaluation |
-| `image.root_image` | `root.img`'s `size` and `digest` |
-| `image.esp_inventory` | SHA-256 of the canonical JSON array `esp.files` |
-| `image.esp_bytes` | the ESP partition size (1 GiB) |
 | `root.label`, `.filesystem_uuid`, `.registered_paths` | the ext4 image's fixed identity, shared by every installation of the image (`identities.json`) |
-| `esp.volume_id` | the FAT volume ID in `installer_data.json`: null for the product image, whose ESPs get their own |
-| `esp.files` | every file in the payload's `esp/`: `path`, `size`, `digest`, sorted by path bytes |
-| `esp.used_bytes`, `.generation_bytes`, `.generations` | ESP use, one generation's kernel and initrd, and the retained-generation limit the capacity check used |
-| `esp.boot_files` | roles: `m1n1-stage2`, `removable-loader`, `systemd-boot`, `kernel`, `initrd`, `loader-config`, `entry`, `boot-bin-record` |
-| `esp.boot_entry`, `.placeholders` | the entry the installer edits and the placeholders in it |
+| `esp_layout.volume_id` | the FAT volume ID in `installer_data.json`: null for the product image, whose ESPs get their own |
+| `esp_layout.used_bytes`, `.generation_bytes`, `.generations` | ESP use, one generation's kernel and initrd, and the retained-generation limit the capacity check used |
+| `esp_layout.boot_files` | roles: `m1n1-stage2`, `removable-loader`, `systemd-boot`, `kernel`, `initrd`, `loader-config`, `entry`, `boot-bin-record` |
+| `esp_layout.placeholders` | the placeholders in the boot entry |
 | `payload` | the zip's `name`, `size` and `digest` |
 | `installer_data` | `size` and `digest` of `installer_data.json` |
-| `allocation.minimum`, `.recommended` | bytes for the whole Sekka allocation, 1 MiB-aligned |
 | `allocation_basis` | `stub` (2.5 GB aligned, `plan.rs`), `esp`, `root_image`, `generation_reserve`, `data_room` |
 | `handoff` | `schema`, `path` and `kernel_arguments` of the handoff, or null for the developer image |
 
 `minimum = stub + esp + root_image + generation_reserve`, where
 `generation_reserve = max(root_image, 10 GB)`: room for one more full
 generation, and never less than the free space Yukimi needs to start an
-update. `recommended = minimum + generation_reserve + 64 GiB`.
-Digests are `sha256:` and 64 lowercase hex digits, as `Digest` writes them.
-The engine's later writes to the ESP (`sekka/install.json`, the filled
-entry, `vendorfw/`, Asahi's own files) are outside the inventory.
+update. `recommended = minimum + generation_reserve + 64 GiB`. The stub and
+ESP must be `plan.rs`'s `STUB_BYTES` and `ESP_BYTES`, the partitions
+`derive_plan` creates, and `Release::check` refuses a catalog whose minimum
+leaves the root partition smaller than the root image or whose ESP is
+another size. Digests are `sha256:` and 64 lowercase hex digits, as `Digest`
+writes them. The engine's later writes to the ESP (`sekka/install.json`, the
+filled entry, `vendorfw/`, Asahi's own files) are outside the inventory;
+`manifest.py` refuses ESP files that collide with them or with each other
+ignoring case.
+
+Nothing yet compares a catalog's `image.esp_inventory` or `esp_bytes` with
+the manifest: the plan carries the manifest's digest and the root image's,
+not these, and the engine checks the ESP's bytes against the manifest's
+`esp.files`. A catalog made from the manifest carries the engine's form.
 
 ### Integrity checks before packaging
 
