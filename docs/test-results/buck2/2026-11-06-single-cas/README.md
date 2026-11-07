@@ -93,7 +93,10 @@ storage-plan runs' cold and release stages predate the fix.
 A cold release build (742 actions) on the fixed engine kept 0.03 GB of its
 16.67 GB `buck-out` to itself. Its 4,636 placeholder and published files
 (12.2 GB) all shared their CAS blobs, and the content store held 36.1 MB. The
-journal pass shared 10.0 GB in 15.8 s.
+journal pass shared 10.0 GB in 15.8 s, one pair at a time. On up to 8 threads
+(`1cfc5199`), a release shared-crate edit's pass (55 actions in 60.5 s)
+shared 6.6 GB in 3.5 s. The worktree then kept 0.03 GB of its 19.96 GB
+`buck-out` to itself.
 
 ## Free-space sizing
 
@@ -225,6 +228,8 @@ On wx, at the branch's commits:
   shared, mismatched, journaled, empty, changed and repeated cases.
 - `checks.x86_64-linux.build-service-inventory` passed, with the autosize,
   deferral and dispatch tests.
+- At `1cfc5199`, both checks passed again, and the engine's check phase
+  passed at `54ff881a` (engine patches unchanged since).
 - The gateway configuration passed `nginx -t` in the pinned nginx image.
 - The engine's check phase passed, including the new content-store,
   presence and local-CAS tests.
