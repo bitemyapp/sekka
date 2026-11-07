@@ -98,6 +98,24 @@ journal pass shared 10.0 GB in 15.8 s, one pair at a time. On up to 8 threads
 shared 6.6 GB in 3.5 s. The worktree then kept 0.03 GB of its 19.96 GB
 `buck-out` to itself.
 
+## Remote execution on the CAS host
+
+A fresh service ran the dev graph on its own workers (`--cache remote
+--cache-write`) through a `--local-cas` client. Then a fresh worktree built
+it from the cache, and two test groups ran remotely:
+
+| Engine | Cold remote build (706 actions) | Downloaded | Content store |
+| --- | --- | --- | --- |
+| Rescan at most once a second | 104.8 s | 1.8 GiB | 1,942 MB |
+| Rescan once ten scan durations pass (`cb96b108`) | 104.5 s | 58 MiB | 72 MB |
+
+Workers kept adding blobs, so with the fixed second most materializations
+missed the index between scans and downloaded what was already a local
+file. Across both runs:
+- the fresh worktree built all 706 actions from the cache in 4.4–4.9 s;
+- the remote tests passed (317 actions);
+- each worktree kept 0.01 GB of its 3.1 GB `buck-out` to itself.
+
 ## Stale outputs in a worktree
 
 An edit gives each changed content-based output a new content-path
