@@ -166,17 +166,7 @@ impl Window {
                 Event::Phase(p) => s.screen = Screen::Working(p),
                 Event::Log(line) => s.log.push(line),
                 Event::Finished(result, finisher) => {
-                    s.screen = match result {
-                        Ok(()) => Screen::Done,
-                        Err(FinishError::Password) => Screen::Ready {
-                            error: Some(format!("That password isn't right for {}. Enter it again.", s.owner.0)),
-                        },
-                        Err(FinishError::Failed(m)) => Screen::Ready {
-                            error: Some(format!(
-                                "{m} You can try again; only these steps are repeated. Choose Utilities › Show Details for what macOS said."
-                            )),
-                        },
-                    };
+                    s.screen = screen::finished(result, &s.owner.0);
                     s.finisher = Some(*finisher);
                 }
             }

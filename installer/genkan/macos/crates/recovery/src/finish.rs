@@ -140,8 +140,14 @@ pub enum Phase {
 pub enum FinishError {
     #[error("That password isn't right.")]
     Password,
+    /// Trying again repeats only these steps, and may get further.
     #[error("{0}")]
     Failed(String),
+    /// Stopped, before this attempt changed anything, by something that
+    /// trying again here would only meet again: the window says how to
+    /// start up in macOS instead of offering Install again.
+    #[error("{0}")]
+    Stopped(String),
 }
 
 pub struct Finisher<S: System> {
@@ -296,12 +302,14 @@ impl<S: System> Finisher<S> {
         // Before anything is written to the stub's System volume, the
         // receipt included. Sekka can't start until its SystemVersion is
         // shown there again, so a volume that stays read-only stops here,
-        // before the password is used.
-        self.system.make_writable(&self.install.volume).map_err(|m| {
-            FinishError::Failed(format!(
-                "Sekka's startup volume can't be written to here ({m}), and this app needs to write to it to finish. Nothing was changed."
-            ))
-        })?;
+        // before the password is used, and for good: every attempt would
+        // stop at the same place.
+        if let Err(m) = self.system.make_writable(&self.install.volume) {
+            log(&format!("Sekka's startup volume can't be made writable: {m}\n"));
+            return Err(FinishError::Stopped(format!(
+                "Sekka's startup volume can't be written to here ({m}), and this app needs to write to it to finish."
+            )));
+        }
         self.receipt.attempts += 1;
         let c = self.install.config.clone();
         let user = c.owner.short_name.to_string();
@@ -604,12 +612,11 @@ mod tests {
         f.remount = Err("mount: Operation not permitted".into());
         mount(dir.path(), false);
         let mut finisher = Finisher::open(&f, install);
-        let e = finisher.finish("right", &mut |_| {}, &mut |_| {}).unwrap_err();
+        let mut log = String::new();
+        let e = finisher.finish("right", &mut |_| {}, &mut |l| log.push_str(l)).unwrap_err();
         mount(dir.path(), true);
-        assert!(
-            matches!(&e, FinishError::Failed(m) if m.contains("Operation not permitted") && m.contains("Nothing was changed")),
-            "{e}"
-        );
+        assert!(matches!(&e, FinishError::Stopped(m) if m.contains("Operation not permitted")), "{e}");
+        assert!(log.contains("mount: Operation not permitted"), "Details says what mount said: {log}");
         assert!(f.calls.borrow().is_empty());
         assert!(!dir.path().join(RECOVERY_STATE_DIR).exists());
         assert!(dir.path().join(".IAPhysicalMedia").exists());

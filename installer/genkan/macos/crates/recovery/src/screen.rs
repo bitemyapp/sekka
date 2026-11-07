@@ -6,7 +6,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use crate::finish::{Environment, Phase};
+use crate::finish::{Environment, FinishError, Phase};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Screen {
@@ -29,6 +29,24 @@ pub fn checked(result: Result<Environment, String>, done: bool) -> Screen {
         Ok(Environment::WrongRecovery) => Screen::WrongRecovery,
         Ok(Environment::NotOneTrue) => Screen::NotOneTrue,
         Err(e) => Screen::Broken(e),
+    }
+}
+
+/// What the window shows once Install has run. A failure that trying
+/// again might get past offers Install again; one it wouldn't says how to
+/// start up in macOS instead.
+pub fn finished(result: Result<(), FinishError>, short_name: &str) -> Screen {
+    match result {
+        Ok(()) => Screen::Done,
+        Err(FinishError::Password) => Screen::Ready {
+            error: Some(format!("That password isn't right for {short_name}. Enter it again.")),
+        },
+        Err(FinishError::Failed(m)) => Screen::Ready {
+            error: Some(format!(
+                "{m} You can try again; only these steps are repeated. Choose Utilities › Show Details for what macOS said."
+            )),
+        },
+        Err(FinishError::Stopped(m)) => Screen::Broken(m),
     }
 }
 
@@ -157,6 +175,22 @@ mod tests {
         assert_eq!(checked(Ok(Environment::NotOneTrue), false), Screen::NotOneTrue);
         assert_eq!(checked(Ok(Environment::WrongRecovery), false), Screen::WrongRecovery);
         assert_eq!(checked(Err("gone".into()), true), Screen::Broken("gone".into()));
+    }
+
+    #[test]
+    fn only_a_failure_that_may_pass_offers_install_again() {
+        assert_eq!(finished(Ok(()), "chris"), Screen::Done);
+        let Screen::Ready { error: Some(e) } = finished(Err(FinishError::Password), "chris") else { panic!() };
+        assert!(e.contains("chris"), "{e}");
+        let Screen::Ready { error: Some(e) } = finished(Err(FinishError::Failed("kmutil: busy.".into())), "chris") else {
+            panic!()
+        };
+        assert!(e.starts_with("kmutil: busy. You can try again"), "{e}");
+        // Shown with BROKEN_NEXT, how to start up in macOS, and Shut Down.
+        assert_eq!(
+            finished(Err(FinishError::Stopped("read-only".into())), "chris"),
+            Screen::Broken("read-only".into())
+        );
     }
 
     #[test]
