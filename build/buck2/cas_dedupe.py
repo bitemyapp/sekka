@@ -4,8 +4,8 @@ On one host both keep every uploaded output: the content store reflinks it
 into worktrees, and NativeLink's CAS serves it to the action cache. Objects
 are matched by SHA-256 and size and shared with FIDEDUPERANGE, which compares
 the bytes first, so a name never substitutes for content. Pairs whose first
-extent is already shared are skipped: repeating costs two FIEMAP calls per
-pair. Only extents change; both owners keep their names and their eviction.
+extent and last extent are already shared are skipped: repeating costs four
+FIEMAP calls per pair. Only extents change; both owners keep their names and their eviction.
 """
 import concurrent.futures
 import errno
@@ -48,14 +48,23 @@ def scan(content_dirs):
     return blobs
 
 
-def first_extent(fd):
-    """Physical address of a file's first data extent, or None when inline/unmapped."""
+def extent_at(fd, offset):
+    """Where byte `offset` is stored, or None when inline or unmapped; equal for
+    two files only if they share it.
+
+    FIEMAP reports the file extent item holding the byte, and sharing in steps
+    splits one extent across several items. A plain extent maps its bytes one
+    to one, so the byte's own address is compared; a compressed one is named by
+    where its data starts."""
     request = bytearray(32 + 56)
-    struct.pack_into("=QQIII", request, 0, 0, 2**64 - 1, 0, 0, 1)
+    struct.pack_into("=QQIII", request, 0, offset, 1, 0, 0, 1)
     fcntl.ioctl(fd, FIEMAP, request, True)
     mapped = struct.unpack_from("=I", request, 20)[0]
-    physical, flags = struct.unpack_from("=Q", request, 40)[0], struct.unpack_from("=I", request, 72)[0]
-    return physical if mapped and not flags & 0x306 else None  # UNKNOWN, DELALLOC, NOT_ALIGNED, INLINE
+    logical, physical = struct.unpack_from("=QQ", request, 32)
+    flags = struct.unpack_from("=I", request, 72)[0]
+    if not mapped or flags & 0x306:  # UNKNOWN, DELALLOC, NOT_ALIGNED, INLINE
+        return None
+    return physical if flags & 0x8 else physical + offset - logical  # 0x8: ENCODED
 
 
 def store_objects(stores):
@@ -95,8 +104,10 @@ def share(source, blob, size):
                 status = os.fstat(fd)
                 if status.st_size != size or not stat.S_ISREG(status.st_mode):
                     raise Changed()
-            start = first_extent(src)
-            if start is not None and start == first_extent(dst):
+            # Sharing proceeds from the start, so a pass killed partway leaves
+            # the last extent apart: both ends must already match.
+            ends = [extent_at(fd, offset) for fd in (src, dst) for offset in (0, size - 1)]
+            if None not in ends and ends[:2] == ends[2:]:
                 return "already"
             offset = 0
             while offset < size:
