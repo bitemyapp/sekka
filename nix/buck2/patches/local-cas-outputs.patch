@@ -162,10 +162,10 @@ index afa6ba8..2f5fb9d 100644
                          Ok(())
                      })
 diff --git a/app/buck2_execute_impl/src/materializers/local_content_store.rs b/app/buck2_execute_impl/src/materializers/local_content_store.rs
-index e9d55e9..ea9ccc6 100644
+index 70caea7..be2ed4d 100644
 --- a/app/buck2_execute_impl/src/materializers/local_content_store.rs
 +++ b/app/buck2_execute_impl/src/materializers/local_content_store.rs
-@@ -2296,6 +2296,64 @@ pub(crate) fn artifact<D: ActionDirectory>(
+@@ -2303,6 +2303,64 @@ pub(crate) fn artifact<D: ActionDirectory>(
      Ok(())
  }
  

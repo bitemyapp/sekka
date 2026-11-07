@@ -14,8 +14,10 @@ by hash like any download, but is not ingested as a second content-store
 object: the CAS file holds the bytes, and the store records only a
 buffered view hint, so it can still recover the bytes from this worktree
 if NativeLink evicts them. Names carry a generation, so an index maps
-SHA-256 digest and size to the newest file and is rescanned at most once
-a second on a miss. The rescan runs outside the index's lock, since at
+SHA-256 digest and size to the newest file and is rescanned on a miss, at
+most once per ten scan durations (50 ms to 1 s). A fixed second made a
+cold remote build download 1.8 GiB that workers had just put in the CAS.
+The rescan runs outside the index's lock, since at
 500,000 blobs holding it would stall every other clone: hits use the
 current index meanwhile, and misses wait for the scan, which may find
 them. An evicted or unopenable blob, another digest
@@ -83,17 +85,18 @@ index db56c16..afa6ba8 100644
                                  missing.push(download);
                                  files.push(NamedDigestWithPermissions {
 diff --git a/app/buck2_execute_impl/src/materializers/local_content_store.rs b/app/buck2_execute_impl/src/materializers/local_content_store.rs
-index fc397e2..e9d55e9 100644
+index fc397e2..70caea7 100644
 --- a/app/buck2_execute_impl/src/materializers/local_content_store.rs
 +++ b/app/buck2_execute_impl/src/materializers/local_content_store.rs
-@@ -1255,6 +1255,131 @@ mod linux {
+@@ -1255,6 +1255,138 @@ mod linux {
          })
      }
  
 +    /// A NativeLink filesystem CAS on this host (`BUCK2_LOCAL_CAS_DIR`, its
 +    /// content directory) holds every blob the remote cache serves, so cloning
 +    /// one replaces a download. Its names carry a generation; an index maps
-+    /// digests to files and is rescanned at most once a second on a miss.
++    /// digests to files and is rescanned on a miss, at most once per ten scan
++    /// durations (50 ms to 1 s), so scanning takes at most a tenth of the time.
 +    struct LocalCas {
 +        root: PathBuf,
 +        index: Mutex<LocalCasIndex>,
@@ -106,9 +109,11 @@ index fc397e2..e9d55e9 100644
 +    #[derive(Default)]
 +    struct LocalCasIndex {
 +        files: LocalCasFiles,
-+        /// When the latest scan started, and whether it is still running.
++        /// When the latest scan started, whether it is still running, and how
++        /// long the last finished one took.
 +        scanned: Option<std::time::Instant>,
 +        scanning: bool,
++        scan_took: std::time::Duration,
 +    }
 +
 +    /// Ends a scan, waking its waiters even if the scan unwinds.
@@ -174,16 +179,20 @@ index fc397e2..e9d55e9 100644
 +                let index = self.scan_done.wait_while(index, |index| index.scanning).ok()?;
 +                return found(&index.files);
 +            }
-+            if index.scanned.is_some_and(|at| at.elapsed() < std::time::Duration::from_secs(1)) {
++            let interval = (index.scan_took * 10)
++                .clamp(std::time::Duration::from_millis(50), std::time::Duration::from_secs(1));
++            if index.scanned.is_some_and(|at| at.elapsed() < interval) {
 +                return None;
 +            }
-+            index.scanned = Some(std::time::Instant::now());
++            let started = std::time::Instant::now();
++            index.scanned = Some(started);
 +            index.scanning = true;
 +            drop(index);
 +            let _done = ScanDone(self);
 +            let files = Self::scan(&self.root);
 +            let mut index = self.index.lock().ok()?;
 +            index.files = files;
++            index.scan_took = started.elapsed();
 +            found(&index.files)
 +        }
 +    }
@@ -218,7 +227,7 @@ index fc397e2..e9d55e9 100644
      #[cfg(test)]
      mod tests {
          use buck2_common::cas_digest::DigestAlgorithm;
-@@ -1395,6 +1520,27 @@ mod linux {
+@@ -1395,6 +1527,27 @@ mod linux {
              Ok(())
          }
  
@@ -246,7 +255,7 @@ index fc397e2..e9d55e9 100644
          #[test]
          fn reflink_store_buffers_advisory_writes_until_eviction() -> buck2_error::Result<()> {
              let temp = tempfile::tempdir()?;
-@@ -2169,6 +2315,9 @@ pub(crate) struct Download {
+@@ -2169,6 +2322,9 @@ pub(crate) struct Download {
      destination: buck2_fs::paths::abs_norm_path::AbsNormPathBuf,
      temporary: tempfile::TempPath,
      metadata: buck2_common::file_ops::metadata::FileMetadata,
@@ -256,7 +265,7 @@ index fc397e2..e9d55e9 100644
  }
  
  impl Download {
-@@ -2177,13 +2326,18 @@ impl Download {
+@@ -2177,13 +2333,18 @@ impl Download {
          metadata: buck2_common::file_ops::metadata::FileMetadata,
          config: DigestConfig,
      ) -> buck2_error::Result<Option<Self>> {
@@ -282,7 +291,7 @@ index fc397e2..e9d55e9 100644
              return Ok(None);
          }
          let parent = destination.parent().ok_or_else(|| {
-@@ -2200,9 +2354,46 @@ impl Download {
+@@ -2200,9 +2361,46 @@ impl Download {
              destination,
              temporary,
              metadata,
@@ -329,7 +338,7 @@ index fc397e2..e9d55e9 100644
      pub(crate) fn name(&self) -> buck2_error::Result<String> {
          Ok(
              buck2_fs::paths::abs_norm_path::AbsNormPathBuf::new(self.temporary.to_path_buf())?
-@@ -2214,13 +2405,15 @@ impl Download {
+@@ -2214,13 +2412,15 @@ impl Download {
      pub(crate) fn finish(self, config: DigestConfig) -> buck2_error::Result<()> {
          let path =
              buck2_fs::paths::abs_norm_path::AbsNormPathBuf::new(self.temporary.to_path_buf())?;
