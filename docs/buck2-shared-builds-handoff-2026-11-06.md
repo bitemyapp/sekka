@@ -23,7 +23,12 @@ over long benchmark matrices. Builds, tests and measurements go to
     (`local-cas-outputs.patch`, `build/buck2/cas_dedupe.py`);
   - the client opts in with a `build-service client --local-cas` file;
   - the post-build pass scans the CAS directory once, 0.6 s at 500,000
-    blobs. It had scanned twice at 3.2–4.5 s each.
+    blobs. It had scanned twice at 3.2–4.5 s each;
+  - both copies of a locally built content-based output (placeholder and
+    published content path) share the CAS blob's extents (`54ff881a`). One
+    had kept its own: 1.1 GB of a cold dev worktree;
+  - the engine's index of the CAS directory rescans outside its lock, and
+    misses wait for a scan in progress (`4f41ec88`).
 - `build-service autosize` sizes the CAS to free disk space above a floor,
   and `dedupe` shares the CAS with a content store. `autosize` waits for an
   idle service before resizing, unless the disk is under half its floor.
@@ -75,7 +80,6 @@ it. Incremental state is private per worktree (~0.7 GB after a dev build).
    - Its storage-plan run passed every gate except eviction recovery. That
      failure was a controller bug, fixed in `84954a1a`, and a targeted
      eviction repro passed.
-   - Rerun the plan once if a full eviction-stage record is wanted.
 2. **Make `autosize` routine** on the deployment host: DEVELOPERS.md has the
    timer recipe. It resizes only on a 5% shrink or a 25% growth, and only
    when idle. On wx, the user's service manager has run since 2026-11-03,
@@ -83,12 +87,11 @@ it. Incremental state is private per worktree (~0.7 GB after a dev build).
    form there; that form ran `autosize` cleanly. No timer is installed:
    the only long-lived services on wx are 2026-11-05's, which are not this
    work's to manage.
-3. **Next engine change, batched with any other:** the local-CAS index
-   (`local-cas-downloads.patch`) rescans under its mutex, at most once a
-   second and only on a miss. At 500,000 blobs, each rescan blocks other
-   clone lookups for a fraction of a second. That only matters after heavy
-   eviction, when lookups miss, so it does not justify an engine rebuild on
-   its own. Scanning into a new map outside the lock fixes it.
+3. **Rerun the storage plan** once, if a full record is wanted. It would
+   record the eviction stages. It would also correct the cold and release
+   stages, which predate `54ff881a`: that commit reclaimed each locally
+   built content-based output's leftover copy, so those unions overstate
+   the cost.
 4. **NativeLink fork**, only if needed: stable digest paths (dropping the
    client's index) and casita-style retention (roots, and action-cache-first
    eviction). Cloned blobs are already kept recent: `has()` touches each key

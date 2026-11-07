@@ -645,9 +645,16 @@ client file there with `client --domain trusted --access writer --format buck2
   uploader put in the CAS in `buck-out/ISOLATION/local-cas-journal`, and after
   every `build` or `test` the client shares those files' extents with their
   CAS blobs through `build/buck2/cas_dedupe.py`. Outputs that changed since
-  are skipped;
-- shares content-store objects that the CAS also holds, after builds that
-  added any.
+  are skipped. A content-based output exists twice, at the placeholder it
+  was written to and as the copy published at its content path; both are
+  listed, as are other materialized copies;
+- first, shares content-store objects that the CAS also holds, after builds
+  that added any. That pass moves CAS blobs onto store objects' extents and
+  the journal pass moves outputs onto CAS blobs', so in this order each
+  output ends on one copy.
+
+After a cold dev build on wx-workstation, 0.02 GB of the worktree's 6.64 GB
+`buck-out` was its own; the content store held 28.7 MB.
 
 Both passes share one scan of the CAS directory, which takes 0.6 s at about
 500,000 blobs (the 256 GiB maximum) on wx-workstation. The kernel's byte

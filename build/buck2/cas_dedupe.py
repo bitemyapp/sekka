@@ -7,6 +7,7 @@ the bytes first, so a name never substitutes for content. Pairs whose first
 extent is already shared are skipped: repeating costs two FIEMAP calls per
 pair. Only extents change; both owners keep their names and their eviction.
 """
+import concurrent.futures
 import errno
 import fcntl
 import os
@@ -19,6 +20,9 @@ FIEMAP = 0xC020660B
 FIDEDUPERANGE = 0xC0189436
 STEP = 16 * 1024**2  # Btrfs dedupes at most 16 MiB per request.
 BLOCK = 4096
+# Pairs share independently; on wx-workstation, 8 threads shared real release
+# outputs 2.5 times as fast as one, and more did not help.
+WORKERS = min(8, os.cpu_count() or 1)
 BLOB = re.compile(r"([0-9a-f]{64})-([0-9]+)(?:-([0-9]+))?")
 
 
@@ -64,6 +68,19 @@ def store_objects(stores):
 
 class Changed(Exception):
     """A file's size or type no longer matches its digest."""
+
+
+def share_all(pairs):
+    """share() over (source, blob, size) triples on WORKERS threads, in order.
+
+    Each result is share()'s outcome or the OSError or Changed it raised."""
+    def attempt(pair):
+        try:
+            return share(*pair)
+        except (OSError, Changed) as error:
+            return error
+    with concurrent.futures.ThreadPoolExecutor(WORKERS) as pool:
+        return list(pool.map(attempt, pairs))
 
 
 def share(source, blob, size):
@@ -114,6 +131,7 @@ def dedupe(content_dirs, stores, blobs=None):
               "cross_filesystem": False, "differs": [], "errors": []}
     if not objects:
         return report
+    work = []
     for digest, size, _, blob in (blobs or (lambda: scan(content_dirs)))():
         source = objects.get((digest, size))
         if not source:
@@ -122,18 +140,18 @@ def dedupe(content_dirs, stores, blobs=None):
         if size < BLOCK:
             report["skipped_small"] += 1  # Inline or a single partial block: nothing to share.
             continue
-        try:
-            outcome = share(source, blob, size)
-        except FileNotFoundError:
+        work.append((source, blob, size))
+    for (_, blob, size), outcome in zip(work, share_all(work)):
+        if isinstance(outcome, FileNotFoundError):
             continue  # Evicted by NativeLink or the content store meanwhile.
-        except Changed:
+        if isinstance(outcome, Changed):
             report["errors"].append({"blob": blob, "error": "size or type differs from its digest name"})
             continue
-        except OSError as error:
-            if error.errno == errno.EXDEV:
+        if isinstance(outcome, OSError):
+            if outcome.errno == errno.EXDEV:
                 report["cross_filesystem"] = True
                 return report
-            report["errors"].append({"blob": blob, "error": str(error)})
+            report["errors"].append({"blob": blob, "error": str(outcome)})
             continue
         if outcome == "differs":
             report["differs"].append(blob)
@@ -183,6 +201,7 @@ def share_journal(content_dirs, journal, blobs=None):
                     (retried.add if again else retried.discard)(parts[2])
     later = []
     index = None
+    work = []
     for path, (digest, size) in entries.items():
         report["entries"] += 1
         if size < BLOCK:
@@ -197,16 +216,16 @@ def share_journal(content_dirs, journal, blobs=None):
             if path not in retried:
                 later.append(f"{digest} {size} {path}\n")
             continue
-        try:
-            outcome = share(blob, path, size)
-        except (FileNotFoundError, Changed):
+        work.append((blob, path, size))
+    for (_, path, size), outcome in zip(work, share_all(work)):
+        if isinstance(outcome, (FileNotFoundError, Changed)):
             report["changed"] += 1
             continue
-        except OSError as error:
-            if error.errno == errno.EXDEV:
+        if isinstance(outcome, OSError):
+            if outcome.errno == errno.EXDEV:
                 report["cross_filesystem"] = True
                 break
-            report["errors"].append({"path": path, "error": str(error)})
+            report["errors"].append({"path": path, "error": str(outcome)})
             continue
         if outcome == "differs":
             report["changed"] += 1  # Rewritten in place since it was listed.
