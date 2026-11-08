@@ -186,7 +186,10 @@ machine, on the console or a login screen, get the session sum while they
 are: a `login` PAM session rule, which the login screens' PAM services
 include, sets it at runtime after `pam_systemd` and starts
 `aizome-memory-reserve-<session>.service`, bound to the session's scope, which
-resets it to 0 when that person's last such session ends, however it ends.
+resets it to 0 when that person's last such session ends. The PAM rule also
+runs at normal logout: background jobs can keep a logged-out session's scope
+alive, so waiting for the scope alone would retain the reserve. Both paths
+keep the reserve while another local session remains open.
 Greeters, SSH logins, lingering user managers
 and other accounts get none, so their jobs can't claim the reserve that
 `user.slice` holds for the person at the desktop. Protection a service doesn't
@@ -229,7 +232,9 @@ covers user and system-wide audio with optional audio services disabled. The
 `aizome-login` VM test reads every budgeted unit's `MemoryLow` and the cgroup
 files of the ancestors after a real login, checks that a lingering second
 account and the greeter get no reserve and that the user manager keeps its
-memory delegation, and that the reserve returns to 0 at logout. A bounded
+memory delegation, and that the reserve returns to 0 after forced termination
+and normal logout with surviving background jobs, while another open local
+session keeps it. A bounded
 cgroup reclaim experiment
 showed that protected pages remained resident while an unprotected control was
 evicted. These are mechanism checks, not a before/after measurement of the

@@ -251,5 +251,50 @@ pkgs.testers.runNixOSTest {
         greeter = machine.succeed("id -u greeter").strip()
         assert low(f"user.slice/user-{greeter}.slice") == 0
         assert low("system.slice") == sum(system.values()) * mib
+
+    with subtest("normal logout releases the last local session's reserve despite surviving jobs"):
+        # Real login PAM sessions in ptys. Each leaves a nohup job in its
+        # scope: NixOS's default KillUserProcesses=false keeps that scope
+        # active after logout, so BindsTo alone cannot release the reserve.
+        login = machine.succeed("command -v login").strip()
+        def console_login(name):
+            commands = (
+                f"echo $XDG_SESSION_ID >/tmp/{name}-session\n"
+                f"nohup sleep 600 >/tmp/{name}-background.log 2>&1 &\n"
+                f"echo $! >/tmp/{name}-background-pid\n"
+                f"while [ ! -e /tmp/{name}-logout ]; do sleep 0.1; done\n"
+                "exit\n"
+            )
+            machine.succeed("printf %s " + shlex.quote(commands) + f" >/tmp/{name}-commands")
+            command = f"script -qec '{login} -f demo' /tmp/{name}.log </tmp/{name}-commands"
+            machine.succeed(f"systemd-run --unit={name} --no-block /bin/sh -c " + shlex.quote(command))
+            machine.wait_until_succeeds(f"test -s /tmp/{name}-background-pid", timeout=30)
+            return machine.succeed(f"cat /tmp/{name}-session").strip()
+
+        def console_logout(name, session):
+            machine.succeed(f"touch /tmp/{name}-logout")
+            machine.wait_until_fails(f"systemctl is-active --quiet {name}.service", timeout=30)
+            assert machine.succeed(f"loginctl show-session {session} -p State --value").strip() == "closing"
+            machine.succeed(f"systemctl is-active session-{session}.scope")
+            machine.succeed(f"kill -0 $(cat /tmp/{name}-background-pid)")
+
+        first = console_login("reserve-first")
+        second = console_login("reserve-second")
+        session_sum = sum(reserve["session"].values()) * mib
+        for path in ("user.slice/user-1000.slice", "user.slice/user-1000.slice/user@1000.service"):
+            assert low(path) == session_sum, path
+        console_logout("reserve-first", first)
+        # The other local login still needs its reserve.
+        for path in ("user.slice/user-1000.slice", "user.slice/user-1000.slice/user@1000.service"):
+            assert low(path) == session_sum, path
+        console_logout("reserve-second", second)
+        for path in ("user.slice/user-1000.slice", "user.slice/user-1000.slice/user@1000.service"):
+            assert low(path) == 0, path
+        # Stop the surviving jobs in the disposable VM; the bound units'
+        # later cleanup must remain harmless after PAM already released it.
+        machine.succeed(f"systemctl stop session-{first}.scope session-{second}.scope")
+        for session in (first, second):
+            machine.wait_until_fails(f"systemctl is-active --quiet aizome-memory-reserve-{session}.service", timeout=30)
+        assert low("user.slice/user-1000.slice/user@1000.service") == 0
   '';
 }

@@ -118,14 +118,21 @@ let
     && !(c.systemd.services."user@".serviceConfig ? MemoryLow);
   rule = c: c.security.pam.services.login.rules.session.aizome-memory-reserve or null;
   script = c: lib.last (rule c).args;
-  # Runs after pam_systemd, which registers the session it reads.
+  # Runs on open and close after pam_systemd, which registers/releases the
+  # session it reads. A close hook is needed while background jobs keep the
+  # departing session's scope alive.
   loginRule =
     c:
     rule c != null
     && (rule c).enable
     && (rule c).control == "optional"
     && (rule c).order > c.security.pam.services.login.rules.session.systemd.order
-    && lib.hasInfix (builtins.unsafeDiscardStringContext "pam_exec.so quiet type=open_session ${script c}") (
+    &&
+      (rule c).args == [
+        "quiet"
+        (script c)
+      ]
+    && lib.hasInfix (builtins.unsafeDiscardStringContext "pam_exec.so quiet ${script c}") (
       lib.last (builtins.split "pam_systemd\\.so" c.security.pam.services.login.text)
     );
   # Each budget, 0 included, as the drop-in that carries it.
@@ -320,7 +327,7 @@ pkgs.runCommand "aizome-memory-policy" { } ''
   # bound to the session takes it back.
   grep -qF 'reserve "$uid" 1200M' ${script alone}
   grep -qF 'reserve "$uid" 1296M' ${script coexist}
-  grep -qF 'reserve "$2" 0' ${script alone}
+  grep -qF 'reserve "$1" 0' ${script alone}
   grep -qF -- '--property=BindsTo="$scope"' ${script alone}
   echo 'Budgets, sums, explicit overrides, zeroed and empty packages, the login rule and user/system audio drop-ins' > "$out"
 ''

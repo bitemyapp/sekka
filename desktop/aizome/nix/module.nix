@@ -202,10 +202,10 @@ let
   # user manager and user-UID.slice while they are, so SSH logins,
   # lingering managers and other accounts' jobs don't claim it. pam_exec
   # runs this as root after pam_systemd, with PAM_USER and the session's
-  # XDG_SESSION_ID. Ending the session can kill the process that would
-  # close it in PAM (`loginctl terminate-session` does), so a unit bound to
-  # the session's scope takes the reserve back when the person's last such
-  # session stops.
+  # XDG_SESSION_ID. Normal PAM close releases the reserve even if background
+  # processes keep the session scope alive. Ending the session can also kill
+  # the process that would close it in PAM (`loginctl terminate-session`
+  # does), so a unit bound to the scope handles that path too.
   personalReserve = pkgs.writeShellScript "aizome-memory-reserve-login" ''
     systemctl=${config.systemd.package}/bin/systemctl
     loginctl=${config.systemd.package}/bin/loginctl
@@ -227,18 +227,29 @@ let
       $timeout 10 "$systemctl" set-property --runtime "user-$1.slice" "MemoryLow=$2"
       $timeout 10 "$systemctl" set-property --runtime "user@$1.service" "MemoryLow=$2"
     }
-    case "''${1:-}" in
+    release() {
+      # PAM close and the bound unit may both run. Exclude the departing
+      # session even if logind still lists it, and keep any other local
+      # session's reserve. Releasing an already released reserve is harmless.
+      local session
+      for session in $($timeout 5 "$loginctl" show-user "$1" -p Sessions --value 2>/dev/null); do
+        if [ "$session" != "$2" ] && present "$session"; then
+          return 0
+        fi
+      done
+      reserve "$1" 0
+    }
+    case "''${1:-''${PAM_TYPE:-}}" in
       release)
-        # The bound unit stopping with session $3 of user $2.
-        for session in $($timeout 5 "$loginctl" show-user "$2" -p Sessions --value 2>/dev/null); do
-          if [ "$session" != "$3" ] && present "$session"; then
-            exit 0
-          fi
-        done
-        reserve "$2" 0
+        release "$2" "$3"
         ;;
-      *)
-        [ "''${PAM_TYPE:-}" = open_session ] && [ -n "''${XDG_SESSION_ID:-}" ] || exit 0
+      close_session)
+        [ -n "''${XDG_SESSION_ID:-}" ] || exit 0
+        uid=$(${pkgs.coreutils}/bin/id -u "$PAM_USER") || exit 0
+        release "$uid" "$XDG_SESSION_ID"
+        ;;
+      open_session)
+        [ -n "''${XDG_SESSION_ID:-}" ] || exit 0
         present "$XDG_SESSION_ID" || exit 0
         uid=$(${pkgs.coreutils}/bin/id -u "$PAM_USER") || exit 0
         reserve "$uid" ${reserveSum reserve.session}
@@ -532,7 +543,6 @@ in
         modulePath = "${config.security.pam.package}/lib/security/pam_exec.so";
         args = [
           "quiet"
-          "type=open_session"
           "${personalReserve}"
         ];
         order = config.security.pam.services.login.rules.session.systemd.order + 10;
