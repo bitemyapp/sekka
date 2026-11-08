@@ -159,6 +159,10 @@ impl Screen {
         }
     }
 
+    pub fn sink(&self) -> Option<&VideoSink> {
+        self.sink.as_ref()
+    }
+
     pub fn set_format(&mut self, format: std::ffi::c_uint) {
         self.format = format;
     }

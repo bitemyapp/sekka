@@ -27,10 +27,13 @@ let
     "Nintendo - Super Nintendo Entertainment System" = "sha256-QGiWHB36p+BZlfJepD53f0iydERGF44J/QYEDoRq4M4=";
     "SNK - Neo Geo Pocket" = "sha256-t2TXSAbEFEbiKd10Agzs8LP0vnt8hazcRjGVfSOG5vQ=";
     "SNK - Neo Geo Pocket Color" = "sha256-bCpAoglWRchRWChxayU5rquzfe654eVUB8xjFNyYEBg=";
+    "Sega - Dreamcast" = "sha256-IgSHHIGTFAK+m32U+k8NhJJkqenbpADDyf0BiUR3rQg=";
     "Sega - Game Gear" = "sha256-0dR0aITs/mO5BpEnD94M+KP57Js+gH5ZDaLPyviQJ4Q=";
     "Sega - Master System - Mark III" = "sha256-4HZpB157K7IuEUPQCQ5txVTes6sHJpYGge5jaclM48E=";
     "Sega - Mega Drive - Genesis" = "sha256-5bpANlF2tLhJ+mZ6MrDksX4axvSQoIMjWHLBzvLwzFc=";
+    "Sega - Saturn" = "sha256-HnMLgUA9xfX9LUn6s2ulBIAcUV/ZWdKXPE6pexu6vAY=";
     "Sony - PlayStation" = "sha256-mYyNsBN7w2hGkeUgQyOqfwFedRIHlIdL+2h8p3075qs=";
+    "Sony - PlayStation 2" = "sha256-DI8JQcQTHiniiNs9b2EQFu/96jAw9YoDdld9i+kOINo=";
   };
   # Store paths can't hold spaces: each file is fetched under a name of
   # its own and installed under libretro's.

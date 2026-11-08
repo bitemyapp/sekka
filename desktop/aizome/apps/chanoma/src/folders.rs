@@ -254,7 +254,7 @@ pub fn look_into(dir: &Path) -> Option<Inside> {
             {
                 n.systems.push(s.short);
             }
-        } else if library::system_of(&path, root).is_some() {
+        } else if library::is_game_file(&path, root) {
             n.games += 1;
         } else if aizome_media::is_video(&path) {
             n.videos += 1;

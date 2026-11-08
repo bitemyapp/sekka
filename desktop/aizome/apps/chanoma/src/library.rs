@@ -39,7 +39,12 @@ impl System {
     /// as cartridge sets come (a disc isn't played zipped). A zip elsewhere
     /// could be anything's, and isn't opened to see.
     pub fn takes(&self, ext: &str) -> bool {
-        self.extensions.contains(&ext) || (ext == "zip" && self.id != "psx")
+        self.extensions.contains(&ext) || (ext == "zip" && !self.is_disc())
+    }
+
+    /// Whether its games are discs (cue sheets, CHDs).
+    pub fn is_disc(&self) -> bool {
+        self.extensions.iter().any(|e| DISC_PARTS.contains(e))
     }
 }
 
@@ -148,13 +153,52 @@ pub const SYSTEMS: &[System] = &[
         id: "psx",
         name: "PlayStation",
         short: "PlayStation",
-        folders: &["psx", "ps1", "playstation", "psone"],
+        folders: &["psx", "ps1", "playstation", "psone", "sonyplaystation"],
         extensions: &["chd", "cue", "pbp", "m3u"],
         // PCSX-ReARMed first: it plays without a BIOS image of the console's.
         cores: &["pcsx_rearmed", "swanstation", "mednafen_psx"],
         color: 0x5f6b7a,
         players: 2,
         prefer: &[("swanstation_GPU_Renderer", "Software")],
+    },
+    System {
+        id: "saturn",
+        name: "Sega Saturn",
+        short: "Saturn",
+        folders: &["saturn", "segasaturn", "saturnjp"],
+        extensions: &["cue", "chd", "ccd", "m3u"],
+        // Beetle Saturn where the console's BIOS is there (it plays with
+        // nothing else), else Yabause, which stands in for it.
+        cores: &["mednafen_saturn", "yabause"],
+        color: 0x34405a,
+        players: 2,
+        prefer: &[],
+    },
+    System {
+        id: "dreamcast",
+        name: "Sega Dreamcast",
+        short: "Dreamcast",
+        folders: &["dreamcast", "dc", "segadreamcast"],
+        extensions: &["gdi", "cdi", "chd", "cue", "m3u"],
+        // Through OpenGL ([`crate::retro::gl`]).
+        cores: &["flycast"],
+        color: 0xd6601e,
+        players: 4,
+        // Twice the console's 640 by 480, for a television.
+        prefer: &[("reicast_internal_resolution", "1280x960")],
+    },
+    System {
+        id: "ps2",
+        name: "PlayStation 2",
+        short: "PlayStation 2",
+        folders: &["ps2", "playstation2", "sonyplaystation2"],
+        extensions: &["iso", "chd", "cso", "cue", "m3u"],
+        // PCSX2 where the console's BIOS is there (it plays with nothing
+        // else), else Play!, which stands in for it; both through OpenGL.
+        cores: &["pcsx2", "play"],
+        color: 0x23408e,
+        players: 2,
+        prefer: &[("pcsx2_renderer", "OpenGL")],
     },
     System {
         id: "atari2600",
@@ -217,24 +261,49 @@ pub fn system_named(name: &str) -> Option<&'static System> {
     SYSTEMS.iter().find(|s| s.folders.contains(&key.as_str()))
 }
 
+/// Says which system's a disc is ([`crate::disc`]), for one that several
+/// systems' come as (a cue sheet, a CHD); none when it can't be told.
+pub type Discs<'a> = &'a mut dyn FnMut(&Path) -> Option<&'static str>;
+
+/// Disc images only one system's games come as: a GDI or a CDI is a
+/// Dreamcast's, a PBP a PlayStation's. Others (an ISO, a CHD, a cue
+/// sheet) may be another system's, or no game's.
+const OWN_DISCS: &[&str] = &["gdi", "cdi", "pbp"];
+
 /// The system a file is for: its nearest folder that names one, else its
-/// extension (when only one system uses it).
-pub fn system_of(path: &Path, root: &Path) -> Option<&'static System> {
+/// extension when only one system uses it, else (a disc any of several
+/// systems' could be) what `discs` says is on it.
+pub fn system_of(path: &Path, root: &Path, discs: Discs) -> Option<&'static System> {
     let ext = path.extension()?.to_string_lossy().to_ascii_lowercase();
-    let mut dir = path.parent();
-    while let Some(d) = dir {
-        if d == root || !d.starts_with(root) {
-            break;
-        }
-        if let Some(s) = d.file_name().and_then(|n| system_named(&n.to_string_lossy())) {
-            // A system's folder holds its games; other files there aren't.
-            return s.takes(&ext).then_some(s);
-        }
-        dir = d.parent();
+    if let Some(s) = folder_system(path, root) {
+        // A system's folder holds its games; other files there aren't.
+        return s.takes(&ext).then_some(s);
     }
     let mut by_ext = SYSTEMS.iter().filter(|s| s.extensions.contains(&ext.as_str()));
     let first = by_ext.next()?;
-    by_ext.next().is_none().then_some(first)
+    if by_ext.next().is_none() && (!first.is_disc() || OWN_DISCS.contains(&ext.as_str())) {
+        return Some(first);
+    }
+    let id = discs(path)?;
+    SYSTEMS.iter().find(|s| s.id == id && s.extensions.contains(&ext.as_str()))
+}
+
+/// The system `path`'s nearest folder under `root` names.
+fn folder_system(path: &Path, root: &Path) -> Option<&'static System> {
+    path.ancestors()
+        .skip(1)
+        .take_while(|d| *d != root && d.starts_with(root))
+        .find_map(|d| d.file_name().and_then(|n| system_named(&n.to_string_lossy())))
+}
+
+/// Whether `path` may be a game, without reading it: one [`system_of`]
+/// would find, or a disc of one.
+pub fn is_game_file(path: &Path, root: &Path) -> bool {
+    system_of(path, root, &mut |p| {
+        let ext = p.extension()?.to_string_lossy().to_ascii_lowercase();
+        SYSTEMS.iter().find(|s| s.extensions.contains(&ext.as_str())).map(|s| s.id)
+    })
+    .is_some()
 }
 
 /// A game's name from its file's: without the extension, the dump's
@@ -368,7 +437,18 @@ impl Cores {
 
     /// The best core here for `system`.
     pub fn for_system(&self, system: &System) -> Option<&Path> {
-        system.cores.iter().find_map(|c| self.found.iter().find(|(s, _)| s == c).map(|(_, p)| p.as_path()))
+        self.first(system.cores.iter().copied())
+    }
+
+    /// The best core here for a game of `system` whose console's BIOS, if
+    /// it needs one, `has` says is there ([`crate::retro::bios::NEEDS`]);
+    /// else the best of all, which says why it can't start.
+    pub fn for_game(&self, system: &System, has: impl Fn(&str) -> bool) -> Option<&Path> {
+        self.first(crate::retro::bios::playable(system.cores.iter().copied(), has)).or_else(|| self.for_system(system))
+    }
+
+    fn first<'a>(&self, cores: impl IntoIterator<Item = &'a str>) -> Option<&Path> {
+        cores.into_iter().find_map(|c| self.found.iter().find(|(s, _)| s == c).map(|(_, p)| p.as_path()))
     }
 }
 
@@ -557,10 +637,11 @@ fn in_system_folder(path: &Path, root: &Path) -> bool {
 
 /// What a disc's sheet may name: its tracks' images, or (a playlist) its
 /// discs' sheets.
-const DISC_PARTS: &[&str] = &["bin", "img", "iso", "chd", "cue", "ccd", "pbp", "ecm", "mdf", "m3u"];
+const DISC_PARTS: &[&str] =
+    &["bin", "img", "iso", "chd", "cue", "ccd", "pbp", "ecm", "mdf", "m3u", "gdi", "cdi", "cso"];
 
 /// The games in folders read, each counted in its folder's `held`.
-fn games_of(reads: &[(usize, Read)], cores: &Cores, held: &mut [Held]) -> (Vec<Game>, usize) {
+fn games_of(reads: &[(usize, Read)], cores: &Cores, held: &mut [Held], discs: Discs) -> (Vec<Game>, usize) {
     let mut games = Vec::new();
     let mut unplayable = 0;
     for (i, read) in reads {
@@ -585,7 +666,7 @@ fn games_of(reads: &[(usize, Read)], cores: &Cores, held: &mut [Held]) -> (Vec<G
             if listed.contains(path.as_path()) {
                 continue;
             }
-            let Some(system) = system_of(path, root) else { continue };
+            let Some(system) = system_of(path, root, discs) else { continue };
             // A sheet known only by its extension is a disc's if it names
             // one: an album's names its music, a playlist its videos.
             if !in_system_folder(path, root)
@@ -636,7 +717,8 @@ fn held_of(folders: &[PathBuf], reads: &[(usize, Read)]) -> Vec<Held> {
 /// when `refresh`).
 pub fn scan_games(index: &mut Index, folders: &[PathBuf], cores: &Cores, refresh: bool) -> (Vec<Game>, usize) {
     let reads = read_all(index, folders, refresh, &|_| {});
-    games_of(&reads, cores, &mut held_of(folders, &reads))
+    let mut facts = crate::metadata::Facts::new(index, refresh);
+    games_of(&reads, cores, &mut held_of(folders, &reads), &mut |p| crate::disc::seen(&mut facts, p, refresh)?.system)
 }
 
 /// A folder of games found on a drive (or at home), for a grown-up to add.
@@ -671,9 +753,11 @@ pub fn find_games(
             }
         }
         let Read { root, files, .. } = read(index, path, false, &|_| {});
+        let mut facts = crate::metadata::Facts::new(index, refresh);
+        let mut discs = |p: &Path| crate::disc::seen(&mut facts, p, refresh)?.system;
         let mut counts: std::collections::BTreeMap<(PathBuf, &'static str), (usize, bool)> = Default::default();
         for f in &files {
-            let Some(system) = system_of(f, &root) else { continue };
+            let Some(system) = system_of(f, &root, &mut discs) else { continue };
             // The nearest folder named for the system, else the game's own.
             let named = f.ancestors().skip(1).take_while(|d| d.starts_with(&root) && *d != root).find(|d| {
                 d.file_name().is_some_and(|n| system.folders.contains(&folder_key(&n.to_string_lossy()).as_str()))
@@ -845,7 +929,8 @@ pub fn scan_videos(index: &mut Index, folders: &[PathBuf], refresh: bool) -> Vec
 pub fn held_in(index: &mut Index, folders: &[PathBuf], cores: &Cores, refresh: bool) -> Vec<Held> {
     let reads = read_all(index, folders, refresh, &|_| {});
     let mut held = held_of(folders, &reads);
-    games_of(&reads, cores, &mut held);
+    let mut facts = crate::metadata::Facts::new(index, refresh);
+    games_of(&reads, cores, &mut held, &mut |p| crate::disc::seen(&mut facts, p, refresh)?.system);
     shelves_of(&reads, &mut held);
     held
 }
@@ -943,7 +1028,11 @@ pub fn scan(
     let reads = read_all(index, folders, refresh, &tell);
     let read = began.elapsed();
     let mut held = held_of(folders, &reads);
-    let (mut games, unplayable) = games_of(&reads, &cores, &mut held);
+    // A disc whose folder doesn't say its system is read for it once, at a
+    // look after refreshing; the index keeps what it is.
+    let mut facts = crate::metadata::Facts::new(index, refresh);
+    let (mut games, unplayable) =
+        games_of(&reads, &cores, &mut held, &mut |p| crate::disc::seen(&mut facts, p, refresh)?.system);
     log::debug!("chanoma: the folders read in {read:.0?}, their games recognised in {:.0?}", began.elapsed() - read);
     if shown.get() {
         progress(&Look::default());
@@ -978,16 +1067,37 @@ mod tests {
     }
 
     #[test]
-    fn systems_by_folder_then_by_extension() {
+    fn systems_by_folder_then_by_extension_then_by_whats_on_a_disc() {
         let root = Path::new("/games");
-        assert_eq!(system_of(Path::new("/games/Super Nintendo/Kirby.sfc"), root).map(|s| s.id), Some("snes"));
-        assert_eq!(system_of(Path::new("/games/whatever/Tetris.gb"), root).map(|s| s.id), Some("gb"));
-        // Of the systems here only the PlayStation's games come as cue sheets.
-        assert_eq!(system_of(Path::new("/games/misc/Disc.cue"), root).map(|s| s.id), Some("psx"));
-        assert_eq!(system_of(Path::new("/games/GBC/Pokemon.gbc"), root).map(|s| s.id), Some("gbc"));
+        let of = |p: &str| system_of(Path::new(p), root, &mut |_| None).map(|s| s.id);
+        assert_eq!(of("/games/Super Nintendo/Kirby.sfc"), Some("snes"));
+        assert_eq!(of("/games/whatever/Tetris.gb"), Some("gb"));
+        assert_eq!(of("/games/GBC/Pokemon.gbc"), Some("gbc"));
         // A system's folder holds only its own games.
-        assert_eq!(system_of(Path::new("/games/snes/readme.txt"), root), None);
-        assert_eq!(system_of(Path::new("/games/snes/Tetris.gb"), root), None);
+        assert_eq!(of("/games/snes/readme.txt"), None);
+        assert_eq!(of("/games/snes/Tetris.gb"), None);
+        // Discs in their systems' folders, as collections name them.
+        assert_eq!(of("/games/saturn/Nights (USA).cue"), Some("saturn"));
+        assert_eq!(of("/games/Sega - Dreamcast/Shenmue/Shenmue (Disc 1).chd"), Some("dreamcast"));
+        assert_eq!(of("/games/Sony - PlayStation 2/Ico (USA).iso"), Some("ps2"));
+        assert_eq!(of("/games/Sony - PlayStation/Crash (USA).chd"), Some("psx"));
+        // Only the Dreamcast's come as GDIs.
+        assert_eq!(of("/games/misc/Sonic Adventure.gdi"), Some("dreamcast"));
+        // A cue sheet elsewhere could be any of four systems': not the
+        // PlayStation's unless it says so.
+        assert_eq!(of("/games/misc/Disc.cue"), None);
+        let said = |p: &str, id: &'static str| system_of(Path::new(p), root, &mut |_| Some(id)).map(|s| s.id);
+        assert_eq!(said("/games/misc/Disc.cue", "saturn"), Some("saturn"));
+        assert_eq!(said("/games/misc/Disc.cue", "psx"), Some("psx"));
+        // An ISO is a PlayStation 2's only when it says so: it may be a
+        // PSP's, or a computer's.
+        assert_eq!(of("/games/misc/Ico (USA).iso"), None);
+        assert_eq!(said("/games/misc/Ico (USA).iso", "ps2"), Some("ps2"));
+        assert_eq!(of("/games/psp/Lumines (USA).cso"), None);
+        // A system whose games don't come so isn't taken from the disc.
+        assert_eq!(said("/games/misc/Disc.iso", "saturn"), None);
+        assert!(is_game_file(Path::new("/games/misc/Disc.cue"), root));
+        assert!(!is_game_file(Path::new("/games/misc/notes.txt"), root));
     }
 
     #[test]
@@ -1060,6 +1170,55 @@ mod tests {
         // The NES game has no core here; the N64 one no system.
         assert_eq!(lib.unplayable, 1);
         assert_eq!(lib.games[0].file_key(), "psx~PS1~Disc.cue");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn loose_discs_are_known_by_whats_on_them_read_once() {
+        use crate::disc::tests::{iso_sectors, raw, sega};
+        let d = tmp("discs");
+        let cores_dir = d.join("cores");
+        std::fs::create_dir_all(&cores_dir).unwrap();
+        for core in ["pcsx_rearmed", "yabause", "flycast", "play"] {
+            std::fs::write(cores_dir.join(format!("{core}_libretro.so")), b"").unwrap();
+        }
+        let games = d.join("Games/Discs");
+        std::fs::create_dir_all(&games).unwrap();
+        let cue = |bin: &str, mode: &str| format!("FILE \"{bin}\" BINARY\n  TRACK 01 {mode}\n    INDEX 01 00:00:00\n");
+        let saturn = raw(&iso_sectors(&sega(b"SEGA SEGASATURN ", 0x20, b"MK-81009  "), b"SEGA SEGASATURN", ""), 1);
+        std::fs::write(games.join("Nights (USA).bin"), saturn).unwrap();
+        std::fs::write(games.join("Nights (USA).cue"), cue("Nights (USA).bin", "MODE1/2352")).unwrap();
+        let ps1 = raw(&iso_sectors(b"", b"PLAYSTATION", "BOOT = cdrom:\\SCUS_949.00;1\r\n"), 2);
+        std::fs::write(games.join("Crash Bandicoot (USA).bin"), ps1).unwrap();
+        std::fs::write(games.join("Crash Bandicoot (USA).cue"), cue("Crash Bandicoot (USA).bin", "MODE2/2352"))
+            .unwrap();
+        let ps2 = iso_sectors(b"", b"PLAYSTATION", "BOOT2 = cdrom0:\\SCUS_971.13;1\r\n");
+        std::fs::write(games.join("Ico (USA).iso"), ps2.concat()).unwrap();
+        // A computer's disc, and a Mega-CD's: no games of Chanoma's.
+        std::fs::write(games.join("installer.iso"), vec![0u8; 20 * 2048]).unwrap();
+        let mega = raw(&iso_sectors(b"SEGADISCSYSTEM  ", b"", ""), 1);
+        std::fs::write(games.join("Sonic CD (USA).bin"), &mega[..16 * 2352]).unwrap();
+        std::fs::write(games.join("Sonic CD (USA).cue"), cue("Sonic CD (USA).bin", "MODE1/2352")).unwrap();
+        let mut index = index(&d);
+        let look = |index: &mut Index, refresh: bool| {
+            let lib = scan(
+                index,
+                std::slice::from_ref(&games),
+                std::slice::from_ref(&cores_dir),
+                None,
+                &mut Default::default(),
+                refresh,
+                &|_| {},
+            );
+            lib.games.iter().map(|g| g.key.clone()).collect::<Vec<_>>()
+        };
+        // A look at what the index knows reads no disc: none known yet.
+        assert!(look(&mut index, false).is_empty());
+        let found = ["psx/Crash Bandicoot (USA).cue", "ps2/Ico (USA).iso", "saturn/Nights (USA).cue"];
+        assert_eq!(look(&mut index, true), found);
+        // Kept: the next start knows them without reading a disc.
+        std::fs::write(games.join("Nights (USA).bin"), vec![0u8; 24 * 2352]).unwrap();
+        assert_eq!(look(&mut index, false), found);
         let _ = std::fs::remove_dir_all(&d);
     }
 

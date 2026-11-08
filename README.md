@@ -80,7 +80,9 @@ in detail.
 it's turned on (`programs.aizome.chanoma`). Kids use it with nothing but
 a Bluetooth game controller: streaming services open full screen in
 Chrome, films and shows play from your own folders, and retro games play
-through emulator cores, kept just where they were left. Drives plugged
+through emulator cores, kept just where they were left: cartridge
+consoles, and the PlayStation, Saturn, Dreamcast and PlayStation 2 from
+their discs, each told apart by what's on it. Drives plugged
 in are opened by themselves, as it starts and as they come, and it says
 once if one can't be. Add a folder, or one it suggests on a drive (a
 `roms`, a `Movies`), and it finds the games, films and shows inside
@@ -103,11 +105,13 @@ PIN or a password, as you choose, and leaving Chanoma logs out. The login
 screen takes a game controller too, so the whole evening needs no
 keyboard: nothing changes there until a button is pressed, then the
 controller chooses who logs in and types a password on an on-screen
-keyboard, or presses the TV's PIN on its buttons. So far all of it has
-been tested in a virtual machine with a virtual controller and with real
-emulator cores, not yet with a physical controller, Netflix-style
-services or a television, and consoles that need 3D hardware (the
-Nintendo 64 and later) aren't supported. See
+keyboard, or presses the TV's PIN on its buttons. It has been tested in a
+virtual machine with a virtual controller and with real emulator cores,
+and used on a television with a physical controller; Netflix-style
+services haven't been checked. The Dreamcast and PlayStation 2 draw on
+the GPU and haven't been played on a television yet; the PlayStation 2's
+best core needs the console's own BIOS, kept in a `bios` folder by the
+games. The Nintendo 64, GameCube and later consoles aren't supported. See
 [docs/chanoma.md](desktop/aizome/docs/chanoma.md).
 
 **Super + Return** opens Hotaru 蛍, Aizome's own terminal, and programs that

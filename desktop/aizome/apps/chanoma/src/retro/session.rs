@@ -49,6 +49,9 @@ pub struct Launch {
     /// Folders of console BIOS images offered to the core: linked into
     /// `system_dir` beside what's there ([`offer_bios`]).
     pub bios: Vec<PathBuf>,
+    /// Images from a `bios` folder by the games, and where each goes in
+    /// `system_dir` ([`super::bios`]).
+    pub found_bios: Vec<(PathBuf, PathBuf)>,
     pub save_dir: PathBuf,
     pub players: usize,
     /// Core settings to use instead of the core's defaults.
@@ -270,6 +273,7 @@ fn run(
         let _ = std::fs::create_dir_all(d);
     }
     offer_bios(&launch.bios, &launch.system_dir);
+    super::bios::offer(&launch.found_bios, &launch.system_dir);
     // A zipped game is unpacked first, as RetroArch does: a core takes a
     // file or its bytes, never a zip. The last few stay unpacked.
     if launch.game.extension().is_some_and(|e| e.eq_ignore_ascii_case("zip")) {
@@ -278,7 +282,11 @@ fn run(
             Err(e) => return events(Event::Failed(format!("{}: {e}", launch.game.display()))),
         }
     }
+    // What the compositor takes, known since the window showed: a core
+    // drawing with OpenGL draws on its GPU.
+    let caps = sink.as_ref().and_then(|_| aizome_kit::sidestep_ui::video::caps(Duration::from_millis(500)));
     let mut host = Box::new(Host::new(Screen::new(sink), pads, live.clone()));
+    host.caps = caps;
     host.system_dir = cstring(&launch.system_dir);
     host.save_dir = cstring(&launch.save_dir);
     host.core_path = cstring(&core_path);
@@ -344,6 +352,15 @@ fn run(
         let g = av.geometry;
         let k = video::factor(g.base_height.max(1), launch.screen_lines);
         h.screen.configure(g.max_width.max(g.base_width), g.max_height.max(g.base_height), k);
+        if let Some(hw) = &mut h.hw {
+            hw.gl.configure(g.max_width.max(g.base_width), g.max_height.max(g.base_height));
+        }
+    }
+    // A core drawing with OpenGL sets its things up in the framebuffer
+    // just made, as libretro has it: after the game's loaded.
+    // SAFETY: not inside a core call; then the core's own function.
+    if let Some(reset) = unsafe { &*host_ptr }.hw.as_ref().and_then(|hw| hw.reset) {
+        unsafe { reset() };
     }
     load_save_ram(&api, &launch.save_ram);
     let mut resumed = false;
@@ -408,6 +425,9 @@ fn run(
             let g = h.av.geometry;
             let k = video::factor(g.base_height.max(1), launch.screen_lines);
             h.screen.configure(g.max_width.max(g.base_width), g.max_height.max(g.base_height), k);
+            if let Some(hw) = &mut h.hw {
+                hw.gl.configure(g.max_width.max(g.base_width), g.max_height.max(g.base_height));
+            }
             resampler.set_rate(h.av.timing.sample_rate.max(1.0));
             frame_time = Duration::from_secs_f64(1.0 / h.av.timing.fps.clamp(1.0, 240.0));
             events(Event::Aspect(aspect(&h.av)));
@@ -452,16 +472,24 @@ fn run(
         kept = crate::store::write_bytes(&launch.state, &bytes).is_ok();
         // SAFETY: not inside a core call.
         let h = unsafe { &*host_ptr };
-        if let Some((w, hgt, rgba)) = h.screen.last_rgba() {
+        if let Some((w, hgt, rgba)) = h.last_rgba() {
             let _ = save_picture(&launch.picture, w, hgt, &rgba, aspect(&h.av));
         }
     }
-    // SAFETY: as above, in libretro's order.
+    // SAFETY: as above, in libretro's order: a core's OpenGL things go
+    // while its context is there, which goes after the core.
     unsafe {
-        let h = &*host_ptr;
-        h.screen.clear();
+        let destroy = {
+            let h = &*host_ptr;
+            h.screen.clear();
+            h.hw.as_ref().and_then(|hw| hw.destroy)
+        };
+        if let Some(destroy) = destroy {
+            destroy();
+        }
         (api.unload_game)();
         (api.deinit)();
+        (*host_ptr).hw = None;
     }
     Host::unregister();
     drop(host);

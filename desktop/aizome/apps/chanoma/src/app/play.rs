@@ -158,7 +158,12 @@ impl Chanoma {
         if !self.may_start(cx) {
             return;
         }
-        let Some(core) = self.library.cores.for_system(g.system).map(Path::to_path_buf) else {
+        // A BIOS kept by the games may be what the best core needs.
+        let system_dir = self.config.dirs.system();
+        let packaged = crate::library::bios_dirs();
+        let found_bios = crate::retro::bios::wanted(&crate::retro::bios::near(&g.path, &self.settings.folders));
+        let has = |place: &str| crate::retro::bios::has(place, &system_dir, &packaged, &found_bios);
+        let Some(core) = self.library.cores.for_game(g.system, has).map(Path::to_path_buf) else {
             self.go(
                 Screen::Problem(
                     "This game can't start".into(),
@@ -174,6 +179,7 @@ impl Chanoma {
         let file = g.file_key();
         let dirs = &self.config.dirs;
         let state = dirs.states().join(format!("{file}.state"));
+        let prefer = g.system.prefer.iter().map(|(k, v)| ((*k).to_owned(), (*v).to_owned())).collect();
         let core = match self.config.core_override {
             Some(api) => CoreSource::Api(api),
             None => CoreSource::Library(core),
@@ -185,11 +191,12 @@ impl Chanoma {
             resume: state.is_file(),
             picture: dirs.states().join(format!("{file}.png")),
             state,
-            system_dir: dirs.system(),
-            bios: crate::library::bios_dirs(),
+            system_dir,
+            bios: packaged,
+            found_bios,
             save_dir: dirs.saves(),
             players: g.system.players,
-            prefer: g.system.prefer.iter().map(|(k, v)| ((*k).to_owned(), (*v).to_owned())).collect(),
+            prefer,
             screen_lines: self.lines,
             silent: self.config.silent,
             unpack_dir: dirs.unzipped(),

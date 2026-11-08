@@ -8,23 +8,21 @@
 //! is found by what's in it, worked out once and kept in the files index
 //! beside the file (a fact, forgotten when the file changes): a zip's
 //! CRC from its directory, a cartridge's CRC (an NES one's without its
-//! header too), or the serial a PlayStation disc boots, from its
-//! `SYSTEM.CNF`.
+//! header too), or a disc's serial, from its `SYSTEM.CNF` or its system
+//! area ([`crate::disc`]).
 //!
 //! The databases are RetroArch's `.rdb` files: `RARCHDB\0`, an offset,
 //! then one MessagePack map a game until a nil.
 
 use std::collections::HashMap;
-use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
 use aizome_index::Index;
 
 use crate::library::Game;
 
-/// The facts kept in the files index for a renamed file.
+/// The fact kept in the files index for a renamed cartridge.
 const FACT_CRC: &str = "chanoma.crc";
-const FACT_SERIAL: &str = "chanoma.serial";
 /// Cartridges larger than this aren't read for their CRC.
 const READ_AT_MOST: u64 = 64 << 20;
 
@@ -74,6 +72,9 @@ pub fn databases(system: &str) -> &'static [&'static str] {
         "gg" => &["Sega - Game Gear"],
         "pce" => &["NEC - PC Engine - TurboGrafx 16", "NEC - PC Engine SuperGrafx"],
         "psx" => &["Sony - PlayStation"],
+        "ps2" => &["Sony - PlayStation 2"],
+        "saturn" => &["Sega - Saturn"],
+        "dreamcast" => &["Sega - Dreamcast"],
         "atari2600" => &["Atari - 2600"],
         "lynx" => &["Atari - Lynx"],
         "ngp" => &["SNK - Neo Geo Pocket", "SNK - Neo Geo Pocket Color"],
@@ -296,15 +297,19 @@ struct Ids {
 }
 
 /// The facts the index keeps of the games' files, read a folder at a time.
-struct Facts<'a> {
-    index: &'a Index,
+pub struct Facts<'a> {
+    pub index: &'a Index,
     /// Whether a fact holds only while its file is as it was.
     check: bool,
     folders: HashMap<(PathBuf, &'static str), HashMap<std::ffi::OsString, Vec<u8>>>,
 }
 
-impl Facts<'_> {
-    fn get(&mut self, path: &Path, key: &'static str) -> Option<Vec<u8>> {
+impl<'a> Facts<'a> {
+    pub fn new(index: &'a Index, check: bool) -> Facts<'a> {
+        Facts { index, check, folders: HashMap::new() }
+    }
+
+    pub fn get(&mut self, path: &Path, key: &'static str) -> Option<Vec<u8>> {
         let (dir, name) = (path.parent()?, path.file_name()?);
         let Facts { index, check, folders } = self;
         let here = folders
@@ -314,38 +319,26 @@ impl Facts<'_> {
     }
 }
 
-/// `path`'s ids (a disc's when `disc`): kept in the index, else worked out
-/// (when `read`) and kept.
+/// `path`'s ids (a disc's serial when `disc`): kept in the index, else
+/// worked out (when `read`) and kept.
 fn ids(facts: &mut Facts, path: &Path, disc: bool, read: bool) -> Option<Ids> {
-    let ext = path.extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
-    // A disc by its sheet; a CHD or PBP isn't read.
-    if disc && !matches!(ext.as_str(), "cue" | "m3u") {
-        return None;
+    if disc {
+        let serial = crate::disc::seen(facts, path, read)?.serial;
+        return Some(Ids { serial, ..Ids::default() });
     }
-    let key = if disc { FACT_SERIAL } else { FACT_CRC };
-    if let Some(v) = facts.get(path, key) {
-        return Some(if disc {
-            Ids { serial: (!v.is_empty()).then(|| String::from_utf8_lossy(&v).into_owned()), ..Ids::default() }
-        } else {
-            Ids { crcs: v.as_chunks::<4>().0.iter().map(|c| u32::from_le_bytes(*c)).collect(), serial: None }
-        });
+    let ext = path.extension().map(|e| e.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
+    if let Some(v) = facts.get(path, FACT_CRC) {
+        return Some(Ids { crcs: v.as_chunks::<4>().0.iter().map(|c| u32::from_le_bytes(*c)).collect(), serial: None });
     }
     if !read {
         return None;
     }
-    let (ids, value) = if disc {
-        let serial = disc_serial(path);
-        let value = serial.clone().unwrap_or_default().into_bytes();
-        (Ids { serial, ..Ids::default() }, value)
-    } else {
-        let crcs = file_crcs(path, &ext);
-        let value = crcs.iter().flat_map(|c| c.to_le_bytes()).collect();
-        (Ids { crcs, serial: None }, value)
-    };
-    if let Err(e) = facts.index.set_fact(path, key, &value) {
+    let crcs = file_crcs(path, &ext);
+    let value: Vec<u8> = crcs.iter().flat_map(|c| c.to_le_bytes()).collect();
+    if let Err(e) = facts.index.set_fact(path, FACT_CRC, &value) {
         log::debug!("chanoma: keeping what {} is: {e}", path.display());
     }
-    Some(ids)
+    Some(Ids { crcs, serial: None })
 }
 
 /// A cartridge's CRCs: a zip's file's from its directory; a file's own,
@@ -365,106 +358,10 @@ fn file_crcs(path: &Path, ext: &str) -> Vec<u32> {
     out
 }
 
-/// The serial a PlayStation disc boots (`SCUS-94900`), from its first
-/// track's `SYSTEM.CNF`: a cue sheet's (or a playlist's first disc's).
-pub fn disc_serial(sheet: &Path) -> Option<String> {
-    let text = std::fs::read_to_string(sheet).ok()?;
-    let dir = sheet.parent()?;
-    if sheet.extension().is_some_and(|e| e.eq_ignore_ascii_case("m3u")) {
-        let first = text.lines().map(str::trim).find(|l| !l.is_empty() && !l.starts_with('#'))?;
-        return disc_serial(&dir.join(first));
-    }
-    // The first file and the first track's mode.
-    let mut file = None;
-    let mut mode = None;
-    for line in text.lines().map(str::trim) {
-        if file.is_none()
-            && let Some(rest) = line.strip_prefix("FILE ")
-        {
-            let name = match rest.strip_prefix('"') {
-                Some(r) => r.split('"').next()?,
-                None => rest.rsplit_once(' ').map_or(rest, |(n, _)| n),
-            };
-            file = Some(dir.join(name));
-        } else if let Some(rest) = line.strip_prefix("TRACK ") {
-            mode = rest.split_whitespace().nth(1).map(str::to_owned);
-            break;
-        }
-    }
-    let (size, skip) = match mode.as_deref()? {
-        "MODE2/2352" => (2352, 24),
-        "MODE1/2352" => (2352, 16),
-        "MODE2/2336" => (2336, 8),
-        "MODE1/2048" | "MODE2/2048" => (2048, 0),
-        _ => return None,
-    };
-    let mut disc = Disc { f: std::fs::File::open(file?).ok()?, size, skip };
-    let pvd = disc.sectors(16, 1)?;
-    if &pvd[1..6] != b"CD001" {
-        return None;
-    }
-    let root = &pvd[156..190];
-    let (at, len) = (u32_at(root, 2), u32_at(root, 10));
-    let dir = disc.sectors(at, (len as usize).div_ceil(2048).min(16))?;
-    let mut i = 0;
-    while i < dir.len() {
-        let n = usize::from(dir[i]);
-        if n == 0 {
-            // Records don't cross sectors: on to the next.
-            i = (i / 2048 + 1) * 2048;
-            continue;
-        }
-        let rec = dir.get(i..i + n)?;
-        let name = rec.get(33..33 + usize::from(*rec.get(32)?))?;
-        if name.eq_ignore_ascii_case(b"SYSTEM.CNF;1") || name.eq_ignore_ascii_case(b"SYSTEM.CNF") {
-            let (at, len) = (u32_at(rec, 2), u32_at(rec, 10).min(2048));
-            let cnf = disc.sectors(at, 1)?;
-            let cnf = String::from_utf8_lossy(&cnf[..len as usize]).into_owned();
-            return boot_serial(&cnf);
-        }
-        i += n;
-    }
-    None
-}
-
-/// `BOOT = cdrom:\SCUS_949.00;1` → `SCUS-94900`.
-fn boot_serial(cnf: &str) -> Option<String> {
-    let line = cnf.lines().find(|l| l.trim_start().to_ascii_uppercase().starts_with("BOOT"))?;
-    let exe = line.split_once('=')?.1.trim();
-    let exe = exe.rsplit(['\\', ':', '/']).next()?;
-    let exe = exe.split(';').next()?.trim();
-    let (prefix, number) = exe.split_once('_')?;
-    let number: String = number.chars().filter(char::is_ascii_digit).collect();
-    (!prefix.is_empty() && !number.is_empty()).then(|| format!("{}-{number}", prefix.to_ascii_uppercase()))
-}
-
-fn u32_at(b: &[u8], i: usize) -> u32 {
-    u32::from_le_bytes([b[i], b[i + 1], b[i + 2], b[i + 3]])
-}
-
-/// A disc image's track, read a sector's user data at a time.
-struct Disc {
-    f: std::fs::File,
-    size: u64,
-    skip: u64,
-}
-
-impl Disc {
-    fn sectors(&mut self, at: u32, n: usize) -> Option<Vec<u8>> {
-        let mut out = Vec::with_capacity(n * 2048);
-        let mut buf = [0; 2048];
-        for s in 0..n as u64 {
-            self.f.seek(SeekFrom::Start((u64::from(at) + s) * self.size + self.skip)).ok()?;
-            self.f.read_exact(&mut buf).ok()?;
-            out.extend_from_slice(&buf);
-        }
-        Some(out)
-    }
-}
-
-/// The systems' databases read so far. They're 21 MB in all (the
-/// PlayStation's near 8, the NES's 6), so a start reads each once for both
-/// its looks through the games, and the systems' at once, a thread each.
+/// The systems' databases read so far. They're 27 MB in all (the
+/// PlayStation's near 8, the NES's 6, the PlayStation 2's 5.5), so a
+/// start reads each once for both its looks through the games, and the
+/// systems' at once, a thread each.
 #[derive(Debug, Default)]
 pub struct Catalogs(HashMap<&'static str, Catalog>);
 
@@ -491,7 +388,7 @@ pub fn describe(games: &mut [Game], index: &Index, dir: &Path, read: bool, catal
     log::debug!("chanoma: the games' databases read in {:.0?}", began.elapsed());
     // A look at what the index knows takes what it kept as it is; the look
     // after a refresh holds it to the files as they are.
-    let mut facts = Facts { index, check: read, folders: HashMap::new() };
+    let mut facts = Facts::new(index, read);
     let (mut by_name, mut by_content) = (0, 0);
     for g in games.iter_mut() {
         let Some(c) = catalogs.0.get(g.system.id).filter(|c| !c.is_empty()) else { continue };
@@ -504,7 +401,7 @@ pub fn describe(games: &mut [Game], index: &Index, dir: &Path, read: bool, catal
             g.known_as = Some(stem);
             continue;
         }
-        let Some(ids) = ids(&mut facts, &g.path, g.system.id == "psx", read) else { continue };
+        let Some(ids) = ids(&mut facts, &g.path, g.system.is_disc(), read) else { continue };
         let name =
             ids.crcs.iter().find_map(|crc| c.name_by_crc(*crc)).or_else(|| c.name_by_serial(ids.serial.as_deref()?));
         if let Some(n) = name {
@@ -561,41 +458,6 @@ pub(crate) mod tests {
         out
     }
 
-    /// A PlayStation disc's first track (2,352-byte sectors, as a BIN is)
-    /// booting `boot`.
-    pub fn disc(boot: &str) -> Vec<u8> {
-        let mut img = vec![0u8; 24 * 2352];
-        let mut put = |lba: usize, data: &[u8]| {
-            let at = lba * 2352 + 24;
-            img[at..at + data.len()].copy_from_slice(data);
-        };
-        let mut pvd = vec![0u8; 2048];
-        pvd[0] = 1;
-        pvd[1..6].copy_from_slice(b"CD001");
-        // The root folder: a record at sector 18, one sector long.
-        pvd[156] = 34;
-        pvd[158..162].copy_from_slice(&18u32.to_le_bytes());
-        pvd[166..170].copy_from_slice(&2048u32.to_le_bytes());
-        put(16, &pvd);
-        let cnf = format!("BOOT = cdrom:\\{boot};1\r\nTCB = 4\r\n");
-        let mut root = vec![0u8; 2048];
-        let mut i = 0;
-        for (name, at, len) in
-            [(&b"\0"[..], 18u32, 2048u32), (b"README.TXT;1", 19, 5), (b"SYSTEM.CNF;1", 20, cnf.len() as u32)]
-        {
-            let n = 33 + name.len() + (name.len() + 1) % 2;
-            root[i] = n as u8;
-            root[i + 2..i + 6].copy_from_slice(&at.to_le_bytes());
-            root[i + 10..i + 14].copy_from_slice(&len.to_le_bytes());
-            root[i + 32] = name.len() as u8;
-            root[i + 33..i + 33 + name.len()].copy_from_slice(name);
-            i += n;
-        }
-        put(18, &root);
-        put(20, cnf.as_bytes());
-        img
-    }
-
     #[test]
     fn a_database_is_read_and_games_found_by_name_crc_and_serial() {
         let mut c = Catalog::default();
@@ -623,23 +485,5 @@ pub(crate) mod tests {
         assert_eq!(c.name_by_serial("scus_949.00").and_then(|n| c.by_name(n)).unwrap(), crash);
         assert_eq!(c.by_name("Nothing Known (USA)"), None, "named, but nothing said");
         assert!(Catalog::default().add(b"not a database").is_err());
-    }
-
-    #[test]
-    fn a_disc_says_its_serial() {
-        let d = std::env::temp_dir().join(format!("chanoma-disc-{}", std::process::id()));
-        std::fs::create_dir_all(&d).unwrap();
-        std::fs::write(d.join("Game (Track 1).bin"), disc("SCUS_949.00")).unwrap();
-        std::fs::write(
-            d.join("Renamed.cue"),
-            "FILE \"Game (Track 1).bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n",
-        )
-        .unwrap();
-        std::fs::write(d.join("Game.m3u"), "# a playlist\nRenamed.cue\n").unwrap();
-        assert_eq!(disc_serial(&d.join("Renamed.cue")).as_deref(), Some("SCUS-94900"));
-        assert_eq!(disc_serial(&d.join("Game.m3u")).as_deref(), Some("SCUS-94900"));
-        assert_eq!(boot_serial("BOOT=cdrom:SLPS_012.34;1").as_deref(), Some("SLPS-01234"));
-        assert_eq!(boot_serial("VMODE = NTSC"), None);
-        let _ = std::fs::remove_dir_all(&d);
     }
 }
