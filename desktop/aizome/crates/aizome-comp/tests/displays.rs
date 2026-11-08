@@ -189,6 +189,45 @@ fn screenshots_across_displays_of_different_scales() {
 }
 
 #[test]
+fn fractional_screenshot_crops_match_the_native_capture() {
+    for scale in [1.25, 1.5, 1.75] {
+        let mode = format!("1920x1080@{scale}");
+        let c = Compositor::start(Options { outputs: &[&mode], renderer: Some("pixman"), ..Default::default() });
+        // A solid window would conceal repeated/skipped rows and columns.
+        let _client = c.client(
+            Spec::new("org.example.pixel-pattern", 0)
+                .pixel_pattern(|x, y| ((x as u32 & 255) << 16) | ((y as u32 & 255) << 8) | ((x ^ y) as u32 & 255)),
+        );
+        let window = c.wait_window("org.example.pixel-pattern");
+        c.ok(Request::Move { id: Some(window.id), x: 200, y: 100 });
+        c.settle();
+        let path = c.dir.join("native.png");
+        c.ok(Request::Screenshot {
+            output: Some("HEADLESS-1".into()),
+            path: Some(path.to_string_lossy().into()),
+            window: None,
+            area: None,
+            clipboard: false,
+        });
+        let native = Image::load(&path);
+        for (x, y, w, h) in [(1, 1, 900, 500), (2, 3, 800, 450)] {
+            let crop = shot_of_area(&c, x, y, w, h);
+            assert_eq!(
+                (crop.width, crop.height),
+                ((w as f64 * scale).round() as u32, (h as f64 * scale).round() as u32)
+            );
+            let sx = (x as f64 * scale).round() as usize;
+            let sy = (y as f64 * scale).round() as usize;
+            let row_bytes = crop.width as usize * 4;
+            for (row, pixels) in crop.rgba.chunks_exact(row_bytes).enumerate() {
+                let start = ((sy + row) * native.width as usize + sx) * 4;
+                assert_eq!(pixels, &native.rgba[start..start + row_bytes], "scale {scale}, crop ({x}, {y}), row {row}");
+            }
+        }
+    }
+}
+
+#[test]
 fn mirroring_from_the_settings() {
     let c = Compositor::start(Options {
         outputs: &["1280x800@1", "1280x800@1"],

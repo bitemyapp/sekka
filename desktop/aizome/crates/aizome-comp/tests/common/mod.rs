@@ -242,16 +242,24 @@ pub fn solid_buffer<S>(shm: &wl_shm::WlShm, (w, h): (i32, i32), color: u32, qh: 
 where
     S: Dispatch<wl_shm_pool::WlShmPool, ()> + Dispatch<wl_buffer::WlBuffer, ()> + 'static,
 {
+    // Copied in doubling runs: fast enough, unoptimised, for a fullscreen
+    // client drawing every frame.
+    let data = [color as u8, (color >> 8) as u8, (color >> 16) as u8, 0xff].repeat((w * h) as usize);
+    rgba_buffer(shm, (w, h), &data, qh)
+}
+
+fn rgba_buffer<S>(shm: &wl_shm::WlShm, (w, h): (i32, i32), data: &[u8], qh: &QueueHandle<S>) -> wl_buffer::WlBuffer
+where
+    S: Dispatch<wl_shm_pool::WlShmPool, ()> + Dispatch<wl_buffer::WlBuffer, ()> + 'static,
+{
     let len = (w * h * 4) as usize;
+    assert_eq!(data.len(), len);
     // Safety: memfd_create with a static name.
     let fd = unsafe { libc::memfd_create(c"aizome-test".as_ptr(), 0) };
     assert!(fd >= 0);
     // Safety: we own the new fd.
     let mut file = std::fs::File::from(unsafe { OwnedFd::from_raw_fd(fd) });
-    // Copied in doubling runs: fast enough, unoptimised, for a fullscreen
-    // client drawing every frame.
-    let data = [color as u8, (color >> 8) as u8, (color >> 16) as u8, 0xff].repeat((w * h) as usize);
-    file.write_all(&data).unwrap();
+    file.write_all(data).unwrap();
     let pool = shm.create_pool(file.as_fd(), len as i32, qh, ());
     let buffer = pool.create_buffer(0, w, h, w * 4, wl_shm::Format::Argb8888, qh, ());
     pool.destroy();
@@ -357,6 +365,8 @@ pub struct Spec {
     pub title: String,
     /// The solid colour it draws, 0xRRGGBB.
     pub color: u32,
+    /// Optional per-pixel 0xRRGGBB pattern, for screenshot fidelity tests.
+    pub pixel_pattern: Option<fn(i32, i32) -> u32>,
     pub size: (i32, i32),
     /// Ask for server-side decorations (otherwise it never binds
     /// xdg-decoration, as GTK4 doesn't).
@@ -384,6 +394,7 @@ impl Spec {
             app_id: app_id.into(),
             title: app_id.into(),
             color,
+            pixel_pattern: None,
             size: (400, 300),
             ssd: true,
             min_size: None,
@@ -397,6 +408,10 @@ impl Spec {
     }
     pub fn text_input(mut self) -> Spec {
         self.text_input = true;
+        self
+    }
+    pub fn pixel_pattern(mut self, pattern: fn(i32, i32) -> u32) -> Spec {
+        self.pixel_pattern = Some(pattern);
         self
     }
     pub fn animated(mut self) -> Spec {
@@ -695,7 +710,19 @@ impl App {
 
     /// Fills a surface with one colour, opaque, and commits it.
     fn paint(&self, qh: &QueueHandle<App>, s: &wl_surface::WlSurface, (w, h): (i32, i32), c: u32) {
-        let buffer = solid_buffer(&self.shm, (w, h), c, qh);
+        let buffer = if let Some(pattern) = self.spec.pixel_pattern {
+            let data: Vec<_> = (0..h)
+                .flat_map(|y| {
+                    (0..w).flat_map(move |x| {
+                        let color = pattern(x, y);
+                        [color as u8, (color >> 8) as u8, (color >> 16) as u8, 255]
+                    })
+                })
+                .collect();
+            rgba_buffer(&self.shm, (w, h), &data, qh)
+        } else {
+            solid_buffer(&self.shm, (w, h), c, qh)
+        };
         let opaque = self.compositor.create_region(qh, ());
         opaque.add(0, 0, w, h);
         s.set_opaque_region(Some(&opaque));
