@@ -75,8 +75,8 @@ impl Action {
     /// Parses an action name (as in settings overrides and IPC `action`).
     pub fn parse(s: &str) -> Option<Action> {
         let s = s.trim();
-        if let Some(cmd) = s.strip_prefix("spawn ") {
-            return Some(Action::Spawn(cmd.split_whitespace().map(String::from).collect()));
+        if let Some(cmd) = aizome_config::bindings::SpawnCommand::parse(s) {
+            return Some(Action::Spawn(cmd.into_argv()));
         }
         if let Some(n) = s.strip_prefix("go-to-desk-").and_then(|n| n.parse().ok()) {
             return Some(Action::GoToDesk(n));
@@ -364,6 +364,15 @@ impl Bindings {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn spawn_actions_use_the_shared_command_grammar() {
+        assert_eq!(
+            Action::parse(" spawn\tkoe  record\ttoggle "),
+            Some(Action::Spawn(vec!["koe".into(), "record".into(), "toggle".into()]))
+        );
+        assert_eq!(Action::parse("spawn"), None);
+    }
 
     #[test]
     fn parses_chords() {

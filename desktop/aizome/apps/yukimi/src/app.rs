@@ -1097,9 +1097,8 @@ impl Yukimi {
     fn choose_branch(&mut self, input: String, cx: &mut Cx<Msg>) {
         let Some(found) = self.model.inputs.iter().find(|i| i.name == input) else { return };
         let Some(locked) = &found.locked else { return };
-        let source = found.original.as_ref().unwrap_or(locked).describe();
-        let current = yukimi_config::branch::of(&source);
-        let repo = locked.github_repo().map(|(owner, repo)| (owner.to_owned(), repo.to_owned()));
+        let current = found.original.as_ref().unwrap_or(locked).reference.clone();
+        let repo = locked.github_repo();
         if let Some((owner, name)) = repo.clone()
             && !matches!(self.source, Source::Sample(_))
         {

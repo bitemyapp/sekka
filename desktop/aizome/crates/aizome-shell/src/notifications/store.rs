@@ -90,9 +90,22 @@ pub enum NoteSound {
     Named(String),
 }
 
+/// Stable identity for shell state migrations, independent of visible text.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum NotificationKind {
+    #[default]
+    Application,
+    /// Retired shell-local keyboard setup offer. Its actions cannot survive
+    /// a shell restart, regardless of the language used for its text.
+    KeyboardSetup,
+}
+
 /// What an app asked to show (`Notify`'s arguments).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Incoming {
+    /// Set by local producers, never inferred from application-supplied text.
+    pub kind: NotificationKind,
     pub app_name: String,
     /// Replace the notification with this id (0: a new one).
     pub replaces_id: u32,
@@ -121,6 +134,7 @@ pub struct Incoming {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Notification {
+    pub kind: NotificationKind,
     pub id: u32,
     pub app_name: String,
     pub app_icon: String,
@@ -236,6 +250,7 @@ impl Store {
     pub fn post_as(&mut self, id: u32, n: Incoming, filed_under: String, quiet: bool, now: u64) -> Posted {
         let replaced = self.list.iter().any(|x| x.id == id);
         let note = Notification {
+            kind: n.kind,
             id,
             app_name: n.app_name,
             app_icon: n.app_icon,

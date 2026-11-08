@@ -1099,6 +1099,10 @@ commit pins have the same meaning across these operations. The offline
 `reconstruction_agrees_with_nix` test compares reconstructed URLs with
 `builtins.parseFlakeRef`; run it explicitly with
 `cargo test --locked --manifest-path apps/yukimi/Cargo.toml -p yukimi-config reconstruction_agrees_with_nix -- --ignored`.
+Lock-file descriptions, GitHub links/API requests and FlakeHub release URLs
+use the same URI component encoders. Branch controls read the lock's `ref`
+directly; update-cache identities serialize source metadata rather than
+reusing visible labels, so a changed pin invalidates the previous answer.
 One given an address of one's own keeps it, and Sekka follows it; that
 system may then build Sekka's packages itself. The build passes the binary
 caches the new configuration names (as root, so the daemon accepts them), so
@@ -1440,6 +1444,19 @@ nix build .#aizome .#aizome-fonts
 nix develop .#aizome
 nix build .#aizome-checks.session -L
 ```
+
+Command bindings and Koe's executable-name migration share
+`aizome_config::bindings::SpawnCommand`. The grammar is `spawn` followed by
+whitespace-separated arguments, with no shell expansion or quote processing;
+migrations edit the parsed executable and serialize representable arguments.
+The shell's carried notification state has an explicit version and stable
+notification kinds. Only unversioned history uses the old keyboard-offer
+text recognizer; versioned records are retired by kind, independent of wording.
+
+Ananicy's build-time rule filter parses JSON records and matches their decoded
+`name` fields. Surviving records, comments and malformed upstream lines stay
+unchanged. `checks.x86_64-linux.tuning-policy` builds the filtered provider and
+runs its regression tests alongside the scheduling policy tests.
 
 The shell observes application launch attempts through `aizome-sys`:
 process creation and exit are separate events, and only a compositor window

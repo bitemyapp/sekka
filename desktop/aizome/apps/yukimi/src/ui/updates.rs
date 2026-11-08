@@ -5,7 +5,6 @@ use std::collections::BTreeMap;
 
 use aizome_kit::prelude::*;
 use aizome_kit::{column, row};
-use yukimi_config::branch;
 use yukimi_config::lock::Movement;
 use yukimi_system::completion::{Action, Completion};
 use yukimi_system::human_age;
@@ -126,7 +125,8 @@ fn inputs(app: &Yukimi, moves: Option<&BTreeMap<String, Movement>>) -> Vec<Eleme
                 slots(vec![space(0.0), tag("follows", Role::Text3)], None, None, None),
             ),
             (Some(locked), None) => {
-                let source = input.original.as_ref().unwrap_or(locked).describe();
+                let metadata = input.original.as_ref().unwrap_or(locked);
+                let source = metadata.describe();
                 let mut subtitle = source.clone();
                 if !input.follows_inputs.is_empty() {
                     subtitle.push_str(&format!("  ·  uses this system's {}", input.follows_inputs.join(", ")));
@@ -141,8 +141,8 @@ fn inputs(app: &Yukimi, moves: Option<&BTreeMap<String, Movement>>) -> Vec<Eleme
                     failures.get(&input.name).map(String::as_str),
                 );
                 let mut branch_button = None;
-                if branch::changeable(&source) {
-                    let label = branch::of(&source).unwrap_or_else(|| "default branch".to_owned());
+                if metadata.branch_changeable() {
+                    let label = metadata.reference.clone().unwrap_or_else(|| "default branch".to_owned());
                     branch_button = Some(
                         button(label)
                             .plain()

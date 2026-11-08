@@ -26,17 +26,10 @@ let
   # CachyOS's rules without its shell rules. ananicy loads rule files in
   # directory order and the last rule for a name wins, so an added rule could
   # not reliably replace them.
-  rules = pkgs.runCommand "ananicy-rules-sekka" { } ''
+  rules = pkgs.runCommand "ananicy-rules-sekka" { nativeBuildInputs = [ pkgs.python3 ]; } ''
     cp -r ${pkgs.ananicy-rules-cachyos} $out
     chmod -R u+w $out
-    pattern='"name": *"(${lib.concatStringsSep "|" shells})"'
-    grep -rlE "$pattern" $out/etc/ananicy.d | while read -r file; do
-      sed -i -E "/$pattern/d" "$file"
-    done
-    if grep -rqE "$pattern" $out/etc/ananicy.d; then
-      echo "shell rules remain" >&2
-      exit 1
-    fi
+    python3 ${../../../../nix/scheduling/filter-rules.py} $out/etc/ananicy.d ${lib.escapeShellArgs shells}
   '';
 in
 {
