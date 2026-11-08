@@ -30,9 +30,11 @@ erasure and verified from its header. The installed configuration contains:
   two days of swap wrote 211 GiB to the partition and read 113 GiB back,
   while the compressed pool held about 1 GiB. 65% of swapped pages were
   needed again, against 11% of evicted file cache, and at one point about
-  16 GiB of anonymous memory sat only on disk beside 18 GiB of page cache. At 60, reclaim drops cache before it
-  swaps. Much lower values strip programs' code from memory before anything
-  is swapped, and at 1 or below the kernel reclaims file pages alone. With
+  16 GiB of anonymous memory sat only on disk beside 18 GiB of page cache.
+  At 60, reclaim weighs file cache over anonymous memory (60 against 140)
+  instead of treating them alike; it still swaps, just less. Much lower
+  values strip programs' code from memory before anything is swapped; only
+  0 limits reclaim to file pages, and 1 merely tries them first. With
   the desktop's own services protected (see
   [Keeping the desktop resident](#keeping-the-desktop-resident)), swappiness
   decides only which applications' pages pay.
@@ -177,11 +179,19 @@ PipeWire's budgets follow its services: by default they belong to
 belong to `memoryReserve.system` and count toward `system.slice` instead.
 
 A service is protected only as far as every ancestor is. The module sets
-`session.slice`, `user@.service`, every user's `user-UID.slice` (through a
-`user-.slice` drop-in) and `user.slice` to the sum of the session budgets, and
-`system.slice` to the sum of the system ones. Protection a service doesn't use
-passes to its siblings in proportion to their use (systemd mounts cgroup2 with
-`memory_recursiveprot`). People logged in at the same time share
+`session.slice` and `user.slice` to the sum of the session budgets, and
+`system.slice` to the sum of the system ones. The user manager
+(`user@UID.service`) and `user-UID.slice` of each person signed in at the
+machine, on the console or a login screen, get the session sum while they
+are: a `login` PAM session rule, which the login screens' PAM services
+include, sets it at runtime after `pam_systemd` and starts
+`aizome-memory-reserve-<session>.service`, bound to the session's scope, which
+resets it to 0 when that person's last such session ends, however it ends.
+Greeters, SSH logins, lingering user managers
+and other accounts get none, so their jobs can't claim the reserve that
+`user.slice` holds for the person at the desktop. Protection a service doesn't
+use passes to its siblings in proportion to their use (systemd mounts cgroup2
+with `memory_recursiveprot`). People signed in at the same time share
 `user.slice`'s reserve; a shared machine can raise
 `systemd.slices.user.sliceConfig.MemoryLow`.
 
@@ -193,11 +203,15 @@ protected memory rather than run out. The budgets are NixOS defaults in Aizome's
 module (the IBus one in Sekka's input-method module), independent of
 `calamares.tuning.enable`. Change them through
 `programs.aizome.memoryReserve.session` and `.system`, in MiB, so the
-ancestors follow; 0 removes a service, and disabling all reserves produces an
-empty drop-in package. An explicit `serviceConfig.MemoryLow` on one of these
-units, including 0, suppresses its default drop-in but leaves the ancestors
-at the old sum. This works for both packaged and NixOS-defined services;
-use the reserve options when the ancestors should follow the new size.
+ancestors follow. 0 turns a service's protection off with a `MemoryLow=0`
+drop-in, which also overrides what the unit asks for itself (systemd-oomd's
+64 MiB); `lib.mkForce { }` leaves an empty drop-in package. The drop-ins are
+named `40-aizome-memory.conf`, after packaged drop-ins and before an
+administrator's (`50-…`, `override.conf`), which can still change them. An
+explicit `serviceConfig.MemoryLow` on one of these units, including 0, takes
+precedence over its drop-in, for packaged and NixOS-defined services alike,
+and the sums follow it when it's in bytes or K, M, G or T. Other forms, such
+as a share of RAM, leave the service's budget in the sums, with a warning.
 
 The reserve changes where reclaim happens: unprotected workloads can lose
 pages and run more slowly before the desktop does. It introduces no new OOM
@@ -208,11 +222,15 @@ OOM killer; keeping the desktop resident does not guarantee that every job
 survives, and concentrating reclaim on workloads can increase their pressure.
 
 `checks.aizome-memory-policy` evaluates the budgets, sums, drop-ins and
-overrides for Aizome alone, with IBus, customized, and without Aizome. It also
-builds empty reserve packages, checks explicit service overrides, and covers
-user and system-wide audio with optional audio services disabled. The
+overrides for Aizome alone, with IBus, customized, without tuning, and without
+Aizome. It also builds empty and zeroed reserve packages, checks explicit
+service overrides and the sums that follow them, the login session rule, and
+covers user and system-wide audio with optional audio services disabled. The
 `aizome-login` VM test reads every budgeted unit's `MemoryLow` and the cgroup
-files of the ancestors after a real login. A bounded cgroup reclaim experiment
+files of the ancestors after a real login, checks that a lingering second
+account and the greeter get no reserve and that the user manager keeps its
+memory delegation, and that the reserve returns to 0 at logout. A bounded
+cgroup reclaim experiment
 showed that protected pages remained resident while an unprotected control was
 evicted. These are mechanism checks, not a before/after measurement of the
 full desktop under the original workload. The budgets are an overridable

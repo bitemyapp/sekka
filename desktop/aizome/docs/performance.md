@@ -19,8 +19,9 @@ CPU/I/O weights and gives each service the desktop waits on a best-effort
 (`programs.aizome.memoryReserve`): 1 GiB for the compositor, shell and
 Xwayland, smaller ones for audio, the input method, the portals and the
 session bus, and, among system services, logind, udev, the system bus,
-RealtimeKit, BlueZ and systemd-oomd. Their slices and the user manager get the
-sums, since a reserve counts only as far as every ancestor grants it. Reclaim
+RealtimeKit, BlueZ and systemd-oomd. Their slices, and the user manager of
+each person signed in at the machine, get the sums, since a reserve counts only
+as far as every ancestor grants it. Reclaim
 takes applications' pages first, while unused RAM stays available to
 workloads. It does not pin memory or guarantee that a session survives
 exhaustion.

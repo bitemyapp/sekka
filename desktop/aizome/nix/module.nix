@@ -105,20 +105,78 @@ let
   # (programs.aizome.memoryReserve), as drop-ins: they apply to whichever
   # package or module defines the unit, and do nothing where it isn't
   # installed. A unit is protected only as far as its parent is, so the
-  # slices and user manager above these services get the sums.
-  reserve = lib.mapAttrs (_: lib.filterAttrs (_: mib: mib > 0)) cfg.memoryReserve;
+  # slices above these services, and the user manager of each person
+  # signed in at the machine, get the sums.
   reserveSum = units: "${toString (lib.foldl' builtins.add 0 (lib.attrValues units))}M";
+  services = {
+    session = config.systemd.user.services;
+    system = config.systemd.services;
+  };
   # A NixOS-defined service carries serviceConfig in its main unit, which
-  # package drop-ins would override. Leave explicit MemoryLow settings
-  # (including 0) to NixOS for both module- and package-provided services.
-  # Keep the ancestor sums based on memoryReserve, as documented.
-  defaultReserves =
-    services:
-    lib.filterAttrs (
-      unit: _:
-      (lib.attrByPath [ (lib.removeSuffix ".service" unit) "serviceConfig" "MemoryLow" ] null services)
-      == null
-    );
+  # package drop-ins would override, so an explicit MemoryLow (0 included)
+  # stays NixOS's, for module- and package-provided services alike.
+  explicitLow =
+    manager: unit:
+    lib.attrByPath [
+      (lib.removeSuffix ".service" unit)
+      "serviceConfig"
+      "MemoryLow"
+    ] null services.${manager};
+  # An explicit MemoryLow in MiB, rounded up: systemd's plain bytes, or K,
+  # M, G or T. null for what the sums can't follow (a share of RAM,
+  # infinity, fractions).
+  explicitMiB =
+    value:
+    let
+      size = builtins.match "(0|[1-9][0-9]*)([KMGT]?)" (toString value);
+      n = lib.toInt (builtins.head size);
+      up = unit: (n + unit - 1) / unit;
+    in
+    if !(builtins.isInt value || builtins.isString value) || size == null then
+      null
+    else
+      {
+        "" = up 1048576;
+        K = up 1024;
+        M = n;
+        G = n * 1024;
+        T = n * 1048576;
+      }
+      .${builtins.elemAt size 1};
+  # Each service's MemoryLow in MiB as it applies: its budget, or its
+  # explicit setting, which the sums then follow.
+  applied = lib.mapAttrs (
+    manager:
+    lib.mapAttrs (
+      unit: mib:
+      let
+        explicit = explicitLow manager unit;
+      in
+      if explicit == null then mib else lib.defaultTo mib (explicitMiB explicit)
+    )
+  ) cfg.memoryReserve;
+  reserve = lib.mapAttrs (_: lib.filterAttrs (_: mib: mib > 0)) applied;
+  unfollowed = lib.flatten (
+    lib.mapAttrsToList (
+      manager:
+      lib.mapAttrsToList (
+        unit: _:
+        let
+          explicit = explicitLow manager unit;
+        in
+        lib.optional (
+          explicit != null && explicitMiB explicit == null
+        ) "${unit} (MemoryLow=${toString explicit})"
+      )
+    ) cfg.memoryReserve
+  );
+  # The budgets of services without an explicit MemoryLow. A 0 is written
+  # too: it overrides what the unit asks for itself (systemd-oomd's 64 MiB).
+  dropIns = lib.mapAttrs (
+    manager: lib.filterAttrs (unit: _: explicitLow manager unit == null)
+  ) cfg.memoryReserve;
+  # Named to sort after packaged drop-ins (10-…) and before an
+  # administrator's (50-…, override.conf), which can still change them.
   memoryDropIns = pkgs.runCommand "aizome-memory-reserve" { } ''
     mkdir -p "$out"
     ${lib.concatStrings (
@@ -129,15 +187,72 @@ let
             lib.mapAttrsToList (unit: mib: ''
               dir="$out/lib/systemd/${manager}/"${lib.escapeShellArg "${unit}.d"}
               mkdir -p "$dir"
-              printf '[Service]\nMemoryLow=%sM\n' ${toString mib} > "$dir/aizome-memory.conf"
+              printf '[Service]\nMemoryLow=%sM\n' ${toString mib} > "$dir/40-aizome-memory.conf"
             '') units
           )
           {
-            user = defaultReserves config.systemd.user.services reserve.session;
-            system = defaultReserves config.systemd.services reserve.system;
+            user = dropIns.session;
+            inherit (dropIns) system;
           }
       )
     )}
+  '';
+  # Each person signed in at the machine (on the console or a login screen,
+  # whose session rules include `login`'s) gets the session sum for their
+  # user manager and user-UID.slice while they are, so SSH logins,
+  # lingering managers and other accounts' jobs don't claim it. pam_exec
+  # runs this as root after pam_systemd, with PAM_USER and the session's
+  # XDG_SESSION_ID. Ending the session can kill the process that would
+  # close it in PAM (`loginctl terminate-session` does), so a unit bound to
+  # the session's scope takes the reserve back when the person's last such
+  # session stops.
+  personalReserve = pkgs.writeShellScript "aizome-memory-reserve-login" ''
+    systemctl=${config.systemd.package}/bin/systemctl
+    loginctl=${config.systemd.package}/bin/loginctl
+    timeout=${pkgs.coreutils}/bin/timeout
+    # A person's session here: not a greeter's, a lingering manager's or a
+    # remote login's, and not on its way out.
+    present() {
+      local class= remote= state= key value
+      while IFS='=' read -r key value; do
+        case "$key" in
+          Class) class=$value ;;
+          Remote) remote=$value ;;
+          State) state=$value ;;
+        esac
+      done <<<"$($timeout 5 "$loginctl" show-session "$1" -p Class -p Remote -p State 2>/dev/null)"
+      [ "$class" = user ] && [ "$remote" = no ] && [ "$state" != closing ]
+    }
+    reserve() {
+      $timeout 10 "$systemctl" set-property --runtime "user-$1.slice" "MemoryLow=$2"
+      $timeout 10 "$systemctl" set-property --runtime "user@$1.service" "MemoryLow=$2"
+    }
+    case "''${1:-}" in
+      release)
+        # The bound unit stopping with session $3 of user $2.
+        for session in $($timeout 5 "$loginctl" show-user "$2" -p Sessions --value 2>/dev/null); do
+          if [ "$session" != "$3" ] && present "$session"; then
+            exit 0
+          fi
+        done
+        reserve "$2" 0
+        ;;
+      *)
+        [ "''${PAM_TYPE:-}" = open_session ] && [ -n "''${XDG_SESSION_ID:-}" ] || exit 0
+        present "$XDG_SESSION_ID" || exit 0
+        uid=$(${pkgs.coreutils}/bin/id -u "$PAM_USER") || exit 0
+        reserve "$uid" ${reserveSum reserve.session}
+        scope="session-$XDG_SESSION_ID.scope"
+        $timeout 10 ${config.systemd.package}/bin/systemd-run --quiet --no-block \
+          --unit="aizome-memory-reserve-$XDG_SESSION_ID" \
+          --description="Aizome's memory reserve for session $XDG_SESSION_ID" \
+          --service-type=oneshot --property=RemainAfterExit=yes \
+          --property=BindsTo="$scope" --property=After="$scope" \
+          --property=ExecStop="$0 release $uid $XDG_SESSION_ID" \
+          ${pkgs.coreutils}/bin/true
+        ;;
+    esac
+    exit 0
   '';
   # wf-recorder (the fallback recorder) puts its wl_shm buffers in files in
   # /tmp, which on most NixOS systems is on disk: every frame the compositor
@@ -248,11 +363,15 @@ in
           services in `session.slice` that the desktop waits on: drawing and
           input, audio, the session bus and the portals. The defaults cover
           what each service keeps resident, not the reclaimable caches
-          charged alongside it. `session.slice`, `user@.service`, every
-          `user-UID.slice` and `user.slice` get the sum, which people logged
-          in at the same time share. 0 removes a service. Unused protection
-          stays available to other programs, and the kernel reclaims
-          protected memory rather than run out.
+          charged alongside it. `session.slice` and `user.slice` get the
+          sum, and so do the user manager and `user-UID.slice` of each
+          person signed in at the machine (on the console or a login
+          screen) while they are; people signed in at the same time share
+          it. 0 turns a service's protection off. An explicit
+          `serviceConfig.MemoryLow` on one of these services takes
+          precedence, and the sums follow it when it's in bytes or K, M, G
+          or T. Unused protection stays available to other programs, and
+          the kernel reclaims protected memory rather than run out.
         '';
       };
       system = lib.mkOption {
@@ -274,6 +393,16 @@ in
           is enabled. `system.slice` gets the sum.
         '';
       };
+    };
+    effectiveMemoryReserve = lib.mkOption {
+      type = lib.types.attrsOf (lib.types.attrsOf lib.types.ints.unsigned);
+      default = { };
+      internal = true;
+      description = ''
+        Each protected service's `MemoryLow` in MiB as it applies (its
+        budget, or its explicit setting), under `session` and `system`; the
+        slices above them get the sums. For tests.
+      '';
     };
   };
 
@@ -342,6 +471,12 @@ in
         message = "programs.aizome.memoryReserve names services (unit names ending in .service).";
       }
     ];
+    warnings = lib.optional (unfollowed != [ ]) ''
+      programs.aizome.memoryReserve: the slices above ${lib.concatStringsSep ", " unfollowed}
+      still grant those services' budgets, since an explicit MemoryLow counts toward
+      the sums only in bytes or K, M, G or T. Set the size in programs.aizome.memoryReserve.
+    '';
+    programs.aizome.effectiveMemoryReserve = reserve;
     programs.aizome.memoryReserve =
       let
         bus =
@@ -389,15 +524,19 @@ in
         );
       };
     systemd.slices.system.sliceConfig.MemoryLow = lib.mkDefault (reserveSum reserve.system);
-    # People logged in at the same time share user.slice's reserve.
+    # People signed in at the same time share user.slice's reserve.
     systemd.slices.user.sliceConfig.MemoryLow = lib.mkDefault (reserveSum reserve.session);
-    systemd.slices."user-" = {
-      overrideStrategy = "asDropin";
-      sliceConfig.MemoryLow = lib.mkDefault (reserveSum reserve.session);
-    };
-    systemd.services."user@" = {
-      overrideStrategy = "asDropin";
-      serviceConfig.MemoryLow = lib.mkDefault (reserveSum reserve.session);
+    security.pam.services.login.rules.session = lib.mkIf (reserve.session != { }) {
+      aizome-memory-reserve = {
+        control = "optional";
+        modulePath = "${config.security.pam.package}/lib/security/pam_exec.so";
+        args = [
+          "quiet"
+          "type=open_session"
+          "${personalReserve}"
+        ];
+        order = config.security.pam.services.login.rules.session.systemd.order + 10;
+      };
     };
     # Keep the compositor, shell, audio and portals ahead of applications
     # for CPU/I/O too: session : app : background = 400 : 100 : 30.

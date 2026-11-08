@@ -41,6 +41,15 @@ pkgs.testers.runNixOSTest {
         password = "demo@#";
         linger = true;
       };
+      # Another account whose user manager runs without anyone signed in,
+      # as a build or agent account's would: it must get no reserve. Its
+      # nologin shell keeps it off the login screen, which stays one person.
+      users.users.other = {
+        isNormalUser = true;
+        uid = 1001;
+        linger = true;
+        shell = "/run/current-system/sw/bin/nologin";
+      };
       virtualisation = {
         memorySize = 4096;
         cores = 4;
@@ -55,11 +64,10 @@ pkgs.testers.runNixOSTest {
       environment.systemPackages = [
         (import ./libsecret-dh-padding.nix { inherit (pkgs) lib libsecret; })
       ];
-      # Each service's reclaim budget in MiB, as the module computed it, for
-      # the test to compare with systemd's and the kernel's.
-      environment.etc."aizome-memory-reserve.json".text = builtins.toJSON (
-        lib.mapAttrs (_: lib.filterAttrs (_: mib: mib > 0)) config.programs.aizome.memoryReserve
-      );
+      # Each service's MemoryLow in MiB as the module applies it, for the
+      # test to compare with systemd's and the kernel's.
+      environment.etc."aizome-memory-reserve.json".text =
+        builtins.toJSON config.programs.aizome.effectiveMemoryReserve;
     };
   testScript = ''
     import json
@@ -128,7 +136,8 @@ pkgs.testers.runNixOSTest {
     with subtest("the services the desktop waits on keep their reclaim budgets"):
         # A service's MemoryLow counts only as far as every ancestor grants
         # it, so the user slices, the user manager and system.slice carry
-        # the sums. Read the kernel's view of them after a real login.
+        # the sums; the login session rule grants demo's user manager and
+        # slice theirs. Read the kernel's view of them after a real login.
         mib = 1024 * 1024
         reserve = json.loads(machine.succeed("cat /etc/aizome-memory-reserve.json"))
         session, system = reserve["session"], reserve["system"]
@@ -139,6 +148,16 @@ pkgs.testers.runNixOSTest {
             assert low(path) == sum(session.values()) * mib, (path, low(path))
         assert low("system.slice") == sum(system.values()) * mib, low("system.slice")
         assert low(manager + "/app.slice") == 0
+        # The runtime property leaves the user manager its delegation.
+        assert "memory" in machine.succeed(f"cat /sys/fs/cgroup/{manager}/cgroup.subtree_control").split()
+        # A unit bound to the session takes it back when the session ends.
+        display = machine.succeed("loginctl show-user demo -p Display --value").strip()
+        machine.succeed(f"systemctl is-active aizome-memory-reserve-{display}.service")
+        # A lingering account nobody is signed in to claims none of it.
+        other = "user.slice/user-1001.slice"
+        machine.wait_until_succeeds(f"test -d /sys/fs/cgroup/{other}/user@1001.service", timeout=60)
+        assert low(other) == 0, low(other)
+        assert low(other + "/user@1001.service") == 0
         assert low(manager + "/session.slice/aizome.service") == session["aizome.service"] * mib
         assert low("system.slice/systemd-logind.service") == system["systemd-logind.service"] * mib
         for unit, size in session.items():
@@ -225,5 +244,12 @@ pkgs.testers.runNixOSTest {
         for name in (*keys, "AIZOME_ENVIRONMENT_KEYS"):
             assert not any(line.startswith(name + "=") for line in manager), manager
         machine.screenshot("keyboard-environment-cleared-at-logout")
+
+    with subtest("the reserve leaves demo's lingering manager at logout, and the greeter gets none"):
+        machine.wait_until_succeeds("test $(cat /sys/fs/cgroup/user.slice/user-1000.slice/memory.low) = 0", timeout=30)
+        assert low("user.slice/user-1000.slice/user@1000.service") == 0
+        greeter = machine.succeed("id -u greeter").strip()
+        assert low(f"user.slice/user-{greeter}.slice") == 0
+        assert low("system.slice") == sum(system.values()) * mib
   '';
 }

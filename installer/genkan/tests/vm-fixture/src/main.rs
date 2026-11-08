@@ -916,11 +916,17 @@ fn main() -> Result<()> {
                     fs::read_to_string("/proc/sys/vm/swappiness")?.trim() == "60",
                     "Swappiness is not 60"
                 );
+                // Swappiness 60 is also the kernel's default; page-cluster
+                // (default 3) shows the swap sysctls were applied.
+                ensure!(
+                    fs::read_to_string("/proc/sys/vm/page-cluster")?.trim() == "1",
+                    "vm.page-cluster is not 1"
+                );
                 ensure!(
                     fs::read_to_string("/proc/cmdline")?.contains("resume="),
                     "Hibernation resume device missing"
                 );
-                println!("SWAP=partition,{size},zswap,swappiness=60,resume");
+                println!("SWAP=partition,{size},zswap,swappiness=60,page-cluster=1,resume");
             }
             // The helper leaves its stage timings for hardware measurements.
             let record: serde_json::Value =
