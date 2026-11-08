@@ -100,6 +100,17 @@ environment.
 
 `AIZOME_SESSION` is `1` only on udev without `--no-session`, the
 machine's login session, and `0` under headless, winit or `--no-session`.
+Only that login compositor exports the shared systemd/D-Bus activation
+environment and starts `aizome-session.target`. Headless and nested runs
+never do either, even without `--no-session` and even when started by
+systemd. Their display and IPC addresses belong only to their children;
+otherwise a portal restarted during a test could inherit the test display
+and lose its file chooser when the test exits.
+
+Service supervision is separate: a headless service can still report
+`READY=1` to its own `NOTIFY_SOCKET`. `--no-session` suppresses that readiness
+notification on every backend and opts udev out of login-session ownership.
+
 Those children still see `XDG_CURRENT_DESKTOP=Aizome`, but they run as the
 same user inside the user's real session, so the shell reads
 `AIZOME_SESSION` and there doesn't register as the polkit agent, take

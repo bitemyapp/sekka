@@ -1469,6 +1469,24 @@ is visible in Details, then opens a real Koe window without enabling
 dictation. Its screenshots and JSON identify component evidence, not an ISO
 or physical-hardware qualification.
 
+Only the udev compositor without `--no-session` may publish the shared
+systemd/D-Bus activation environment or start `aizome-session.target`.
+Headless and nested compositors keep their display and IPC addresses local
+to their children, including when launched by systemd. Service readiness
+remains independent: headless `Type=notify` services can report ready, and
+`--no-session` suppresses readiness on every backend.
+
+The package check phase runs `session_environment` against the real headless
+compositor using pixman, private directories, disconnected buses and recording
+stand-ins for the environment/target commands. It covers direct launches,
+`INVOCATION_ID`, `NOTIFY_SOCKET`, explicit `--no-session`, and the environment
+received by both the shell and the command after `--`. It requires no GPU or
+live login session. Run it directly with:
+
+```sh
+nix develop .#aizome -c cargo test --locked --manifest-path desktop/aizome/Cargo.toml -p aizome-comp --test session_environment
+```
+
 Aizome's session launcher owns desktop cleanup even when logind terminates
 only the login scope, as Yukimi's Sign Out does. The compositor runs in the
 user manager, outside that scope; HUP, INT and TERM must therefore stop the

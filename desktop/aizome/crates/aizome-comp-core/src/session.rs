@@ -1,9 +1,9 @@
 //! Session startup and the processes the compositor keeps alive.
 //!
-//! Once the Wayland socket and IPC are up, the compositor exports its
-//! environment to the systemd user manager and D-Bus activation, tells
-//! systemd it is ready (when started as `aizome.service`), and starts
-//! `aizome-session.target`. It runs `aizome-shell` and
+//! Once the Wayland socket and IPC are up, the login compositor exports
+//! its environment to the systemd user manager and D-Bus activation and
+//! starts `aizome-session.target`. Service readiness is independent of
+//! login-session ownership. It runs `aizome-shell` and
 //! `xwayland-satellite` (when installed) and restarts them, backing off,
 //! if they die.
 
@@ -155,9 +155,10 @@ fn free_x_display() -> Option<u32> {
     })
 }
 
-/// Whether this is someone's login session, on a seat and known to
-/// systemd: only then does the shell serve polkit, hold logind's sleep and
-/// lock for logind (`AIZOME_SESSION=1`). A headless or nested run (tests,
+/// Whether this compositor owns the login session: only then may it
+/// publish the shared activation environment and start desktop services,
+/// and its shell serve polkit, hold logind's sleep and lock for logind
+/// (`AIZOME_SESSION=1`). A headless or nested run (tests,
 /// screenshots, trying Aizome inside another desktop) runs as the same user
 /// inside that user's real login session, and must leave all of that alone.
 fn real_session(opts: &crate::cli::Options) -> bool {
@@ -214,10 +215,13 @@ pub fn start(state: &mut State) {
         TimeoutAction::ToDuration(Duration::from_millis(next))
     });
 
-    if !opts.no_session {
+    // A systemd invocation can also be a headless test or nested compositor.
+    // Its display belongs to its children, never the user's shared manager
+    // or D-Bus activation environment (which portals inherit on restart).
+    let under_systemd = std::env::var_os("NOTIFY_SOCKET").is_some() || std::env::var_os("INVOCATION_ID").is_some();
+    if real {
         let env = session_env(&state.az);
         let names: Vec<String> = env.iter().map(|(k, _)| k.clone()).collect();
-        let under_systemd = std::env::var_os("NOTIFY_SOCKET").is_some() || std::env::var_os("INVOCATION_ID").is_some();
         if under_systemd {
             run_quietly(
                 Command::new("systemctl").arg("--user").arg("import-environment").args(&names).envs(env.clone()),
@@ -228,10 +232,14 @@ pub fn start(state: &mut State) {
             dbus.arg("--systemd");
         }
         run_quietly(dbus.args(&names).envs(env.clone()));
+    }
+    // Type=notify is useful for headless services too. Reporting this
+    // process ready does not grant it ownership of the desktop session.
+    if !opts.no_session {
         notify_ready();
-        if under_systemd {
-            run_quietly(Command::new("systemctl").args(["--user", "--no-block", "start", "aizome-session.target"]));
-        }
+    }
+    if real && under_systemd {
+        run_quietly(Command::new("systemctl").args(["--user", "--no-block", "start", "aizome-session.target"]));
     }
 
     if !opts.command.is_empty() {
@@ -545,7 +553,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn only_a_seat_known_to_systemd_is_a_real_session() {
+    fn only_udev_without_no_session_owns_the_login_session() {
         let real = |args: &[&str]| real_session(&crate::cli::parse(args.iter().map(|s| s.to_string())).unwrap());
         assert!(real(&["--backend", "udev"]));
         assert!(!real(&["--backend", "udev", "--no-session"]));

@@ -204,7 +204,8 @@ rustPlatform.buildRustPackage {
 
   # Yukimi's headless interactions and rendering run without a desktop.
   # Hako's show-in-folder service answers on a private bus of its own.
-  # Session, GPU and other D-Bus coverage remain in the component VMs.
+  # Headless session isolation uses pixman and command stand-ins; login,
+  # GPU and other D-Bus coverage remain in the component VMs.
   doCheck = true;
   nativeCheckInputs = [ dbus ];
   checkPhase = ''
@@ -224,6 +225,10 @@ rustPlatform.buildRustPackage {
       }
     }
     export TZDIR=${tzdata}/share/zoneinfo
+    ${cargo}/bin/cargo test --offline --target ${target} --release -p aizome-comp --test session_environment
+    # Test-only dependency features can change the dylib ABI. Restore the
+    # production compositor and logic together before installing them.
+    ${cargo}/bin/cargo build --offline --target ${target} --release -p aizome-comp -p aizome-comp-logic
     cargo test --offline --target ${target} --profile release-lto -p aizome-yukimi -p aizome-kit --lib --test headless --test look --test golden
     # A successful spawn is not a successful application launch. Gate the
     # shipped shell on process outcomes and its failure/details interface.

@@ -40,7 +40,8 @@ pub struct Options {
     pub no_shell: bool,
     /// Start no X11 bridge (xwayland-satellite).
     pub no_xwayland: bool,
-    /// Don't talk to systemd or D-Bus (tests, nested sessions).
+    /// Opt out of login-session ownership and service readiness.
+    /// Headless and nested backends never own the login session.
     pub no_session: bool,
     /// Settings file to read instead of ~/.config/aizome/settings.toml.
     pub config: Option<PathBuf>,
@@ -67,8 +68,8 @@ usage: aizome [options] [-- command args...]
                                   ~/.config/aizome/settings.toml)
   --no-shell                      don't start aizome-shell
   --no-xwayland                   don't start xwayland-satellite
-  --no-session                    don't import the environment into systemd
-                                  and D-Bus or notify readiness
+  --no-session                    disable login-session integration (udev)
+                                  and service readiness (all backends)
   --logic PATH                    the compositor logic library to load
                                   (default: $AIZOME_LOGIC, else the one
                                   installed beside the binary)
