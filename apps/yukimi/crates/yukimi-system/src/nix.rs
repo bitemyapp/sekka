@@ -130,6 +130,31 @@ pub fn stream(mut command: Command, stop: &Stop, update: impl FnMut(&Progress)) 
     stream_command(&mut command, stop, update)
 }
 
+/// Read through the end of a line, or of a carriage return: Git, fetching a
+/// repository for Nix, rewrites its progress in place with `\r` and ends
+/// the line only when a phase is done. Returns how many bytes were read,
+/// 0 at the end.
+fn read_line_or_rewrite(reader: &mut impl BufRead, out: &mut Vec<u8>) -> std::io::Result<usize> {
+    let mut read = 0;
+    loop {
+        let available = match reader.fill_buf() {
+            Ok(available) => available,
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(error) => return Err(error),
+        };
+        let (ended, used) = match available.iter().position(|&b| b == b'\n' || b == b'\r') {
+            Some(end) => (true, end + 1),
+            None => (available.is_empty(), available.len()),
+        };
+        out.extend_from_slice(&available[..used]);
+        reader.consume(used);
+        read += used;
+        if ended {
+            return Ok(read);
+        }
+    }
+}
+
 /// As `stream`, retaining the command for a caller that can prove a retry
 /// is safe (for example pkexec failing before it starts the helper).
 pub fn stream_command(
@@ -165,7 +190,7 @@ pub fn stream_command(
     let mut bytes = Vec::new();
     loop {
         bytes.clear();
-        match errors.read_until(b'\n', &mut bytes) {
+        match read_line_or_rewrite(&mut errors, &mut bytes) {
             Ok(0) => break,
             Ok(_) => {}
             Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
@@ -230,6 +255,22 @@ pub fn flake_nixpkgs(flake: &str) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn progress_rewritten_in_place_is_read_as_it_comes() {
+        let text = "@nix {}\nReceiving objects:   1% (1/9)\rReceiving objects: 100% (9/9), done.\nlast";
+        // A small buffer, so lines also arrive in pieces.
+        let mut reader = BufReader::with_capacity(4, text.as_bytes());
+        let mut pieces = Vec::new();
+        let mut bytes = Vec::new();
+        while read_line_or_rewrite(&mut reader, &mut bytes).unwrap() > 0 {
+            pieces.push(String::from_utf8(std::mem::take(&mut bytes)).unwrap());
+        }
+        assert_eq!(
+            pieces,
+            ["@nix {}\n", "Receiving objects:   1% (1/9)\r", "Receiving objects: 100% (9/9), done.\n", "last"]
+        );
+    }
 
     #[test]
     fn errors_start_at_the_last_error() {
