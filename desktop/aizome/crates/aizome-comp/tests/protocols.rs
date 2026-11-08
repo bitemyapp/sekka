@@ -1,7 +1,8 @@
 //! What Sidestep's fast paths ask of the compositor: wl_shm in ABGR and
-//! XBGR, shm buffers released once their pixels are uploaded (GLES), and
-//! drag and drop with an icon surface that moves by wl_surface.offset and
-//! data source actions (version 3).
+//! XBGR, shm buffers released once, as soon as their pixels are uploaded
+//! (GLES), a sync subsurface's with its parent's commit, and drag and drop
+//! with an icon surface that moves by wl_surface.offset and data source
+//! actions (version 3).
 
 mod common;
 
@@ -9,7 +10,7 @@ use std::io::{Read, Write};
 use std::os::fd::{AsFd, FromRawFd, OwnedFd};
 use std::os::unix::net::UnixStream;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use aizome_ipc::{Request, Response, Synthetic};
@@ -17,7 +18,7 @@ use common::*;
 use wayland_client::globals::{GlobalList, GlobalListContents, registry_queue_init};
 use wayland_client::protocol::{
     wl_buffer, wl_compositor, wl_data_device, wl_data_device_manager, wl_data_offer, wl_data_source, wl_pointer,
-    wl_registry, wl_seat, wl_shm, wl_shm_pool, wl_surface,
+    wl_registry, wl_seat, wl_shm, wl_shm_pool, wl_subcompositor, wl_subsurface, wl_surface,
 };
 use wayland_client::{Connection, Dispatch, EventQueue, Proxy, QueueHandle, WEnum};
 use wayland_protocols::xdg::shell::client::{xdg_surface, xdg_toplevel, xdg_wm_base};
@@ -110,10 +111,10 @@ impl Client {
         }
     }
 
-    /// A solid ARGB8888 buffer; `released` turns true when the compositor
-    /// releases it.
-    fn buffer(&self, w: i32, h: i32, color: u32, released: Option<Arc<AtomicBool>>) -> wl_buffer::WlBuffer {
-        self.buffer_in(wl_shm::Format::Argb8888, w, h, color, None, released)
+    /// A solid ARGB8888 buffer; `releases` counts the compositor's
+    /// releases of it.
+    fn buffer(&self, w: i32, h: i32, color: u32, releases: Option<Arc<AtomicUsize>>) -> wl_buffer::WlBuffer {
+        self.buffer_in(wl_shm::Format::Argb8888, w, h, color, None, releases)
     }
 
     /// A buffer in a format: `color` (0xRRGGBB) everywhere, or only in
@@ -125,7 +126,7 @@ impl Client {
         h: i32,
         color: u32,
         patch: Option<(i32, i32, i32, i32)>,
-        released: Option<Arc<AtomicBool>>,
+        releases: Option<Arc<AtomicUsize>>,
     ) -> wl_buffer::WlBuffer {
         // Safety: memfd_create with a static name.
         let fd = unsafe { OwnedFd::from_raw_fd(libc::memfd_create(c"aizome-probe".as_ptr(), 0)) };
@@ -147,7 +148,7 @@ impl Client {
         }
         file.write_all(&data).unwrap();
         let pool = self.shm.create_pool(file.as_fd(), w * h * 4, &self.qh, ());
-        let b = pool.create_buffer(0, w, h, w * 4, format, &self.qh, released.unwrap_or_default());
+        let b = pool.create_buffer(0, w, h, w * 4, format, &self.qh, releases.unwrap_or_default());
         pool.destroy();
         b
     }
@@ -170,17 +171,19 @@ fn shm_formats_and_release(renderer_name: &str) {
     assert!(a.state.formats.contains(&wl_shm::Format::Abgr8888), "ABGR8888 offered: {:?}", a.state.formats);
     assert!(a.state.formats.contains(&wl_shm::Format::Xbgr8888), "XBGR8888 offered: {:?}", a.state.formats);
     // A new frame in a buffer of its own, and no commit after it.
-    let released = Arc::new(AtomicBool::new(false));
-    let b = a.buffer(300, 200, 0xcc6622, Some(released.clone()));
+    let releases = Arc::new(AtomicUsize::new(0));
+    let b = a.buffer(300, 200, 0xcc6622, Some(releases.clone()));
     a.surface.attach(Some(&b), 0, 0);
     a.surface.damage_buffer(0, 0, 300, 200);
     a.surface.commit();
     let gles = renderer(&c) == "gles";
     if gles {
         // Its pixels are in a texture: it comes back without waiting for
-        // the next commit.
-        a.wait("the buffer released", |_| released.load(Ordering::SeqCst));
+        // the next commit, once.
+        a.wait("the buffer released", |_| releases.load(Ordering::SeqCst) > 0);
         c.settle();
+        a.roundtrip();
+        assert_eq!(releases.load(Ordering::SeqCst), 1, "one release for one commit");
         let w = c.window("org.example.probe").unwrap();
         let img = c.screenshot();
         assert_px(&img, w.geometry.x + 150, w.geometry.y + 100, rgb(0xcc6622), "the released buffer's pixels shown");
@@ -188,7 +191,7 @@ fn shm_formats_and_release(renderer_name: &str) {
         // Pixman reads the client's memory while drawing: kept.
         c.settle();
         a.roundtrip();
-        assert!(!released.load(Ordering::SeqCst), "pixman keeps the buffer until the next commit");
+        assert_eq!(releases.load(Ordering::SeqCst), 0, "pixman keeps the buffer until the next commit");
     }
 }
 
@@ -200,6 +203,45 @@ fn shm_buffers_in_abgr_and_released_after_upload_gles() {
 #[test]
 fn shm_buffers_in_abgr_and_kept_while_drawn_pixman() {
     shm_formats_and_release("pixman");
+}
+
+/// A sync subsurface's first frame, as GTK maps a tooltip or a Firefox
+/// panel: the child commits a buffer, and the parent's commit applies it.
+/// The child's buffer is released once (GLES) or kept (pixman). GTK takes a
+/// release back as the buffer to draw into, and frees it on a second.
+fn sync_subsurface_release(renderer_name: &str) {
+    let c = Compositor::start(Options { renderer: Some(renderer_name), ..Default::default() });
+    let mut a = Client::new(&c, "org.example.probe");
+    let subcompositor: wl_subcompositor::WlSubcompositor = a.globals.bind(&a.qh, 1..=1, ()).unwrap();
+    let child = a.compositor.create_surface(&a.qh, ());
+    let sub = subcompositor.get_subsurface(&child, &a.surface, &a.qh, ());
+    sub.set_position(20, 20);
+    let releases = Arc::new(AtomicUsize::new(0));
+    let b = a.buffer(60, 40, 0x22aa44, Some(releases.clone()));
+    child.attach(Some(&b), 0, 0);
+    child.damage_buffer(0, 0, 60, 40);
+    child.commit();
+    a.surface.commit();
+    let gles = renderer(&c) == "gles";
+    if gles {
+        a.wait("the subsurface's buffer released", |_| releases.load(Ordering::SeqCst) > 0);
+    }
+    c.settle();
+    a.roundtrip();
+    assert_eq!(releases.load(Ordering::SeqCst), usize::from(gles), "one release for one commit at most");
+    let w = c.window("org.example.probe").unwrap();
+    let img = c.screenshot();
+    assert_px(&img, w.geometry.x + 50, w.geometry.y + 40, rgb(0x22aa44), "the subsurface's pixels shown");
+}
+
+#[test]
+fn sync_subsurface_buffer_released_once_gles() {
+    sync_subsurface_release("gles");
+}
+
+#[test]
+fn sync_subsurface_buffer_kept_while_drawn_pixman() {
+    sync_subsurface_release("pixman");
 }
 
 #[test]
@@ -307,6 +349,8 @@ ignore!(
     wl_shm_pool::WlShmPool,
     wl_surface::WlSurface,
     wl_seat::WlSeat,
+    wl_subcompositor::WlSubcompositor,
+    wl_subsurface::WlSubsurface,
     xdg_toplevel::XdgToplevel,
     wl_data_device_manager::WlDataDeviceManager,
     wayland_client::protocol::wl_callback::WlCallback
@@ -320,17 +364,17 @@ impl Dispatch<wl_shm::WlShm, ()> for Probe {
     }
 }
 
-impl Dispatch<wl_buffer::WlBuffer, Arc<AtomicBool>> for Probe {
+impl Dispatch<wl_buffer::WlBuffer, Arc<AtomicUsize>> for Probe {
     fn event(
         _: &mut Self,
         _: &wl_buffer::WlBuffer,
         event: wl_buffer::Event,
-        released: &Arc<AtomicBool>,
+        releases: &Arc<AtomicUsize>,
         _: &Connection,
         _: &QueueHandle<Self>,
     ) {
         if let wl_buffer::Event::Release = event {
-            released.store(true, Ordering::SeqCst);
+            releases.fetch_add(1, Ordering::SeqCst);
         }
     }
 }

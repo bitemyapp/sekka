@@ -171,7 +171,11 @@ Notes for client authors:
   its commit has been uploaded into a texture, not at the next commit, so
   a client can draw into one buffer again at once (smithay adds a second
   release when the next commit replaces it); under pixman, which draws
-  from the client's memory, it is kept until then.
+  from the client's memory, it is kept until then. A sync subsurface's
+  buffer goes back once, with the parent commit that applies it: GTK
+  takes a release as the buffer to draw into next and frees it on another,
+  so a second release there crashed GTK apps (Firefox's panels and
+  tooltips are such subsurfaces).
 - Drag and drop: wl_data_device_manager 3 (source and offer actions),
   and the drag icon moves with its wl_surface.offset (or attach x, y)
   relative to the pointer; it shows above everything, in screenshots
@@ -494,8 +498,9 @@ nix develop .#aizome --command cargo test -p aizome-comp
 - `tests/input_method.rs`: an input method counting its serial as IBus
   does types into a text input that checks serials as foot does, across a
   display turned off and on.
-- `tests/protocols.rs`: wl_shm formats, shm buffers released after upload
-  (GLES) or kept (pixman), drag and drop with an icon and actions.
+- `tests/protocols.rs`: wl_shm formats, shm buffers released once after
+  upload (GLES) or kept (pixman), a sync subsurface's too, drag and drop
+  with an icon and actions.
 - `tests/chromium.rs`: a window opened the way Chromium and Electron
   open theirs (an xdg-toplevel-icon set and destroyed before its buffer,
   either decoration mode, activation with their own token), and the icon
