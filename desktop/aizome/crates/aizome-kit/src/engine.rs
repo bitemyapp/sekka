@@ -110,6 +110,9 @@ pub(crate) enum PopupKind {
         spec: MenuSpec,
         look: MenuLook,
         bar: Option<usize>,
+        /// The height the compositor gave it, shorter than it asked for:
+        /// no more fits on its output, and it scrolls in that.
+        fit: Option<f64>,
     },
     /// A popover element's content, from the owner's tree, shown against
     /// `anchor` (the node's rectangle when last placed).
@@ -367,7 +370,13 @@ impl Core {
             WindowKind::Lock { output } => (OpenKind::Lock { output: *output }, None),
             WindowKind::Popup { parent, anchor, placement, grab } => match self.window_of(*parent) {
                 Some(p) => (
-                    OpenKind::Popup { parent: p, anchor: *anchor, placement: placement.placement(), grab: *grab },
+                    OpenKind::Popup {
+                        parent: p,
+                        anchor: *anchor,
+                        placement: placement.placement(),
+                        grab: *grab,
+                        fit: false,
+                    },
                     None,
                 ),
                 None => {
@@ -943,6 +952,12 @@ impl Core {
     /// Re-lay-out a popup (its content changed) and resize it.
     fn build_popup(&mut self, win: WinId, root: RawElement, platform: &mut dyn Platform) -> Size {
         let Some(w) = self.wins.get_mut(&win) else { return Size::ZERO };
+        // A menu asks for all its rows; the compositor shortens one that
+        // doesn't fit on its output (see `fit_menu`).
+        let tall = match &w.kind {
+            WinKind::Popup { kind: PopupKind::Menu { fit, .. }, .. } => fit.unwrap_or(f64::INFINITY),
+            _ => 900.0,
+        };
         let mut tree = Tree::new(root, NodeId::ROOT.child("popup"));
         let mut env = Env {
             scale: w.scale,
@@ -953,7 +968,7 @@ impl Core {
             now: Instant::now(),
             on_selection: false,
         };
-        let size = tree.layout_free(Size::new(1200.0, 900.0), &mut env);
+        let size = tree.layout_free(Size::new(1200.0, tall), &mut env);
         let size = Size::new(size.width.ceil(), size.height.ceil());
         if w.built && size == w.size {
             for r in settle(&mut tree, &w.snapshot, w.focused, win, platform) {
@@ -990,6 +1005,22 @@ impl Core {
         }
     }
 
+    /// The compositor configured `win` at `size`: for a menu popup, laid
+    /// out at that size. Shorter than the menu asked, it didn't fit on its
+    /// output; it stays that short and scrolls its rows. Whether `win` is
+    /// a menu popup ([`resized`](Self::resized) does for the rest).
+    pub fn fit_menu(&mut self, win: WinId, size: Size, platform: &mut dyn Platform) -> bool {
+        let Some(w) = self.wins.get_mut(&win) else { return false };
+        let WinKind::Popup { kind: PopupKind::Menu { fit, .. }, .. } = &mut w.kind else { return false };
+        if size.height < w.size.height - 0.5 {
+            *fit = Some(size.height);
+        }
+        if size != w.size {
+            self.relayout_popup(win, platform);
+        }
+        true
+    }
+
     /// A fractional output-scale change also invalidates pixel-snapped layout.
     pub fn scale_changed(&mut self, win: WinId, scale: f64) {
         if !scale.is_finite() || scale <= 0.0 {
@@ -1010,12 +1041,13 @@ impl Core {
     pub fn relayout_popup(&mut self, win: WinId, platform: &mut dyn Platform) {
         let Some(w) = self.wins.get(&win) else { return };
         let WinKind::Popup { kind, .. } = &w.kind else { return };
-        let root = match kind {
-            PopupKind::Menu { spec, look, .. } => MenuView::element(spec.clone(), look.clone()),
+        let (root, fit) = match kind {
+            PopupKind::Menu { spec, look, fit, .. } => (MenuView::element(spec.clone(), look.clone()), *fit),
             _ => return,
         };
         // A menu fits what's left as typing filters it: it shortens and
-        // grows back, and only ever widens (it doesn't jump about).
+        // grows back, and only ever widens (it doesn't jump about). It grows
+        // no taller than the compositor let it be.
         let Some(w) = self.wins.get_mut(&win) else { return };
         let mut tree = Tree::new(root, NodeId::ROOT.child("popup"));
         let mut env = Env {
@@ -1027,8 +1059,9 @@ impl Core {
             now: Instant::now(),
             on_selection: false,
         };
-        let natural = tree.layout_free(Size::new(1200.0, 900.0), &mut env);
-        let size = Size::new(natural.width.ceil().max(w.size.width), natural.height.ceil());
+        let natural = tree.layout_free(Size::new(1200.0, f64::INFINITY), &mut env);
+        let height = natural.height.ceil().min(fit.unwrap_or(f64::INFINITY));
+        let size = Size::new(natural.width.ceil().max(w.size.width), height);
         tree.layout_window(size, &mut env);
         if size == w.size {
             for r in settle(&mut tree, &w.snapshot, w.focused, win, platform) {
@@ -1087,6 +1120,7 @@ impl Core {
     ) -> WinId {
         let id = self.next_win;
         self.next_win += 1;
+        let fit = matches!(kind, PopupKind::Menu { .. });
         let mut w = Win::new(id, WinKind::Popup { owner, kind }, Size::ZERO);
         w.mapper = mapper;
         w.has_keyboard = grab;
@@ -1101,7 +1135,7 @@ impl Core {
             min_size: None,
             max_size: None,
             resizable: false,
-            kind: OpenKind::Popup { parent: owner, anchor, placement, grab },
+            kind: OpenKind::Popup { parent: owner, anchor, placement, grab, fit },
             background: None,
             app_id: self.info.app_id.clone(),
             visible: true,
@@ -1210,7 +1244,7 @@ impl Core {
             anchor,
             placement,
             true,
-            PopupKind::Menu { spec, look, bar: None },
+            PopupKind::Menu { spec, look, bar: None, fit: None },
             root,
             mapper,
             platform,
@@ -1249,7 +1283,7 @@ impl Core {
             anchor,
             Placement::Below,
             true,
-            PopupKind::Menu { spec, look: MenuLook::default(), bar: Some(index) },
+            PopupKind::Menu { spec, look: MenuLook::default(), bar: Some(index), fit: None },
             root,
             None,
             platform,
@@ -1323,7 +1357,7 @@ impl Core {
             anchor,
             Placement::Beside,
             true,
-            PopupKind::Menu { spec: sub, look, bar: None },
+            PopupKind::Menu { spec: sub, look, bar: None, fit: None },
             root,
             mapper,
             platform,

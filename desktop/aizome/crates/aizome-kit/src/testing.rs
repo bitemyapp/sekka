@@ -700,6 +700,15 @@ impl<P: Program> Harness<P> {
         self.rt.flush(&mut self.platform);
     }
 
+    /// The compositor configured popup `popup` at `size`, as it does one
+    /// that doesn't fit on its output (shorter than it asked).
+    pub fn configure_popup(&mut self, popup: u32, size: Size) {
+        if !self.rt.core.fit_menu(popup, size, &mut self.platform) {
+            self.rt.core.resized(popup, size);
+        }
+        self.rt.flush(&mut self.platform);
+    }
+
     // Input.
 
     /// Native window entry, before ordinary movement among its widgets.
@@ -759,6 +768,19 @@ impl<P: Program> Harness<P> {
             }
             None => false,
         }
+    }
+
+    /// Move the pointer to `at` in popup `popup` (its own coordinates).
+    pub fn move_in_popup(&mut self, popup: u32, at: Point) {
+        self.rt.core.pointer_move(popup, at, &mut self.platform);
+        self.rt.flush(&mut self.platform);
+    }
+
+    /// Scroll in popup `popup` at `at` (its own coordinates).
+    pub fn scroll_popup(&mut self, popup: u32, at: Point, delta: Vec2) {
+        self.rt.core.pointer_move(popup, at, &mut self.platform);
+        self.rt.core.scroll(popup, at, delta, ScrollPhase::None, ScrollPhase::None, &mut self.platform);
+        self.rt.flush(&mut self.platform);
     }
 
     /// Click in popup `popup` at `at` (its own coordinates).

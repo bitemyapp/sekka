@@ -36,8 +36,10 @@ pub enum OpenKind {
     /// A window of its own; a dialog is kept over `parent`.
     Toplevel { parent: Option<WinId>, utility: bool },
     /// A popup over `parent`, at `anchor` (the parent's coordinates).
-    /// With `grab` it takes the keyboard and pointer while open.
-    Popup { parent: WinId, anchor: Rect, placement: Placement, grab: bool },
+    /// With `grab` it takes the keyboard and pointer while open. With `fit`
+    /// the compositor may make it shorter to fit its output (a menu, which
+    /// scrolls then).
+    Popup { parent: WinId, anchor: Rect, placement: Placement, grab: bool, fit: bool },
     /// A desktop surface (wlr-layer-shell).
     Layer(LayerOptions),
     /// The session lock's surface on an output.

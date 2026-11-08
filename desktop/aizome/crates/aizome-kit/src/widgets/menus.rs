@@ -19,6 +19,11 @@
 //! the rows (and the submenus', flattened with their paths), or goes to
 //! whoever showed the menu ([`MenuStyle::on_type`]); moving toward an open
 //! submenu across other rows doesn't close it.
+//!
+//! A menu given less height than its rows need (a long one on a short
+//! output, a palette kept below the bar) scrolls them: a band with a chevron
+//! at either end where there's more, which scrolls while the pointer rests
+//! on it, the wheel, and the keys bringing the row they reach into sight.
 
 use std::marker::PhantomData;
 use std::time::Duration;
@@ -46,6 +51,11 @@ const SWATCH: f64 = 8.0;
 const SWATCH_GAP: f64 = 6.0;
 /// How long the pointer may cross other rows on its way to a submenu.
 const AIM: Duration = Duration::from_millis(220);
+/// The band at a scrolling menu's end: how tall, and how far it scrolls
+/// how often while the pointer rests on it.
+const BAND: f64 = 16.0;
+const BAND_TICK: Duration = Duration::from_millis(30);
+const BAND_STEP: f64 = 8.0;
 
 /// Where a menu opens against the rectangle it's anchored to.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -278,6 +288,10 @@ pub(crate) struct MenuState {
     aiming: Option<usize>,
     /// The strip being dragged from.
     strip_press: Option<Point>,
+    /// How far the rows are scrolled (whole points are drawn).
+    scroll: f64,
+    /// The band the pointer rests on: -1 the top's, 1 the bottom's.
+    band: i8,
 }
 
 /// A menu, drawn and run.
@@ -289,6 +303,12 @@ pub(crate) struct MenuView {
     width: f64,
     /// The query the rows were laid out for.
     query: String,
+    /// Where the rows show (top and bottom), how far they're scrolled and
+    /// how far they can be: more than nothing only in a menu given less
+    /// height than its rows need.
+    view: (f64, f64),
+    scroll: f64,
+    max_scroll: f64,
 }
 
 /// Whether `query`'s characters come in order in `text` (case aside),
@@ -328,7 +348,17 @@ fn label_of(item: &ItemSpec) -> &str {
 
 impl MenuView {
     pub fn new(spec: MenuSpec, look: MenuLook) -> MenuView {
-        MenuView { spec, look, rows: Vec::new(), gutter: 0.0, width: 0.0, query: String::new() }
+        MenuView {
+            spec,
+            look,
+            rows: Vec::new(),
+            gutter: 0.0,
+            width: 0.0,
+            query: String::new(),
+            view: (0.0, 0.0),
+            scroll: 0.0,
+            max_scroll: 0.0,
+        }
     }
 
     pub fn element(spec: MenuSpec, look: MenuLook) -> RawElement {
@@ -418,12 +448,92 @@ impl MenuView {
     }
 
     fn row_at(&self, p: Point) -> Option<usize> {
-        self.rows.iter().position(|r| p.y >= r.y && p.y < r.y + r.h && p.x >= 0.0 && p.x < self.width)
+        let (top, bottom) = self.shown();
+        if p.y < top || p.y >= bottom {
+            return None;
+        }
+        let y = p.y + self.scroll;
+        self.rows.iter().position(|r| y >= r.y && y < r.y + r.h && p.x >= 0.0 && p.x < self.width)
     }
 
+    /// Where row `i` shows now (scrolled).
     fn row_rect(&self, i: usize) -> Rect {
         let r = &self.rows[i];
-        Rect::new(1.0, r.y, self.width - 1.0, r.y + r.h)
+        Rect::new(1.0, r.y - self.scroll, self.width - 1.0, r.y + r.h - self.scroll)
+    }
+
+    /// The bands showing: above (rows scrolled out of sight) and below
+    /// (rows still to come).
+    fn bands(&self) -> (bool, bool) {
+        (self.scroll > 0.0, self.scroll < self.max_scroll)
+    }
+
+    /// Where the rows show between the bands (top and bottom).
+    fn shown(&self) -> (f64, f64) {
+        let (up, down) = self.bands();
+        (self.view.0 + if up { BAND } else { 0.0 }, self.view.1 - if down { BAND } else { 0.0 })
+    }
+
+    fn band_rect(&self, dir: i8) -> Rect {
+        if dir < 0 {
+            Rect::new(1.0, self.view.0, self.width - 1.0, self.view.0 + BAND)
+        } else {
+            Rect::new(1.0, self.view.1 - BAND, self.width - 1.0, self.view.1)
+        }
+    }
+
+    /// The band showing at `p`: -1 the top's, 1 the bottom's, else 0.
+    fn band_at(&self, p: Point) -> i8 {
+        let (up, down) = self.bands();
+        if up && self.band_rect(-1).contains(p) {
+            -1
+        } else if down && self.band_rect(1).contains(p) {
+            1
+        } else {
+            0
+        }
+    }
+
+    /// Scroll the rows `by` points on from where they are.
+    fn scroll_by(&mut self, cx: &mut EventCx, by: f64) -> bool {
+        let at = cx.state::<MenuState>().scroll.clamp(0.0, self.max_scroll);
+        self.scroll_to(cx, at + by)
+    }
+
+    /// Scroll the rows to `to` (as far as they go): whether they moved.
+    /// The submenu open goes, its row having moved from beside it.
+    fn scroll_to(&mut self, cx: &mut EventCx, to: f64) -> bool {
+        let st = cx.state::<MenuState>();
+        st.scroll = to.clamp(0.0, self.max_scroll);
+        let shown = st.scroll.round();
+        if shown == self.scroll {
+            return false;
+        }
+        self.scroll = shown;
+        if cx.state::<MenuState>().open_sub.take().is_some() {
+            let window = cx.window_id();
+            cx.emit_any(Box::new(KitMsg::MenuCloseSubs { window }));
+        }
+        cx.invalidate();
+        true
+    }
+
+    /// Scroll as little as brings row `i` whole into sight, clear of the
+    /// bands (near an end, the band there goes).
+    fn reveal(&mut self, cx: &mut EventCx, i: usize) {
+        if self.max_scroll <= 0.0 {
+            return;
+        }
+        let r = &self.rows[i];
+        let (top, bottom) = (self.view.0 + BAND, self.view.1 - BAND);
+        let to = if r.y - self.scroll < top {
+            r.y - top
+        } else if r.y + r.h - self.scroll > bottom {
+            r.y + r.h - bottom
+        } else {
+            return;
+        };
+        self.scroll_to(cx, to);
     }
 
     fn strip_rect(&self) -> Rect {
@@ -506,7 +616,7 @@ impl MenuView {
         }
     }
 
-    fn step(&self, cx: &mut EventCx, down: bool) {
+    fn step(&mut self, cx: &mut EventCx, down: bool) {
         let n = self.rows.len();
         if n == 0 {
             return;
@@ -517,8 +627,17 @@ impl MenuView {
             i = if down { (i + 1) % n } else { (i + n - 1) % n };
             if self.selectable(i) {
                 self.set_hover(cx, Some(i), false);
+                self.reveal(cx, i);
                 return;
             }
+        }
+    }
+
+    /// Highlight row `i` from the keyboard (Home, End), in sight.
+    fn key_to(&mut self, cx: &mut EventCx, i: Option<usize>) {
+        self.set_hover(cx, i, false);
+        if let Some(i) = i {
+            self.reveal(cx, i);
         }
     }
 
@@ -534,6 +653,7 @@ impl MenuView {
         let st = cx.state::<MenuState>();
         st.query = q;
         st.hover = None;
+        st.scroll = 0.0;
         if st.open_sub.take().is_some() {
             let window = cx.window_id();
             cx.emit_any(Box::new(KitMsg::MenuCloseSubs { window }));
@@ -605,7 +725,17 @@ impl Widget for MenuView {
         // Laid out in a popup that keeps its size (filtered), fill it.
         let width = width.max(bc.min.width - shadow);
         self.width = width;
-        Size::new(width + shadow, (y + shadow).max(bc.min.height))
+        // Given less height than that, the rows scroll between the strip
+        // (and what's typed) and the bottom edge.
+        let natural = y + shadow;
+        let height = if natural > bc.max.height { bc.max.height } else { natural.max(bc.min.height) };
+        let top = if filtered { self.top() + 4.0 + m.menu_row } else { self.top() };
+        self.view = (top, height - shadow - 1.0);
+        self.max_scroll = (natural - height).max(0.0).ceil();
+        // (Left as it is in the state: a popup is laid out at its natural
+        // size too, which scrolls nothing.)
+        self.scroll = cx.state::<MenuState>().scroll.clamp(0.0, self.max_scroll).round();
+        Size::new(width + shadow, height)
     }
 
     fn paint(&self, cx: &mut PaintCx) {
@@ -681,14 +811,17 @@ impl Widget for MenuView {
                 );
             }
         }
+        let (shown_top, shown_bottom) = self.shown();
+        cx.canvas.save();
+        cx.canvas.clip_rect(Rect::new(0.0, shown_top, self.width, shown_bottom));
         for (i, row) in self.rows.iter().enumerate() {
             let r = self.row_rect(i);
-            if !cx.canvas.needs(r) {
+            if r.y1 <= shown_top || r.y0 >= shown_bottom || !cx.canvas.needs(r) {
                 continue;
             }
             let item = self.item(&row.path);
             match row.kind {
-                RowKind::Separator => draw::separator(cx.canvas, t, 1.0, self.width - 1.0, row.y + 4.0),
+                RowKind::Separator => draw::separator(cx.canvas, t, 1.0, self.width - 1.0, r.y0 + 4.0),
                 RowKind::Header => {
                     let spec =
                         TextSpec { letter_spacing: 1.2, ..TextSpec::new(FontSpec::mono(t.metrics.caption), t.text3()) };
@@ -785,10 +918,21 @@ impl Widget for MenuView {
                 }
             }
         }
+        cx.canvas.restore();
+        // A chevron in each band where there are more rows.
+        let (up, down) = self.bands();
+        for (on, dir, icon) in [(up, -1, Icon::ChevronUp), (down, 1, Icon::ChevronDown)] {
+            if on {
+                let b = self.band_rect(dir);
+                let at = Point::new((b.center().x - 6.0).round(), b.y0 + (BAND - 12.0) / 2.0);
+                icon.draw(cx.canvas, at, 12.0, t.text3());
+            }
+        }
     }
 
     fn hash(&self, h: &mut PaintHasher) {
         h.str(&self.spec.title).f64(self.width).str(&self.query);
+        h.f64(self.view.0).f64(self.view.1).f64(self.scroll).f64(self.max_scroll);
         if let Some(t) = &self.look.title {
             h.str(t);
         }
@@ -850,6 +994,19 @@ impl Widget for MenuView {
                     }
                     return Status::Handled;
                 }
+                // Resting on a band scrolls the rows its way, a step a tick.
+                let band = self.band_at(*pos);
+                let st = cx.state::<MenuState>();
+                let was = std::mem::replace(&mut st.band, band);
+                if band != 0 {
+                    st.last = Some(*pos);
+                    st.aiming = None;
+                    self.set_hover(cx, None, false);
+                    if was == 0 {
+                        cx.request_tick(BAND_TICK);
+                    }
+                    return Status::Handled;
+                }
                 let row = self.row_at(*pos).filter(|&i| self.selectable(i));
                 let last = cx.state::<MenuState>().last.replace(*pos);
                 // Heading right toward an open submenu: let the pointer
@@ -873,12 +1030,34 @@ impl Widget for MenuView {
                 if let Some(row) = cx.state::<MenuState>().aiming.take() {
                     self.set_hover(cx, Some(row), true);
                 }
+                let band = cx.state::<MenuState>().band;
+                if band != 0 {
+                    self.scroll_by(cx, f64::from(band) * BAND_STEP);
+                    // On until the pointer leaves the band, or it goes at
+                    // the end.
+                    let last = cx.state::<MenuState>().last;
+                    let (up, down) = self.bands();
+                    let more = if band < 0 { up } else { down };
+                    if more && last.is_some_and(|p| self.band_rect(band).contains(p)) {
+                        cx.request_tick(BAND_TICK);
+                    } else {
+                        cx.state::<MenuState>().band = 0;
+                    }
+                }
+                Status::Handled
+            }
+            Event::Scroll { pos, delta, .. } if self.max_scroll > 0.0 => {
+                if self.scroll_by(cx, delta.y) {
+                    let row = self.row_at(*pos).filter(|&i| self.selectable(i));
+                    self.set_hover(cx, row, false);
+                }
                 Status::Handled
             }
             Event::PointerLeave => {
                 let st = cx.state::<MenuState>();
                 st.last = None;
                 st.aiming = None;
+                st.band = 0;
                 if st.open_sub.is_none() {
                     self.set_hover(cx, None, false);
                 }
@@ -925,11 +1104,11 @@ impl Widget for MenuView {
                     Key::Named(NamedKey::ArrowUp) => self.step(cx, false),
                     Key::Named(NamedKey::Home) => {
                         let first = (0..self.rows.len()).find(|&i| self.selectable(i));
-                        self.set_hover(cx, first, false);
+                        self.key_to(cx, first);
                     }
                     Key::Named(NamedKey::End) => {
                         let last = (0..self.rows.len()).rev().find(|&i| self.selectable(i));
-                        self.set_hover(cx, last, false);
+                        self.key_to(cx, last);
                     }
                     Key::Named(NamedKey::Enter) => {
                         let hover = cx.state::<MenuState>().hover;
