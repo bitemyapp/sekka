@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-//! Which branch a flake input follows, and the same address following
-//! another: `github:bitemyapp/tatami/stable` following `main` is
+//! The same flake input address following another branch:
+//! `github:bitemyapp/tatami/stable` following `main` is
 //! `github:bitemyapp/tatami/main`. GitHub, GitLab and SourceHut addresses
 //! name the branch after the repository (or as `?ref=` when it has a slash in
 //! it); Git addresses as `?ref=`. Other kinds of address have no branch to
-//! choose.
+//! choose. Which branch an input follows now is the lock's `ref`
+//! (`Locked::reference`).
 
 use crate::flake_url::FlakeUrl;
 
@@ -20,17 +21,6 @@ pub fn valid(name: &str) -> bool {
         && !name.contains("//")
 }
 
-/// The branch an address follows, or `None` for the repository's default
-/// branch (or an address that names none).
-pub fn of(url: &str) -> Option<String> {
-    FlakeUrl::parse(url)?.reference
-}
-
-/// Whether Yukimi can make this address follow another branch.
-pub fn changeable(url: &str) -> bool {
-    with(url, "main").is_some()
-}
-
 /// The address following `branch` instead, pinned to no commit.
 pub fn with(url: &str, branch: &str) -> Option<String> {
     if !valid(branch) {
@@ -42,15 +32,6 @@ pub fn with(url: &str, branch: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn branches_of_addresses() {
-        assert_eq!(of("github:bitemyapp/tatami/stable").as_deref(), Some("stable"));
-        assert_eq!(of("github:bitemyapp/tatami"), None);
-        assert_eq!(of("github:o/r?ref=feature/x&dir=sub").as_deref(), Some("feature/x"));
-        assert_eq!(of("git+https://example.org/r.git?ref=dev").as_deref(), Some("dev"));
-        assert_eq!(of("https://flakehub.com/f/NixOS/nixpkgs/0.1"), None);
-    }
 
     #[test]
     fn following_another_branch() {
@@ -67,7 +48,7 @@ mod tests {
             Some("git+https://example.org/r.git?ref=main&submodules=1")
         );
         assert_eq!(with("https://flakehub.com/f/NixOS/nixpkgs/0.1", "main"), None);
-        assert!(changeable("github:o/r") && !changeable("path:/home/a/x"));
+        assert_eq!(with("path:/home/a/x", "main"), None);
         for bad in ["", "-x", "a..b", "a b", "x.lock", "a//b", "/a", "a/", "$(x)"] {
             assert!(with("github:o/r", bad).is_none(), "{bad}");
         }

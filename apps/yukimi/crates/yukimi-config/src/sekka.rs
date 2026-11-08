@@ -378,6 +378,14 @@ mod tests {
         // Without shallow=1, as someone wrote it themselves.
         let deep = nightly.replace(NIGHTLY, "git+https://github.com/bitemyapp/sekka?ref=nightly");
         assert_eq!(prepare(&deep).unwrap(), deep);
+        // Git's own spellings of the same repository are still Sekka.
+        for url in [
+            "git+https://github.com/bitemyapp/sekka.git?ref=nightly&shallow=1",
+            "git+https://github.com/bitemyapp/sekka/?ref=nightly&shallow=1",
+        ] {
+            let spelled = nightly.replace(NIGHTLY, url);
+            assert_eq!(prepare(&spelled).unwrap(), spelled, "{url}");
+        }
     }
 
     #[test]
@@ -434,7 +442,7 @@ mod tests {
         assert_eq!(prepare(&nightly.replace(NIGHTLY, TARBALL_EARLY)).unwrap(), early);
         assert!(super::early(EARLY) && super::early(TARBALL_EARLY));
         assert!(!super::early(NIGHTLY) && !super::early("github:bitemyapp/sekka/main"));
-        assert_eq!(crate::branch::of(EARLY).as_deref(), Some("main"));
+        assert_eq!(FlakeUrl::parse(EARLY).unwrap().reference.as_deref(), Some("main"));
         // Turning early updates off and on again, as the helper does.
         assert_eq!(crate::branch::with(EARLY, "nightly").as_deref(), Some(NIGHTLY));
         assert_eq!(crate::branch::with(NIGHTLY, "main").as_deref(), Some(EARLY));
@@ -450,6 +458,7 @@ mod tests {
             "git+https://github.com/bitemyapp/sekka?ref=main&shallow=0",
             "git+https://github.com/bitemyapp/sekka?submodules=1&ref=refs/heads/main&shallow=1",
             "git+https://github.com/bit%65myapp/sekka?%72ef=refs%2Fheads%2Fmain",
+            "git+https://github.com/bitemyapp/sekka.git?ref=main&shallow=1",
         ] {
             let chosen = nightly.replace(NIGHTLY, url);
             assert!(early(url), "{url}");

@@ -2,6 +2,7 @@
 {
   lib,
   rustPlatform,
+  gitMinimal,
   pkg-config,
   sqlite,
   util-linux,
@@ -33,6 +34,9 @@ rustPlatform.buildRustPackage {
   nativeBuildInputs = [ pkg-config ];
   nativeCheckInputs = [ util-linux ];
   buildInputs = [ sqlite ];
+  # The system's programs first, then a Git for Nix to fetch Sekka with, so
+  # that Git's own progress reaches Yukimi on installations without Git.
+  env.YUKIMI_HELPER_PATH = "/run/current-system/sw/bin:/run/wrappers/bin:${gitMinimal}/bin";
   postInstall = ''
     # Names this exact helper, so polkit's prompt says what Yukimi is asking for.
     mkdir -p $out/share/polkit-1/actions

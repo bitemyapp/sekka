@@ -43,7 +43,7 @@ pub(crate) fn segments(uri: &Uri<&str>) -> Option<Vec<String>> {
 /// Decoded path components of an ordinary HTTPS origin, excluding the
 /// leading slash. User info, nonstandard ports and fragments aren't origins
 /// Yukimi's repository and release APIs accept.
-pub(crate) fn https_parts(value: &str) -> Option<(String, Vec<String>)> {
+pub fn https_parts(value: &str) -> Option<(String, Vec<String>)> {
     let uri = Uri::parse(value).ok()?;
     let authority = uri.authority()?;
     if uri.scheme().as_str() != "https"
@@ -60,6 +60,20 @@ pub(crate) fn https_parts(value: &str) -> Option<(String, Vec<String>)> {
         return None;
     }
     Some((authority.host().to_ascii_lowercase(), parts))
+}
+
+/// The `(owner, repo)` of a repository on github.com, from the HTTPS address
+/// Git clones it from: `https://github.com/owner/repo`, with or without
+/// `.git` or a final slash.
+pub(crate) fn github_repository(value: &str) -> Option<(String, String)> {
+    let (host, mut parts) = https_parts(value)?;
+    if parts.last().is_some_and(String::is_empty) {
+        parts.pop();
+    }
+    let [owner, repo] = parts.as_slice() else { return None };
+    let repo = repo.strip_suffix(".git").unwrap_or(repo);
+    let name = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_alphanumeric() || b"._-".contains(&b));
+    (host == "github.com" && name(owner) && name(repo)).then(|| (owner.clone(), repo.to_owned()))
 }
 
 /// Build an HTTPS URL from decoded components. Separators inside a component
