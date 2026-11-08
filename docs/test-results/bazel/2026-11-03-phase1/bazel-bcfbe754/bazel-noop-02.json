@@ -1,0 +1,72 @@
+{
+ "source": {
+  "commit": "bcfbe754aed7cdf2ad225f19ae0f84d19e774e36",
+  "patch_sha256": "e97da848eb24373bb5484a3f1fc41ed1f51c5d36fcc08c6ed690676e9209b130"
+ },
+ "host": {
+  "hostname": "callen",
+  "nproc": 128,
+  "loadavg_before": [
+   16.62,
+   12.38,
+   8.56
+  ],
+  "loadavg_after": [
+   16.62,
+   12.38,
+   8.56
+  ]
+ },
+ "scenario": "noop",
+ "rep": 2,
+ "tool": "bazel",
+ "profile": "dev",
+ "jobs": 16,
+ "toolchain": {
+  "SEKKA_BAZEL_RUST_TOOLCHAIN": "/nix/store/w6rh05llxkdc8pljap560h1zyivh5px5-sekka-bazel-rust-toolchain",
+  "SEKKA_BAZEL_NATIVE_ENV": "/nix/store/wkqh2gv8imr0pdnyxwlm0xy1m8cavxhk-sekka-bazel-native-env",
+  "rustc": "rustc 1.99.0 (b940084d7 2026-09-28) (built from a source tarball)\nbinary: rustc\ncommit-hash: b940084d7eb6a299eb4bfeb8e34901bc051e7ac4\ncommit-date: 2026-09-28\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.0\nLLVM version: 21.1.8\n"
+ },
+ "argv": [
+  "bazel",
+  "--output_user_root=/dev/shm/sekka-bazel-lab/phase1-bcfbe754-bazel/bazel",
+  "build",
+  "--config=dev",
+  "--config=wx-local",
+  "--jobs=16",
+  "--repository_cache=/dev/shm/sekka-bazel-lab/phase1-bcfbe754-bazel/repos",
+  "--build_event_json_file=/home/callen/sekka-work/bazel-lab/results/phase1-bcfbe754/bazel/logs/bazel-noop-02.bep.json",
+  "--profile=/home/callen/sekka-work/bazel-lab/results/phase1-bcfbe754/bazel/logs/bazel-noop-02.profile.gz",
+  "--target_pattern_file=/home/callen/sekka-work/bazel-lab/results/phase1-bcfbe754/bazel/targets.txt"
+ ],
+ "exit_status": 0,
+ "wall_seconds": 0.264,
+ "executed_actions": {
+  "BazelWorkspaceStatusAction": 1
+ },
+ "runners": {
+  "total": 1,
+  "internal": 1
+ },
+ "cache_hits": 0,
+ "cache_misses": 1,
+ "action_cpu_seconds": 1.74,
+ "action_cpu_reason": "Bazel's timingMetrics.cpuTimeInMs: the build's CPU time, server included",
+ "analysis_seconds": 0.024,
+ "execution_seconds": 0.012,
+ "actions_created": 0,
+ "download_bytes": null,
+ "download_bytes_reason": "local trial: nothing downloaded during the build",
+ "storage_peak_bytes": null,
+ "storage_peak_reason": "not sampled during the build in this run",
+ "correctness": {
+  "check": "build succeeded",
+  "passed": true,
+  "sha256": "2e7bad083ec93eff9109eb333aada65be8eb7eeaac8c043b5509cc2b3d1dccb5"
+ },
+ "raw_logs": {
+  "bazel-noop-02.log": "170f893c438daee1929b25eb9b31d2fdf5a8368eceed2f239e3648e387802919",
+  "bazel-noop-02.bep.json": "40224cc4b85f3ca52dcf50ea4e7db7781742638715f34d8b7fc3b3eb642f59fc",
+  "bazel-noop-02.profile.gz": "52998768eca7c15ff971075afb2e8f26bbc171b64da80c73316e65d67bb2bc70"
+ }
+}

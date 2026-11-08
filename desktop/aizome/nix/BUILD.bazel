@@ -1,0 +1,6 @@
+# The font packages Bazel's test environment builds (nix/bazel/toolchains.nix).
+exports_files([
+    "aizome-fonts.nix",
+    "fonts.nix",
+    "hotaru-fonts.nix",
+])

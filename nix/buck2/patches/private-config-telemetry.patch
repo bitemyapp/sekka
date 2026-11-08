@@ -1,0 +1,1668 @@
+diff --git a/app/buck2/src/lib.rs b/app/buck2/src/lib.rs
+index 0eee785..05c4731 100644
+--- a/app/buck2/src/lib.rs
++++ b/app/buck2/src/lib.rs
+@@ -10,6 +10,8 @@
+ 
+ #![feature(used_with_arg)]
+ 
++use std::sync::Arc;
++use std::sync::Mutex;
+ use std::thread;
+ 
+ use buck2_client::commands::build::BuildCommand;
+@@ -55,6 +57,8 @@ use buck2_cmd_log_client::LogCommand;
+ use buck2_cmd_rage_client::rage::RageCommand;
+ use buck2_cmd_starlark_client::StarlarkCommand;
+ use buck2_common::argv::Argv;
++use buck2_common::argv::ConfigArgvRedactions;
++use buck2_common::argv::ExpandedArgv;
+ use buck2_common::invocation_paths::RESERVED_BUCK_OUT_PREFIX;
+ use buck2_common::invocation_paths_result::InvocationPathsResult;
+ use buck2_common::invocation_roots::get_invocation_paths_result;
+@@ -73,6 +77,7 @@ use buck2_fs::paths::file_name::FileNameBuf;
+ use buck2_util::threads::thread_spawn_scoped;
+ use clap::CommandFactory;
+ use clap::FromArgMatches;
++use clap::builder::TypedValueParser;
+ use dupe::Dupe;
+ 
+ use crate::check_user_allowed::check_user_allowed;
+@@ -263,6 +268,65 @@ impl Opt {
+     }
+ }
+ 
++/// Capture actual CLI value consumption rather than reparsing short-option
++/// clusters or treating Clap's logical indices as physical argv positions.
++/// Capture happens before global settings can overwrite earlier value lists.
++fn parse_argv(
++    argv: Vec<String>,
++    expanded: ExpandedArgv,
++) -> Result<(Argv, clap::ArgMatches), clap::Error> {
++    fn install_parsers(
++        command: clap::Command,
++        config: &clap::builder::ValueParser,
++        settings: &clap::builder::ValueParser,
++    ) -> clap::Command {
++        let has_config = command.get_arguments().any(|arg| arg.get_id() == "config_values");
++        let command = if has_config {
++            command.mut_arg("config_values", |arg| arg.value_parser(config.clone()))
++        } else {
++            command
++        };
++        let has_settings = command.get_arguments().any(|arg| arg.get_id() == "settings");
++        let command = if has_settings {
++            command.mut_arg("settings", |arg| arg.value_parser(settings.clone()))
++        } else {
++            command
++        };
++        command.mut_subcommands(|child| install_parsers(child, config, settings))
++    }
++
++    let source = Arc::new((argv, expanded));
++    let redactions = Arc::new(Mutex::new(ConfigArgvRedactions::default()));
++    let command = {
++        let source = Arc::clone(&source);
++        let redactions = Arc::clone(&redactions);
++        let capture = move |value: &str| {
++            redactions
++                .lock()
++                .expect("CLI redaction capture was poisoned")
++                .record(&source.0, &source.1, value);
++        };
++        let capture_setting = capture.clone();
++        let config = clap::builder::StringValueParser::new().map(move |value| {
++            capture(&value);
++            value
++        });
++        let settings = buck_error_clap_parser(move |value: &str| {
++            capture_setting(value);
++            parse_setting_flag_arg(value)
++        });
++        install_parsers(Opt::clap_command(), &config.into(), &settings.into())
++    };
++    let matches = command.try_get_matches_from(source.1.args())?;
++    let (argv, expanded) = Arc::try_unwrap(source)
++        .unwrap_or_else(|_| panic!("CLI parser retained argument source"));
++    let redactions = Arc::try_unwrap(redactions)
++        .unwrap_or_else(|_| panic!("CLI parser retained redaction capture"))
++        .into_inner()
++        .expect("CLI redaction capture was poisoned");
++    Ok((Argv::new(argv, expanded, redactions), matches))
++}
++
+ pub fn exec(process: ProcessContext<'_>) -> ExitResult {
+     let cwd = process.shared.working_dir.clone();
+     let mut immediate_config = ImmediateConfigContext::new(&cwd);
+@@ -275,14 +339,8 @@ pub fn exec(process: ProcessContext<'_>) -> ExitResult {
+     )
+     .buck_error_context("Error expanding argsfiles")?;
+ 
+-    let argv = Argv {
+-        argv: process.shared.args.to_vec(),
+-        expanded_argv: expanded_args,
+-    };
+-
+-    let clap = Opt::clap_command();
+-    let matches = match clap.try_get_matches_from(argv.expanded_argv.args()) {
+-        Ok(matches) => matches,
++    let (argv, matches) = match parse_argv(process.shared.args.to_vec(), expanded_args) {
++        Ok(parsed) => parsed,
+         Err(e) => {
+             // Print colorized output, ExitResult::report will not colorize.
+             // `ClientIoError` so that a closed stdout exits quietly instead of as a buck2 failure,
+@@ -688,6 +746,171 @@ impl CommandKind {
+ mod tests {
+     use super::*;
+ 
++    fn assert_config_argv_private(argv: &Argv, secret: &str) {
++        for sanitized in [
++            argv.clone().no_need_to_sanitize(),
++            argv.clone().redacted(Default::default()),
++        ] {
++            assert!(!sanitized.argv.join(" ").contains(secret));
++            assert!(!sanitized.expanded_argv.args().collect::<Vec<_>>().join(" ").contains(secret));
++        }
++        assert!(!buck2_common::argv::get_representative_config_flags(&argv.expanded_argv)
++            .join(" ")
++            .contains(secret));
++    }
++
++    #[test]
++    fn cli_parser_classifies_clustered_config_values_without_mutating_execution() {
++        for value in [
++            "ordinary.choice=synthetic-private-token",
++            "ordinary.choice=synthetic-private-token= // Unicode 秘密",
++            "synthetic-private-token==",
++            "ordinary.choice=",
++        ] {
++            for config_args in [
++                vec!["-Ac".to_owned(), value.to_owned()],
++                vec![format!("-Ac{value}")],
++            ] {
++                let mut args = vec!["buck2".to_owned(), "cquery".to_owned()];
++                args.extend(config_args);
++                // The duplicate also exercises idempotent capture and spans.
++                args.extend(["-c".to_owned(), value.to_owned(), "//:target".to_owned()]);
++                let (argv, matches) = parse_argv(
++                    args.clone(),
++                    ExpandedArgv::from_literals(args.clone()),
++                ).unwrap();
++                assert_eq!(argv.argv, args);
++                assert_eq!(argv.expanded_argv.args().collect::<Vec<_>>(), args);
++                assert_eq!(
++                    matches.subcommand().unwrap().1
++                        .get_many::<String>("config_values").unwrap()
++                        .map(String::as_str).collect::<Vec<_>>(),
++                    vec![value, value],
++                );
++                assert_config_argv_private(&argv, "synthetic-private-token");
++                let sanitized = argv.clone().no_need_to_sanitize();
++                assert!(sanitized.argv.iter().any(|arg| arg.contains("<redacted>")));
++                if value == "synthetic-private-token==" {
++                    assert!(sanitized.argv.iter().any(|arg| arg == "<redacted>" || arg == "-Ac<redacted>"));
++                } else {
++                    assert!(sanitized.argv.iter().any(|arg| arg.contains("ordinary.choice=<redacted>")));
++                }
++                assert_eq!(argv.argv, args);
++            }
++        }
++    }
++
++    #[test]
++    fn cli_parser_does_not_reinterpret_a_value_taking_short_option_as_config() {
++        let args: Vec<String> = [
++            "buck2", "cquery", "-acordinary.choice=public", "//:target",
++        ].into_iter().map(str::to_owned).collect();
++        let (argv, matches) = parse_argv(
++            args.clone(),
++            ExpandedArgv::from_literals(args.clone()),
++        ).unwrap();
++        assert!(matches.subcommand().unwrap().1.get_many::<String>("config_values").is_none());
++        assert_eq!(argv.no_need_to_sanitize().argv, args);
++    }
++
++    #[test]
++    fn cli_capture_redacts_overwritten_global_settings_without_changing_toml_values() {
++        let args: Vec<String> = [
++            "buck2",
++            "--setting", "ordinary.choice=\"synthetic-first-private-token = // 秘密\"",
++            "cquery",
++            "--setting=ordinary.choice=\"synthetic-second-private-token\"",
++            "//:target",
++        ].into_iter().map(str::to_owned).collect();
++        let baseline = Opt::clap_command().try_get_matches_from(&args).unwrap();
++        let (argv, matches) = parse_argv(
++            args.clone(),
++            ExpandedArgv::from_literals(args.clone()),
++        ).unwrap();
++        assert_eq!(
++            Opt::from_clap_matches(&matches).unwrap().common_opts.settings,
++            Opt::from_clap_matches(&baseline).unwrap().common_opts.settings,
++        );
++        assert_config_argv_private(&argv, "synthetic-first-private-token");
++        assert_config_argv_private(&argv, "synthetic-second-private-token");
++        assert_eq!(argv.argv, args);
++    }
++
++    #[test]
++    fn cli_argfile_flags_redact_inline_values_and_preserve_source_paths() -> buck2_error::Result<()> {
++        let project = buck2_core::fs::project::ProjectRootTemp::new()?;
++        project.write_file(".buckconfig", "[cells]\nroot = .\n");
++        let cwd = buck2_fs::working_dir::AbsWorkingDir::unchecked_new(
++            project.path().root().to_owned(),
++        );
++        for flag in ["-c", "--config", "--setting"] {
++            project.write_file("modefile", flag);
++            for reference in [vec!["@modefile"], vec!["--flagfile", "modefile"]] {
++                let mut args: Vec<String> = ["buck2", "cquery"]
++                    .into_iter().chain(reference).map(str::to_owned).collect();
++                args.extend([
++                    "ordinary.choice=synthetic-boundary-private-token".to_owned(),
++                    "//:target".to_owned(),
++                ]);
++                let mut context = ImmediateConfigContext::new(&cwd);
++                let expanded = expand_argv(None, args.clone(), &mut context, &cwd)?;
++                assert!(expanded.iter().any(|(arg, source)| {
++                    arg == flag && matches!(source, buck2_common::argv::ExpandedArgSource::Flagfile(_))
++                }));
++                let (argv, _) = parse_argv(args.clone(), expanded).unwrap();
++                assert_config_argv_private(&argv, "synthetic-boundary-private-token");
++                for sanitized in [
++                    argv.clone().no_need_to_sanitize(),
++                    argv.clone().redacted(Default::default()),
++                ] {
++                    assert!(sanitized.argv.iter().any(|arg| arg == "@modefile" || arg == "modefile"));
++                    assert!(sanitized.argv.iter().any(|arg| arg == "ordinary.choice=<redacted>"));
++                }
++                assert_eq!(argv.argv, args);
++                assert!(argv.expanded_argv.args().any(|arg| arg.contains("synthetic-boundary-private-token")));
++            }
++        }
++        Ok(())
++    }
++
++    #[test]
++    fn cli_removal_keeps_original_redaction_positions() {
++        let args: Vec<String> = [
++            "buck2", "run",
++            "-c", "ordinary.choice=synthetic-native-private-token",
++            "//:target", "--", "-c", "synthetic-program-private-token",
++        ].into_iter().map(str::to_owned).collect();
++        let extra: Vec<String> = ["-c", "synthetic-program-private-token"]
++            .into_iter().map(str::to_owned).collect();
++        let (argv, _) = parse_argv(
++            args.clone(),
++            ExpandedArgv::from_literals(args.clone()),
++        ).unwrap();
++        let sanitized = argv.clone().redacted(extra.iter().collect());
++        assert!(!sanitized.argv.join(" ").contains("private-token"));
++        assert_eq!(sanitized.expanded_argv.args().collect::<Vec<_>>(), sanitized.argv);
++        assert!(sanitized.argv.iter().any(|arg| arg == "ordinary.choice=<redacted>"));
++        assert_eq!(argv.argv, args);
++    }
++
++    #[test]
++    fn cli_setting_errors_do_not_echo_malformed_keys_or_values() {
++        for value in [
++            "synthetic-private-token==",
++            "synthetic-private-token=",
++            "synthetic-private-token",
++            "ordinary.choice=1\nanother=\"synthetic-private-token\"",
++        ] {
++            let args: Vec<String> = ["buck2", "cquery", "--setting", value, "//:target"]
++                .into_iter().map(str::to_owned).collect();
++            let error = match parse_argv(args.clone(), ExpandedArgv::from_literals(args)) {
++                Err(error) => error,
++                Ok(_) => panic!("malformed setting unexpectedly parsed"),
++            };
++            assert!(!error.to_string().contains("synthetic-private-token"));
++        }
++    }
++
+     fn agent_context(args: &[&str]) -> Vec<AgentContextEntry> {
+         let matches = Opt::clap_command()
+             .try_get_matches_from(std::iter::once("buck2").chain(args.iter().copied()))
+diff --git a/app/buck2_build_api_tests/src/interpreter/rule_defs/provider/builtin/configuration_info.rs b/app/buck2_build_api_tests/src/interpreter/rule_defs/provider/builtin/configuration_info.rs
+index 49daaeb..e432f54 100644
+--- a/app/buck2_build_api_tests/src/interpreter/rule_defs/provider/builtin/configuration_info.rs
++++ b/app/buck2_build_api_tests/src/interpreter/rule_defs/provider/builtin/configuration_info.rs
+@@ -28,7 +28,7 @@ fn configuration_info_validates_buckconfigs() -> buck2_error::Result<()> {
+             )
+         "#
+         ),
+-        "Could not find section separator (`.`) in pair `applekey`",
++        "Could not find section separator (`.`); expected `section.key`",
+     );
+ 
+     tester.run_starlark_bzl_test(indoc!(
+@@ -61,7 +61,7 @@ fn configuration_info_validates_root_buckconfigs() -> buck2_error::Result<()> {
+             )
+         "#
+         ),
+-        "Could not find section separator (`.`) in pair `applekey`",
++        "Could not find section separator (`.`); expected `section.key`",
+     );
+ 
+     tester.run_starlark_bzl_test_expecting_error(
+diff --git a/app/buck2_client_ctx/src/common.rs b/app/buck2_client_ctx/src/common.rs
+index 4d640c7..e85fd42 100644
+--- a/app/buck2_client_ctx/src/common.rs
++++ b/app/buck2_client_ctx/src/common.rs
+@@ -553,6 +553,7 @@ impl<'a> BuckArgMatches<'a> {
+         use buck2_common::argv::ConfigFlagValue;
+         use buck2_common::argv::get_flagfile_for_logging;
+         use buck2_common::argv::parse_config_flags;
++        use buck2_common::legacy_configs::telemetry::redact_config_argument;
+ 
+         let mut args: Vec<RepresentativeConfigFlag> = Vec::new();
+         let mut last_flagfile = None;
+@@ -575,7 +576,8 @@ impl<'a> BuckArgMatches<'a> {
+                 }
+                 None => {
+                     let source = match flag_value {
+-                        ConfigFlagValue::ConfigFlag(v) => {
++                        ConfigFlagValue::ConfigFlag(mut v) => {
++                            redact_config_argument(&mut v);
+                             RepresentativeConfigFlagSource::ConfigFlag(v)
+                         }
+                         ConfigFlagValue::ConfigFile(v) => {
+@@ -618,6 +620,42 @@ mod tests {
+         RepresentativeConfigFlag { source: Some(flag) }
+     }
+ 
++    #[test]
++    fn representative_config_sources_redact_innocuous_alias_values() {
++        let mut argv = ExpandedArgvBuilder::new();
++        argv.push("--config=cell//ordinary.choice=synthetic-inline-credential".to_owned());
++        argv.argfile_scope(ArgFileKind::Stdin, |argv| {
++            argv.push("-c".to_owned());
++            argv.push("ordinary.other=synthetic-argfile-credential".to_owned());
++        });
++        argv.push("-cbuild.threads=8".to_owned());
++        argv.push("-c".to_owned());
++        argv.push("synthetic-padded-credential==".to_owned());
++        let argv = argv.build();
++        let clap = clap::ArgMatches::default();
++        let matches = BuckArgMatches::from_clap(&clap, &argv);
++        assert_eq!(
++            matches.get_representative_config_flags_by_source(),
++            vec![
++                source(RepresentativeConfigFlagSource::ConfigFlag(
++                    "cell//ordinary.choice=<redacted>".to_owned(),
++                )),
++                source(RepresentativeConfigFlagSource::ConfigFlag(
++                    "ordinary.other=<redacted>".to_owned(),
++                )),
++                source(RepresentativeConfigFlagSource::ConfigFlag(
++                    "build.threads=<redacted>".to_owned(),
++                )),
++                source(RepresentativeConfigFlagSource::ConfigFlag(
++                    "<redacted>".to_owned(),
++                )),
++            ],
++        );
++        assert!(argv.args().any(|arg| arg.contains("synthetic-inline-credential")));
++        assert!(argv.args().any(|arg| arg.contains("synthetic-argfile-credential")));
++        assert!(argv.args().any(|arg| arg == "synthetic-padded-credential=="));
++    }
++
+     #[test]
+     fn test_by_source_inline_flags() -> buck2_error::Result<()> {
+         let mut argv = ExpandedArgvBuilder::new();
+@@ -640,7 +678,7 @@ mod tests {
+             flags,
+             vec![
+                 source(RepresentativeConfigFlagSource::ConfigFlag(
+-                    "section.key=val".to_owned()
++                    "section.key=<redacted>".to_owned()
+                 )),
+                 source(RepresentativeConfigFlagSource::Modifier(
+                     "//mod:bar".to_owned()
+@@ -698,13 +736,13 @@ mod tests {
+             flags,
+             vec![
+                 source(RepresentativeConfigFlagSource::ConfigFlag(
+-                    "inline.key=val".to_owned()
++                    "inline.key=<redacted>".to_owned()
+                 )),
+                 source(RepresentativeConfigFlagSource::ModeFile(
+                     "@root//mode/dev".to_owned()
+                 )),
+                 source(RepresentativeConfigFlagSource::ConfigFlag(
+-                    "external.key=val".to_owned()
++                    "external.key=<redacted>".to_owned()
+                 )),
+             ]
+         );
+diff --git a/app/buck2_common/src/argv.rs b/app/buck2_common/src/argv.rs
+index 511f7f9..d7a2740 100644
+--- a/app/buck2_common/src/argv.rs
++++ b/app/buck2_common/src/argv.rs
+@@ -15,6 +15,10 @@ use buck2_core::cells::cell_path::CellPath;
+ use buck2_fs::paths::abs_norm_path::AbsNormPathBuf;
+ use buck2_hash::BuckMutSet;
+ 
++use crate::legacy_configs::telemetry::ConfigArgvRedactor;
++use crate::legacy_configs::telemetry::config_argument_redaction_span;
++use crate::legacy_configs::telemetry::redact_config_argument;
++
+ /// Argv contains the bare process argv and the "expanded" argv. The expanded argv is
+ /// the argv after processing flagfiles (args like @mode/opt and --flagfile mode/opt)
+ /// and after possibly replacing `argv[0]` with a more representative value.
+@@ -22,6 +26,29 @@ use buck2_hash::BuckMutSet;
+ pub struct Argv {
+     pub argv: Vec<String>,
+     pub expanded_argv: ExpandedArgv,
++    config_redactions: Vec<(usize, usize)>,
++    expanded_config_redactions: Vec<(usize, usize)>,
++}
++
++/// Logging-only spans captured by the real CLI value parsers, including values
++/// subsequently overwritten by global-option merging. Never stores values.
++#[derive(Default)]
++pub struct ConfigArgvRedactions {
++    raw: Vec<(usize, usize)>,
++    expanded: Vec<(usize, usize)>,
++}
++
++impl ConfigArgvRedactions {
++    pub fn record(&mut self, argv: &[String], expanded: &ExpandedArgv, value: &str) {
++        self.raw.extend(argv.iter().enumerate().filter_map(|(index, arg)| {
++            config_argument_redaction_span(arg, value).map(|start| (index, start))
++        }));
++        self.expanded.extend(
++            expanded.args().enumerate().filter_map(|(index, arg)| {
++                config_argument_redaction_span(arg, value).map(|start| (index, start))
++            }),
++        );
++    }
+ }
+ 
+ #[derive(Clone)]
+@@ -81,14 +108,18 @@ impl ExpandedArgv {
+         }
+     }
+ 
+-    fn redacted(self, to_redact: &BuckMutSet<&String>) -> ExpandedArgv {
+-        Self {
+-            args: self
+-                .args
+-                .into_iter()
+-                .filter(|(arg, _)| !to_redact.contains(arg))
+-                .collect(),
+-        }
++    fn redacted(
++        mut self,
++        to_redact: &BuckMutSet<&String>,
++        config_redactions: &[(usize, usize)],
++    ) -> ExpandedArgv {
++        let mut redactor = ConfigArgvRedactor::new(config_redactions);
++        self.args.retain_mut(|(arg, _)| {
++            let keep = !to_redact.contains(arg);
++            redactor.redact(arg);
++            keep
++        });
++        self
+     }
+ 
+     pub fn args(&self) -> impl Iterator<Item = &str> {
+@@ -285,7 +316,10 @@ pub fn get_representative_config_flags(expanded_argv: &ExpandedArgv) -> Vec<Stri
+             }
+             None => {
+                 let formatted = match flag_value {
+-                    ConfigFlagValue::ConfigFlag(v) => format!("-c {v}"),
++                    ConfigFlagValue::ConfigFlag(mut v) => {
++                        redact_config_argument(&mut v);
++                        format!("-c {v}")
++                    }
+                     ConfigFlagValue::ConfigFile(v) => format!("--config-file {v}"),
+                     ConfigFlagValue::Modifier(v) => format!("-m {v}"),
+                     ConfigFlagValue::TargetPlatforms(v) => format!("--target-platforms {v}"),
+@@ -303,6 +337,8 @@ pub fn get_representative_config_flags(expanded_argv: &ExpandedArgv) -> Vec<Stri
+ /// The "sanitized" argv is the argv and expanded argv after stripping some possibly sensitive
+ /// arguments. What's considered sensitive is command-specific and usually determined by an implementation
+ /// of `StreamingCommand::sanitize_argv`.
++/// All config values are always redacted in both argv forms,
++/// independently of additional command-specific argument removal.
+ ///
+ /// For example, for the run command this will strip out the arguments passed to the executed command (i.e. those after `--`).
+ #[derive(Clone)]
+@@ -314,26 +350,43 @@ pub struct SanitizedArgv {
+ }
+ 
+ impl Argv {
+-    pub fn no_need_to_sanitize(self) -> SanitizedArgv {
+-        let Argv {
+-            argv,
+-            expanded_argv,
+-        } = self;
+-        SanitizedArgv {
++    /// Arguments remain operational; only their logging projections use the
++    /// spans recorded by the real CLI value parsers.
++    pub fn new(
++        argv: Vec<String>,
++        expanded_argv: ExpandedArgv,
++        mut redactions: ConfigArgvRedactions,
++    ) -> Self {
++        // Global Clap options can occur in several match scopes. If different
++        // classified values overlap, retain only the earliest redaction start.
++        for spans in [&mut redactions.raw, &mut redactions.expanded] {
++            spans.sort_unstable();
++            spans.dedup_by_key(|(index, _)| *index);
++        }
++        Self {
+             argv,
+             expanded_argv,
+-            _priv: (),
++            config_redactions: redactions.raw,
++            expanded_config_redactions: redactions.expanded,
+         }
+     }
+ 
+-    pub fn redacted(self, to_redact: BuckMutSet<&String>) -> SanitizedArgv {
++    pub fn no_need_to_sanitize(self) -> SanitizedArgv {
++        self.redacted(BuckMutSet::default())
++    }
++
++    pub fn redacted(mut self, to_redact: BuckMutSet<&String>) -> SanitizedArgv {
++        let mut redactor = ConfigArgvRedactor::new(&self.config_redactions);
++        self.argv.retain_mut(|arg| {
++            let keep = !to_redact.contains(arg);
++            redactor.redact(arg);
++            keep
++        });
+         SanitizedArgv {
+-            argv: self
+-                .argv
+-                .into_iter()
+-                .filter(|arg| !to_redact.contains(arg))
+-                .collect(),
+-            expanded_argv: self.expanded_argv.redacted(&to_redact),
++            argv: self.argv,
++            expanded_argv: self
++                .expanded_argv
++                .redacted(&to_redact, &self.expanded_config_redactions),
+             _priv: (),
+         }
+     }
+@@ -347,6 +400,132 @@ mod tests {
+ 
+     use super::*;
+ 
++    fn classified_argv<'a>(
++        argv: Vec<String>,
++        expanded: ExpandedArgv,
++        values: impl Iterator<Item = &'a str>,
++    ) -> Argv {
++        let mut redactions = ConfigArgvRedactions::default();
++        for value in values {
++            redactions.record(&argv, &expanded, value);
++        }
++        Argv::new(argv, expanded, redactions)
++    }
++
++    #[test]
++    fn malformed_config_logging_argv_does_not_echo_private_values() {
++        for (args, value) in [
++            (vec!["--config", "synthetic-malformed-credential"], "synthetic-malformed-credential"),
++            (vec!["-c", "key=synthetic-malformed-credential"], "key=synthetic-malformed-credential"),
++            (vec!["--config=buck2_re_client.=synthetic-malformed-credential"], "buck2_re_client.=synthetic-malformed-credential"),
++            (vec!["-c", "synthetic-malformed-credential=="], "synthetic-malformed-credential=="),
++        ] {
++            let args: Vec<String> = args.into_iter().map(str::to_owned).collect();
++            let input = classified_argv(
++                args.clone(),
++                ExpandedArgv::from_literals(args),
++                std::iter::once(value),
++            );
++            let sanitized = input.clone().no_need_to_sanitize();
++            assert!(!sanitized.argv.join(" ").contains("synthetic-malformed-credential"));
++            assert!(!sanitized.expanded_argv.args().collect::<Vec<_>>().join(" ").contains("synthetic-malformed-credential"));
++            assert!(!get_representative_config_flags(&input.expanded_argv).join(" ").contains("synthetic-malformed-credential"));
++        }
++    }
++
++    #[test]
++    fn config_credentials_are_redacted_from_all_logging_argv_forms() {
++        let secret = "synthetic-argv-credential";
++        let assignment = format!("other//ordinary.choice={secret}");
++        for args in [
++            vec!["-c".to_owned(), assignment.clone()],
++            vec!["--config".to_owned(), assignment.clone()],
++            vec![format!("-c{assignment}")],
++            vec![format!("-c={assignment}")],
++            vec![format!("--config={assignment}")],
++        ] {
++            let input = classified_argv(
++                args.clone(),
++                ExpandedArgv::from_literals(args),
++                std::iter::once(assignment.as_str()),
++            );
++            let sanitized = input.clone().no_need_to_sanitize();
++            assert!(input.argv.join(" ").contains(secret));
++            assert!(input.expanded_argv.args().collect::<Vec<_>>().join(" ").contains(secret));
++            assert!(!sanitized.argv.join(" ").contains(secret));
++            assert!(!sanitized.expanded_argv.args().collect::<Vec<_>>().join(" ").contains(secret));
++            assert_eq!(
++                get_representative_config_flags(&input.expanded_argv),
++                vec!["-c other//ordinary.choice=<redacted>"],
++            );
++        }
++
++        let mut expanded = ExpandedArgvBuilder::new();
++        expanded.argfile_scope(ArgFileKind::Stdin, |args| {
++            args.push("--config".to_owned());
++            args.push(assignment.clone());
++            args.push("-cbuild.threads=8".to_owned());
++        });
++        let input = classified_argv(
++            vec!["@-".to_owned()],
++            expanded.build(),
++            [assignment.as_str(), "build.threads=8"].into_iter(),
++        );
++        let sanitized = input.clone().no_need_to_sanitize();
++        assert_eq!(sanitized.argv, vec!["@-"]);
++        assert!(!sanitized.expanded_argv.args().collect::<Vec<_>>().join(" ").contains(secret));
++        assert!(matches!(sanitized.expanded_argv.iter().next().unwrap().1, ExpandedArgSource::Flagfile(_)));
++        assert_eq!(
++            get_representative_config_flags(&input.expanded_argv),
++            vec!["-c other//ordinary.choice=<redacted>", "-c build.threads=<redacted>"],
++        );
++    }
++
++    #[test]
++    fn settings_values_follow_the_same_argv_privacy_policy() {
++        for args in [
++            vec!["--setting", "ordinary.choice=synthetic-setting-credential"],
++            vec!["--setting=ordinary.choice=synthetic-setting-credential"],
++        ] {
++            let args: Vec<String> = args.into_iter().map(str::to_owned).collect();
++            let input = classified_argv(
++                args.clone(),
++                ExpandedArgv::from_literals(args),
++                std::iter::once("ordinary.choice=synthetic-setting-credential"),
++            );
++            let sanitized = input.no_need_to_sanitize();
++            assert!(!sanitized.argv.join(" ").contains("synthetic-setting-credential"));
++            assert!(sanitized.argv.join(" ").contains("ordinary.choice=<redacted>"));
++        }
++    }
++
++    #[test]
++    fn command_argument_redaction_cannot_expose_a_config_assignment() {
++        let extra = vec!["-c".to_owned(), "synthetic-program-credential".to_owned()];
++        let args = vec![
++            "-c".to_owned(),
++            "buck2_re_client.http_headers=authorization: synthetic-native-credential".to_owned(),
++            "-cbuild.threads=8".to_owned(),
++            "--".to_owned(),
++            extra[0].clone(),
++            extra[1].clone(),
++        ];
++        let input = classified_argv(
++            args.clone(),
++            ExpandedArgv::from_literals(args),
++            [
++                "buck2_re_client.http_headers=authorization: synthetic-native-credential",
++                "build.threads=8",
++            ].into_iter(),
++        );
++        let sanitized = input.redacted(extra.iter().collect());
++        assert_eq!(
++            sanitized.argv,
++            vec!["buck2_re_client.http_headers=<redacted>", "-cbuild.threads=<redacted>", "--"],
++        );
++        assert_eq!(sanitized.expanded_argv.args().collect::<Vec<_>>(), sanitized.argv);
++    }
++
+     #[test]
+     fn test_get_representative_config_flags() -> buck2_error::Result<()> {
+         let mut argv = ExpandedArgvBuilder::new();
+@@ -389,12 +568,12 @@ mod tests {
+         assert_eq!(
+             flags,
+             vec![
+-                "-c section.option=value",
+-                "-c section1.option=value",
+-                "-c section2.option=value",
+-                "-c section.option2=value",
+-                "-c section.option3=value",
+-                "-c section.option4=value",
++                "-c section.option=<redacted>",
++                "-c section1.option=<redacted>",
++                "-c section2.option=<redacted>",
++                "-c section.option2=<redacted>",
++                "-c section.option3=<redacted>",
++                "-c section.option4=<redacted>",
+                 "--config-file //1.bcfg",
+                 "--config-file //2.bcfg",
+                 "-m //bar:baz",
+@@ -460,8 +639,8 @@ mod tests {
+                 "-m //bar:baz",
+                 "@root//mode/1",
+                 "@root//mode/2",
+-                "-c a.b5=c",
+-                "-c a.b6=c"
++                "-c a.b5=<redacted>",
++                "-c a.b6=<redacted>"
+             ]
+         );
+         Ok(())
+@@ -485,7 +664,7 @@ mod tests {
+ 
+         assert_eq!(
+             flags,
+-            vec!["-c section.option=value", "-c section.option2=value",]
++            vec!["-c section.option=<redacted>", "-c section.option2=<redacted>",]
+         );
+         Ok(())
+     }
+diff --git a/app/buck2_common/src/legacy_configs.rs b/app/buck2_common/src/legacy_configs.rs
+index 1e53764..234c2a1 100644
+--- a/app/buck2_common/src/legacy_configs.rs
++++ b/app/buck2_common/src/legacy_configs.rs
+@@ -23,4 +23,5 @@ pub mod file_ops;
+ pub mod key;
+ mod parser;
+ pub(crate) mod path;
++pub mod telemetry;
+ pub mod view;
+diff --git a/app/buck2_common/src/legacy_configs/access.rs b/app/buck2_common/src/legacy_configs/access.rs
+index 8017aaf..5ea38f8 100644
+--- a/app/buck2_common/src/legacy_configs/access.rs
++++ b/app/buck2_common/src/legacy_configs/access.rs
+@@ -13,31 +13,24 @@ use std::sync::Arc;
+ 
+ use buck2_error::BuckErrorContext;
+ use buck2_hash::StdBuckHashMap;
+-use buck2_util::env_vars::substitute_env_vars;
+ 
+ use crate::legacy_configs::configs::ConfigValue;
+ use crate::legacy_configs::configs::LegacyBuckConfig;
+ use crate::legacy_configs::configs::LegacyBuckConfigSection;
+ use crate::legacy_configs::configs::LegacyBuckConfigValue;
+ use crate::legacy_configs::key::BuckconfigKeyRef;
++use crate::legacy_configs::telemetry::REDACTED_CONFIG_VALUE;
+ use crate::legacy_configs::view::LegacyBuckConfigView;
+ 
+-/// Read the `[buck2_metadata]` section from a `LegacyBuckConfig` and resolve any `$VAR`
+-/// references. Entries whose env vars are not set are skipped with a warning.
++/// Record `[buck2_metadata]` keys only. Values may resolve arbitrary credential
++/// aliases or environment variables and must not enter command event metadata.
+ pub fn parse_buckconfig_metadata(config: &LegacyBuckConfig) -> StdBuckHashMap<String, String> {
+     let mut map = StdBuckHashMap::default();
+     let Some(section) = config.get_section("buck2_metadata") else {
+         return map;
+     };
+-    for (key, value) in section.iter() {
+-        match substitute_env_vars(value.as_str()) {
+-            Ok(resolved) => {
+-                map.insert(key.to_owned(), resolved);
+-            }
+-            Err(e) => {
+-                tracing::warn!("Skipping [buck2_metadata] key `{}`: {:#}", key, e);
+-            }
+-        }
++    for key in section.keys() {
++        map.insert(key.to_owned(), REDACTED_CONFIG_VALUE.to_owned());
+     }
+     map
+ }
+@@ -107,19 +100,17 @@ impl LegacyBuckConfig {
+     where
+         buck2_error::Error: From<<T as FromStr>::Err>,
+     {
+-        let BuckconfigKeyRef { section, property } = key;
+-        value
+-            .parse()
+-            .map_err(buck2_error::Error::from)
+-            .with_buck_error_context(|| {
+-                format!(
+-                    "Invalid value for buckconfig `{}.{}`: conversion to {} failed, value as `{}`",
+-                    section.to_owned(),
+-                    property.to_owned(),
+-                    std::any::type_name::<T>(),
+-                    value.to_owned(),
+-                )
+-            })
++        value.parse().map_err(|error| {
++            let error = buck2_error::Error::from(error);
++            // FromStr diagnostics can embed their input too. Preserve failure
++            // classification, key and target type, but not that error chain.
++            buck2_error::buck2_error!(
++                error.best_tag().unwrap_or(buck2_error::ErrorTag::Input),
++                "Invalid value for buckconfig `{key}`: conversion to {} failed, value and parser diagnostic {REDACTED_CONFIG_VALUE}",
++                std::any::type_name::<T>(),
++            )
++            .tag(error.tags())
++        })
+     }
+ 
+     pub fn parse<T: FromStr>(&self, key: BuckconfigKeyRef) -> buck2_error::Result<Option<T>>
+diff --git a/app/buck2_common/src/legacy_configs/args.rs b/app/buck2_common/src/legacy_configs/args.rs
+index d6b2e9b..83e38b5 100644
+--- a/app/buck2_common/src/legacy_configs/args.rs
++++ b/app/buck2_common/src/legacy_configs/args.rs
+@@ -106,9 +106,9 @@ fn resolve_config_flag_arg(
+ ) -> buck2_error::Result<ResolvedConfigFlag> {
+     let (raw_section_and_key, raw_value) = raw_arg
+         .split_once('=')
+-        .ok_or_else(|| ConfigArgumentParseError::NoEqualsSeparator(raw_arg.to_owned()))?;
++        .ok_or(ConfigArgumentParseError::NoEqualsSeparator)?;
+     let ConfigSectionAndKey { section, key } =
+-        parse_config_section_and_key(raw_section_and_key, Some(raw_arg))?;
++        parse_config_section_and_key(raw_section_and_key)?;
+ 
+     let value = match raw_value {
+         "" => None, // An empty string unsets this config.
+@@ -230,6 +230,20 @@ pub(crate) fn to_proto_config_args(
+ mod tests {
+     use super::resolve_config_flag_arg;
+ 
++    #[test]
++    fn malformed_config_arguments_do_not_echo_values() {
++        for argument in [
++            "buck2_re_client. http_headers=synthetic-invalid-credential",
++            "buck2_re_client.=synthetic-invalid-credential",
++            "http_headers=synthetic-invalid-credential",
++            "synthetic-invalid-credential",
++            "synthetic-invalid-credential==",
++        ] {
++            let error = resolve_config_flag_arg(None, argument).unwrap_err();
++            assert!(!format!("{error:#}").contains("synthetic-invalid-credential"));
++        }
++    }
++
+     #[test]
+     fn test_argument_pair() -> buck2_error::Result<()> {
+         // Valid Formats
+diff --git a/app/buck2_common/src/legacy_configs/configs.rs b/app/buck2_common/src/legacy_configs/configs.rs
+index b158810..54e338f 100644
+--- a/app/buck2_common/src/legacy_configs/configs.rs
++++ b/app/buck2_common/src/legacy_configs/configs.rs
+@@ -86,16 +86,16 @@ pub struct ConfigSectionAndKey {
+ #[derive(buck2_error::Error, Debug)]
+ #[buck2(input)]
+ pub(crate) enum ConfigArgumentParseError {
+-    #[error("Could not find section separator (`.`) in pair `{0}`")]
+-    NoSectionDotSeparator(String),
+-    #[error("Could not find equals sign (`=`) in pair `{0}`")]
+-    NoEqualsSeparator(String),
++    #[error("Could not find section separator (`.`); expected `section.key`")]
++    NoSectionDotSeparator,
++    #[error("Could not find equals sign (`=`); expected `section.key=value`")]
++    NoEqualsSeparator,
+ 
+-    #[error("Expected key-value in format of `section.key=value` but only got `{0}`")]
+-    MissingData(String),
++    #[error("Expected a nonempty section and key in `section.key=value`")]
++    MissingData,
+ 
+-    #[error("Contains whitespace in key-value pair `{0}`")]
+-    WhitespaceInKeyOrValue(String),
++    #[error("Contains whitespace in configuration section or key")]
++    WhitespaceInKeyOrValue,
+ 
+     #[error("Specifying cells via cli config overrides is banned (`{0}.key=value`)")]
+     CellOverrideViaCliConfig(&'static str),
+@@ -104,30 +104,34 @@ pub(crate) enum ConfigArgumentParseError {
+ // Parses config key in the format `section.key`
+ pub fn parse_config_section_and_key(
+     raw_section_and_key: &str,
+-    raw_arg_in_err: Option<&str>, // Used in error strings to preserve the original config argument, not just section and key
+ ) -> buck2_error::Result<ConfigSectionAndKey> {
+-    let raw_arg = raw_arg_in_err.unwrap_or(raw_section_and_key);
++    let (section, key) = split_config_section_and_key(raw_section_and_key)?;
++    Ok(ConfigSectionAndKey {
++        section: section.to_owned(),
++        key: key.to_owned(),
++    })
++}
++
++/// Shared validation for execution and privacy-safe identifier retention. Errors
++/// deliberately contain no unvalidated input, which may itself be a credential.
++pub(crate) fn split_config_section_and_key(
++    raw_section_and_key: &str,
++) -> Result<(&str, &str), ConfigArgumentParseError> {
+     let (raw_section, raw_key) = raw_section_and_key
+         .split_once('.')
+-        .ok_or_else(|| ConfigArgumentParseError::NoSectionDotSeparator(raw_arg.to_owned()))?;
++        .ok_or(ConfigArgumentParseError::NoSectionDotSeparator)?;
+ 
+-    // We only trim the section + key, whitespace in values needs to be preserved. For example,
+-    // Buck can be invoked with --config section.key="Some Value" that contains important whitespace.
++    // Leading section whitespace is accepted by the existing config grammar.
+     let trimmed_section = raw_section.trim_start();
+     if trimmed_section.find(char::is_whitespace).is_some()
+         || raw_key.find(char::is_whitespace).is_some()
+     {
+-        return Err(ConfigArgumentParseError::WhitespaceInKeyOrValue(raw_arg.to_owned()).into());
++        return Err(ConfigArgumentParseError::WhitespaceInKeyOrValue);
+     }
+-
+     if trimmed_section.is_empty() || raw_key.is_empty() {
+-        return Err(ConfigArgumentParseError::MissingData(raw_arg.to_owned()).into());
++        return Err(ConfigArgumentParseError::MissingData);
+     }
+-
+-    Ok(ConfigSectionAndKey {
+-        section: trimmed_section.to_owned(),
+-        key: raw_key.to_owned(),
+-    })
++    Ok((trimmed_section, raw_key))
+ }
+ 
+ #[derive(Debug, Clone, PartialEq, Eq, Allocative, Pagable)]
+@@ -778,23 +782,23 @@ pub(crate) mod tests {
+     fn test_section_and_key() -> buck2_error::Result<()> {
+         // Valid Formats
+ 
+-        let normal_section_and_key = parse_config_section_and_key("apple.key", None)?;
++        let normal_section_and_key = parse_config_section_and_key("apple.key")?;
+ 
+         assert_eq!("apple", normal_section_and_key.section);
+         assert_eq!("key", normal_section_and_key.key);
+ 
+         // Whitespace
+ 
+-        let section_leading_whitespace = parse_config_section_and_key("  apple.key", None)?;
++        let section_leading_whitespace = parse_config_section_and_key("  apple.key")?;
+         assert_eq!("apple", section_leading_whitespace.section);
+         assert_eq!("key", section_leading_whitespace.key);
+ 
+-        let pair_with_whitespace_in_key = parse_config_section_and_key("apple. key", None);
++        let pair_with_whitespace_in_key = parse_config_section_and_key("apple. key");
+         assert!(pair_with_whitespace_in_key.is_err());
+ 
+         // Invalid Formats
+ 
+-        let pair_without_dot = parse_config_section_and_key("applekey", None);
++        let pair_without_dot = parse_config_section_and_key("applekey");
+         assert!(pair_without_dot.is_err());
+ 
+         Ok(())
+diff --git a/app/buck2_common/src/legacy_configs/parser.rs b/app/buck2_common/src/legacy_configs/parser.rs
+index f061d81..f71ac35 100644
+--- a/app/buck2_common/src/legacy_configs/parser.rs
++++ b/app/buck2_common/src/legacy_configs/parser.rs
+@@ -45,20 +45,20 @@ mod resolver;
+ #[derive(buck2_error::Error, Debug)]
+ #[buck2(input)]
+ enum ConfigError {
+-    #[error("Expected line of the form `key = value` but key was empty. Line was `{0}`")]
+-    EmptyKey(String),
++    #[error("Expected line of the form `key = value` but key was empty")]
++    EmptyKey,
+     #[error("Included file doesn't exist `{0}`")]
+     MissingInclude(String),
+-    #[error("Improperly formatted section. Expected something of the form `[section]`, got {0}")]
+-    SectionMissingTrailingBracket(String),
+-    #[error("Improperly include directive path. Got {0}")]
+-    BadIncludePath(String),
++    #[error("Improperly formatted section. Expected something of the form `[section]`")]
++    SectionMissingTrailingBracket,
++    #[error("Improperly formatted include directive path")]
++    BadIncludePath,
+     #[error("Detected a cycle in buckconfig includes: `{0}` is already being parsed")]
+     IncludeCycle(String),
+     #[error(
+-        "Couldn't parse line. Expected include directive (`<file:/file.bcfg>`), section(`[some_section]`), or key assignment (`some_key = some_value`). Got `{0}`"
++        "Couldn't parse line. Expected include directive (`<file:/file.bcfg>`), section(`[some_section]`), or key assignment (`some_key = some_value`)"
+     )]
+-    InvalidLine(String),
++    InvalidLine,
+     #[error("Detected cycles in buckconfig $(config) references: {}", format_cycle(.0))]
+     ReferenceCycle(Vec<(String, String)>),
+ }
+@@ -331,7 +331,7 @@ impl<'p> LegacyConfigFileParser<'p> {
+         // using oss-enable/oss-disable is super tricky
+         match line.strip_prefix('[') {
+             Some(remaining) => match Self::strip_line_comment(remaining).strip_suffix(']') {
+-                None => Err(ConfigError::SectionMissingTrailingBracket(line.to_owned()).into()),
++                None => Err(ConfigError::SectionMissingTrailingBracket.into()),
+                 Some(section) => Ok(Some(section)),
+             },
+             None => Ok(None),
+@@ -381,7 +381,7 @@ impl<'p> LegacyConfigFileParser<'p> {
+                 let key = key.trim();
+                 let val = val.trim();
+                 if key.is_empty() {
+-                    return Err(ConfigError::EmptyKey(line.to_owned()).into());
++                    return Err(ConfigError::EmptyKey.into());
+                 }
+                 self.current_section.1.insert(
+                     key.to_owned(),
+@@ -406,7 +406,7 @@ impl<'p> LegacyConfigFileParser<'p> {
+                         match config_path.join_to_parent_normalized(relative) {
+                             Ok(d) => d,
+                             Err(_) => {
+-                                return Err(ConfigError::BadIncludePath(include.to_owned()).into());
++                                return Err(ConfigError::BadIncludePath.into());
+                             }
+                         }
+                     };
+@@ -422,7 +422,7 @@ impl<'p> LegacyConfigFileParser<'p> {
+                     }
+                 }
+             } else {
+-                return Err(ConfigError::InvalidLine(line.to_owned()).into());
++                return Err(ConfigError::InvalidLine.into());
+             }
+         }
+         Ok(())
+diff --git a/app/buck2_common/src/legacy_configs/parser/resolver.rs b/app/buck2_common/src/legacy_configs/parser/resolver.rs
+index 64f7557..2ff8485 100644
+--- a/app/buck2_common/src/legacy_configs/parser/resolver.rs
++++ b/app/buck2_common/src/legacy_configs/parser/resolver.rs
+@@ -201,7 +201,7 @@ impl ConfigResolver {
+ 
+             let config_key = captures.get(1).unwrap().as_str();
+ 
+-            let config_section_and_key = parse_config_section_and_key(config_key, None)?;
++            let config_section_and_key = parse_config_section_and_key(config_key)?;
+ 
+             resolved.push_str(self.resolve_item(
+                 resolved_items,
+diff --git a/app/buck2_common/src/settings/args.rs b/app/buck2_common/src/settings/args.rs
+index a95640d..45d9452 100644
+--- a/app/buck2_common/src/settings/args.rs
++++ b/app/buck2_common/src/settings/args.rs
+@@ -11,14 +11,14 @@
+ #[derive(buck2_error::Error, Debug)]
+ #[buck2(input)]
+ enum SettingsArgumentError {
+-    #[error("Could not find equals sign (`=`) in setting `{0}`")]
+-    NoEqualsSeparator(String),
+-    #[error("Expected a value after `=` in setting `{0}`")]
+-    MissingValue(String),
+-    #[error("Expected `section.key`, but got `{0}`")]
+-    InvalidSectionAndKey(String),
+-    #[error("Expected one key-value pair, but got `{0}`")]
+-    MultipleKeyValuePairs(String),
++    #[error("Could not find equals sign (`=`); expected `section.key=value`")]
++    NoEqualsSeparator,
++    #[error("Expected a value after `=` in setting")]
++    MissingValue,
++    #[error("Expected a valid `section.key` in setting")]
++    InvalidSectionAndKey,
++    #[error("Expected one key-value pair in setting")]
++    MultipleKeyValuePairs,
+ }
+ 
+ /// A settings layer parsed from a single `--setting` argument.
+@@ -36,14 +36,14 @@ impl SettingOverride {
+ pub fn parse_setting_flag_arg(raw: &str) -> buck2_error::Result<SettingOverride> {
+     let (raw_section_and_key, raw_value) = raw
+         .split_once('=')
+-        .ok_or_else(|| SettingsArgumentError::NoEqualsSeparator(raw.to_owned()))?;
++        .ok_or(SettingsArgumentError::NoEqualsSeparator)?;
+ 
+     if raw_value.is_empty() {
+-        return Err(SettingsArgumentError::MissingValue(raw.to_owned()).into());
++        return Err(SettingsArgumentError::MissingValue.into());
+     }
+     let (section, key) = parse_setting_section_and_key(raw_section_and_key)?;
+ 
+-    let value = parse_setting_value(raw_value, raw)?;
++    let value = parse_setting_value(raw_value)?;
+ 
+     let mut section_table = toml::Table::new();
+     section_table.insert(key.to_owned(), value);
+@@ -54,9 +54,7 @@ pub fn parse_setting_flag_arg(raw: &str) -> buck2_error::Result<SettingOverride>
+ 
+ fn parse_setting_section_and_key(raw_section_and_key: &str) -> buck2_error::Result<(&str, &str)> {
+     let Some((section, key)) = raw_section_and_key.split_once('.') else {
+-        return Err(
+-            SettingsArgumentError::InvalidSectionAndKey(raw_section_and_key.to_owned()).into(),
+-        );
++        return Err(SettingsArgumentError::InvalidSectionAndKey.into());
+     };
+ 
+     if section.is_empty()
+@@ -64,20 +62,18 @@ fn parse_setting_section_and_key(raw_section_and_key: &str) -> buck2_error::Resu
+         || key.contains('.')
+         || raw_section_and_key.chars().any(char::is_whitespace)
+     {
+-        return Err(
+-            SettingsArgumentError::InvalidSectionAndKey(raw_section_and_key.to_owned()).into(),
+-        );
++        return Err(SettingsArgumentError::InvalidSectionAndKey.into());
+     }
+ 
+     Ok((section, key))
+ }
+ 
+-fn parse_setting_value(raw_value: &str, raw_arg: &str) -> buck2_error::Result<toml::Value> {
++fn parse_setting_value(raw_value: &str) -> buck2_error::Result<toml::Value> {
+     let Ok(mut table) = toml::from_str::<toml::Table>(&format!("value = {raw_value}")) else {
+         return Ok(toml::Value::String(raw_value.to_owned()));
+     };
+     if table.len() != 1 {
+-        return Err(SettingsArgumentError::MultipleKeyValuePairs(raw_arg.to_owned()).into());
++        return Err(SettingsArgumentError::MultipleKeyValuePairs.into());
+     }
+     Ok(table
+         .remove("value")
+@@ -89,6 +85,19 @@ mod tests {
+     use super::*;
+     use crate::settings::parser::table;
+ 
++    #[test]
++    fn malformed_setting_diagnostics_do_not_echo_values() {
++        for argument in [
++            "synthetic-setting-credential",
++            "synthetic-setting-credential=",
++            "synthetic-setting-credential==",
++            "ordinary.choice=1\nanother = \"synthetic-setting-credential\"",
++        ] {
++            let error = parse_setting_flag_arg(argument).unwrap_err();
++            assert!(!format!("{error:#}").contains("synthetic-setting-credential"));
++        }
++    }
++
+     #[test]
+     fn test_parse_setting_flag_arg_valid_formats() -> buck2_error::Result<()> {
+         assert_eq!(
+diff --git a/app/buck2_configuration_providers/src/configuration_info.rs b/app/buck2_configuration_providers/src/configuration_info.rs
+index 52047ce..4641b16 100644
+--- a/app/buck2_configuration_providers/src/configuration_info.rs
++++ b/app/buck2_configuration_providers/src/configuration_info.rs
+@@ -220,10 +220,10 @@ fn configuration_info_creator(globals: &mut GlobalsBuilder) {
+         let new_constraints = build_constraints_map_from_dict(constraints)?;
+ 
+         for (k, _) in &values.typed.entries {
+-            parse_config_section_and_key(k, None)?;
++            parse_config_section_and_key(k)?;
+         }
+         for (k, _) in &root_values.typed.entries {
+-            parse_config_section_and_key(k, None)?;
++            parse_config_section_and_key(k)?;
+         }
+ 
+         let value_keys: BuckMutSet<&str> = values.typed.entries.iter().map(|(k, _)| *k).collect();
+diff --git a/app/buck2_configured/src/configuration.rs b/app/buck2_configured/src/configuration.rs
+index 01f474a..0d46e7e 100644
+--- a/app/buck2_configured/src/configuration.rs
++++ b/app/buck2_configured/src/configuration.rs
+@@ -99,7 +99,7 @@ async fn configuration_matches(
+     // Cell used for buckconfigs is set to cell of target that applies select to match Buck v1 behavior.
+     // Eventually, we want this to be the cell of the platform instead.
+     for (raw_section_and_key, config_value) in &constraints_and_configs.buckconfigs {
+-        let config_section_and_key = parse_config_section_and_key(raw_section_and_key, None)?;
++        let config_section_and_key = parse_config_section_and_key(raw_section_and_key)?;
+         let v = ctx
+             .get_legacy_config_property(
+                 target_node_cell.0,
+@@ -119,7 +119,7 @@ async fn configuration_matches(
+         let root_config = ctx.get_legacy_root_config_on_dice().await?;
+ 
+         for (raw_section_and_key, config_value) in &constraints_and_configs.root_buckconfigs {
+-            let config_section_and_key = parse_config_section_and_key(raw_section_and_key, None)?;
++            let config_section_and_key = parse_config_section_and_key(raw_section_and_key)?;
+             let v = root_config.lookup(
+                 ctx,
+                 BuckconfigKeyRef {
+diff --git a/app/buck2_data/data.proto b/app/buck2_data/data.proto
+index 6ce51da..664bfd5 100644
+--- a/app/buck2_data/data.proto
++++ b/app/buck2_data/data.proto
+@@ -554,6 +554,8 @@ message BuckconfigComponent {
+ message ConfigValue {
+   string section = 1;
+   string key = 2;
++  // Logging-only: ALL values must be replaced with <redacted> before native
++  // dispatch. Arbitrarily named keys can alias credentials; execution uses real configs.
+   string value = 3;
+   optional string cell = 4;
+   // whether config is provided by the command line (either single arg or config
+diff --git a/app/buck2_event_log/src/write.rs b/app/buck2_event_log/src/write.rs
+index 809976f..ac9166d 100644
+--- a/app/buck2_event_log/src/write.rs
++++ b/app/buck2_event_log/src/write.rs
+@@ -577,10 +577,11 @@ mod tests {
+                         open_event_log_for_writing(log, None, EventLogType::System).await?,
+                     ],
+                 },
+-                sanitized_argv: Argv {
+-                    argv: vec!["buck2".to_owned()],
+-                    expanded_argv: ExpandedArgv::from_literals(vec!["buck2".to_owned()]),
+-                }
++                sanitized_argv: Argv::new(
++                    vec!["buck2".to_owned()],
++                    ExpandedArgv::from_literals(vec!["buck2".to_owned()]),
++                    Default::default(),
++                )
+                 .no_need_to_sanitize(),
+                 command_name: "testtest".to_owned(),
+                 working_dir: AbsWorkingDir::current_dir()?,
+diff --git a/app/buck2_re_configuration/src/lib.rs b/app/buck2_re_configuration/src/lib.rs
+index 8fafdbc..59f21cb 100644
+--- a/app/buck2_re_configuration/src/lib.rs
++++ b/app/buck2_re_configuration/src/lib.rs
+@@ -504,12 +504,21 @@ pub struct Buck2OssReConfiguration {
+     pub max_concurrency_per_connection: Option<usize>,
+ }
+ 
+-#[derive(Clone, Debug, Default, Allocative)]
++#[derive(Clone, Default, Allocative)]
+ pub struct HttpHeader {
+     pub key: String,
+     pub value: String,
+ }
+ 
++impl std::fmt::Debug for HttpHeader {
++    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
++        f.debug_struct("HttpHeader")
++            .field("key", &"<redacted>")
++            .field("value", &"<redacted>")
++            .finish()
++    }
++}
++
+ impl FromStr for HttpHeader {
+     type Err = buck2_error::Error;
+ 
+@@ -522,8 +531,7 @@ impl FromStr for HttpHeader {
+             }),
+             _ => Err(buck2_error::buck2_error!(
+                 buck2_error::ErrorTag::Input,
+-                "Invalid header (expect name and value separated by `:`): `{}`",
+-                s
++                "Invalid header (expect name and value separated by `:`)"
+             )),
+         }
+     }
+@@ -647,3 +655,36 @@ impl Buck2OssReConfiguration {
+ pub use fbcode::RemoteExecutionStaticMetadata;
+ #[cfg(not(fbcode_build))]
+ pub use not_fbcode::RemoteExecutionStaticMetadata;
++
++#[cfg(test)]
++mod privacy_tests {
++    use super::*;
++
++    #[test]
++    fn header_diagnostics_do_not_disclose_credentials() {
++        let header: HttpHeader = "authorization: Bearer synthetic-header-credential".parse().unwrap();
++        assert_eq!(header.key, "authorization");
++        assert_eq!(header.value, "Bearer synthetic-header-credential");
++        let debug = format!("{header:?}");
++        assert!(!debug.contains("synthetic-header-credential"));
++        assert!(!debug.contains("authorization"));
++        assert!(debug.contains("<redacted>"));
++
++        let error = LegacyBuckConfig::parse_list_value::<HttpHeader>(
++            BuckconfigKeyRef {
++                section: BUCK2_RE_CLIENT_CFG_SECTION,
++                property: "http_headers",
++            },
++            Some("synthetic-malformed-credential"),
++        )
++        .unwrap_err();
++        let diagnostic = format!("{error:#}");
++        assert!(!diagnostic.contains("synthetic-malformed-credential"));
++        assert!(diagnostic.contains("conversion to"));
++        assert!(error.has_tag(buck2_error::ErrorTag::Input));
++        let direct = "synthetic-malformed-credential".parse::<HttpHeader>().unwrap_err();
++        assert!(!format!("{direct:#}").contains("synthetic-malformed-credential"));
++        assert!(format!("{direct:#}").contains("Invalid header"));
++        assert!(diagnostic.contains("buck2_re_client.http_headers"));
++    }
++}
+diff --git a/app/buck2_server_ctx/src/ctx.rs b/app/buck2_server_ctx/src/ctx.rs
+index 4c8cb2f..b8f6a72 100644
+--- a/app/buck2_server_ctx/src/ctx.rs
++++ b/app/buck2_server_ctx/src/ctx.rs
+@@ -22,6 +22,7 @@ use buck2_certs::validate::CertState;
+ use buck2_cli_proto::client_context::ExitWhen;
+ use buck2_cli_proto::client_context::PreemptibleWhen;
+ use buck2_common::legacy_configs::dice::HasInjectedLegacyConfigs;
++use buck2_common::legacy_configs::telemetry::redact_buckconfig_input_values;
+ use buck2_core::fs::project::ProjectRoot;
+ use buck2_core::fs::project_rel_path::ProjectRelativePath;
+ use buck2_core::pattern::pattern::ParsedPattern;
+@@ -179,10 +180,13 @@ impl CommandTransactionObserver for BuckconfigTelemetry<'_> {
+         self.events.instant_event(buck2_data::TagEvent {
+             tags: get_experiment_tags(&current_external_and_local_configs),
+         });
+-        self.events
+-            .instant_event(buck2_data::BuckconfigInputValues {
+-                components: current_external_and_local_configs,
+-            });
++        let mut config_event = buck2_data::BuckconfigInputValues {
++            components: current_external_and_local_configs,
++        };
++        // Keep execution and mismatch detection on real values; only the event
++        // copy is redacted, before any native event sink can serialize it.
++        redact_buckconfig_input_values(&mut config_event);
++        self.events.instant_event(config_event);
+ 
+         Ok(())
+     }
+@@ -391,3 +395,71 @@ impl ServerCommandDiceContext for dyn ServerCommandContextTrait + '_ {
+             .await?
+     }
+ }
++
++#[cfg(test)]
++mod telemetry_tests {
++    use std::sync::atomic::AtomicUsize;
++    use std::sync::atomic::Ordering;
++
++    use buck2_events::Event;
++    use buck2_events::EventSink;
++    use buck2_events::daemon_id::DaemonId;
++
++    use super::*;
++
++    struct CountEvents(Arc<AtomicUsize>);
++
++    impl EventSink for CountEvents {
++        fn send(&self, _event: Event) {
++            self.0.fetch_add(1, Ordering::Relaxed);
++        }
++    }
++
++    #[test]
++    fn redaction_keeps_private_config_comparisons_exact() {
++        let count = Arc::new(AtomicUsize::new(0));
++        let dispatcher = EventDispatcher::new(
++            TraceId::null(),
++            DaemonId::null(),
++            CountEvents(count.clone()),
++        );
++        let mut previous = PreviousCommandData::default();
++        for (value, expected_mismatches) in [
++            ("synthetic-first-credential", 0),
++            ("synthetic-first-credential", 0),
++            ("synthetic-rotated-credential", 1),
++        ] {
++            let mut event = buck2_data::BuckconfigInputValues {
++                components: vec![buck2_data::BuckconfigComponent {
++                    data: Some(buck2_data::buckconfig_component::Data::ConfigValue(
++                        buck2_data::ConfigValue {
++                            section: "ordinary".to_owned(),
++                            key: "choice".to_owned(),
++                            value: value.to_owned(),
++                            ..Default::default()
++                        },
++                    )),
++                }],
++            };
++            // This is the observer's ordering: compare/store real values first,
++            // then redact only the separate native event payload.
++            previous.process_current_command(
++                dispatcher.dupe(),
++                event.components.clone(),
++                Vec::new(),
++                TraceId::null(),
++            );
++            redact_buckconfig_input_values(&mut event);
++            assert_eq!(count.load(Ordering::Relaxed), expected_mismatches);
++            let stored = &previous.data.as_ref().unwrap().external_and_local_configs[0];
++            let Some(buck2_data::buckconfig_component::Data::ConfigValue(stored)) = &stored.data else {
++                panic!("missing stored config");
++            };
++            assert_eq!(stored.value, value);
++            let Some(buck2_data::buckconfig_component::Data::ConfigValue(logged)) = &event.components[0].data else {
++                panic!("missing event config");
++            };
++            assert_eq!(logged.value, "<redacted>");
++        }
++    }
++}
+diff --git a/app/buck2_common/src/legacy_configs/telemetry.rs b/app/buck2_common/src/legacy_configs/telemetry.rs
+new file mode 100644
+index 0000000..4191a84
+--- /dev/null
++++ b/app/buck2_common/src/legacy_configs/telemetry.rs
+@@ -0,0 +1,288 @@
++/*
++ * Copyright (c) Meta Platforms, Inc. and affiliates.
++ *
++ * This source code is dual-licensed under either the MIT license found in the
++ * LICENSE-MIT file in the root directory of this source tree or the Apache
++ * License, Version 2.0 found in the LICENSE-APACHE file in the root directory
++ * of this source tree. You may select, at your option, one of the
++ * above-listed licenses.
++ */
++
++//! Redaction at logging boundaries, never on configuration used for execution.
++//! All values are private: `$(config section.key)` can obtain credentials from
++//! innocently named settings. Names, scope and source paths remain diagnostic;
++//! neither literal values nor value-derived hashes belong in native telemetry.
++
++use crate::legacy_configs::configs::split_config_section_and_key;
++
++pub const REDACTED_CONFIG_VALUE: &str = "<redacted>";
++
++/// Mutate only the event copy, after real configuration comparisons are complete.
++/// Covers global defaults, local files, explicit --config-file inputs and CLI
++/// overrides. Project config references contain paths only.
++pub fn redact_buckconfig_input_values(event: &mut buck2_data::BuckconfigInputValues) {
++    use buck2_data::buckconfig_component::Data;
++
++    fn redact(value: &mut buck2_data::ConfigValue) {
++        value.value.clear();
++        value.value.push_str(REDACTED_CONFIG_VALUE);
++    }
++
++    for component in &mut event.components {
++        match &mut component.data {
++            Some(Data::ConfigValue(value)) => redact(value),
++            Some(Data::GlobalExternalConfigFile(file)) => {
++                file.values.iter_mut().for_each(redact);
++            }
++            Some(Data::ConfigFile(file)) => {
++                if let Some(buck2_data::config_file::Data::GlobalExternalConfig(file)) = &mut file.data {
++                    file.values.iter_mut().for_each(redact);
++                }
++            }
++            None => {}
++        }
++    }
++}
++
++/// Preserve validated key/scope identifiers, never an override's value or an
++/// unvalidated prefix (for example a padded credential passed as `token==`).
++pub fn redact_config_argument(argument: &mut String) {
++    let start = config_argument_redaction_start(argument);
++    argument.truncate(start);
++    argument.push_str(REDACTED_CONFIG_VALUE);
++}
++
++fn config_argument_redaction_start(argument: &str) -> usize {
++    let Some((scoped_key, _)) = argument.split_once('=') else {
++        return 0;
++    };
++    let key = match scoped_key.split_once("//") {
++        Some((cell, key)) if !cell.contains(char::is_whitespace) => key,
++        Some(_) => return 0,
++        None => scoped_key,
++    };
++    if split_config_section_and_key(key).is_err() {
++        return 0;
++    }
++    scoped_key.len() + 1
++}
++
++/// Locate a value already classified by the real CLI parser. This deliberately
++/// does not parse short-option clusters or reinterpret another option's value.
++/// Matching the original strings also covers a flag in an argfile consuming an
++/// inline value. Repeated copies of a classified assignment are conservatively
++/// private, even if another argument happens to contain the same bytes.
++pub(crate) fn config_argument_redaction_span(
++    argument: &str,
++    parsed_assignment: &str,
++) -> Option<usize> {
++    if parsed_assignment.is_empty() {
++        // There are no private bytes; never match the empty suffix of every arg.
++        return None;
++    }
++    let prefix = argument.strip_suffix(parsed_assignment)?;
++    if !prefix.is_empty() && !prefix.starts_with('-') {
++        return None;
++    }
++    Some(prefix.len() + config_argument_redaction_start(parsed_assignment))
++}
++
++/// Positions refer to the original argv, before command-specific removals.
++/// Plans are sorted and deduplicated before construction.
++pub(crate) struct ConfigArgvRedactor<'a> {
++    position: usize,
++    spans: &'a [(usize, usize)],
++}
++
++impl<'a> ConfigArgvRedactor<'a> {
++    pub(crate) fn new(spans: &'a [(usize, usize)]) -> Self {
++        Self { position: 0, spans }
++    }
++
++    pub(crate) fn redact(&mut self, argument: &mut String) {
++        if let Some(&(position, start)) = self.spans.first() {
++            if position == self.position {
++                argument.truncate(start);
++                argument.push_str(REDACTED_CONFIG_VALUE);
++                self.spans = &self.spans[1..];
++            }
++        }
++        self.position += 1;
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use crate::legacy_configs::key::BuckconfigKeyRef;
++
++    use super::*;
++
++    #[test]
++    fn config_argument_redaction_preserves_only_validated_identifiers() {
++        for (raw, expected) in [
++            ("ordinary.choice=synthetic-private-token", "ordinary.choice=<redacted>"),
++            ("other//ordinary.choice=synthetic-private-token = // 秘密", "other//ordinary.choice=<redacted>"),
++            ("ordinary.choice=", "ordinary.choice=<redacted>"),
++            ("synthetic-private-token==", "<redacted>"),
++            ("synthetic-private-token", "<redacted>"),
++            ("ordinary.=synthetic-private-token", "<redacted>"),
++            ("ordinary. choice=synthetic-private-token", "<redacted>"),
++            ("bad cell//ordinary.choice=synthetic-private-token", "<redacted>"),
++        ] {
++            let mut argument = raw.to_owned();
++            redact_config_argument(&mut argument);
++            assert_eq!(argument, expected);
++        }
++        assert_eq!(config_argument_redaction_span("--config", ""), None);
++        assert_eq!(
++            config_argument_redaction_span("-Acsynthetic-private-token==", "synthetic-private-token=="),
++            Some(3),
++        );
++    }
++
++    #[test]
++    fn malformed_config_files_do_not_echo_private_lines() {
++        for contents in [
++            "[ordinary]\n= synthetic-invalid-line-credential\n",
++            "[synthetic-invalid-line-credential\n",
++            "synthetic-invalid-line-credential\n",
++        ] {
++            let error = crate::legacy_configs::configs::testing::parse(
++                &[("config", contents)],
++                "config",
++            )
++            .unwrap_err();
++            assert!(!format!("{error:#}").contains("synthetic-invalid-line-credential"));
++        }
++    }
++
++    #[test]
++    fn typed_config_parse_errors_keep_tags_without_input_or_error_values() {
++        #[derive(Debug)]
++        struct EchoingValue;
++
++        impl std::str::FromStr for EchoingValue {
++            type Err = buck2_error::Error;
++
++            fn from_str(value: &str) -> Result<Self, Self::Err> {
++                Err(buck2_error::buck2_error!(
++                    buck2_error::ErrorTag::Input,
++                    "parser echoed {value}",
++                ))
++            }
++        }
++
++        let error = crate::legacy_configs::configs::LegacyBuckConfig::parse_value::<EchoingValue>(
++            BuckconfigKeyRef {
++                section: "ordinary",
++                property: "choice",
++            },
++            Some("synthetic-parser-credential"),
++        )
++        .unwrap_err();
++        assert!(error.has_tag(buck2_error::ErrorTag::Input));
++        let diagnostic = format!("{error:#}");
++        assert!(!diagnostic.contains("synthetic-parser-credential"));
++        assert!(diagnostic.contains("ordinary.choice"));
++        assert!(diagnostic.contains("EchoingValue"));
++    }
++
++    #[test]
++    fn buckconfig_metadata_redaction_preserves_actual_alias_resolution() {
++        let config = crate::legacy_configs::configs::testing::parse(
++            &[(
++                "config",
++                "[ordinary]\nchoice = synthetic-aliased-credential\n[buck2_metadata]\nnote = $(config ordinary.choice)\npurpose = test\n[buck2_re_client]\nhttp_headers = authorization: $(config ordinary.choice)\n",
++            )],
++            "config",
++        )
++        .unwrap();
++        let metadata = crate::legacy_configs::parse_buckconfig_metadata(&config);
++        assert_eq!(metadata["note"], REDACTED_CONFIG_VALUE);
++        assert_eq!(metadata["purpose"], REDACTED_CONFIG_VALUE);
++        assert_eq!(
++            config.get(BuckconfigKeyRef {
++                section: "ordinary",
++                property: "choice",
++            }),
++            Some("synthetic-aliased-credential"),
++        );
++        assert_eq!(
++            config.get(BuckconfigKeyRef {
++                section: "buck2_re_client",
++                property: "http_headers",
++            }),
++            Some("authorization: synthetic-aliased-credential"),
++        );
++    }
++
++    #[test]
++    fn native_buckconfig_event_redacts_aliases_and_all_value_representations() {
++        use buck2_data::buckconfig_component::Data;
++
++        let alias = buck2_data::ConfigValue {
++            section: "ordinary".to_owned(),
++            key: "choice".to_owned(),
++            value: "synthetic-native-credential".to_owned(),
++            cell: Some("scoped-cell".to_owned()),
++            is_cli: true,
++        };
++        let private = buck2_data::ConfigValue {
++            section: "buck2_re_client".to_owned(),
++            key: "http_headers".to_owned(),
++            value: "authorization: $(config ordinary.choice)".to_owned(),
++            ..Default::default()
++        };
++        let public = buck2_data::ConfigValue {
++            section: "build".to_owned(),
++            key: "threads".to_owned(),
++            value: "8".to_owned(),
++            ..Default::default()
++        };
++        let file = buck2_data::GlobalExternalConfig {
++            values: vec![private, alias.clone(), public],
++            origin_path: "/synthetic/included-config".to_owned(),
++        };
++        let original = buck2_data::BuckconfigInputValues {
++            components: vec![
++                buck2_data::BuckconfigComponent {
++                    data: Some(Data::ConfigValue(alias.clone())),
++                },
++                buck2_data::BuckconfigComponent {
++                    data: Some(Data::GlobalExternalConfigFile(file.clone())),
++                },
++                buck2_data::BuckconfigComponent {
++                    data: Some(Data::ConfigFile(buck2_data::ConfigFile {
++                        data: Some(buck2_data::config_file::Data::GlobalExternalConfig(file)),
++                    })),
++                },
++                buck2_data::BuckconfigComponent {
++                    data: Some(Data::ConfigFile(buck2_data::ConfigFile {
++                        data: Some(buck2_data::config_file::Data::ProjectRelativePath(
++                            ".buckconfig".to_owned(),
++                        )),
++                    })),
++                },
++            ],
++        };
++        let mut telemetry = original.clone();
++        redact_buckconfig_input_values(&mut telemetry);
++        let native_event = buck2_data::BuckEvent {
++            data: Some(buck2_data::buck_event::Data::Instant(buck2_data::InstantEvent {
++                data: Some(buck2_data::instant_event::Data::BuckconfigInputValues(telemetry.clone())),
++            })),
++            ..Default::default()
++        };
++        let serialized = serde_json::to_string(&native_event).unwrap();
++        assert!(!serialized.contains("synthetic-native-credential"));
++        assert!(!serialized.contains("$(config"));
++        assert_eq!(serialized.matches(REDACTED_CONFIG_VALUE).count(), 7);
++        assert!(serialized.contains("scoped-cell"));
++        assert!(serialized.contains("/synthetic/included-config"));
++        // Real configuration / previous-command comparison input stays intact.
++        assert_eq!(original.components[0].data, Some(Data::ConfigValue(alias)));
++        let before = telemetry.clone();
++        redact_buckconfig_input_values(&mut telemetry);
++        assert_eq!(before, telemetry);
++    }
++}

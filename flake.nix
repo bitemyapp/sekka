@@ -76,6 +76,12 @@
       pipewireOverlay = import ./nix/overlays/pipewire.nix;
       pipewirePkgs = pkgs.extend pipewireOverlay;
       tools = import ./nix/tools.nix { inherit pkgs; };
+      bazelClient = import ./nix/bazel/client.nix { inherit pkgs; };
+      buckBuild = import ./nix/buck2 {
+        inherit pkgs;
+        rustOverlay = externalInputs.omp.inputs.rust-overlay.overlays.default;
+      };
+      buildService = import ./nix/build-service { inherit pkgs; };
       pushCache = import ./nix/push-cache.nix { inherit pkgs; };
       publishNightly = import ./nix/publish-nightly.nix { inherit pkgs; };
       kakehashi = import ./nix/kakehashi.nix { inherit pkgs; };
@@ -104,6 +110,10 @@
         fonts = inputs.aizome.packages.${system}.fonts;
       };
       applicationCatalog = import ./nix/applications.nix { inherit inputs; };
+      tatamiReference = (import ./nix/reference-systems.nix {
+        inherit inputs applicationCatalog;
+        desktops = [ "tatami" ];
+      }).systems.tatami.config;
       installer = nixpkgs.lib.nixosSystem {
         inherit system;
         specialArgs = {
@@ -152,6 +162,9 @@
       };
       devShells.${system} = {
         kakehashi = kakehashi.shell;
+        # Build clients share the root lock's tools and native libraries.
+        bazel = import ./nix/bazel/shell.nix { inherit pkgs; };
+        buck2 = buckBuild.shell;
         # Aizome's workspace (desktop/aizome), which its `just` recipes and
         # aizome-dev enter.
         aizome = inputs.aizome.devShells.${system}.default;
@@ -181,6 +194,21 @@
       # `checks`, which CI runs, as they weren't in Aizome's repository.
       legacyPackages.${system}.aizome-checks = inputs.aizome.checks.${system};
       apps.${system} = {
+        sekka-bazel = {
+          type = "app";
+          program = "${bazelClient}/bin/sekka-bazel-client";
+          meta.description = "Build Cargo workspaces with pinned Bazel toolchains and shared artifacts";
+        };
+        sekka-buck2 = {
+          type = "app";
+          program = "${buckBuild.client}/bin/sekka-buck2";
+          meta.description = "Build Cargo unit graphs with pinned Buck2 toolchains and shared artifacts";
+        };
+        build-service = {
+          type = "app";
+          program = "${buildService.controller}/bin/sekka-build-service";
+          meta.description = "Manage isolated authenticated shared build caches and workers";
+        };
         update = {
           type = "app";
           program = "${inputs.yukimi.packages.${system}.yukimi}/bin/sekka-update";
@@ -204,6 +232,15 @@
           iso = installer.config.system.build.isoImage;
         };
         inherit tools calamares;
+        sekka-bazel = bazelClient;
+        sekka-buck2 = buckBuild.client;
+        buck2 = buckBuild.buck2;
+        build-service = buildService.controller;
+        shared-build-inputs = pkgs.linkFarm "sekka-shared-build-inputs" {
+          source = self;
+          bazel = bazelClient;
+          buck2 = buckBuild.client;
+        };
         sekka-discord = import ./nix/sekka-discord.nix { inherit pkgs; };
         chatgpt = (import ./nix/ai-packages.nix inputs.ai-apps.packages.${system}).chatgpt;
         aizome = inputs.aizome.packages.${system}.aizome;
@@ -221,6 +258,12 @@
           inherit pkgs;
           inherit (pkgs) lib;
           nixPackage = runnerNix;
+        };
+        build-client-runner = import ./nix/runner.nix {
+          inherit pkgs;
+          inherit (pkgs) lib;
+          nixPackage = runnerNix;
+          role = "build-client";
         };
         screenshots = import ./nix/screenshots.nix {
           inherit pkgs;
@@ -371,6 +414,15 @@
         hyprlauncher-software = import ./nix/hyprlauncher-software-test.nix { pkgs = hyprlandPkgs; };
         aizome-ibus = import ./nix/aizome-ibus-test.nix { inherit pkgs inputs; };
         aizome-ibus-policy = import ./nix/aizome-ibus-policy-test.nix { inherit pkgs inputs; };
+        # Bazel's native environment matches Aizome's package
+        # (docs/bazel-build-plan.md, nix/bazel/inputs-test.nix).
+        bazel-native-inputs = import ./nix/bazel/inputs-test.nix {
+          inherit pkgs;
+          aizome = inputs.aizome.packages.${system}.aizome;
+        };
+        build-input-stability = import ./nix/build-inputs-test.nix { inherit pkgs; };
+        buck2-backend = buckBuild.backendTest;
+        build-service-inventory = buildService.inventoryTest;
         # Aizome's toolkit's own tests, under a headless sway
         # (desktop/aizome/sukumo).
         sukumo = import ./nix/sukumo-test.nix {
@@ -584,11 +636,7 @@
         binary-cache =
           let
             advertised = (import ./flake.nix).nixConfig;
-            installed =
-              (import ./nix/reference-systems.nix {
-                inherit inputs applicationCatalog;
-                desktops = [ "tatami" ];
-              }).systems.tatami.config;
+            installed = tatamiReference;
             uses =
               c:
               builtins.all (name: builtins.all (v: builtins.elem v c.nix.settings.${name}) advertised.${name}) [
@@ -622,11 +670,7 @@
         tatami-session-entry =
           let
             inherit (pkgs) lib;
-            installed =
-              (import ./nix/reference-systems.nix {
-                inherit inputs applicationCatalog;
-                desktops = [ "tatami" ];
-              }).systems.tatami.config;
+            installed = tatamiReference;
             entry = lib.findFirst (
               p: p.name == "tatami-session"
             ) (throw "Tatami offers no login session") installed.services.displayManager.sessionPackages;

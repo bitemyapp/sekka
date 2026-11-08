@@ -67,18 +67,20 @@ let
   aizome = ../../../desktop/aizome;
   kit = lib.fileset.toSource {
     root = aizome;
-    fileset = lib.fileset.unions [
-      (aizome + "/Cargo.toml")
-      (aizome + "/crates/aizome-kit")
-      (aizome + "/crates/aizome-theme")
-      (aizome + "/crates/aizome-config")
-      (aizome + "/crates/aizome-shell-proto")
-      # The compositor's IPC, for the keyboard step's key.
-      (aizome + "/crates/aizome-ipc")
-      # Sukumo, which the kit draws with: its workspace manifest and crates.
-      (aizome + "/sukumo/Cargo.toml")
-      (aizome + "/sukumo/crates")
-    ];
+    fileset = import ../../../nix/bazel/without-build-files.nix { inherit lib; } [ aizome ] (
+      lib.fileset.unions [
+        (aizome + "/Cargo.toml")
+        (aizome + "/crates/aizome-kit")
+        (aizome + "/crates/aizome-theme")
+        (aizome + "/crates/aizome-config")
+        (aizome + "/crates/aizome-shell-proto")
+        # The compositor's IPC, for the keyboard step's key.
+        (aizome + "/crates/aizome-ipc")
+        # Sukumo, which the kit draws with: its workspace manifest and crates.
+        (aizome + "/sukumo/Cargo.toml")
+        (aizome + "/sukumo/crates")
+      ]
+    );
   };
   ui = lib.fileset.toSource {
     root = ../ui;

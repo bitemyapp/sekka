@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "deployment": "shared-build-service-5ce137e61808",
+  "content_stores": [
+    "/home/callen/sekka-work/buck2-storage-20261106/run/cache/content-store"
+  ],
+  "candidates": 12746,
+  "already_shared": 9675,
+  "deduplicated": 3,
+  "deduplicated_bytes": 12288,
+  "skipped_small": 3068,
+  "differs": [],
+  "errors": []
+}

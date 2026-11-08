@@ -74,6 +74,25 @@ class Retention(unittest.TestCase):
         retain.prune(self.root, self.now, PLENTY)
         self.assertFalse(running.exists())
 
+    def test_queued_consumers_survive_history_pressure_until_release_or_expiry(self):
+        queued = self.generation("pr-build-clients", 10)
+        retain.lease_consumers(queued, "291-1", self.now)
+        newer = [self.generation("pr-build-clients", age) for age in (1, 2, 3, 4, 5)]
+        retain.prune(self.root, self.now, PLENTY)
+        self.assertTrue(queued.exists())
+        self.assertEqual([p.exists() for p in newer], [True, True, True, True, False])
+        other = self.generation("pr-build-clients", 20)
+        retain.lease_consumers(other, "292-1", self.now)
+        retain.prune(self.root, self.now, 0)
+        self.assertTrue(queued.exists())
+        self.assertTrue(other.exists())
+        retain.release_consumers(self.root, "291-1")
+        retain.prune(self.root, self.now, 0)
+        self.assertFalse(queued.exists())
+        self.assertTrue(other.exists())
+        retain.prune(self.root, self.now + retain.CONSUMER_LEASE_SECONDS + 1, 0)
+        self.assertFalse(other.exists())
+
     def test_pruning_does_not_follow_symlink_directories(self):
         root = self.root / "roots"
         outside = self.root / "outside"
@@ -176,6 +195,20 @@ echo {self.store_path}
         result = self.run_retain("pr", "uta", "build", ".#uta", "--out-link", "elsewhere")
         self.assertEqual(result.returncode, 2)
         self.assertFalse(self.args.exists())
+
+    def test_client_handoff_is_leased_before_immediate_low_space_prune(self):
+        env = dict(GITHUB_RUN_ID="291", GITHUB_RUN_ATTEMPT="2",
+                   SEKKA_CI_MIN_FREE_BYTES=str(2**62))
+        result = self.run_retain("pr", "build-clients", "build", ".#shared-build-inputs", **env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        [generation] = self.generations("pr-build-clients")
+        self.assertTrue((generation / "result").is_symlink())
+        wrong_run = self.run_retain("release-consumers", **dict(env, GITHUB_RUN_ID="292"))
+        self.assertEqual(wrong_run.returncode, 0, wrong_run.stderr)
+        self.assertTrue(generation.exists())
+        released = self.run_retain("release-consumers", **env)
+        self.assertEqual(released.returncode, 0, released.stderr)
+        self.assertFalse(generation.exists())
 
 
 class GitCache(unittest.TestCase):

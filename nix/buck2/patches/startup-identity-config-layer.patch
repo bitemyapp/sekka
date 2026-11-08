@@ -1,0 +1,160 @@
+Subject: [PATCH] Name the private config layer in the daemon identity; let unreadable RE inputs fail only RE use
+
+Base: facebook/buck2 9a1876786f32806f6b65fc51f4c1c3077efc38a5 plus the
+preceding Sekka patches.
+
+The daemon reads BUCK2_EXTRA_EXTERNAL_CONFIG from its own environment,
+but the startup identity covered only a digest of [buck2_re_client]. A
+client naming another private layer with the same RE settings kept the
+old daemon and its old layer. The layer's path now joins the identity.
+
+The digest also failed every command, local-only ones included, when a
+[buck2_re_client] value named an unset environment variable or a TLS
+file that could not be read. Upstream fails only when the RE client is
+built. Such inputs now add a marker to the digest instead, so fixing
+them later still restarts the daemon.
+
+diff --git a/app/buck2_common/src/init.rs b/app/buck2_common/src/init.rs
+index 089e121..8e159ff 100644
+--- a/app/buck2_common/src/init.rs
++++ b/app/buck2_common/src/init.rs
+@@ -628,6 +628,9 @@ pub struct DaemonStartupConfig {
+     pub local_content_store: Option<String>,
+     pub local_content_store_max_bytes: Option<String>,
+     pub local_content_store_max_entries: Option<String>,
++    /// The private layer `BUCK2_EXTRA_EXTERNAL_CONFIG` names. The daemon reads it from its
++    /// own environment, so a client naming another layer needs another daemon.
++    pub extra_external_config: Option<String>,
+     pub num_tokio_workers: Option<usize>,
+     pub daemon_buster: Option<String>,
+     pub digest_algorithms: Option<String>,
+@@ -654,22 +657,37 @@ fn remote_execution_config_digest(
+     let mut digest = blake3::Hasher::new();
+     if let Some(section) = config.get_section("buck2_re_client") {
+         for (key, value) in section.iter() {
+-            let value = buck2_util::env_vars::substitute_env_vars(value.as_str())?;
++            // An unset variable or unreadable credential file fails only when the RE
++            // client is built, as upstream; a local-only command must not fail on it.
++            // Markers keep such inputs distinct, and a later fix still restarts the daemon.
++            let value = match buck2_util::env_vars::substitute_env_vars(value.as_str()) {
++                Ok(value) => value,
++                Err(_) => {
++                    digest.update(b"unsubstituted");
++                    value.as_str().to_owned()
++                }
++            };
+             digest.update(&(key.len() as u64).to_le_bytes());
+             digest.update(key.as_bytes());
+             digest.update(&(value.len() as u64).to_le_bytes());
+             digest.update(value.as_bytes());
+             if matches!(key, "tls_ca_certs" | "tls_client_cert") && !value.is_empty() {
+                 let path = Path::new(&value);
+-                let file = if path.is_absolute() {
+-                    std::fs::File::open(path)
++                let contents = if path.is_absolute() {
++                    std::fs::read(path)
+                 } else {
+-                    std::fs::File::open(project_root.join(path))
++                    std::fs::read(project_root.join(path))
++                };
++                match contents {
++                    Ok(contents) => {
++                        digest.update(b"contents");
++                        digest.update(&(contents.len() as u64).to_le_bytes());
++                        digest.update(&contents);
++                    }
++                    Err(_) => {
++                        digest.update(b"unreadable");
++                    }
+                 }
+-                .buck_error_context("Opening RE TLS credential input")?;
+-                digest
+-                    .update_reader(file)
+-                    .buck_error_context("Reading RE TLS credential input")?;
+             }
+         }
+     }
+@@ -733,6 +751,7 @@ impl DaemonStartupConfig {
+                 .map(str::to_owned),
+             local_content_store_max_entries: buck2_env!("BUCK2_LOCAL_CONTENT_STORE_MAX_ENTRIES")?
+                 .map(str::to_owned),
++            extra_external_config: buck2_env!("BUCK2_EXTRA_EXTERNAL_CONFIG")?.map(str::to_owned),
+             num_tokio_workers: config
+                 .parse(BuckconfigKeyRef {
+                     section: "build",
+@@ -839,6 +858,7 @@ impl DaemonStartupConfig {
+             local_content_store: None,
+             local_content_store_max_bytes: None,
+             local_content_store_max_entries: None,
++            extra_external_config: None,
+             num_tokio_workers: None,
+             daemon_buster: None,
+             digest_algorithms: None,
+@@ -870,6 +890,67 @@ mod tests {
+     use crate::settings::parser::resolve_setting_flags;
+     use crate::settings::parser::table;
+ 
++    #[test]
++    fn test_unreadable_remote_execution_inputs_do_not_fail_startup() -> buck2_error::Result<()> {
++        let digest = |data: &str| -> buck2_error::Result<String> {
++            remote_execution_config_digest(&parse(&[("config", data)], "config")?, Path::new("/"))
++        };
++        let missing = digest("[buck2_re_client]\ntls_ca_certs = /nonexistent/sekka-a.pem\n")?;
++        assert_ne!(missing, digest("[buck2_re_client]\ntls_ca_certs = /nonexistent/sekka-b.pem\n")?);
++        let unset = digest("[buck2_re_client]\nhttp_headers = x-key:$BUCK2_TEST_UNSET_VARIABLE\n")?;
++        assert_ne!(unset, digest("[buck2_re_client]\nhttp_headers = x-key:\n")?);
++        Ok(())
++    }
++
++    #[test]
++    fn test_extra_external_config_tracks_daemon_identity() -> buck2_error::Result<()> {
++        const CHILD_ENV: &str = "BUCK2_TEST_EXTRA_EXTERNAL_CONFIG_IDENTITY_CHILD";
++        if std::env::var_os(CHILD_ENV).is_some() {
++            let config = parse(&[("config", "")], "config")?;
++            let startup =
++                DaemonStartupConfig::new(&config, &BuckSettings::empty(), false, Path::new("."))?;
++            println!("\nSTARTUP_IDENTITY={}", startup.serialize()?);
++            return Ok(());
++        }
++        let capture = |layer: Option<&str>| {
++            let mut command = std::process::Command::new(std::env::current_exe()?);
++            command
++                .args([
++                    "--exact",
++                    "init::tests::test_extra_external_config_tracks_daemon_identity",
++                    "--nocapture",
++                ])
++                .env(CHILD_ENV, "1")
++                .env_remove("BUCK2_EXTRA_EXTERNAL_CONFIG");
++            if let Some(layer) = layer {
++                command.env("BUCK2_EXTRA_EXTERNAL_CONFIG", layer);
++            }
++            let output = command.output()?;
++            assert!(
++                output.status.success(),
++                "{}",
++                String::from_utf8_lossy(&output.stderr)
++            );
++            let stdout = String::from_utf8(output.stdout)?;
++            DaemonStartupConfig::deserialize(
++                stdout
++                    .lines()
++                    .find_map(|line| line.strip_prefix("STARTUP_IDENTITY="))
++                    .expect("child startup identity"),
++            )
++        };
++        let unset = capture(None)?;
++        let layer = capture(Some("/tmp/sekka-layer-a.buckconfig"))?;
++        assert_eq!(
++            layer.extra_external_config.as_deref(),
++            Some("/tmp/sekka-layer-a.buckconfig")
++        );
++        assert_ne!(unset, layer);
++        assert_eq!(layer, capture(Some("/tmp/sekka-layer-a.buckconfig"))?);
++        assert_ne!(layer, capture(Some("/tmp/sekka-layer-b.buckconfig"))?);
++        Ok(())
++    }
++
+     #[test]
+     fn test_local_content_store_environment_tracks_daemon_identity() -> buck2_error::Result<()> {
+         const CHILD_ENV: &str = "BUCK2_TEST_LOCAL_CONTENT_STORE_IDENTITY_CHILD";

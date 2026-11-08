@@ -1,0 +1,25 @@
+{
+  "generated": "2026-11-03T05:13:40-0600",
+  "roots": {
+    "worktree": {
+      "path": "/dev/shm/sekka-bazel-lab/phase1-bcfbe754-cargo/worktrees/cargo",
+      "allocated_bytes": 389230592,
+      "unique_allocated_bytes": 389230592,
+      "files": 5246,
+      "multiply_linked_files": 0,
+      "directories": 749,
+      "symlinks": 0
+    },
+    "cargo-target": {
+      "path": "/dev/shm/sekka-bazel-lab/phase1-bcfbe754-cargo/cargo-target",
+      "allocated_bytes": 9847533568,
+      "unique_allocated_bytes": 7564464128,
+      "files": 28531,
+      "multiply_linked_files": 11176,
+      "directories": 1238,
+      "symlinks": 0
+    }
+  },
+  "total_allocated_bytes": 10236764160,
+  "physical_allocated_bytes": 7953694720
+}

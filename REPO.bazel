@@ -1,0 +1,13 @@
+# Directories Bazel never treats as packages: other checkouts, Cargo's and
+# Nix's outputs, and vendored trees outside the build (docs/bazel-build-plan.md).
+ignore_directories([
+    ".work",
+    "vendor",
+    "artifacts",
+    "result*",
+    "**/target",
+    "**/buck-out",
+    "**/.buckal",
+    "**/node_modules",
+    "**/.objc2-overlay",
+])

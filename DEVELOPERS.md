@@ -223,6 +223,617 @@ Release publication settings are unrelated and remain unchanged.
 
 ## Build and check
 
+### Cargo workspaces through Bazel
+
+`scripts/sekka-bazel` realizes and roots the root-lock-pinned client once.
+Subsequent source edits do not enter a Nix shell or evaluate the root flake.
+Independent worktrees get separate output bases and share the configured action
+cache. Frontend options precede the command; backend flags and application
+arguments after it pass through unchanged:
+
+```sh
+scripts/sekka-bazel build
+scripts/sekka-bazel --profile release build
+scripts/sekka-bazel --profile release-lto run -- --build-info
+scripts/sekka-bazel check
+```
+
+The default build covers the Aizome workspace, including its first-party Hotaru,
+Yukimi and Sukumo dependencies. Public executable targets include their runtime
+files and paired compositor logic library; `NAME__bin` selects the raw executable
+when inspecting bytes. `nix run .#sekka-bazel -- build` and `nix develop .#bazel`
+use the same pinned toolchains. `--workspace CHECKOUT` selects another checkout.
+Crate-universe repository evaluation also uses the root-pinned Cargo and rustc
+through `host_tools`; registering compiler action toolchains alone does not
+control repository subprocesses. Changing that tool version can legitimately
+change the generated crate-universe checksum without changing Cargo.lock or
+dependency versions; regenerate rather than bypassing the checksum.
+
+Cargo manifests and `desktop/aizome/Cargo.lock` remain authoritative. After a
+manifest, lock, feature or crate-annotation change, run
+`scripts/sekka-bazel generate`; ordinary commands reject stale graphs without
+running Cargo or contacting its index. `check` also regenerates the graph for
+comparison. Explicit feature selection is recorded by generation, for example:
+
+```sh
+scripts/sekka-bazel generate --features aizome-koe/openblas,aizome-koe/vulkan
+```
+
+Development, release and mixed-LTO workspace builds, the portable test groups,
+default compositor startup, cross-machine cache restoration and a real
+remote-execution dependency graph have passed component smoke checks. These are
+not ISO qualification or a completed performance/storage comparison. Nix's
+shipping packages remain separate outputs; selecting a development profile does
+not silently select shipping features.
+
+Portable tests can skip checks requiring a systemd user manager. The real
+`apps::launch::tests::through_systemd` probe also passed on the workstation,
+including its scope/cgroup, literal-argument, session and child-reaping
+assertions. To exercise that path, use an actual user session and local
+standalone execution, not a sandbox PID namespace. Pass Rust test selection
+with `--test_arg`, rather than relying on Bazel's `--test_filter`:
+
+```sh
+scripts/sekka-bazel test //desktop/aizome/crates/aizome-sys:lib_test \
+  --spawn_strategy=standalone --test_strategy=standalone \
+  --test_env=XDG_RUNTIME_DIR="/run/user/$(id -u)" \
+  --test_env=DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$(id -u)/bus" \
+  --test_arg=--exact --test_arg=apps::launch::tests::through_systemd \
+  --test_arg=--nocapture --test_output=all --nocache_test_results
+```
+
+Build metadata is not a Cargo package input. The shared source filter excludes
+generated Bazel/Buck files; real Rust sources and Cargo manifests still change
+the Nix source identity. Small probes name the files they actually compile
+rather than copying an entire desktop checkout. `checks.build-input-stability`
+exercises those boundaries with a private Nix store inside the build sandbox,
+including independent paths, unrelated metadata, meaningful source edits and
+reverts. Run it with:
+
+```sh
+nix build .#checks.x86_64-linux.build-input-stability --no-update-lock-file
+```
+
+Warm frontend execution is deliberately outside Nix evaluation. On
+`wx-workstation`, execution tracing of five real no-op theme builds found
+zero Nix invocations for either frontend. Traced Bazel runs took
+1.19–1.28 seconds; Buck2 runs took 0.45–0.56 seconds. Initial client rooting
+from already-realized store closures took 4.90 and 9.52 seconds respectively.
+The Buck2 trial used a fresh private XDG cache and included a real Git fetch
+during Nix evaluation; an earlier trial with different source-cache state took
+2.37 seconds. These are traced bootstrap measurements, not cold toolchain-build
+timings or the full-workspace benchmark. Source and generated-metadata edits
+preserved the client GC-root identity. Toolchain, native-input and lockfile
+changes still invalidate the relevant declared inputs.
+
+Full root-check evaluation remains substantially heavier than selecting a
+development client. Identical Tatami reference configurations are shared
+between checks rather than evaluated twice. Three interleaved uncached
+eight-evaluator-thread trials measured median wall time 89.1 → 84.3 seconds
+and peak RSS 42.5 → 40.6 GiB. Ranges overlap under concurrent workstation
+load; this is not an isolated speedup claim. All non-provenance check
+derivations stayed identical; site revision strings and the installed-lock
+provenance account for the other changes. No checks were removed.
+
+### Cargo workspaces through Buck2
+
+`scripts/sekka-buck2` roots a pinned client closure once, then executes it
+without reevaluating the root flake on ordinary source edits. Cargo manifests,
+lockfiles and feature resolution remain authoritative; no Reindeer manifest
+or parallel dependency list is maintained. After `cargo add`, `cargo update`,
+removal or a feature change, run `scripts/sekka-buck2 generate`. The pinned
+Cargo unit graph becomes individual Rust compiler and build-script actions,
+not an action that invokes a whole Cargo build. Registry and Git dependencies
+come from Nix's locked vendor closure; new Git dependencies do not require
+manually maintained output hashes.
+
+```sh
+scripts/sekka-buck2 generate
+scripts/sekka-buck2 check
+scripts/sekka-buck2 targets
+scripts/sekka-buck2 build
+scripts/sekka-buck2 --profile release-lto build
+scripts/sekka-buck2 test //desktop/aizome/crates/aizome-kit:aizome_kit-test-test-lib
+scripts/sekka-buck2 run //desktop/aizome/crates/aizome-comp:aizome-build-dev -- --build-info
+```
+
+`-p PACKAGE` narrows discovery/builds; `outputs` reports artifact paths and
+`runtime` creates launchers referencing outputs in place, including the
+matching compositor logic library. Application arguments after `--` are
+preserved. `--buck-arg=--FLAG` forwards an exact engine option. Generate with
+`--features PACKAGE/FEATURE,...` and/or `--no-default-features` to change the
+recorded Cargo feature selection. Ordinary commands reject stale graphs;
+runtime-launcher and frontend-only changes do not invalidate compiler actions.
+Release-LTO follows Cargo's per-unit LTO decisions, including mixed non-LTO
+compositor/dynamic-library roots, proc macros and build scripts.
+
+Compiler actions use rustc's dep-info to distinguish a target's actual source
+and included resources from other files in its narrowly assembled source tree.
+An unused source edit can reuse the native depfile cache; edits to a reachable
+module or sibling `include_str!` resource still rebuild. Resolved dependency
+outputs and build-script inputs remain unconditional. Dependency paths that
+cross a directory symlink with `..` are rejected when lexical normalization
+would name a different file, rather than silently caching the wrong inputs.
+
+Cargo's resolved `profile.incremental` separately enables compiler-managed
+incremental state for Rust compilation; build-script execution is not made
+incremental. State has its own declared output, excluded from consumer inputs
+and ordinary output providers. Incremental actions retain that advisory state
+but clear ordinary artifacts and depfiles before compilation and on failure.
+Missing, incompatible or failed-session state must remain safe to rebuild.
+Rustc owns session cleanup; there is no additional per-action state-byte quota.
+
+Execution-root compiler paths use `/proc/self/cwd` and stable working-directory
+remapping so cached state and binaries can move between worktrees. This includes
+joined native search options, delimiter-separated root entries and build-script
+metadata; a root substring inside an external path is not treated as owned.
+Imported read-only state is atomically
+replaced with writable owned files before rustc runs, using reflinks where
+available and preserving sparse allocation in the fallback. Native post-action
+mode normalization also detaches shared inodes, including on early failure.
+
+Successful local or remote incremental execution publishes a source-key cache
+alias so a fresh worktree can hit the warm result. The alias assumes the
+tool's output depends only on its sources, as rustc's incremental mode is
+designed to; a tool whose bytes depend on its own history would share one
+worktree's result with the others. Action/executor write policy
+and upload-size limits still apply; failed actions do not publish successful
+aliases. Actual LAN probes cover fresh-root hits, disabled writes, compiler
+failures, reverts and shared-donor preservation. These are correctness checks,
+not proof of a full-workspace performance or storage win.
+
+Linux local execution pipelines output preparation while the producer runs.
+Close-write and move events are hints: candidates are captured into private
+independent snapshots, hashed, normalized and synchronized, with optional early
+CAS upload. Four process-wide batches of at most eight files share a 512 MiB,
+4,096-pair retention budget, charging both snapshots rounded to 4 KiB blocks;
+oversized candidates use the ordinary final path. CAS streaming uses
+bounded 64 KiB frames rather than buffering each complete file. Separate upload
+snapshots remain stable across retries and publication of writable worktree
+views. Final output membership, types, executable bits and full content hashes
+remain authoritative; failed or cancelled producers publish no successful
+action result. Missing prepared views fall back to ordinary materialization.
+Remote write policy and permission checks still apply. A configured whole-action
+upload-size limit disables speculative remote transfers, not local preparation.
+Final root publication remains synchronous; remote-worker ingestion is unchanged.
+The controlled LAN proof observed early blobs without an early action root,
+then verified same-size rewrites, executable-mode changes, fresh-root restoration,
+failure/cancellation rejection and ignored external symlinks. The native
+525-file smoke also checked writable single-link views and mutation isolation.
+Neither fixture establishes full-workspace latency or storage acceptance.
+
+Ready local compiler actions are prioritized by their longest reverse
+dependency path in Cargo's resolved unit graph. A dependency can retain a
+higher rank even when it is also a requested root. Higher-ranked ready actions
+pass queued lower-ranked work; running work is never preempted, resource
+weights remain unchanged, and equal-priority admission follows the configured
+host-sharing policy. This scheduling hint does not enter compiler action
+identity or change the remote scheduler's policy. The native queued-process
+smoke proves ordering and permit retention, not an end-to-end latency win.
+
+Portable Buck tests deliberately use private home, runtime and D-Bus paths.
+They do not certify integration with the host's user manager, even when
+explicit environment arguments name its bus. The real `through_systemd`
+probe also passed separately through the ordinary runtime wrapper using the
+exact Buck-produced test artifact and the workstation's user bus, without
+the wrapper's `--test-run` isolation. Keep that host-runtime check separate
+from portable test and remote-worker results.
+
+The engine includes a per-user content store for immutable artifact data.
+The frontend enables shared reflinks automatically where supported; separate
+worktrees retain separate mutable daemon state. Defaults are 10 GiB and
+100,000 stored objects. `--local-content-store off` disables it;
+`--local-content-store PATH`, `--local-content-store-max-bytes N` and
+`--local-content-store-max-entries N` select an explicit store and bounds.
+A single output larger than the byte bound cannot be stored, so it fails to
+materialize while the store is on: raise the bound or turn the store off for
+such a build.
+Evicting store objects does not invalidate existing reflinked outputs.
+It does leave them as sole copies, including the old copies an edit leaves
+behind for each changed content-based output. `.buckconfig` therefore turns
+on Buck2's daily stale cleaning: artifacts unused for 7 days are deleted, or
+those unused for 12 hours once under 10% of the disk is free. Buck2 skips
+stale cleaning without `defer_write_actions`, so write actions are deferred
+too. `buck2 clean --stale` runs it by hand. A cleaned artifact a later build
+needs comes back from the cache, or is rebuilt without one. On
+wx-workstation, a release worktree cleaned with `--stale=1m` rebuilt all 742
+actions in 99.7 s under `--cache local`.
+The store also keeps a separately entry-bounded index of weak output paths.
+After canonical eviction, a still-live output can supply a digest-verified
+reflink without allocating a second physical extent generation. These hints
+retain no file data; missing, changed, symlinked or nonregular paths are
+discarded. Opens are nonblocking and verification reads are bounded by the
+expected artifact size. Mutable daemon state remains worktree-local.
+Tree artifact ingestion stages at most 16 destinations at once, sharing
+directory barriers and retaining at most 32 stage/source descriptors.
+A conservative 64 MiB logical staging budget charges two snapshots per
+destination; larger individual objects run alone and must fit the store's
+limits. Distinct canonical digests are reserved once per group.
+Every staged file is still synchronized individually. A lazy, process-wide
+16-thread executor overlaps independent cloning, digest verification and file
+synchronization without duplicating descriptors or using Tokio's blocking pool;
+singleton work stays inline. Each group joins all workers before accounting
+commits, publication or staging cleanup. Failed verification or file
+synchronization prevents that group's publication. Object accounting commits
+before canonical publication.
+Cached-only staging groups share a SQLite FULL metadata transaction across at
+most 256 destinations or 256 MiB charged as two snapshots per destination.
+A larger individual object runs alone at this level too. Both store locks
+remain held until this transaction commits or rolls back. New canonical
+accounting or namespace removals commit before publication and end the
+metadata quantum early. Weak-path hints may precede publication because they
+are advisory and reverified on use; pending LRU updates remain visible to
+later groups in the same transaction. View renames share one directory barrier
+per distinct parent per metadata quantum, before its successful return and
+cached metadata commit. Canonical publication barriers remain unchanged. This
+does not increase the live staging or descriptor bounds, change the database
+schema, or weaken file/directory synchronization.
+
+A view of an object already in the store holds the locks only for its lookup
+and recorded access. It is cloned from the open object, verified, synced and
+renamed after the locks are released, and its parent directory is synced
+before the access returns. The open descriptor keeps the object's extents if a
+peer evicts it meanwhile. Nothing is renamed unless every snapshot in the
+group verified; a failed publication removes that group's view hints, and any
+object whose view failed to stage is removed if it no longer verifies. At most
+one group of these views holds descriptors at a time. New objects keep the
+fully locked path, and staging slots are cleared before the first canonical
+stage of a quantum rather than on every access. Worktrees materializing at once
+no longer take turns hashing each other's views.
+
+LRU accesses and view hints are advisory, so each process buffers them and
+writes them in order with its next durable commit, before any eviction
+decision (which therefore sees them), or after 256 entries or one second. A
+cached lookup's transaction then usually writes nothing and needs no
+synchronous commit. Object accounting stays FULL and durable before canonical
+renames. A process that exits with buffered writes loses only LRU order and
+recovery hints. A fresh worktree materializes ~22,500 files for a shared-crate
+rebuild, 18,768 of them incremental state; before buffering, four doing so at
+once queued on one WAL sync per file.
+
+The index uses FULL-synchronous WAL and a 256-page automatic-checkpoint threshold.
+Its 4 MiB journal-size setting trims retained WAL space after reset, not peak
+transaction space. All SQLite sidecars receive the same regular-file, owner and
+single-link checks as the main index. Stop older daemons before opening an
+existing store with this engine; the index converts to WAL on open.
+
+Sixteen fixed canonical staging slots are removed and the directory synchronized
+under the shared lock before each quantum's admission, so an already-open peer
+can recover abandoned stages without reopening the store or scanning all
+canonical objects.
+CAS download paths remain singleton operations; grouped tree ingestion does
+not establish a fresh-worktree download performance improvement.
+Private cache configuration, TLS material and store settings participate in
+daemon startup identity so a long-lived daemon does not silently retain old
+credentials or settings. Pass credentials only in private `--config-file`
+files, never as `-c`/`--config` or `--setting` values. The engine redacts
+command-line config values in events and telemetry, but not on every path:
+- argument errors before a command starts;
+- `buck2 clean`, `kill` and `log`;
+- `--reuse-current-config` warnings;
+- `buck2 audit config`. Keep the same `--isolation-dir` across cooperating
+remote-cache clients because it enters action paths.
+
+Native engine changes are maintained in
+[the Buck2 fork](https://github.com/bitemyapp/buck2/pull/1);
+`nix/buck2/engine.nix` pins upstream plus the repository patch set. Its
+unused-bindgen patch affects packaging only. The Nix build fixes jemalloc's
+virtual-address width at its portable x86-64 value, 57 bits: otherwise the
+allocator's configure step probes the builder CPU and emits different pointer
+layouts on 48-bit and 57-bit hosts. Source-generation ordering is deterministic
+as well; disabling incremental compilation alone is insufficient.
+
+Both backend toolchains apply `nix/patches/rustc-reproducible-hygiene.patch`
+to the root-locked compiler. It encodes syntax contexts with per-encoder
+identifiers rather than parallel-session interning IDs, which otherwise make
+identical compilations produce different crate metadata. The normal sysroot,
+targets and compiler development outputs are retained; Clippy and rustfmt
+are rebuilt against that compiler. Cargo and rust-analyzer remain root-locked
+and unchanged. Aizome's ordinary package and development shell are not
+switched to this patched compiler. Focused qualification covers identical
+rlib/metadata bytes at 1/8/16 frontend threads, macro hygiene, incremental
+replay, compiler compatibility and actual Clippy/rustfmt/rustdoc execution;
+it is not a whole-workspace performance or whole-Rust qualification.
+
+Bundled BPF standard libraries also use compiler-only `--jobs-backend=1`.
+LLVM 21's process-global passthrough sequence counter is not thread-safe;
+concurrent BPF optimization changed bitcode IDs and ThinLTO symbol hashes.
+The bootstrap patch retains all targets, CGUs and optimization, leaves ordinary
+host/user compilation unchanged, and does not pass the flag to rustdoc.
+Independent workstation builds now match the compiler, manpage and wrapper
+NARs. Auxiliary reference HTML still differs in grammar-section ordering;
+that documentation output is outside the SDK closure, not claimed reproducible.
+
+The native cache path makes authoritative CAS presence checks and rejects
+cached results whose required outputs are missing. Cache uploads ask the CAS
+about every output, even one whose remembered expiration says it is present:
+NativeLink evicts by LRU rather than honouring expirations, and an upload that
+trusted one wrote action results naming blobs that were already gone, which
+the completeness-checking action cache then hid. Rejected action-cache
+results remain rejected across depfile verification and hybrid fallback.
+Typed missing-content failures use Buck's existing bounded, single-restart
+recovery; this repository explicitly enables the restarter. Authentication,
+permission and invalid-configuration failures are not transient connection
+failures. Missing engine, CAS or action-cache endpoints are rejected before
+TLS/network setup rather than retried. Recovery qualification distinguishes
+real service eviction from native fault-injection checks of the retry bound.
+
+The backend depends on the pinned Cargo unit-graph API and its LTO planning
+semantics; changing Cargo requires requalification, not just a version bump.
+`nix build .#checks.x86_64-linux.buck2-backend` exercises real proc macros,
+build scripts, native/Rust dynamic libraries, thin LTO, copied-binary runtime
+paths, argument forwarding and dense/sparse incremental-state ownership in a
+network-disabled Nix sandbox. This is a component check, not
+an ISO or hardware qualification.
+
+### Authenticated workstation cache and remote execution
+
+`nix run .#build-service -- --manifest PRIVATE.json COMMAND` controls an owned
+NativeLink 1.8.3 deployment on `wx-workstation` over SSH. Provision once with
+`init --domains trusted --port 17841`, then `up`. The manifest contains writer
+and reader credentials and must remain mode 0600; never mount it into CI or
+commit it. `status`, `metrics`, `logs`, `restart` and `stop` operate only on
+that deployment. Publication workflows and host firewall policy are unchanged.
+
+On the deployment host, add global `--local` before the command to administer
+the same manifest directly, without SSH or agent forwarding. `inventory`
+discovers owned deployment data, container metadata/logs, referenced overlay
+snapshots and OCI image blobs without starting or mutating the service.
+Union those roots with workload/client state for physical extent accounting;
+shared image roots must be counted once. Retained native Nix closures are
+enumerated separately. Shared Docker/network/builder and Nix database metadata
+are explicitly outside exclusive attribution, not asserted to occupy zero
+space. Inventory discovers paths; it does not itself measure compressed bytes.
+
+`physical-inventory` performs one compression-aware extent union on the
+deployment host. Supply an already-realized `/nix/store/.../bin/compsize`, an
+allowlist for each workload root, and all intended payload roots in one command:
+
+```sh
+nix run .#build-service -- --manifest PRIVATE.json physical-inventory \
+  --scope active --compsize /nix/store/HASH-compsize/bin/compsize \
+  --allow-root /home/callen/sekka-work/WORKLOAD \
+  /home/callen/sekka-work/WORKLOAD/tree-a \
+  /home/callen/sekka-work/WORKLOAD/tree-b
+```
+
+Use `--scope immutable` with the same explicit roots to measure the matched
+payload denominator separately. The controller and its Nix closure must be
+realized on the deployment host. Active scope adds owned service state, exact
+referenced image blobs and snapshots, retained Nix closure, observer state and
+shared control files, charging shared files in full. It refuses old Docker-built
+NativeLink images: `init` now imports a checksum-verified rootfs tar and records
+the image identity and diffID in `image/construction.json`. Use a fresh isolated
+service for this measurement; do not reinterpret old image storage as proven.
+The JSON receipt precedes the single `compsize` result. It records the exact
+roots and identity checks; it is a live file-data extent observation, not a
+filesystem allocation total or automatic storage bound. The observer uses
+read-only, nonrecursive Docker-daemon binds and fails if measured roots contain
+hidden submounts. A disposable four-container service smoke on Btrfs measured
+285 roots and a 1,035,043,103-byte physical union with no unresolved roots;
+this validates the observer path, not the full workload matrix. Store paths
+that are themselves symlinks, such as a man output pointing at another output,
+are listed as `symlink_requisites` rather than measured: they hold no file data.
+
+On one host, the CAS and the per-user Buck2 content store each keep a copy of
+every uploaded output. On the deployment host, share their extents with:
+
+```sh
+nix run .#build-service -- --local --manifest PRIVATE.json dedupe
+```
+
+It matches persistent CAS blobs to content-store objects by SHA-256 and size,
+then asks the kernel (`FIDEDUPERANGE`) to share identical bytes; the kernel
+compares them, and any mismatch fails the command. `--content-store PATH`
+selects stores other than the default `~/.cache/sekka/buck2/content-v1`.
+Pairs that already share their first extent are skipped, so repeating it is
+cheap; run it after large builds or from a timer. Ephemeral CI caches are not
+touched.
+
+The gateway binds host loopback. From another machine, forward it explicitly:
+
+```sh
+ssh -N -L 17841:127.0.0.1:17841 wx-workstation
+```
+
+Generate private client files with `umask 077` and
+`client --domain trusted --access writer --format bazel` or `--format buck2`,
+redirecting stdout to a private file. Omit `--access writer` for read-only
+credentials. These files are used by
+`scripts/sekka-bazel --cache trusted --remote-rc FILE build` and
+`scripts/sekka-buck2 --cache cache --cache-write --config-file FILE build`;
+omit Buck2's `--cache-write` for readers. Buck2's `--cache remote` requests
+execution as well as cache access. Bazel execution additionally needs
+`--remote_executor=grpc://127.0.0.1:17841` on the build command.
+Workers require the exact immutable toolchain/native closures: realize them
+on the workstation and use `retain /nix/store/CLIENT /nix/store/VENDOR`.
+`retain` does not evaluate sources or import unsigned arbitrary build outputs.
+
+For worktrees on the workstation's Btrfs filesystem, the qualified setup is
+local execution with a writer client, `scripts/sekka-buck2 --cache cache
+--cache-write --config-file FILE build`, the default per-user content store,
+and `build-service --local dedupe` after large builds. In the 2026-11-06
+storage run, a fresh worktree of an already-built source reused all 706
+actions and kept 8 MiB of its own build state beside 3.47 GB reflinked from
+the store; deduplicating the CAS against the store then cut the physical
+union by 15%. New build generations, not worktrees, are what grow: each one
+lands in the CAS until its LRU bound. Use `--cache remote` to offload
+execution, from another machine for example; its action-cache entries are
+separate from local execution's. [Results](docs/test-results/buck2/2026-11-06-storage-plan/README.md)
+
+The packaged controller supplies one root-flake-pinned `workerRuntime` closure
+for Bash, `env`, D-Bus and the worker's minimal NSS configuration. It uses the
+same `pkgs.dbus` as `nix/bazel/toolchains.nix`'s test environment, not another
+runtime pin. Workers run as UID/GID 30501 with only `root` and `sekka-builder`
+entries in service-owned read-only passwd/group files. Their private `/tmp`
+is a 1 GiB `exec,nosuid,nodev` tmpfs; D-Bus session policy is read-only at
+`/etc/dbus-1/session.conf`. No host NSS, home, system bus or session socket is
+mounted. Tests can launch their own buses and executable temporary fixtures.
+
+Realize the same controller/runtime closure on the deployment host before
+provisioning or migration. `init` and `runtime` take the packaged runtime by
+default; an explicitly selected immutable bundle uses
+`--worker-runtime /nix/store/ROOT`. There are no independent controller
+`--shell`/`--env` overrides: `/bin/sh`, `/bin/bash` and `/usr/bin/env` come
+from that bundle. For an existing **owned** deployment, run
+`nix run .#build-service -- --manifest PRIVATE.json runtime` (add global
+`--local` on its host). This drains/replaces its workers and restarts their
+schedulers; ephemeral CI cache contents are lost. It leaves the namespace
+owner and frontend gateway in place. Preserve failure evidence, synchronize
+the updated private manifest between administrative hosts, and regenerate
+every private client file before resuming work. Merely restarting an old
+container does not migrate its mounts.
+
+Generated clients require the manifest's runtime store path: Buck2 receives
+`[sekka] worker_runtime = PATH`; Bazel receives repeated
+`--remote_default_exec_properties` for `OSFamily=linux`, `ISA=x86-64` and
+`sekka.worker-runtime=PATH`. NativeLink
+advertises and exactly matches the same platform property. It is part of
+remote action identity, including compilation: build scripts and proc macros
+can observe NSS, `/etc` and interpreter behavior too. Changing the runtime
+therefore invalidates affected remote/cache actions; unrelated checkout
+paths or source edits do not change this root-locked bundle. Local-only
+execution does not add a remote runtime property.
+
+Bazel credentials are private comment metadata consumed by a pinned
+credential helper, not native header options. Old inline-header client files
+and imported rc files are rejected; regenerate them with the current
+`build-service client --format bazel`. Bazel copies native rc options into
+routine build-event logs and some option-error diagnostics, so keep logs
+from the old format private and rotate any credential exposed outside its
+intended audience. The helper scopes credentials by host, effective port and
+HTTP versus HTTPS/gRPC metadata origin; native credential caching is disabled
+so same-path rotation takes effect on the next request. An authenticated
+native smoke covered real remote execution, invalid/restored same-path
+credentials, fresh reader cache hits, rc announcements, invalid options and
+a complete client-file token scan.
+
+The patched Buck engine redacts all configuration values in native telemetry,
+including command-line overrides, expanded flag files and configuration-error
+diagnostics. Parser-time capture handles clustered short options without
+changing execution arguments. Authentication, startup identity and comparison
+of previous configuration still use the original values. Regenerate private
+client files rather than passing credentials inline. Logs produced by older
+engines can contain literal header credentials; keep those logs private and
+rotate exposed credentials. Native command logs can still contain application
+arguments and output, so redaction is not a license to publish arbitrary logs.
+
+Readers are denied CAS, ByteStream and action-cache writes and `Execute` by
+the server, not merely by client flags. Normal CI uses this reader access.
+A writable CI experiment instead needs its own
+`init --domains ci --port UNUSED` deployment, credentials and cache for that
+job; never share its writer namespace across jobs. Its backend data, including
+incomplete uploads, is bounded by a tmpfs quota and is lost on restart.
+Trusted persistent caches default to 64 GiB CAS and 1 GiB action-cache LRU
+retention with a seven-day age policy. Every filesystem cache, including worker
+scratch caches, also caps entries at `max(1, byte_budget // 4096)`, matching its
+explicit 4 KiB block accounting. This closes the zero-byte ActionResult loophole
+in byte-only retention. These are retained-object limits, not hard bounds on
+in-progress trusted uploads. Apply this policy to an existing deployment with
+`restart`; persistent cache contents are retained subject to the new bounds.
+`resize --cas-bytes N --ac-bytes N` drains workers and adjusts the existing cache
+without deleting individual objects. Docker logs are bounded separately.
+While `resize` and `runtime` restart a backend, its gateway is paused: clients
+wait rather than fail, and resume once the backend accepts connections. A
+NativeLink backend loads its whole CAS index before listening, about 2.6 s at
+500,000 entries on wx-workstation, longer than Buck2's 1.5 s of retries.
+Requests in flight to the old backend get `UNAVAILABLE`, which clients retry,
+where the gateway used to answer with an HTML 502 that failed them. `up`
+reloads a running gateway's configuration without dropping its connections.
+`restart` still restarts the gateways too, so run it when the service is idle.
+
+For eviction/restart evidence, `cache-inventory --timeout SECONDS` snapshots
+persistent cache names and sizes with the owned backends temporarily paused.
+It records both apparent sizes and per-file 4 KiB-rounded policy bytes, using
+the latter for byte-limit checks. Complete above-bound observations are retained
+while waiting for configured byte and entry limits; filesystem errors fail
+without retrying partial scans.
+Returned or failed scans resume their backends; an already-paused backend is
+refused without changing its state. Symlinked cache roots are refused.
+Use an idle, isolated qualification deployment: this pauses service requests,
+does not support ephemeral tmpfs caches, and is not physical-extent accounting.
+A killed observer can leave backends paused; inspect `status` and unpause only
+the labelled owned backends before continuing. A real disposable-service smoke
+covered 1,950 evictions, exact restart retention, scan-error cleanup and
+preservation of an operator's preexisting pause. A zero-byte-result regression
+retained 512 empty entries before the count policy; afterward a configured
+eight-entry budget retained eight through 2,048 new results and restart.
+The probe verified real empty-result hits, evicted misses and unchanged ordinary
+CAS entries; it did not merely inspect generated configuration.
+A block-boundary regression rejected two 4,097-byte blobs against a 12,288-byte
+budget: their apparent total was 8,194 bytes, but their policy charge was 16,384.
+An actual resize then retained one blob with an 8,192-byte charge, and its
+downloaded contents matched. Policy accounting is not physical disk usage.
+
+Each domain has an owned frontend bridge and a stable namespace-owner
+container. CI joins that bridge with its own network namespace; it never
+joins the worker's namespace or reaches the unauthenticated backend.
+`connection-info --domain trusted` prints nonsecret network/DNS information;
+`client --domain trusted --frontend --format bazel|buck2` emits a reader
+configuration for that network. Gateway restarts preserve the namespace;
+`up` repairs dependents after namespace-owner replacement. `destroy` refuses
+to remove a network with foreign jobs still attached; `--purge-state`
+additionally removes the validated owned deployment directory.
+
+`scripts/shared-build-bench.py plan` lists the qualification matrix.
+`run CONFIG.json --go` requires an explicit frozen source/client/service
+configuration and a new owned evidence directory. Timed builds, artifact
+inspection, runtime probes and physical-storage measurements are recorded
+separately. Failed cold trials remain failed cold trials; resuming does not
+rewrite their observations. Compression-aware physical accounting measures
+all selected worktrees and shared stores in one union, not a sum of `du`
+results. Service protocol checks alone do not establish frontend correctness,
+full-matrix performance or ISO qualification.
+
+`plan --kind storage` lists the storage-first plan, selected by
+`"plan": "storage"` in the frozen configuration: one observation of each
+storage, reuse and correctness scenario, with edit times reported but not
+gated ([gate revision](docs/bazel-build-plan.md#workstation-exit-gates)).
+A storage root `untracked:GLOB` stands for what git ignores or does not track
+in each matching worktree, so tracked source stays out of the per-worktree
+figure. `storage.attribution_command`, normally `btrfs filesystem du -s
+--raw`, adds each root's uncompressed exclusive and shared extents to the
+receipt; it explains growth and never replaces the compsize union.
+
+Service-operation evidence records each cache root's apparent bytes,
+block-rounded policy bytes, content-entry count and configured byte/entry
+limits from the official `cache-inventory` API. Incomplete or erroneous
+snapshots are rejected. Exceeding a bound before an operation prevents the
+mutation; exceeding one afterward fails the observation. Removed-entry,
+restart-retention, metrics and original apparent-byte-cap checks remain
+required. These retained-cache snapshot bounds establish neither physical
+usage nor automatic total-state enforcement.
+
+The harness creates private evidence and publishes observations create-only.
+Completed command timings survive failed postprocessing; an interrupted trial
+is not replayed as a cold measurement. Failed compiler-category actions are
+attempts, not proof that a compiler process ran, even when the native executor
+kind is unset. Libtest counts include failed commands, and test acceptance
+requires nonzero passing tests and no failures. Native remote test execution
+does not establish local runtime/manager coverage. A server filtering stale
+action-cache entries establishes only that server path, not client recovery
+from an already accepted cache hit with missing CAS data.
+
+Native recovery may leave `--event-log` naming the failed first attempt while
+`--write-build-id` names the successful retry. The harness owns the latter flag,
+captures each invocation's explicit Build IDs, and immediately retains every
+exact trace before further postprocessing. It selects the final trace by that
+written identity, never by an implicit latest log. Native `CommandResult`
+determines success; deprecated `CommandEnd.is_success` does not. Timings include
+retries, so total observed action attempts and failures are retained separately
+from final-attempt compiler counts. Total compiler executions remain unknown
+when any failed compiler action may have stopped before rustc. Missing/expired
+attempt events fail collection rather than becoming zero work or a warm rerun.
+
+Physical sharing uses the post-edit/revert one-tree immutable union as its
+denominator. All roots must share a Btrfs filesystem UUID (subvolume device
+numbers may differ); failed measurements cannot pass storage gates. Finite
+churn under a configured budget is only an observed budget check. Automatic
+total owned cache, daemon and output-state enforcement remains explicitly
+unmeasured without a separate mechanism and enforcement experiment.
+
+### Component builds
+
 Sekka's PipeWire service uses `sekka-pipewire-daemon`, with the X11 bell
 disconnect fix in `nix/patches/pipewire-x11-bell-disconnect.patch`. Xlib can
 report a lost display more than once during logout. The fix makes removal of
@@ -3016,6 +3627,71 @@ main after its fixes are merged; rerunning an old job uses its old workflow,
 which may still publish ISOs. The current nightly intentionally updates inputs,
 builds and checks, uploads the binary cache, then advances main/nightly; it does
 not publish an ISO or qualify the workstation's already frozen image.
+
+### Isolated Bazel and Buck2 CI clients
+
+The trusted PR workflow prepares `.#shared-build-inputs` on the Nix runner,
+then runs each frontend on a separate `sekka-build-client` pool. Its image
+comes from `.#build-client-runner`: read-only store/root, UID 30500, no
+capabilities, no privilege escalation, 64 GiB memory, 32 CPUs, 32 GiB private
+home tmpfs and 8 GiB temporary tmpfs. Unlike the Nix pool, it has no daemon
+socket, shared GC roots, Git cache, Docker socket or host home mount.
+Job containers use Docker's `--init` to reap orphaned application children;
+the runner listener is not a substitute for an init process. The main-owned
+helper copies the candidate source into private writable storage and runs the
+workspace build, nine portable test groups, Soroban's library and integration
+tests, and the compositor build-info check. Bazel uses standalone action
+execution inside this outer container; nested user namespaces are not required.
+
+Input preparation creates a run-and-attempt-specific consumer lease before
+releasing the retention lock. Count/low-space pruning preserves leased roots
+until the main-only finalizer releases them after both clients finish.
+Abandoned leases expire after 72 hours. **Use Re-run all jobs**, not Re-run
+failed jobs or an individual client job: partial reruns reuse prior-attempt
+outputs whose lease may already be released and are rejected before candidate
+execution. Full reruns prepare a fresh protected bundle.
+
+Deploy this additional pool without replacing the existing Nix supervisor:
+build and root `.#build-client-runner`, load its `job-image.tar.gz` and
+`supervisor-image.tar.gz`, and launch `sekka-build-client-supervisor:latest`
+as `sekka-build-client-supervisor`. Use the existing supervisor's restricted
+Docker/store/token mounts, but omit the Git-cache mount. Set
+`SEKKA_BUILD_NETWORK` to the network from `connection-info` and
+`SEKKA_BUILD_READER_DIR` to a host-private mode-0700 directory containing
+frontend reader configurations named `trusted.bazelrc` and
+`trusted.buckconfig`. Make those two files mode 0444 so the individual
+read-only file binds are readable by UID 30500; the parent directory remains
+private. The helper copies them into its private workspace with mode 0600.
+When migrating an already deployed Bazel reader file to the helper format,
+first ensure its runner is idle. Preserve its inode when updating an existing
+file bind, or replace the owned idle job container after an atomic file
+replacement; an existing bind otherwise continues reading the old inode.
+Never substitute writer configurations. The supervisor token remains outside
+job containers, as in the Nix pool.
+
+After preparing those reader files and exporting the two variables, run on
+the builder:
+
+```sh
+nix build .#build-client-runner --out-link ~/sekka-build-client/current
+docker load -i ~/sekka-build-client/current/job-image.tar.gz
+docker load -i ~/sekka-build-client/current/supervisor-image.tar.gz
+docker run -d --name sekka-build-client-supervisor --restart unless-stopped \
+  --user "$(id -u):$(id -g)" --group-add "$(stat -c %g /var/run/docker.sock)" \
+  --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v /nix/store:/nix/store:ro \
+  -v "$HOME/.config/sekka-runner:/run/secrets:ro" \
+  -e SEKKA_BUILD_NETWORK -e SEKKA_BUILD_READER_DIR \
+  sekka-build-client-supervisor:latest
+```
+
+The additional pool has been registered and observed online with the
+`sekka-build-client` label. Workflow changes still require a reviewed merge
+to `main`; registering a runner does not bypass that trust gate or enable
+publication. Before deliberately destroying its cache service, drain and
+stop this pool: the service correctly refuses teardown while its waiting
+job remains attached to the frontend network.
 
 ### Setting up the builder
 

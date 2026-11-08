@@ -173,24 +173,29 @@ fn digest(bytes: &[u8]) -> String {
 }
 
 /// RUSTFLAGS (as Cargo encodes them, separated by 0x1f) without the ones
-/// that only steer the linker or rewrite paths: they change no code.
+/// that only steer the linker or rewrite paths: they change no code. That
+/// includes where the standard library is (`--sysroot`): Bazel passes its
+/// sandbox's, and `rustc -vV` already says which toolchain it is.
 fn codegen_flags(encoded: &str) -> Vec<String> {
     let args: Vec<&str> = encoded.split('\u{1f}').filter(|a| !a.is_empty()).collect();
     let mut out = Vec::new();
     let mut i = 0;
     while i < args.len() {
         let a = args[i];
-        let (flag, value, consumed) = if (a == "-C" || a == "--remap-path-prefix") && i + 1 < args.len() {
-            (a, args[i + 1], 2)
-        } else if let Some(v) = a.strip_prefix("-C") {
-            ("-C", v, 1)
-        } else {
-            (a, "", 1)
-        };
+        let (flag, value, consumed) =
+            if (a == "-C" || a == "--remap-path-prefix" || a == "--sysroot") && i + 1 < args.len() {
+                (a, args[i + 1], 2)
+            } else if let Some(v) = a.strip_prefix("-C") {
+                ("-C", v, 1)
+            } else {
+                (a, "", 1)
+            };
         let drop = (flag == "-C"
             && (value.starts_with("link-arg") || value.starts_with("linker") || value.starts_with("link-args")))
             || flag == "--remap-path-prefix"
-            || a.starts_with("--remap-path-prefix=");
+            || a.starts_with("--remap-path-prefix=")
+            || flag == "--sysroot"
+            || a.starts_with("--sysroot=");
         if !drop {
             out.push(if consumed == 2 { format!("{flag} {value}") } else { a.to_string() });
         }

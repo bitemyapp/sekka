@@ -1,0 +1,6 @@
+load(":platforms.bzl", "execution")
+
+execution(name = "execution")
+
+export_file(name = "action.py", visibility = ["PUBLIC"])
+export_file(name = "run.py", visibility = ["PUBLIC"])

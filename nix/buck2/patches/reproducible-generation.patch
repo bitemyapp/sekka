@@ -1,0 +1,32 @@
+diff --git a/app/buck2_external_cells_bundled/build.rs b/app/buck2_external_cells_bundled/build.rs
+index 7320b24..caaa567 100644
+--- a/app/buck2_external_cells_bundled/build.rs
++++ b/app/buck2_external_cells_bundled/build.rs
+@@ -51,7 +51,7 @@ fn write_include_file(prelude: &Path, mut include_file: impl io::Write) -> io::R
+         "pub(crate) const DATA: &[crate::BundledFile] = &["
+     )?;
+ 
+-    for res in walkdir::WalkDir::new(prelude) {
++    for res in walkdir::WalkDir::new(prelude).sort_by_file_name() {
+         let entry = res.map_err(|e| e.into_io_error().unwrap())?;
+         if !entry.file_type().is_file() {
+             continue;
+diff --git a/starlark-rust/starlark_derive/src/starlark_pagable.rs b/starlark-rust/starlark_derive/src/starlark_pagable.rs
+index cfea7b5..d0c6f3a 100644
+--- a/starlark-rust/starlark_derive/src/starlark_pagable.rs
++++ b/starlark-rust/starlark_derive/src/starlark_pagable.rs
+@@ -263,8 +263,12 @@ fn compute_auto_bounds(
+ 
+     let bound = derived.bound();
+     let mut predicates: Vec<WherePredicate> = Vec::new();
+-    for ident in &visitor.type_params_used {
+-        predicates.push(parse_quote! { #ident: #bound });
++    // Preserve declaration order instead of randomized HashSet iteration.
++    for param in input.generics.type_params() {
++        let ident = &param.ident;
++        if visitor.type_params_used.contains(ident) {
++            predicates.push(parse_quote! { #ident: #bound });
++        }
+     }
+     for path in &visitor.associated_types_used {
+         predicates.push(parse_quote! { #path: #bound });

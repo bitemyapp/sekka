@@ -1,0 +1,13 @@
+# The platform Bazel builds for and on: x86_64 Linux with a Nix store, which
+# the toolchains from Nixpkgs require (build/bazel/nix.bzl).
+platform(
+    name = "x86_64-linux-nix",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+        "@rules_nixpkgs_core//constraints:support_nix",
+    ],
+    # Keep exec_properties empty: Bazel otherwise ignores the private client's
+    # complete OS/ISA and immutable worker-runtime execution defaults.
+    visibility = ["//visibility:public"],
+)

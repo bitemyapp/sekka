@@ -1,0 +1,62 @@
+{
+ "source": {
+  "commit": "bcfbe754aed7cdf2ad225f19ae0f84d19e774e36",
+  "patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+ },
+ "host": {
+  "hostname": "callen",
+  "nproc": 128,
+  "loadavg_before": [
+   13.13,
+   7.67,
+   6.52
+  ],
+  "loadavg_after": [
+   13.13,
+   7.67,
+   6.52
+  ]
+ },
+ "scenario": "noop",
+ "rep": 5,
+ "tool": "cargo",
+ "profile": "dev",
+ "jobs": 16,
+ "toolchain": {
+  "RUSTC_WRAPPER": "/nix/store/vv1wgqrpl3aqrklamqiqhpzshv4vi6lc-rustc-wrapper",
+  "RUSTFLAGS": "-C link-arg=-fuse-ld=mold",
+  "rustc": "rustc 1.99.0 (b940084d7 2026-09-28) (built from a source tarball)\nbinary: rustc\ncommit-hash: b940084d7eb6a299eb4bfeb8e34901bc051e7ac4\ncommit-date: 2026-09-28\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.0\nLLVM version: 21.1.8\n"
+ },
+ "argv": [
+  "cargo",
+  "build",
+  "--locked",
+  "--offline",
+  "--manifest-path",
+  "desktop/aizome/Cargo.toml",
+  "--workspace",
+  "-j",
+  "16"
+ ],
+ "exit_status": 0,
+ "wall_seconds": 0.214,
+ "action_cpu_seconds": 0.194,
+ "peak_rss_kib": 1438064,
+ "executed_actions": {
+  "Compiling": 0
+ },
+ "cache_hits": null,
+ "cache_hits_reason": "Cargo has no action cache; its target directory is per tree",
+ "download_bytes": null,
+ "download_bytes_reason": "local trial: nothing downloaded during the build",
+ "storage_peak_bytes": null,
+ "storage_peak_reason": "not sampled during the build in this run",
+ "correctness": {
+  "check": "build succeeded",
+  "passed": true,
+  "sha256": "3d74a9ae7cbe40f1f0f7d80616ba628f91cd37fa8837cb9ac8a944f724ccc5d3"
+ },
+ "raw_logs": {
+  "cargo-noop-05.log": "577aeeed60734d03d269575a16ec38c61d82b14ea6e78191908cc1fd7789a8b5"
+ }
+}

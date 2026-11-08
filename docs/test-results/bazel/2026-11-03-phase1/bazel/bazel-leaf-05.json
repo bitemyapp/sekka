@@ -1,0 +1,74 @@
+{
+ "source": {
+  "commit": "6a6b9e0e3ab75372712f1c59e56aaa0b98409dc3",
+  "patch_sha256": "1c8a35940775e5fce426d35e67ae7a90091d233c971d9b296dfd9a3b6837dd8d"
+ },
+ "host": {
+  "hostname": "callen",
+  "nproc": 128,
+  "loadavg_before": [
+   14.52,
+   15.88,
+   11.99
+  ],
+  "loadavg_after": [
+   14.52,
+   15.88,
+   11.99
+  ]
+ },
+ "scenario": "leaf",
+ "rep": 5,
+ "tool": "bazel",
+ "profile": "dev",
+ "jobs": 16,
+ "toolchain": {
+  "SEKKA_BAZEL_RUST_TOOLCHAIN": "/nix/store/w6rh05llxkdc8pljap560h1zyivh5px5-sekka-bazel-rust-toolchain",
+  "SEKKA_BAZEL_NATIVE_ENV": "/nix/store/9nwmybw8g9hj5drznwrghida4dqcq04x-sekka-bazel-native-env",
+  "rustc": "rustc 1.99.0 (b940084d7 2026-09-28) (built from a source tarball)\nbinary: rustc\ncommit-hash: b940084d7eb6a299eb4bfeb8e34901bc051e7ac4\ncommit-date: 2026-09-28\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.0\nLLVM version: 21.1.8\n"
+ },
+ "argv": [
+  "bazel",
+  "--output_user_root=/dev/shm/sekka-bazel-lab/phase1-6a6b9e0e-bazel/bazel",
+  "build",
+  "--config=dev",
+  "--config=wx-local",
+  "--jobs=16",
+  "--repository_cache=/dev/shm/sekka-bazel-lab/phase1-6a6b9e0e-bazel/repos",
+  "--build_event_json_file=/home/callen/sekka-work/bazel-lab/results/phase1-6a6b9e0e/bazel/logs/bazel-leaf-05.bep.json",
+  "--profile=/home/callen/sekka-work/bazel-lab/results/phase1-6a6b9e0e/bazel/logs/bazel-leaf-05.profile.gz",
+  "--target_pattern_file=/home/callen/sekka-work/bazel-lab/results/phase1-6a6b9e0e/bazel/targets.txt"
+ ],
+ "exit_status": 0,
+ "wall_seconds": 1.466,
+ "executed_actions": {
+  "Rustc": 2,
+  "BazelWorkspaceStatusAction": 1,
+  "RunfilesTree": 1
+ },
+ "runners": {
+  "total": 4,
+  "internal": 2,
+  "linux-sandbox": 2
+ },
+ "cache_hits": 0,
+ "cache_misses": 4,
+ "action_cpu_seconds": 5.39,
+ "action_cpu_reason": "Bazel's timingMetrics.cpuTimeInMs: the build's CPU time, server included",
+ "analysis_seconds": 0.089,
+ "execution_seconds": 1.147,
+ "actions_created": 0,
+ "download_bytes": null,
+ "download_bytes_reason": "local trial: nothing downloaded during the build",
+ "storage_peak_bytes": null,
+ "storage_peak_reason": "not sampled during the build in this run",
+ "correctness": {
+  "check": "sekka-bench-leaf-0005 in aizome-soroban",
+  "passed": true
+ },
+ "raw_logs": {
+  "bazel-leaf-05.log": "a20e37f69708e5ce8485eb58def13e2c8ed48c5a3dc5cc58cc002c1d42b09be9",
+  "bazel-leaf-05.bep.json": "b19ecc6d502d3b6ba0e5dee2c8f4d91ea867d0f0975d92f91e792b5ca36a55a1",
+  "bazel-leaf-05.profile.gz": "0a1dbe9b937c593e15f3dfe605665ea1282278ab80652e73dc7025c4667638df"
+ }
+}

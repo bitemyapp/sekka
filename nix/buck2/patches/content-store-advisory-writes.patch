@@ -1,0 +1,219 @@
+Subject: [PATCH] Buffer advisory content-store writes instead of syncing each
+
+Base: facebook/buck2 9a1876786f32806f6b65fc51f4c1c3077efc38a5 plus the
+preceding Sekka patches.
+
+Materializing a fresh worktree looks objects up one file at a time, and
+each lookup recorded its LRU access and view hint in a FULL-synchronous
+commit under the cross-process lock. A rebuild materializes ~22,500 files,
+18,768 of them incremental state, so four worktrees queued on ~90,000
+WAL syncs: 125-137 s each, against 37 s with the store off.
+
+Accesses and hints are advisory, so they are now buffered in the
+process and written, in order, with the next durable commit, before any
+eviction decision (which therefore sees them), or after 256 entries or
+one second. A cached lookup's transaction usually writes nothing and its
+commit needs no sync. Object accounting is unchanged and stays FULL and
+durable before canonical renames. A failed publication drops its
+buffered hints. Buffered writes lost with a process only cost LRU order
+and recovery hints.
+
+diff --git a/app/buck2_execute_impl/src/materializers/local_content_store.rs b/app/buck2_execute_impl/src/materializers/local_content_store.rs
+index fc55609..fc397e2 100644
+--- a/app/buck2_execute_impl/src/materializers/local_content_store.rs
++++ b/app/buck2_execute_impl/src/materializers/local_content_store.rs
+@@ -257,8 +257,22 @@ mod linux {
+         db: Connection,
+         max_bytes: u64,
+         max_entries: u64,
++        // LRU accesses and view hints not yet written. They are advisory, so
++        // they wait for a durable commit, an eviction decision or a batch
++        // bound instead of each costing a synchronous commit under the locks.
++        advisory: std::cell::RefCell<Vec<Advisory>>,
++        advisory_since: std::cell::Cell<Option<std::time::Instant>>,
+     }
+ 
++    enum Advisory {
++        Access { path: String, key: String },
++        Forget { path: String },
++    }
++
++    /// Buffered advisory writes are flushed at this many, or this old.
++    const ADVISORY_BATCH: usize = 256;
++    const ADVISORY_AGE: std::time::Duration = std::time::Duration::from_secs(1);
++
+     impl Store {
+         fn open(root: PathBuf, max_bytes: u64, max_entries: u64) -> buck2_error::Result<Self> {
+             if !root.is_absolute()
+@@ -352,6 +366,8 @@ mod linux {
+                 db,
+                 max_bytes,
+                 max_entries,
++                advisory: Default::default(),
++                advisory_since: Default::default(),
+             };
+             store.reconcile()?;
+             store.evict(0, 0)?;
+@@ -473,6 +489,7 @@ mod linux {
+             }
+             // Most groups need no eviction: avoid allocating a protection set
+             // or preparing the victim query on that hot path.
++            self.flush_advisory()?;
+             let protected: HashSet<&str> = protected.into_iter().collect();
+             let mut removed = false;
+             let mut statement = self
+@@ -657,6 +674,11 @@ mod linux {
+                 File::open(parent)?.sync_all()?;
+             }
+             if let Some(transaction) = transaction {
++                // A cached quantum has written nothing unless the buffer is
++                // due, so its commit usually needs no synchronous write.
++                if self.advisory_due() {
++                    self.flush_advisory()?;
++                }
+                 transaction.commit()?;
+             }
+             Ok(result)
+@@ -942,6 +964,8 @@ mod linux {
+                 self.record_access(request.destination, &objects[request.object].key)?;
+             }
+             if new_entries != 0 || removed_names {
++                // Buffered accesses ride along with the durable commit.
++                self.flush_advisory()?;
+                 // FULL accounting is durable BEFORE any canonical rename.
+                 // Failure can leave accounted misses, never unaccounted objects.
+                 transaction.take().expect("active group transaction").commit()?;
+@@ -1017,6 +1041,7 @@ mod linux {
+             failure: &PublishFailure,
+             config: DigestConfig,
+         ) -> buck2_error::Result<()> {
++            self.forget_pending(&deferred.iter().map(|view| view.destination.as_path()).collect());
+             let transaction = self.db.unchecked_transaction()?;
+             for view in deferred {
+                 self.db.execute(
+@@ -1061,17 +1086,56 @@ mod linux {
+             Ok(group.found)
+         }
+ 
+-        // The entire group's accesses share the caller's FULL transaction.
++        fn note(&self, advisory: Advisory) {
++            if self.advisory_since.get().is_none() {
++                self.advisory_since.set(Some(std::time::Instant::now()));
++            }
++            self.advisory.borrow_mut().push(advisory);
++        }
++
+         fn record_access(&self, destination: &Path, key: &str) -> buck2_error::Result<()> {
+-            self.db
+-                .execute_batch("UPDATE clock SET tick=tick+1 WHERE id=1;")?;
+-            self.db.execute(
+-                "UPDATE objects SET used=(SELECT tick FROM clock WHERE id=1) WHERE key=?1",
+-                [key],
+-            )?;
+-            self.remember_view(destination, key)?;
++            self.note(Advisory::Access {
++                path: destination.to_str().ok_or_else(|| error("Non-UTF-8 artifact view path"))?.to_owned(),
++                key: key.to_owned(),
++            });
+             Ok(())
+         }
++
++        fn advisory_due(&self) -> bool {
++            self.advisory.borrow().len() >= ADVISORY_BATCH
++                || self.advisory_since.get().is_some_and(|since| since.elapsed() >= ADVISORY_AGE)
++        }
++
++        /// Writes buffered accesses and hints, in order, into the caller's
++        /// transaction. Callers hold both locks; an eviction decision flushes
++        /// first so that it sees every access this process has made.
++        fn flush_advisory(&self) -> buck2_error::Result<()> {
++            let pending = std::mem::take(&mut *self.advisory.borrow_mut());
++            self.advisory_since.set(None);
++            for advisory in pending {
++                match advisory {
++                    Advisory::Access { path, key } => {
++                        self.db.prepare_cached("UPDATE clock SET tick=tick+1 WHERE id=1")?.execute([])?;
++                        self.db.prepare_cached(
++                            "UPDATE objects SET used=(SELECT tick FROM clock WHERE id=1) WHERE key=?1",
++                        )?.execute([&key])?;
++                        self.remember_view(Path::new(&path), &key)?;
++                    }
++                    Advisory::Forget { path } => {
++                        self.db.prepare_cached("DELETE FROM views WHERE path=?1")?.execute([&path])?;
++                    }
++                }
++            }
++            Ok(())
++        }
++
++        /// Drops buffered hints for paths that were never published.
++        fn forget_pending(&self, paths: &HashSet<&Path>) {
++            self.advisory.borrow_mut().retain(|advisory| match advisory {
++                Advisory::Access { path, .. } => !paths.contains(Path::new(path)),
++                Advisory::Forget { .. } => true,
++            });
++        }
+     }
+ 
+     static STORE: LazyLock<Result<Option<Mutex<Store>>, String>> = LazyLock::new(|| {
+@@ -1175,13 +1239,18 @@ mod linux {
+         digest: &FileDigest,
+     ) -> buck2_error::Result<()> {
+         with_store((), |store| {
+-            let transaction = store.db.unchecked_transaction()?;
+-            store.db.execute(
+-                "DELETE FROM views WHERE path=?1",
+-                [temporary.to_str().ok_or_else(|| error("Non-UTF-8 temporary artifact path"))?],
+-            )?;
+-            store.remember_view(destination, &Store::key(digest))?;
+-            transaction.commit()?;
++            store.note(Advisory::Forget {
++                path: temporary.to_str().ok_or_else(|| error("Non-UTF-8 temporary artifact path"))?.to_owned(),
++            });
++            store.note(Advisory::Access {
++                path: destination.to_str().ok_or_else(|| error("Non-UTF-8 artifact view path"))?.to_owned(),
++                key: Store::key(digest),
++            });
++            if store.advisory_due() {
++                let transaction = store.db.unchecked_transaction()?;
++                store.flush_advisory()?;
++                transaction.commit()?;
++            }
+             Ok(())
+         })
+     }
+@@ -1326,6 +1395,34 @@ mod linux {
+             Ok(())
+         }
+ 
++        #[test]
++        fn reflink_store_buffers_advisory_writes_until_eviction() -> buck2_error::Result<()> {
++            let temp = tempfile::tempdir()?;
++            let config = DigestConfig::leak_new(vec![DigestAlgorithm::Sha256], None)?;
++            let store = Store::open(temp.path().join("store"), 2 * 4096, 2)?;
++            let bytes = vec![7; 4096];
++            let digest = FileDigest::from_content(&bytes, config.cas_digest_config());
++            let original = temp.path().join("original");
++            fs::write(&original, &bytes)?;
++            assert!(store.access(&original, &digest, false, config, true)?);
++            let hinted = |path: &Path| -> buck2_error::Result<bool> {
++                Ok(store.db.query_row(
++                    "SELECT EXISTS(SELECT 1 FROM views WHERE path=?1)",
++                    [path.to_str().expect("temporary UTF-8 path")], |row| row.get(0),
++                )?)
++            };
++            // A cached lookup publishes its view but writes no metadata yet.
++            let view = temp.path().join("view");
++            assert!(store.access(&view, &digest, false, config, false)?);
++            assert_eq!(fs::read(&view)?, bytes);
++            assert!(!hinted(&view)?);
++            // An eviction decision sees every buffered access first.
++            store.evict(2 * 4096, 1)?;
++            assert!(hinted(&view)?);
++            assert_bounded_and_accounted(&store)?;
++            Ok(())
++        }
++
+         #[test]
+         fn reflink_store_metadata_batch_lru_and_rollback() -> buck2_error::Result<()> {
+             let temp = tempfile::tempdir()?;

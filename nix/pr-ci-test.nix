@@ -15,6 +15,7 @@ pkgs.runCommand "trusted-pr-ci-tests"
     cp ${../scripts/runner-admission.sh} scripts/runner-admission.sh
     cp ${../tests/test_pr_trust.py} tests/test_pr_trust.py
     cp ${../scripts/ci-retain.py} scripts/ci-retain.py
+    cp ${../scripts/ci-shared-builds.py} scripts/ci-shared-builds.py
     cp ${../scripts/runner-git-cache.sh} scripts/runner-git-cache.sh
     cp ${../tests/test_ci_cache.py} tests/test_ci_cache.py
     python3 -m unittest discover -s tests -v

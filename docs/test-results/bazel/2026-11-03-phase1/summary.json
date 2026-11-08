@@ -1,0 +1,214 @@
+{
+ "bazel/build-script": {
+  "trials": 5,
+  "failed_builds": 0,
+  "checks_passed": 5,
+  "wall_seconds": {
+   "median": 13.134,
+   "min": 12.937,
+   "max": 14.437
+  },
+  "executed_actions_median": 55,
+  "cache_hits_median": 89,
+  "loadavg_before": [
+   15.44,
+   13.93,
+   12.96,
+   12.97,
+   11.73
+  ]
+ },
+ "bazel/cold": {
+  "trials": 1,
+  "failed_builds": 0,
+  "checks_passed": 1,
+  "wall_seconds": {
+   "median": 114.76,
+   "min": 114.76,
+   "max": 114.76
+  },
+  "executed_actions_median": 1529,
+  "cache_hits_median": 0,
+  "loadavg_before": [
+   13.53
+  ]
+ },
+ "bazel/leaf": {
+  "trials": 5,
+  "failed_builds": 0,
+  "checks_passed": 5,
+  "wall_seconds": {
+   "median": 1.517,
+   "min": 1.466,
+   "max": 1.72
+  },
+  "executed_actions_median": 2,
+  "cache_hits_median": 0,
+  "loadavg_before": [
+   15.26,
+   15.26,
+   15.26,
+   14.52,
+   14.52
+  ]
+ },
+ "bazel/noop": {
+  "trials": 5,
+  "failed_builds": 0,
+  "checks_passed": 5,
+  "wall_seconds": {
+   "median": 0.264,
+   "min": 0.264,
+   "max": 0.314
+  },
+  "executed_actions_median": 0,
+  "cache_hits_median": 0,
+  "loadavg_before": [
+   16.5,
+   16.5,
+   16.5,
+   16.5,
+   16.5
+  ]
+ },
+ "bazel/revert": {
+  "trials": 1,
+  "failed_builds": 0,
+  "checks_passed": 1,
+  "wall_seconds": {
+   "median": 13.335,
+   "min": 13.335,
+   "max": 13.335
+  },
+  "executed_actions_median": 55,
+  "cache_hits_median": 88,
+  "loadavg_before": [
+   12.04
+  ]
+ },
+ "bazel/shared": {
+  "trials": 5,
+  "failed_builds": 0,
+  "checks_passed": 5,
+  "wall_seconds": {
+   "median": 14.537,
+   "min": 14.288,
+   "max": 14.639
+  },
+  "executed_actions_median": 57,
+  "cache_hits_median": 0,
+  "loadavg_before": [
+   14.52,
+   15.32,
+   15.23,
+   14.66,
+   16.62
+  ]
+ },
+ "cargo/build-script": {
+  "trials": 5,
+  "failed_builds": 0,
+  "checks_passed": 5,
+  "wall_seconds": {
+   "median": 7.527,
+   "min": 7.477,
+   "max": 9.23
+  },
+  "executed_actions_median": 25,
+  "cache_hits_median": null,
+  "loadavg_before": [
+   8.02,
+   8.05,
+   11.65,
+   11.67,
+   12.1
+  ]
+ },
+ "cargo/cold": {
+  "trials": 1,
+  "failed_builds": 0,
+  "checks_passed": 1,
+  "wall_seconds": {
+   "median": 123.829,
+   "min": 123.829,
+   "max": 123.829
+  },
+  "executed_actions_median": 512,
+  "cache_hits_median": null,
+  "loadavg_before": [
+   5.05
+  ]
+ },
+ "cargo/leaf": {
+  "trials": 5,
+  "failed_builds": 0,
+  "checks_passed": 5,
+  "wall_seconds": {
+   "median": 0.665,
+   "min": 0.665,
+   "max": 0.715
+  },
+  "executed_actions_median": 1,
+  "cache_hits_median": null,
+  "loadavg_before": [
+   12.32,
+   12.32,
+   12.32,
+   12.32,
+   12.32
+  ]
+ },
+ "cargo/noop": {
+  "trials": 5,
+  "failed_builds": 0,
+  "checks_passed": 5,
+  "wall_seconds": {
+   "median": 0.214,
+   "min": 0.214,
+   "max": 0.214
+  },
+  "executed_actions_median": 0,
+  "cache_hits_median": null,
+  "loadavg_before": [
+   13.13,
+   13.13,
+   13.13,
+   13.13,
+   13.13
+  ]
+ },
+ "cargo/revert": {
+  "trials": 1,
+  "failed_builds": 0,
+  "checks_passed": 1,
+  "wall_seconds": {
+   "median": 7.779,
+   "min": 7.779,
+   "max": 7.779
+  },
+  "executed_actions_median": 25,
+  "cache_hits_median": null,
+  "loadavg_before": [
+   12.6
+  ]
+ },
+ "cargo/shared": {
+  "trials": 5,
+  "failed_builds": 0,
+  "checks_passed": 5,
+  "wall_seconds": {
+   "median": 5.373,
+   "min": 5.322,
+   "max": 5.423
+  },
+  "executed_actions_median": 30,
+  "cache_hits_median": null,
+  "loadavg_before": [
+   12.32,
+   11.57,
+   10.8,
+   9.3,
+   8.63
+  ]
+ }
+}

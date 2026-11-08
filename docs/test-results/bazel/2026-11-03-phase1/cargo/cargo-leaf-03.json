@@ -1,0 +1,61 @@
+{
+ "source": {
+  "commit": "bcfbe754aed7cdf2ad225f19ae0f84d19e774e36",
+  "patch_sha256": "85816f506570c58b2f3afbfdc9a9fe1f498ef20f44e8647317541ddd805bd1a5"
+ },
+ "host": {
+  "hostname": "callen",
+  "nproc": 128,
+  "loadavg_before": [
+   12.32,
+   7.59,
+   6.5
+  ],
+  "loadavg_after": [
+   12.32,
+   7.59,
+   6.5
+  ]
+ },
+ "scenario": "leaf",
+ "rep": 3,
+ "tool": "cargo",
+ "profile": "dev",
+ "jobs": 16,
+ "toolchain": {
+  "RUSTC_WRAPPER": "/nix/store/vv1wgqrpl3aqrklamqiqhpzshv4vi6lc-rustc-wrapper",
+  "RUSTFLAGS": "-C link-arg=-fuse-ld=mold",
+  "rustc": "rustc 1.99.0 (b940084d7 2026-09-28) (built from a source tarball)\nbinary: rustc\ncommit-hash: b940084d7eb6a299eb4bfeb8e34901bc051e7ac4\ncommit-date: 2026-09-28\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.0\nLLVM version: 21.1.8\n"
+ },
+ "argv": [
+  "cargo",
+  "build",
+  "--locked",
+  "--offline",
+  "--manifest-path",
+  "desktop/aizome/Cargo.toml",
+  "--workspace",
+  "-j",
+  "16"
+ ],
+ "exit_status": 0,
+ "wall_seconds": 0.715,
+ "action_cpu_seconds": 0.651,
+ "peak_rss_kib": 1438064,
+ "executed_actions": {
+  "Compiling": 1
+ },
+ "cache_hits": null,
+ "cache_hits_reason": "Cargo has no action cache; its target directory is per tree",
+ "download_bytes": null,
+ "download_bytes_reason": "local trial: nothing downloaded during the build",
+ "storage_peak_bytes": null,
+ "storage_peak_reason": "not sampled during the build in this run",
+ "correctness": {
+  "check": "sekka-bench-leaf-0003 in aizome-soroban",
+  "passed": true
+ },
+ "raw_logs": {
+  "cargo-leaf-03.log": "319f2746c6e1452e053ec2e76a25b40a5f061ab1e29f6d8133dca1e6a5cc6cd2"
+ }
+}

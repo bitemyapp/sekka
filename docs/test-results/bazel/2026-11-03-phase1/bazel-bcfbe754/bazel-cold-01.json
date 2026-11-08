@@ -1,0 +1,86 @@
+{
+ "source": {
+  "commit": "bcfbe754aed7cdf2ad225f19ae0f84d19e774e36",
+  "patch_sha256": "e97da848eb24373bb5484a3f1fc41ed1f51c5d36fcc08c6ed690676e9209b130"
+ },
+ "host": {
+  "hostname": "callen",
+  "nproc": 128,
+  "loadavg_before": [
+   9.58,
+   8.06,
+   6.78
+  ],
+  "loadavg_after": [
+   16.62,
+   12.38,
+   8.56
+  ]
+ },
+ "scenario": "cold",
+ "rep": 1,
+ "tool": "bazel",
+ "profile": "dev",
+ "jobs": 16,
+ "toolchain": {
+  "SEKKA_BAZEL_RUST_TOOLCHAIN": "/nix/store/w6rh05llxkdc8pljap560h1zyivh5px5-sekka-bazel-rust-toolchain",
+  "SEKKA_BAZEL_NATIVE_ENV": "/nix/store/wkqh2gv8imr0pdnyxwlm0xy1m8cavxhk-sekka-bazel-native-env",
+  "rustc": "rustc 1.99.0 (b940084d7 2026-09-28) (built from a source tarball)\nbinary: rustc\ncommit-hash: b940084d7eb6a299eb4bfeb8e34901bc051e7ac4\ncommit-date: 2026-09-28\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.0\nLLVM version: 21.1.8\n"
+ },
+ "argv": [
+  "bazel",
+  "--output_user_root=/dev/shm/sekka-bazel-lab/phase1-bcfbe754-bazel/bazel",
+  "build",
+  "--config=dev",
+  "--config=wx-local",
+  "--jobs=16",
+  "--repository_cache=/dev/shm/sekka-bazel-lab/phase1-bcfbe754-bazel/repos",
+  "--build_event_json_file=/home/callen/sekka-work/bazel-lab/results/phase1-bcfbe754/bazel/logs/bazel-cold-01.bep.json",
+  "--profile=/home/callen/sekka-work/bazel-lab/results/phase1-bcfbe754/bazel/logs/bazel-cold-01.profile.gz",
+  "--target_pattern_file=/home/callen/sekka-work/bazel-lab/results/phase1-bcfbe754/bazel/targets.txt"
+ ],
+ "exit_status": 0,
+ "wall_seconds": 112.255,
+ "executed_actions": {
+  "Symlink": 877,
+  "Rustc": 744,
+  "ExtractCargoTomlEnvVars": 571,
+  "RepoMappingManifest": 122,
+  "SymlinkTree": 122,
+  "SourceSymlinkManifest": 122,
+  "RunfilesTree": 122,
+  "FileWrite": 88,
+  "CargoBuildScriptRun": 88,
+  "ExecutableSymlink": 11,
+  "SolibSymlink": 2,
+  "CppArchive": 1,
+  "BazelWorkspaceStatusAction": 1,
+  "CppCompile": 1
+ },
+ "runners": {
+  "total": 2872,
+  "internal": 1467,
+  "linux-sandbox": 1405
+ },
+ "cache_hits": 0,
+ "cache_misses": 2872,
+ "action_cpu_seconds": 47.24,
+ "action_cpu_reason": "Bazel's timingMetrics.cpuTimeInMs: the build's CPU time, server included",
+ "analysis_seconds": 0.185,
+ "execution_seconds": 111.659,
+ "actions_created": 0,
+ "download_bytes": null,
+ "download_bytes_reason": "local trial: nothing downloaded during the build",
+ "storage_peak_bytes": null,
+ "storage_peak_reason": "not sampled during the build in this run",
+ "correctness": {
+  "check": "aizome-soroban built",
+  "passed": true,
+  "sha256": "2e7bad083ec93eff9109eb333aada65be8eb7eeaac8c043b5509cc2b3d1dccb5"
+ },
+ "raw_logs": {
+  "bazel-cold-01.log": "8af6798bbdcd80e5342ab144e099d83944dfa0c717b33005edabd28413dc2a9e",
+  "bazel-cold-01.bep.json": "b4673f0f6474f6b9a2b40ca63782408863a58fc2c1f6a47c78ae392765927cb0",
+  "bazel-cold-01.profile.gz": "dbaef6e122fa5f25c88b47aa225e2984b8e0067f9f3790bda208870eec50bb49"
+ }
+}
