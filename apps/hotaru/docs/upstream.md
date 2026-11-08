@@ -89,7 +89,7 @@ programs are tried in an Aizome session.
 
 The subsequent OSC8/copy slice is documented in
 [`hyperlinks.md`](hyperlinks.md) and
-[`../upstream/hyperlink-report.json`](../upstream/hyperlink-report.json).
+[`hotaru-benchmark-data/hyperlink-report.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/hyperlink-report.json).
 It adds owned sparse links, metadata-preserving compressed history, immutable
 content captures and bounded/cancellable plain/VT/HTML/mixed formatting.
 134 real-library fixtures cover 402 URI/chunk comparisons and 402 format
@@ -280,7 +280,7 @@ clipboard transport.
 These limitations must not disappear from reports when the basic cases pass.
 
 The current passing expanded run is recorded in
-[`../upstream/differential-report.json`](../upstream/differential-report.json):
+[`hotaru-benchmark-data/differential-report.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/differential-report.json):
 444 matching comparisons against its exact Rust and Zig binary hashes. The
 ledger records the tested core and input modules as **partial**. No module is
 marked complete.
@@ -303,7 +303,7 @@ OSC overrides even when their RGB equals the previous default. This requires
 override tracking, rather than inferring intent from color equality. The earlier 297
 comparisons passed with the configured-colors implementation; its exact source
 and executable hashes are recorded in
-[`../upstream/candidate-correctness-build.json`](../upstream/candidate-correctness-build.json).
+[`hotaru-benchmark-data/candidate-correctness-build.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/candidate-correctness-build.json).
 
 ## Linux keyboard and mouse input
 
@@ -330,7 +330,7 @@ overline, malformed and empty SGR parameters, canonical DECRQSS SGR replies,
 primary/secondary/tertiary device attributes, DECID, strict malformed mode
 queries and DECSTR. All 444 chunked comparisons pass; the tested source tree
 and binary are identified in
-[`../upstream/sgr-report.json`](../upstream/sgr-report.json).
+[`hotaru-benchmark-data/sgr-report.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/sgr-report.json).
 
 Underline styles occupy bits in the existing compact style attributes, so
 the core retains its cell and style layout. DECSTR resets style, margins,
@@ -345,7 +345,7 @@ validation.
 
 The latest measurements are for the
 [history budget check](history-budget-check.md), with reports in
-`upstream/benchmarks/history-budget-check-*.json`. The four reviewed patterns
+[`hotaru-benchmark-data/benchmarks/history-budget-check-*.json`](https://github.com/bitemyapp/hotaru-benchmark-data/tree/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/benchmarks). The four reviewed patterns
 matched again. Rust/Zig ratios were:
 
 - **0.844** ASCII;
@@ -356,31 +356,31 @@ matched again. Rust/Zig ratios were:
 The same document times Ghostty's own suite inputs again, feed-only.
 
 [`ghostty-comparison-2026-10-30.md`](ghostty-comparison-2026-10-30.md) measured
-`2f2f73e0`, with reports in `upstream/benchmarks/clipboard-checkpoint-*.json`.
+`2f2f73e0`, with reports in [`hotaru-benchmark-data/benchmarks/clipboard-checkpoint-*.json`](https://github.com/bitemyapp/hotaru-benchmark-data/tree/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/benchmarks).
 It also runs Ghostty's `ghostty-gen`/`ghostty-bench` suite whole-command, and
 the matched GUI pilot. Styled text and cursor/erase are still slower than at
 the rich-copy checkpoint below.
 
 The rich-copy core checkpoint still missed the performance gate.
-[`../upstream/candidate-rich-copy-build.json`](../upstream/candidate-rich-copy-build.json)
+[`hotaru-benchmark-data/candidate-rich-copy-build.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/candidate-rich-copy-build.json)
 identifies the audited owned-history, hyperlink and formatter build. Its four
 compared states matched. Rust/Zig median feed ratios were **1.115 ASCII**,
 **1.143 Unicode**, **0.606 styled text** and **0.102 cursor/erase**, recorded in
-`upstream/benchmarks/rich-copy-*.json`. A separate diagnostic checks actual URI
+[`hotaru-benchmark-data/benchmarks/rich-copy-*.json`](https://github.com/bitemyapp/hotaru-benchmark-data/tree/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/benchmarks). A separate diagnostic checks actual URI
 metadata and exact VT link transitions before timing. It exposes a larger gap
 on a dense wide-character stream: **4.715** without links, versus **0.407** with
 a persistent long link. Its distinct ASCII pattern measures **1.383** without
 links and **0.060** with the link. See
-[`../upstream/hyperlink-performance-verified.json`](../upstream/hyperlink-performance-verified.json)
+[`hotaru-benchmark-data/hyperlink-performance-verified.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/hyperlink-performance-verified.json)
 and [diagnostic scope](hyperlinks.md). Faster linked workloads do not excuse the
 no-link throughput gaps or establish complete parity.
 
 The preceding
-[`../upstream/candidate-checkpoint-build.json`](../upstream/candidate-checkpoint-build.json)
+[`hotaru-benchmark-data/candidate-checkpoint-build.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/candidate-checkpoint-build.json)
 identifies the build with reflow, keyboard/mouse input, extended styles and the
 compressed-row recycling fix. All four compared states matched. Rust/Zig median
 feed ratios were **1.074 ASCII**, **1.165 Unicode**, **0.554 styled text** and
-**0.084 cursor/erase**, recorded in `upstream/benchmarks/checkpoint-*.json`.
+**0.084 cursor/erase**, recorded in [`hotaru-benchmark-data/benchmarks/checkpoint-*.json`](https://github.com/bitemyapp/hotaru-benchmark-data/tree/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/benchmarks).
 These are zero-history core measurements; history restoration, rendering,
 desktop responsiveness and full feature parity have separate open gates.
 The older measurements below describe their explicitly named checkpoints.
@@ -440,7 +440,7 @@ does not prove that an unimplemented protocol performed equivalent work.
 
 The historical native run before configured-color changes uses CPU 8, 20 timed iterations per engine
 after warmup, and the exact candidate source/build manifest in
-[`../upstream/candidate-build.json`](../upstream/candidate-build.json).
+[`hotaru-benchmark-data/candidate-build.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/candidate-build.json).
 All four common snapshots matched. Median feed times for approximately 8 MiB
 of input were:
 
@@ -459,7 +459,7 @@ performance or complete feature parity.
 
 The subsequent bounded SIMD scanner checkpoint, after configured colors and
 before resize/input changes, is identified by
-[`../upstream/candidate-simd-build.json`](../upstream/candidate-simd-build.json).
+[`hotaru-benchmark-data/candidate-simd-build.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/candidate-simd-build.json).
 The same comparison method and all four common snapshots passed:
 
 | Workload | Zig | Rust | Rust / Zig |
@@ -469,14 +469,14 @@ The same comparison method and all four common snapshots passed:
 | Unicode | 30.765 ms | 34.790 ms | 1.131 |
 | Cursor/erase | 750.796 ms | 192.682 ms | 0.257 |
 
-The raw `simd-*.json` reports are in `upstream/benchmarks/`. ASCII and Unicode
+The raw `simd-*.json` reports are in [`hotaru-benchmark-data/benchmarks`](https://github.com/bitemyapp/hotaru-benchmark-data/tree/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/benchmarks). ASCII and Unicode
 remain slower than the reference. Scanner verification compares every byte at
 each alignment and tail position against the scalar implementation, and a Linux
 guard-page test checks the caller's slice boundary. This evidence applies to
 that checkpoint, not to later protocol or resize changes.
 
 The integrated row-storage checkpoint includes keyboard/mouse encodings and
-reflow. [`../upstream/candidate-row-storage-build.json`](../upstream/candidate-row-storage-build.json)
+reflow. [`hotaru-benchmark-data/candidate-row-storage-build.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/candidate-row-storage-build.json)
 identifies its exact source. Its Rust/Zig ratios were 1.095 for ASCII, 1.051 for
 Unicode, 0.610 for styled text and 0.167 for cursor/erase. Replacing row-local
 tree nodes and separately allocated short graphemes with sparse inline strings,
@@ -484,7 +484,7 @@ and using row references without weak owners, reduced common allocation and
 ownership costs while preserving the reference fixtures.
 
 The subsequent dirty-prefix reset checkpoint is identified by
-[`../upstream/candidate-dirty-row-build.json`](../upstream/candidate-dirty-row-build.json)
+[`hotaru-benchmark-data/candidate-dirty-row-build.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/candidate-dirty-row-build.json)
 and the `dirty-row-*.json` reports. Its ratios were 1.077, 1.085, 0.614 and 0.090
 respectively. Short-row reset and erase improved, but Unicode regressed from
 the preceding checkpoint. These measurements predate the compressed-history
@@ -494,7 +494,7 @@ later implementations require fresh measurements.
 ## Native package checkpoint
 
 The shell integration checkpoint is recorded in
-[`../upstream/nix-shell-checkpoint.json`](../upstream/nix-shell-checkpoint.json).
+[`hotaru-benchmark-data/nix-shell-checkpoint.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/nix-shell-checkpoint.json).
 Its sandbox build passes 34 application tests. The package includes the
 linear-time malformed UTF-8 scanner correction, owner-only budget accounting
 optimization, scalar allocation-order preservation for bulk wide-cell writes,
@@ -511,33 +511,33 @@ new split starts in that directory. Installed shell resources and terminfo
 match their source; 105 recorded source files match the worktree and 100 match
 the prepared Nix source, with only the standalone lock and four applied patch
 inputs intentionally omitted. Results are in
-[`../upstream/native-shell/`](../upstream/native-shell/). These are component
+[`hotaru-benchmark-data/native-shell`](https://github.com/bitemyapp/hotaru-benchmark-data/tree/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/native-shell). These are component
 checks under headless Sway, not Aizome VM, physical desktop or performance
 qualification. The [shell integration notes](shell-integration.md) list the
 supported hooks and remaining scope.
 
 The audited rich-copy package is recorded in
-[`../upstream/nix-rich-copy-checkpoint.json`](../upstream/nix-rich-copy-checkpoint.json).
+[`hotaru-benchmark-data/nix-rich-copy-checkpoint.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/nix-rich-copy-checkpoint.json).
 Its sandbox build passes 21 application tests. Independent core validation
 passes 69 core tests, 19 I/O tests, one documentation test and strict workspace
 Clippy. The Sidestep MIME patch follows the unchanged clipboard and input
 patches; it shares prepared UTF-8 text allocations and immutable HTML bytes.
 The exact packaged runtime evidence is under
-[`../upstream/native-rich-copy/`](../upstream/native-rich-copy/).
+[`hotaru-benchmark-data/native-rich-copy`](https://github.com/bitemyapp/hotaru-benchmark-data/tree/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/native-rich-copy).
 
 The preceding integrated package is recorded in
-[`../upstream/nix-native-checkpoint.json`](../upstream/nix-native-checkpoint.json).
+[`hotaru-benchmark-data/nix-native-checkpoint.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/nix-native-checkpoint.json).
 Its sandbox build passed all 18 application tests. The packaged executable then
 passed the private headless Wayland test with ambient font/library overrides
 cleared: 1,152,000-byte copy, 1,150,000-byte paste, a stalled reader, split-pane
 creation/teardown and 116 exact keyboard/mouse protocol bytes. Results, runtime
 library/font evidence and source hashes are preserved in
-[`../upstream/native-checkpoint/`](../upstream/native-checkpoint/).
+[`hotaru-benchmark-data/native-checkpoint`](https://github.com/bitemyapp/hotaru-benchmark-data/tree/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/native-checkpoint).
 The reported 0.164-second UI interaction includes 150 ms of input-fixture setup;
 it demonstrates progress during the stalled read, not a frame-latency bound.
 This is a component test in Sway, not Aizome desktop VM or ISO qualification.
 
-[`../upstream/nix-package-checkpoint.json`](../upstream/nix-package-checkpoint.json)
+[`hotaru-benchmark-data/nix-package-checkpoint.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/nix-package-checkpoint.json)
 records an earlier successful focused Nix package build on `wx-workstation`, its native
 application tests, installed executable hash, immutable source NAR hash and
 installed `--help` smoke check. That build predates splits, settings, reflow,

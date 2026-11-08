@@ -8,11 +8,11 @@ Local and workstation source lives at `/home/callen/work/hotaru-page-cells-isola
 the matched baseline is `/home/callen/work/hotaru-page-cells-baseline`. Both were
 frozen before the later saved-mode/REP protocol changes. Exact source manifests,
 compiler flags, binary hashes, commands and raw samples are in
-[`final-report.json`](../upstream/page-cells/final-report.json). Final candidate
+[`final-report.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/page-cells/final-report.json). Final candidate
 source SHA-256 is
 `d499ac0df01842a89572db2e98c2f436d2fd5ddb77094c26684b8bf76817c554`.
 The reviewable implementation is
-[`prototype.patch`](../upstream/page-cells/prototype.patch); it has not been
+[`prototype.patch`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/page-cells/prototype.patch); it has not been
 applied to the shared application source.
 
 ## Ownership and bounds
@@ -50,7 +50,7 @@ and mapping-failure fallback counts explicitly.
 
 The exact `memmap2` 0.9.12, `bytemuck` 1.25.2 and derive 1.12.1 sources were read
 before use. The reviewed functions, crate archives and file hashes are recorded
-in [`dependency-review.json`](../upstream/page-cells/dependency-review.json).
+in [`dependency-review.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/page-cells/dependency-review.json).
 No new unsafe block or manual unsafe trait implementation is added to the core.
 This review and measurement cover x86-64 Linux; no additional platform result
 or Miri result is claimed.
@@ -62,7 +62,7 @@ All **107 core tests** and strict all-target Clippy pass. This includes the
 reflow, Unicode, hyperlink and search fixtures, concurrent captures, and new
 tests for typed ranges, COW, layout limits, capacity/charge/codec preservation
 and retained mapped prefixes. The log and exact source identity are in
-[`validation.json`](../upstream/page-cells/validation.json).
+[`validation.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/page-cells/validation.json).
 
 Measurements use fresh processes, five samples, alternating baseline/candidate
 order, CPU 8 and the shared workstation lock. Unlike the earlier audit, host

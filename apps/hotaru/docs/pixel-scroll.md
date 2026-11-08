@@ -2,7 +2,7 @@
 
 Hotaru now connects compatible row scrolling to Aizome Kit's existing pixel
 move operation. The integrated files exactly match the qualified candidate
-identified in [the result](../upstream/pixel-scroll/result.json), based on
+identified in [the result](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/pixel-scroll/result.json), based on
 product checkpoint `e2b1ff7`. This change adds no unsafe code and changes no
 native buffer ownership.
 
@@ -46,7 +46,7 @@ These are damage coverage counts, not elapsed-time or GPU performance results.
 They do not establish relative application performance against Ghostty.
 
 Compact receipts and unmodified qualification logs are in
-[`upstream/pixel-scroll/`](../upstream/pixel-scroll/). Full screenshots, traces
+[`hotaru-benchmark-data/pixel-scroll`](https://github.com/bitemyapp/hotaru-benchmark-data/tree/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/pixel-scroll). Full screenshots, traces
 and the original candidate patch remain under
 `/home/callen/work/hotaru-pixel-scroll-isolated/artifacts/pixel-scroll/` locally
 and on `wx-workstation`; the qualified binary is retained on the workstation.
@@ -80,9 +80,9 @@ Half-pixel padding at 1.25 correctly uses ordinary damage. The four-row fixture
 at scale 1 copies 55,440 pixels and rasterizes 23,040 of 614,400 window pixels.
 These are work counts, not elapsed-time speed or 60 Hz acceptance results.
 
-The [component result](../upstream/region-scroll/result.json) identifies the
+The [component result](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/region-scroll/result.json) identifies the
 three exact integrated files and tested binary. Its runtime base has 178
 sprites; the subsequent [combination with 434 sprites](region-checkpoint.md)
-passes separate Nix and native qualification. The [evidence](../upstream/region-scroll/README.md)
+passes separate Nix and native qualification. The [evidence](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/region-scroll/README.md)
 retains the original missing-optimization failure and the exposure work-gate
 failure. No unsafe code or buffer ownership changes are introduced.

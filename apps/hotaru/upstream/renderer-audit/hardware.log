@@ -1,8 +1,0 @@
-failed to open /dev/dri/renderD128: Permission denied
-failed to open /dev/dri/renderD128: Permission denied
-libEGL warning: failed to open /dev/dri/renderD128: Permission denied
-
-libEGL warning: failed to open /dev/dri/renderD128: Permission denied
-
-libEGL warning: failed to open /dev/dri/card1: Permission denied
-

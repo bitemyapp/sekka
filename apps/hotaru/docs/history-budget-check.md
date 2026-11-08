@@ -97,7 +97,7 @@ check removes 4.3 % of styled text's instructions and 21 % of its time.
 
 **The reviewed corpus:** `tools/benchmark.py` against the pinned
 libghostty-vt, at a load of 1.1–1.4. Screens matched before timing. The
-reports are `upstream/benchmarks/history-budget-check-*.json`.
+reports are [`hotaru-benchmark-data/benchmarks/history-budget-check-*.json`](https://github.com/bitemyapp/hotaru-benchmark-data/tree/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/benchmarks).
 
 | Pattern | Ghostty | Hotaru | Hotaru ÷ Ghostty | Stream parser build |
 | --- | ---: | ---: | ---: | ---: |
@@ -136,9 +136,9 @@ random lines.
 ## Evidence
 
 The candidate is `52ec3c4e…`
-([`upstream/candidate-history-budget-check-build.json`](../upstream/candidate-history-budget-check-build.json)).
+([`hotaru-benchmark-data/candidate-history-budget-check-build.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/candidate-history-budget-check-build.json)).
 The records are in
-[`upstream/history-budget-check/`](../upstream/history-budget-check/).
+[`hotaru-benchmark-data/history-budget-check`](https://github.com/bitemyapp/hotaru-benchmark-data/tree/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/history-budget-check).
 
 - **Oracle:** all 855 cases match the pinned library at chunk sizes of 1, 7
   and 65,536 bytes, 2,565 comparisons.

@@ -6,7 +6,7 @@ the explicit export attempts return `EGL_BAD_MATCH`. This investigation does
 not qualify native GPU presentation or change the frozen Intel result in
 `d8b63a7`.
 
-The [compact evidence](../upstream/gpu-buffer/remote-profile/README.md) contains
+The [compact evidence](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/gpu-buffer/remote-profile/README.md) contains
 reproducible source deltas, exact binary/source/loader identities, full samples
 in compressed JSON, test logs and independent review scope. All builds, tests
 and profiling runs are remote on wx-workstation under the shared task lock.
@@ -101,7 +101,7 @@ disables new GPU work, but must not free committed buffers before release.
 Cache, SSBO and staging allowances must be reserved separately from old/current/
 retired frame leases. The present lease setting is not a total GPU/process
 memory bound. These requirements are specified in
-[NEXT-ADAPTER.md](../upstream/gpu-buffer/remote-profile/NEXT-ADAPTER.md);
+[NEXT-ADAPTER.md](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/gpu-buffer/remote-profile/NEXT-ADAPTER.md);
 the native implementation and private remote compositor checks are the next
 isolated slice.
 
