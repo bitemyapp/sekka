@@ -186,11 +186,23 @@ fn screenshots_across_displays_of_different_scales() {
     assert!(!near(full.px(2490, 1090), blue), "and no further");
     assert_eq!(alpha(&full, 2879, 1199), 255, "the 1× display's far corner");
     assert_eq!(alpha(&full, 100, 1100), 0, "below the panel is off every display");
+
+    // An area only there is inside the displays' bounds but on neither:
+    // refused, rather than an empty picture.
+    let off = c.request(Request::Screenshot {
+        output: None,
+        path: Some(c.dir.join("off.png").to_string_lossy().into()),
+        window: None,
+        area: Some(aizome_ipc::Rect::new(100, 450, 50, 50)),
+        clipboard: false,
+    });
+    assert!(matches!(off, Response::Error { .. }), "{off:?}");
+    assert!(!c.dir.join("off.png").exists());
 }
 
 #[test]
 fn fractional_screenshot_crops_match_the_native_capture() {
-    for scale in [1.25, 1.5, 1.75] {
+    for scale in [1.25_f64, 1.5, 1.75] {
         let mode = format!("1920x1080@{scale}");
         let c = Compositor::start(Options { outputs: &[&mode], renderer: Some("pixman"), ..Default::default() });
         // A solid window would conceal repeated/skipped rows and columns.
@@ -210,14 +222,21 @@ fn fractional_screenshot_crops_match_the_native_capture() {
             clipboard: false,
         });
         let native = Image::load(&path);
-        for (x, y, w, h) in [(1, 1, 900, 500), (2, 3, 800, 450)] {
+        // Inside the output, and from mid-pixel to its far corner (where an
+        // area dragged past the edge is clipped).
+        let (pw, ph) = ((1920.0 / scale).round() as i32, (1080.0 / scale).round() as i32);
+        for (x, y, w, h) in [(1, 1, 900, 500), (2, 3, 800, 450), (1, 1, pw - 1, ph - 1), (2, 3, pw - 2, ph - 3)] {
             let crop = shot_of_area(&c, x, y, w, h);
-            assert_eq!(
-                (crop.width, crop.height),
-                ((w as f64 * scale).round() as u32, (h as f64 * scale).round() as u32)
+            // Edges round on the output's own pixel grid.
+            let edge = |at: i32| (at as f64 * scale).round() as u32;
+            assert_eq!((crop.width, crop.height), (edge(x + w) - edge(x), edge(y + h) - edge(y)));
+            let sx = edge(x) as usize;
+            let sy = edge(y) as usize;
+            assert!(
+                sx + crop.width as usize <= native.width as usize
+                    && sy + crop.height as usize <= native.height as usize,
+                "scale {scale}, crop ({x}, {y}) {w}×{h} runs past the capture"
             );
-            let sx = (x as f64 * scale).round() as usize;
-            let sy = (y as f64 * scale).round() as usize;
             let row_bytes = crop.width as usize * 4;
             for (row, pixels) in crop.rgba.chunks_exact(row_bytes).enumerate() {
                 let start = ((sy + row) * native.width as usize + sx) * 4;
