@@ -9,15 +9,19 @@
   uta,
 }:
 let
-  system = "x86_64-linux";
-  pkgs = nixpkgs.legacyPackages.${system};
+  # PCs, and Apple Silicon Macs (nix/apple-silicon).
+  systems = [
+    "x86_64-linux"
+    "aarch64-linux"
+  ];
+  forSystems = f: nixpkgs.lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
 in
 rec {
   aizome = import ../desktop/aizome/nix { inherit nixpkgs; };
   tatami = {
     outPath = ../desktop/tatami;
     nixosModules.default = ../desktop/tatami/module.nix;
-    packages.${system} = {
+    packages = forSystems (pkgs: {
       tatami = pkgs.callPackage ../desktop/tatami/tool/package.nix { };
       displays = pkgs.callPackage ../desktop/tatami/displays/package.nix { };
       network = pkgs.callPackage ../desktop/tatami/network/package.nix { };
@@ -26,31 +30,42 @@ rec {
       activity = pkgs.callPackage ../desktop/tatami/activity/package.nix { };
       wallpapers = pkgs.callPackage ../desktop/tatami/wallpapers/package.nix { };
       elephant = pkgs.callPackage ../desktop/tatami/elephant/package.nix { };
-    };
+    });
   };
   yukimi = {
     outPath = ../apps/yukimi;
     nixosModules.default = import ../apps/yukimi/nix/module.nix yukimi;
-    packages.${system}.yukimi = pkgs.callPackage ../apps/yukimi/nix/package.nix {
-      nativeYukimi = aizome.packages.${system}.aizome.yukimi;
-    };
+    packages = forSystems (pkgs: {
+      yukimi = pkgs.callPackage ../apps/yukimi/nix/package.nix {
+        nativeYukimi = aizome.packages.${pkgs.stdenv.hostPlatform.system}.aizome.yukimi;
+      };
+    });
   };
   kakehashi = {
     outPath = ../apps/kakehashi;
-    packages.${system}.kakehashi = (import ./kakehashi.nix { inherit pkgs; }).package;
+    packages = forSystems (pkgs: {
+      kakehashi = (import ./kakehashi.nix { inherit pkgs; }).package;
+    });
   };
   # The catalog's applications from this flake (source "sekka"): its own, and
   # those other repositories package, built with the applications' Nixpkgs.
-  catalog.packages.${system} = kakehashi.packages.${system} // {
-    superluminal = superluminal.packages.${system}.default;
-    tracy = tracy.packages.${system}.tracy;
-    # With the session's fonts, which it draws with too.
-    uta = import ./uta.nix {
-      pkgs = applications.legacyPackages.${system};
-      inherit uta;
-      inherit (aizome.packages.${system}) fonts;
-    };
-  };
+  catalog.packages = forSystems (
+    pkgs:
+    let
+      system = pkgs.stdenv.hostPlatform.system;
+    in
+    kakehashi.packages.${system}
+    // {
+      superluminal = superluminal.packages.${system}.default;
+      tracy = tracy.packages.${system}.tracy;
+      # With the session's fonts, which it draws with too.
+      uta = import ./uta.nix {
+        pkgs = applications.legacyPackages.${system};
+        inherit uta;
+        inherit (aizome.packages.${system}) fonts;
+      };
+    }
+  );
   calamares = {
     outPath = ../installer/genkan;
     nixosModules = {
@@ -64,12 +79,10 @@ rec {
         yukimi.nixosModules.default
         aizome.nixosModules.default
       ];
-      # Installed systems make this flake's inputs their own, so these are the
-      # same store paths as `nix run .#push-cache` publishes for the free ones.
-      applications = {
+      applications = { pkgs, ... }: {
         key = "sekka#applications";
         imports = [ ../installer/genkan/rust/src/applications.nix ];
-        _module.args.sekkaPackages = catalog.packages.${system};
+        _module.args.sekkaPackages = catalog.packages.${pkgs.stdenv.hostPlatform.system};
       };
     };
   };
