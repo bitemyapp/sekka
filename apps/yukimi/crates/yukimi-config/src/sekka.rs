@@ -4,7 +4,10 @@
 use rnix::ast::{self, HasEntry};
 use rowan::ast::AstNode;
 
-use crate::edit;
+use crate::{
+    edit,
+    flake_url::{FlakeUrl, RefLocation},
+};
 
 const EXTERNAL: &[&str] = &["nixpkgs", "determinate", "fh", "applications", "ai-apps", "omp"];
 const LEGACY: &[&str] = &["calamares", "tatami", "yukimi"];
@@ -40,17 +43,16 @@ pub const EARLY: &str = "git+https://github.com/bitemyapp/sekka?ref=main&shallow
 /// Early updates as they were written before Sekka was fetched with Git:
 /// with `?ref=`, so they read as a choice, unlike `/main`, which
 /// installations once followed by default and [`prepare`] moves to nightly.
+#[cfg(test)]
 const TARBALL_EARLY: &str = "github:bitemyapp/sekka?ref=main";
 
 /// Whether a Sekka address is the early-updates choice.
 pub fn early(url: &str) -> bool {
-    if url == TARBALL_EARLY {
-        return true;
-    }
-    let Some((base, query)) = url.split_once('?') else { return false };
-    base == "git+https://github.com/bitemyapp/sekka"
-        && !query.split('&').any(|param| param.split('=').next() == Some("rev"))
-        && matches!(crate::branch::of(url).as_deref(), Some("main" | "refs/heads/main"))
+    let Some(url) = FlakeUrl::parse(url) else { return false };
+    url.is_official("bitemyapp", "sekka")
+        && url.revision.is_none()
+        && matches!(url.reference.as_deref(), Some("main" | "refs/heads/main"))
+        && (!url.is_github() || url.ref_location == RefLocation::Query)
 }
 
 /// Return the flake to update. A system following the installer's original
@@ -77,13 +79,26 @@ pub fn prepare(text: &str) -> Result<String, String> {
 
 /// Whether `url` is the address Sekka's installations have used for `name`.
 fn sekka_default(name: &str, url: &str) -> bool {
+    let archive = match name {
+        "nixpkgs" => Some("https://flakehub.com/f/NixOS/nixpkgs/0.1"),
+        "determinate" => Some("https://flakehub.com/f/DeterminateSystems/determinate/*"),
+        "fh" => Some("https://flakehub.com/f/DeterminateSystems/fh/*.tar.gz"),
+        _ => None,
+    };
+    if let Some(default) = archive {
+        return fluent_uri::Uri::parse(url)
+            .ok()
+            .zip(fluent_uri::Uri::parse(default).ok())
+            .is_some_and(|(url, default)| url.normalize() == default.normalize());
+    }
+    let Some(url) = FlakeUrl::parse(url) else { return false };
+    if !url.is_github() || url.revision.is_some() || !url.options.is_empty() {
+        return false;
+    }
     match name {
-        "nixpkgs" => url == "https://flakehub.com/f/NixOS/nixpkgs/0.1",
-        "determinate" => url == "https://flakehub.com/f/DeterminateSystems/determinate/*",
-        "fh" => url == "https://flakehub.com/f/DeterminateSystems/fh/*.tar.gz",
-        "applications" => url == "github:NixOS/nixpkgs/nixos-unstable",
-        "ai-apps" => url == "github:numtide/llm-agents.nix",
-        "omp" => url == "github:can1357/oh-my-pi" || url.starts_with("github:can1357/oh-my-pi/v"),
+        "applications" => url.is_official("NixOS", "nixpkgs") && url.reference.as_deref() == Some("nixos-unstable"),
+        "ai-apps" => url.is_official("numtide", "llm-agents.nix") && url.reference.is_none(),
+        "omp" => url.is_official("can1357", "oh-my-pi") && url.reference.as_deref().is_none_or(|r| r.starts_with('v')),
         _ => false,
     }
 }
@@ -104,8 +119,8 @@ pub fn follow_sekka(text: &str) -> Option<String> {
     let mut converted = Vec::new();
     let mut edits = Vec::new();
     for entry in set.attrpath_values() {
-        let path = entry.attrpath()?.to_string();
-        let parts: Vec<_> = path.split('.').map(str::trim).collect();
+        let path = edit::attr_path(&entry.attrpath()?)?;
+        let parts: Vec<_> = path.iter().map(String::as_str).collect();
         if let ["inputs", name, "url"] = parts.as_slice()
             && EXTERNAL.contains(name)
             && edit::string_value(text, &parts).ok()?.is_some_and(|url| sekka_default(name, &url))
@@ -115,8 +130,8 @@ pub fn follow_sekka(text: &str) -> Option<String> {
         }
     }
     for entry in set.attrpath_values() {
-        let path = entry.attrpath()?.to_string();
-        let parts: Vec<_> = path.split('.').map(str::trim).collect();
+        let path = edit::attr_path(&entry.attrpath()?)?;
+        let parts: Vec<_> = path.iter().map(String::as_str).collect();
         if let ["inputs", "sekka", "inputs", name, "follows"] = parts.as_slice()
             && converted.iter().any(|c| c == name)
         {
@@ -162,12 +177,7 @@ pub fn following(text: &str) -> Vec<&'static str> {
 }
 
 fn official(url: &str, repo: &str) -> bool {
-    let base = format!("github:bitemyapp/{repo}");
-    let git = format!("git+https://github.com/bitemyapp/{repo}");
-    url == base
-        || url.strip_prefix(&base).is_some_and(|s| s.starts_with('/') || s.starts_with('?'))
-        || url == git
-        || url.strip_prefix(&git).is_some_and(|s| s.starts_with('?'))
+    FlakeUrl::parse(url).is_some_and(|url| url.is_official("bitemyapp", repo))
 }
 
 /// Fetch the installation's known `github:` addresses with Git: the old
@@ -177,14 +187,16 @@ fn official(url: &str, repo: &str) -> bool {
 /// the remote, an arbitrary name cannot safely be treated as a branch.
 /// Pins, custom settings and existing Git addresses also stay unchanged.
 pub fn fetched_with_git(url: &str) -> Option<String> {
-    match url {
-        "github:bitemyapp/sekka"
-        | "github:bitemyapp/sekka/main"
-        | "github:bitemyapp/sekka/nightly"
-        | "github:bitemyapp/sekka?ref=nightly" => Some(NIGHTLY.to_owned()),
-        TARBALL_EARLY => Some(EARLY.to_owned()),
-        _ => None,
+    let url = FlakeUrl::parse(url)?;
+    if !url.is_official("bitemyapp", "sekka") {
+        return None;
     }
+    let branch = match (url.reference.as_deref(), url.ref_location) {
+        (Some("main"), RefLocation::Query) => "main",
+        (None | Some("main" | "nightly"), _) => "nightly",
+        _ => return None,
+    };
+    url.github_git(branch)
 }
 
 fn migrate(text: &str) -> Option<String> {
@@ -198,8 +210,8 @@ fn migrate(text: &str) -> Option<String> {
     let mut edits = Vec::new();
     let mut seen = std::collections::BTreeSet::new();
     for entry in set.attrpath_values() {
-        let path = entry.attrpath()?.to_string();
-        let parts: Vec<_> = path.split('.').map(str::trim).collect();
+        let path = edit::attr_path(&entry.attrpath()?)?;
+        let parts: Vec<_> = path.iter().map(String::as_str).collect();
         if parts.first() != Some(&"inputs") {
             continue;
         }
@@ -225,7 +237,9 @@ fn migrate(text: &str) -> Option<String> {
     for name in EXTERNAL {
         edit::string_value(text, &["inputs", name, "url"]).ok()??;
     }
-    let outputs = set.attrpath_values().find(|e| e.attrpath().is_some_and(|p| p.to_string() == "outputs"))?;
+    let outputs = set
+        .attrpath_values()
+        .find(|e| e.attrpath().and_then(|p| edit::attr_path(&p)).is_some_and(|p| p == ["outputs"]))?;
     let ast::Expr::Lambda(lambda) = outputs.value()? else { return None };
     let mut parameter = false;
     let mut module = false;
@@ -248,7 +262,7 @@ fn migrate(text: &str) -> Option<String> {
             parameter = true;
         } else if ast::Select::cast(parent).is_some_and(|s| {
             s.expr().is_some_and(|e| e.syntax() == ident.syntax())
-                && s.attrpath().is_some_and(|p| p.to_string() == "nixosModules.default")
+                && s.attrpath().and_then(|p| edit::attr_path(&p)).is_some_and(|p| p == ["nixosModules", "default"])
         }) && !module
         {
             module = true;
@@ -435,6 +449,7 @@ mod tests {
             "git+https://github.com/bitemyapp/sekka?shallow=1&ref=main",
             "git+https://github.com/bitemyapp/sekka?ref=main&shallow=0",
             "git+https://github.com/bitemyapp/sekka?submodules=1&ref=refs/heads/main&shallow=1",
+            "git+https://github.com/bit%65myapp/sekka?%72ef=refs%2Fheads%2Fmain",
         ] {
             let chosen = nightly.replace(NIGHTLY, url);
             assert!(early(url), "{url}");
@@ -466,9 +481,57 @@ mod tests {
             "{ inputs.sekka.url = \"git+https://github.com/bitemyapp/sekka-evil?ref=nightly\"; }".into(),
             "{ inputs.sekka.url = \"git+https://github.com/bitemyapp/sekka.evil?ref=nightly\"; }".into(),
             "{ inputs.sekka.url = \"git+https://github.com.evil/bitemyapp/sekka?ref=nightly\"; }".into(),
+            "{ inputs.sekka.url = \"github:bitemyapp/sekka?host=elsewhere.example\"; }".into(),
+            "{ inputs.sekka.url = \"github:bitemyapp/sekka/main?ref=nightly\"; }".into(),
+            "{ inputs.sekka.url = \"github:bitemyapp/sekka/${branch}\"; }".into(),
             "{ broken".into(),
         ] {
             assert!(prepare(&old).is_err(), "{old}");
         }
+    }
+
+    #[test]
+    fn migration_uses_decoded_url_components() {
+        for url in ["github:bit%65myapp/sekka/%6dain", "github:bitemyapp/sekka?ref=%6eightly"] {
+            assert_eq!(fetched_with_git(url).as_deref(), Some(NIGHTLY), "{url}");
+        }
+        assert_eq!(fetched_with_git("github:bitemyapp/sekka?%72ef=%6dain").as_deref(), Some(EARLY));
+        assert!(early("github:bitemyapp/sekka?%72ef=%6dain"));
+        for url in [
+            "github:bitemyapp/sekka?ref=main%26dir%3Dsub",
+            "github:bitemyapp/sekka?ref=topic+name",
+            "github:bitemyapp/sekka?%72ev=2111c84ac0b4555518b9482ec436f813d26905ef",
+            "github:bitemyapp/sekka?ref=nightly&%64ir=sub",
+        ] {
+            assert_eq!(fetched_with_git(url), None, "{url}");
+        }
+    }
+
+    #[test]
+    fn migration_edits_nix_nodes_not_attribute_text() {
+        let source = r#"{
+  # Keep this comment, string, and custom setting.
+  description = "inputs.sekka.url = not a declaration";
+  inputs /* .not.an.attribute */ . "sekka" = {
+    "url" = ''github:bit%65myapp/sekka/%6dain'';
+  };
+  custom."a.b" = "unchanged";
+}"#;
+        let expected = source.replace("''github:bit%65myapp/sekka/%6dain''", &edit::nix_string(NIGHTLY));
+        assert_eq!(prepare(source).unwrap(), expected);
+        assert_eq!(prepare(&expected).unwrap(), expected);
+
+        let legacy = OLD
+            .replace("inputs.calamares.url", "inputs /* . */ . \"calamares\" . url")
+            .replace("outputs =", "\"outputs\" =")
+            .replace("calamares.nixosModules.default", "calamares.\"nixosModules\".default");
+        let migrated = prepare(&legacy).unwrap();
+        assert!(migrated.contains("sekka.\"nixosModules\".default"));
+        assert_eq!(edit::string_value(&migrated, &["inputs", "sekka", "url"]).unwrap().as_deref(), Some(NIGHTLY));
+
+        let deps = INSTALLED
+            .replace("inputs.nixpkgs.url", "inputs /* . */ . \"nixpkgs\" . url")
+            .replace("inputs.sekka.inputs.nixpkgs.follows", "inputs.\"sekka\".inputs.\"nixpkgs\".follows");
+        assert_eq!(prepare(&deps).unwrap(), prepare(INSTALLED).unwrap());
     }
 }

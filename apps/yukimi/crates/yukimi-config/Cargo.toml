@@ -8,6 +8,7 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+fluent-uri.workspace = true
 rnix.workspace = true
 rowan.workspace = true
 serde.workspace = true
