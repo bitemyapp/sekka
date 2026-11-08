@@ -73,11 +73,12 @@ impl CapturedOutput {
 }
 
 /// The screenshot's pixel grid: an output's, at the screenshot's scale,
-/// shifted so the crop's corner is pixel (0, 0).
+/// shifted so the crop's corner is pixel (0, 0). An axis that would
+/// collapse to zero pixels instead rounds from the crop's corner.
 struct Grid {
-    /// The output's corner.
+    /// The output's corner, or the crop's on a collapsed axis.
     origin: Point<i64, DesktopPoints>,
-    /// The crop's corner, from the output's.
+    /// The crop's corner, from the grid's origin.
     corner: Point<i64, ScreenshotPixels>,
     scale: PixelsPerPoint<ScreenshotPixels>,
 }
@@ -103,6 +104,18 @@ impl Screenshot {
     pub(super) fn new(crop: LayoutRect, grid: Point<i64, DesktopPoints>, scale: f64) -> Result<Self, String> {
         let mut grid = Grid { origin: grid, corner: (0, 0).into(), scale: PixelsPerPoint::new(scale)? };
         grid.corner = grid.pixel(crop.loc)?;
+        let end = grid.pixel(crop.loc + crop.size)?;
+        // Below 1×, a nonempty crop can have both edges round to the
+        // same pixel. Round that axis from the crop instead, so its one
+        // pixel is also covered by the output, including at the far edge.
+        if end.x == 0 {
+            grid.origin.x = crop.loc.x;
+            grid.corner.x = 0;
+        }
+        if end.y == 0 {
+            grid.origin.y = crop.loc.y;
+            grid.corner.y = 0;
+        }
         let end = grid.pixel(crop.loc + crop.size)?;
         let width = u32::try_from(end.x).map_err(|_| "screenshot width is out of range")?;
         let height = u32::try_from(end.y).map_err(|_| "screenshot height is out of range")?;

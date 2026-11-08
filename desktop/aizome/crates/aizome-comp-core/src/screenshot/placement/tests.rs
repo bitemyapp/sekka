@@ -83,6 +83,37 @@ fn exact_copies_and_fractional_crops_preserve_native_pixels_in_order() {
     }
 }
 
+#[test]
+fn thin_crops_below_one_scale_keep_native_pixels_even_at_far_edges() {
+    let bounds = rect(-23, 17, 64, 48);
+    for scale in [0.5, 0.75] {
+        let source = output(bounds, scale, native_size(bounds, scale), None);
+        let native = source.image.size();
+        let edge = |at: i32| (at as f64 * scale).round() as u32;
+        for x in 0..64 {
+            for y in 0..48 {
+                for (w, h) in [(1, 1), (1, 48 - y), (64 - x, 1)] {
+                    let mut shot = Screenshot::new(rect(-23 + x, 17 + y, w, h), bounds.loc, scale).unwrap();
+                    let job = shot.plan(&source).unwrap();
+                    assert_in_bounds(&job);
+                    job.execute();
+                    let size = shot.image.pixels().size();
+                    assert_eq!((size.w, size.h), ((edge(x + w) - edge(x)).max(1), (edge(y + h) - edge(y)).max(1)));
+                    let sx = edge(x).min(native.w - 1) as usize;
+                    let sy = edge(y).min(native.h - 1);
+                    for row in 0..size.h {
+                        assert_eq!(
+                            shot.image.pixels().row(row),
+                            &source.image.row(sy + row)[sx..sx + size.w as usize],
+                            "scale {scale}, crop ({x}, {y}) {w}×{h}, row {row}",
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// 150% beside 100%, cropped from a point mid-pixel at 150%: the larger
 /// output's pixels run whole to where its capture ends, and its neighbour
 /// starts right there.

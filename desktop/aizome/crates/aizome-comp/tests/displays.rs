@@ -202,7 +202,7 @@ fn screenshots_across_displays_of_different_scales() {
 
 #[test]
 fn fractional_screenshot_crops_match_the_native_capture() {
-    for scale in [1.25_f64, 1.5, 1.75] {
+    for scale in [0.5_f64, 0.75, 1.25, 1.5, 1.75] {
         let mode = format!("1920x1080@{scale}");
         let c = Compositor::start(Options { outputs: &[&mode], renderer: Some("pixman"), ..Default::default() });
         // A solid window would conceal repeated/skipped rows and columns.
@@ -225,13 +225,23 @@ fn fractional_screenshot_crops_match_the_native_capture() {
         // Inside the output, and from mid-pixel to its far corner (where an
         // area dragged past the edge is clipped).
         let (pw, ph) = ((1920.0 / scale).round() as i32, (1080.0 / scale).round() as i32);
-        for (x, y, w, h) in [(1, 1, 900, 500), (2, 3, 800, 450), (1, 1, pw - 1, ph - 1), (2, 3, pw - 2, ph - 3)] {
+        for (x, y, w, h) in [
+            (1, 1, 900, 500),
+            (2, 3, 800, 450),
+            (1, 1, pw - 1, ph - 1),
+            (2, 3, pw - 2, ph - 3),
+            (1, 1, 1, 100),
+            (2, 2, 100, 1),
+            (2, 2, 1, 1),
+            (pw - 1, ph - 1, 1, 1),
+        ] {
             let crop = shot_of_area(&c, x, y, w, h);
-            // Edges round on the output's own pixel grid.
+            // Edges round on the output's own pixel grid. A thin crop
+            // retains one native pixel even when its edges round together.
             let edge = |at: i32| (at as f64 * scale).round() as u32;
-            assert_eq!((crop.width, crop.height), (edge(x + w) - edge(x), edge(y + h) - edge(y)));
-            let sx = edge(x) as usize;
-            let sy = edge(y) as usize;
+            assert_eq!((crop.width, crop.height), ((edge(x + w) - edge(x)).max(1), (edge(y + h) - edge(y)).max(1)));
+            let sx = edge(x).min(native.width - 1) as usize;
+            let sy = edge(y).min(native.height - 1) as usize;
             assert!(
                 sx + crop.width as usize <= native.width as usize
                     && sy + crop.height as usize <= native.height as usize,
