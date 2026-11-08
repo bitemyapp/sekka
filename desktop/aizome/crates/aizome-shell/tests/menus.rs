@@ -113,6 +113,33 @@ fn a_palette_follows_its_strip_and_stays_on_screen() {
 }
 
 #[test]
+fn a_palette_taller_than_its_output_fits_below_the_bar_and_scrolls() {
+    let mut h = scene(false);
+    // An output too short for the app's whole menu below the bar (#338).
+    let short = 240.0;
+    h.set_outputs(vec![aizome_kit::Output { frame: Rect::new(0.0, 0.0, W, short), ..output() }]);
+    h.send(Msg::TearOff {
+        app: "org.aizome.Sumi".into(),
+        path: vec![],
+        output: "eDP-1".into(),
+        at: Point::new(104.0, 180.0),
+    });
+    let palette = window_titled(&h, "Palette (torn off)");
+    let size = h.size(palette);
+    let y = h.program().tearoffs[0].y;
+    assert_eq!((y, size.height), (24.0, short - 24.0), "moved up under the bar, and no taller than the room there");
+    // Its rows scroll (the kit's tests check how): pictures before and
+    // after rolling to the end, for a look.
+    let img = h.render(palette, 2.0);
+    let (w, hh) = img.pixel_size();
+    aizome_kit::testing::write_png(&shots().join("palette-short-output.png"), w, hh, &img.to_rgba8().unwrap()).unwrap();
+    h.scroll(palette, Point::new(60.0, 120.0), Vec2::new(0.0, 10_000.0));
+    let img = h.render(palette, 2.0);
+    aizome_kit::testing::write_png(&shots().join("palette-short-output-scrolled.png"), w, hh, &img.to_rgba8().unwrap())
+        .unwrap();
+}
+
+#[test]
 fn pictures_of_menus() {
     for day in [false, true] {
         let mut h = scene(day);

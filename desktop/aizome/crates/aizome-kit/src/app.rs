@@ -457,9 +457,9 @@ impl Platform for SidestepPlatform<'_> {
                 .close_on_request(false)
                 .background(background),
             OpenKind::Lock { output } => WindowOptions::lock(*output).background(background),
-            OpenKind::Popup { parent, anchor, placement, grab } => {
+            OpenKind::Popup { parent, anchor, placement, grab, fit } => {
                 let Some(&p) = self.maps.to_side.get(parent) else { return };
-                let position = match placement {
+                let mut position = match placement {
                     Placement::Below => PopupPosition::BELOW,
                     Placement::AtPoint => PopupPosition::AT_POINT,
                     Placement::Beside => PopupPosition::BESIDE.offset(2, -5),
@@ -469,6 +469,8 @@ impl Platform for SidestepPlatform<'_> {
                         ..PopupPosition::BELOW
                     },
                 };
+                // Where it still doesn't fit once moved, cut to the output.
+                position.resize_y |= *fit;
                 WindowOptions::popup(p, *anchor, spec.size, *grab).popup_position(position).background(background)
             }
         };
@@ -778,7 +780,11 @@ impl<P: Program> sidestep_ui::Handler for Glue<P> {
         let (rt, mut p) = self.split(cx);
         let core = &mut rt.core;
         match event {
-            WindowEvent::Resized(size) => core.resized(win, size),
+            WindowEvent::Resized(size) => {
+                if !core.fit_menu(win, size, &mut p) {
+                    core.resized(win, size);
+                }
+            }
             WindowEvent::ScaleChanged(scale) => core.scale_changed(win, scale),
             WindowEvent::Focused(on) => core.window_focus(win, on, &mut p),
             WindowEvent::Key(k) => core.key(win, k, &mut p),

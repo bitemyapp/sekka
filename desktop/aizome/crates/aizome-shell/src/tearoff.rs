@@ -107,6 +107,15 @@ pub fn size(menu: &ShellMenu, measure: &mut dyn FnMut(&str, &TextSpec) -> f64, t
     Size::new(width + m.shadow, (h + m.shadow).ceil())
 }
 
+/// A palette of `size` on an output `height` tall, its top at `y`: no
+/// taller than the output below the bar (its menu scrolls then), and its
+/// top moved up as far as it must for it to show whole.
+pub fn fit(size: Size, y: f64, height: f64) -> (Size, f64) {
+    let bar = crate::menubar::HEIGHT;
+    let size = Size::new(size.width, size.height.min((height - bar).max(0.0)));
+    (size, y.min(height - size.height).max(bar))
+}
+
 /// A palette: the kit's menu drawn in place, under a hold for its strip.
 pub fn view(
     index: usize,
@@ -204,7 +213,7 @@ impl Shell {
     }
 
     /// Open the palettes that should show and close the rest; size them
-    /// to their menus.
+    /// to their menus, as far as their outputs have room.
     pub fn sync_tearoffs(&mut self, cx: &mut Cx<Msg>) {
         let theme = cx.theme().clone();
         for i in 0..self.tearoffs.len() {
@@ -216,11 +225,12 @@ impl Shell {
                     let Some(screen) = self.screen_named(&t.output).or(self.primary()).cloned() else { continue };
                     let text = &mut self.text;
                     let mut measure = |s: &str, spec: &TextSpec| text.layout(&theme, s, spec, None).size().width;
-                    let size = size(&menu, &mut measure, &theme);
+                    let (size, y) = fit(size(&menu, &mut measure, &theme), t.y, screen.output.frame.height());
+                    self.tearoffs[i].y = y;
                     let opts = LayerOptions::new(Layer::Top, "aizome-menu")
                         .anchors(Anchors::TOP | Anchors::LEFT)
                         .exclusive_zone(-1)
-                        .margins(Margins::new(t.y as i32, 0, 0, t.x as i32))
+                        .margins(Margins::new(y as i32, 0, 0, t.x as i32))
                         .keyboard(KeyboardInteractivity::OnDemand)
                         .output(screen.output.id);
                     let w = cx.open_window(layer(opts, size.width, size.height, "Palette (torn off)"));
@@ -228,14 +238,20 @@ impl Shell {
                     self.tear_shown.insert(i, Shown { window: w, size, grab: None });
                 }
                 (Some((_, menu)), Some(shown)) => {
+                    let height =
+                        self.screen_named(&t.output).or(self.primary()).map_or(f64::MAX, |s| s.output.frame.height());
                     let text = &mut self.text;
                     let mut measure = |s: &str, spec: &TextSpec| text.layout(&theme, s, spec, None).size().width;
-                    let size = size(&menu, &mut measure, &theme);
+                    let (size, y) = fit(size(&menu, &mut measure, &theme), t.y, height);
                     if size != shown.size {
                         cx.set_layer_size(shown.window, size);
                         if let Some(s) = self.tear_shown.get_mut(&i) {
                             s.size = size;
                         }
+                    }
+                    if y != t.y {
+                        self.tearoffs[i].y = y;
+                        cx.set_layer_margins(shown.window, Margins::new(y as i32, 0, 0, t.x as i32));
                     }
                 }
                 (None, Some(shown)) => {
