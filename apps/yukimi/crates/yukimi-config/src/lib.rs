@@ -15,6 +15,7 @@
 //!   should.
 pub mod branch;
 pub mod edit;
+mod flake_url;
 pub mod lock;
 pub mod packages;
 pub mod sekka;

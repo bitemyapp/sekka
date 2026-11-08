@@ -261,7 +261,12 @@ pub fn check_flake(flake: &str, inputs: &[Input], scratch: &Path) -> BTreeMap<St
 /// Sekka's own move with it, and aren't checked by themselves.
 pub fn sekka_targets(flake: &str, inputs: &[Input], newest: &mut BTreeMap<String, Result<Release, String>>) {
     let address = yukimi_config::edit::string_value(flake, &["inputs", "sekka", "url"]).ok().flatten();
-    if address.as_deref().is_some_and(yukimi_config::sekka::early) {
+    // Use the same parsed migration decision as the writer. In particular,
+    // custom fetcher options can prevent a legacy main URL from migrating.
+    let Some(target) = address.as_deref().and_then(yukimi_config::sekka::fetched_with_git) else {
+        return;
+    };
+    if yukimi_config::sekka::early(&target) {
         return;
     }
     let Some(original) = inputs.iter().find(|i| i.name == "sekka").and_then(|i| i.original.as_ref()) else {
@@ -422,7 +427,7 @@ mod tests {
     }
 
     #[test]
-    fn early_updates_keep_mains_answer() {
+    fn retained_main_sources_keep_mains_answer() {
         let lock = FlakeLock::parse(
             r#"{ "root": "root", "version": 7, "nodes": {
               "root": { "inputs": { "sekka": "sekka" } },
@@ -431,9 +436,15 @@ mod tests {
         )
         .unwrap();
         let main = Release { rev: Some("2".repeat(40)), last_modified: Some(2), ..Release::default() };
-        // Early updates as Yukimi writes them now, and as it wrote them
-        // before Sekka was fetched with Git.
-        for early in [yukimi_config::sekka::EARLY, "github:bitemyapp/sekka?ref=main"] {
+        // Explicit early updates and custom settings that prevent migration
+        // must keep the target of their original main source.
+        for early in [
+            yukimi_config::sekka::EARLY,
+            "github:bitemyapp/sekka?ref=main",
+            "github:bitemyapp/sekka?%72ef=%6dain",
+            "github:bitemyapp/sekka/main?dir=sub",
+            "github:bitemyapp/sekka/main?narHash=sha256-custom",
+        ] {
             let mut newest = BTreeMap::from([("sekka".to_owned(), Ok(main.clone()))]);
             let flake = format!("{{ inputs.sekka.url = \"{early}\"; outputs = _: {{ }}; }}");
             sekka_targets(&flake, &lock.inputs(), &mut newest);

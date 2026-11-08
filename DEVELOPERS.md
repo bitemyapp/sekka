@@ -1090,6 +1090,15 @@ The known default, nightly and early-update `github:` addresses move to Git
 settings stay unchanged: a GitHub ref can be a tag or pull-request ref,
 where an unqualified Git ref would instead name a branch. Existing Git
 addresses also stay unchanged, and update checks retain their own targets.
+The migration reads Nix attribute paths and literal strings through `rnix`,
+then parses flake URLs with `fluent-uri` (RFC 3986) and Nix's ref/revision
+rules. It reconstructs changed URLs with the URI builder and writes only the
+affected Nix syntax nodes. Branch switching and update-target selection use
+the same parser; percent encoding, literal `+`, duplicate query keys and
+commit pins have the same meaning across these operations. The offline
+`reconstruction_agrees_with_nix` test compares reconstructed URLs with
+`builtins.parseFlakeRef`; run it explicitly with
+`cargo test --locked --manifest-path apps/yukimi/Cargo.toml -p yukimi-config reconstruction_agrees_with_nix -- --ignored`.
 One given an address of one's own keeps it, and Sekka follows it; that
 system may then build Sekka's packages itself. The build passes the binary
 caches the new configuration names (as root, so the daemon accepts them), so
