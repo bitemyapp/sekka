@@ -58,6 +58,9 @@ let
       # The host runs Determinate Nix. Its cancellation status is not decoded
       # by the upstream client, which hides the original failed derivation.
       nixPackage
+      # Streams evaluation (nix-eval-jobs, on upstream Nix's evaluator) into
+      # builds, which go through nixPackage (scripts/ci-retain.py).
+      nix-fast-build
       cacert
     ];
   };
