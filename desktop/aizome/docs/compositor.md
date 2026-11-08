@@ -393,7 +393,11 @@ Notes for client authors:
   showing tab out; ❖⇧[ and ❖⇧] show the previous and next tab, and
   ⌃⇧❖[ and ⌃⇧❖] move the showing one along; IPC `stack`/`unstack`
   (`stack` adds at the end).
-- **Desks**: four by default (settings `[[desks]]`). Each display shows a
+- **Desks**: four by default (settings `[[desks]]`). Desks added, renamed,
+  moved or removed here (the overview, the bar's Desks menu, `aizomectl`)
+  are written back to `[[desks]]`, so Settei shows them and a change it
+  saves keeps them (the file is read again first; the four defaults are no
+  entries). Each display shows a
   Desk of its own, as XMonad's screens show workspaces: the main display
   starts on the first, the others on the next ones. The current Desk is
   the one of the display with the focus, which moves with the focused
@@ -512,6 +516,8 @@ nix develop .#aizome --command cargo test -p aizome-comp
   display's Desk comes along and goes back when it's plugged in again.
   The model's rules (swaps, homes, hotplug, stepping, removing Desks) are
   unit tests in `wm/tests.rs`.
+- `tests/desks_settings.rs`: Desks added, renamed and removed through IPC
+  reach `settings.toml`, and a Desk Settei adds there keeps the others.
 - `tests/input_method.rs`: an input method counting its serial as IBus
   does types into a text input that checks serials as foot does, across a
   display turned off and on.
