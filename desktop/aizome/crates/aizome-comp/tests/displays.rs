@@ -1,6 +1,7 @@
 //! Displays: turning outputs off and on, mirroring one on another (scaled
-//! to fit, letterboxed), the main display, Night Light over IPC, and a
-//! laptop's panel going dark while its lid is closed.
+//! to fit, letterboxed), screenshots across displays of different scales,
+//! the main display, Night Light over IPC, and a laptop's panel going dark
+//! while its lid is closed.
 
 mod common;
 
@@ -101,6 +102,129 @@ fn a_mirror_shows_its_source_scaled_to_fit() {
     let m = output(&c, "HEADLESS-2");
     assert_eq!(m.mirror, None);
     assert_eq!(m.logical.x, 1280);
+}
+
+fn alpha(img: &Image, x: u32, y: u32) -> u8 {
+    img.rgba[((y * img.width + x) * 4 + 3) as usize]
+}
+
+fn shot_of_area(c: &Compositor, x: i32, y: i32, w: i32, h: i32) -> Image {
+    let path = c.dir.join(format!("area-{x}-{y}.png"));
+    c.ok(Request::Screenshot {
+        output: None,
+        path: Some(path.to_string_lossy().into()),
+        window: None,
+        area: Some(aizome_ipc::Rect::new(x, y, w, h)),
+        clipboard: false,
+    });
+    Image::load(&path)
+}
+
+/// A 2× panel with a 1× display beside it (#318). An area on the 1×
+/// display is its own pixels; one across both, and the whole screen, are
+/// at 2×, the 1× display's pixels doubled to fill its place. (Each display
+/// was placed unscaled at the largest scale: a band low on the 1× display
+/// came out empty, one higher up showed what was further down, and the
+/// whole screen had the 1× display in a quarter of its place.)
+#[test]
+fn screenshots_across_displays_of_different_scales() {
+    let c = Compositor::start(Options { outputs: &["1280x800@2", "800x600@1"], settings: "", ..Default::default() });
+    let blue = rgb(0x2222cc);
+    let _a = c.client(Spec::new("org.example.editor", 0x2222cc).size(400, 300));
+    let w = c.wait_window("org.example.editor");
+    // (840, 250)–(1240, 550), on the 1× display at (640, 0)–(1440, 600).
+    c.ok(Request::Move { id: Some(w.id), x: 840, y: 250 });
+    c.wait_windows("on the 1× display", |ws| ws[0].output.as_deref() == Some("HEADLESS-2"));
+    c.settle();
+
+    // Print, and a band dragged low across the window.
+    let mut events = aizome_ipc::Client::connect_to(&c.ipc).unwrap().events().unwrap();
+    events.stream().set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+    let button = |pressed| Synthetic::PointerButton { button: "left".into(), pressed };
+    let motion = |x, y| Synthetic::PointerMotion { x, y };
+    c.ok(Request::Synthesize {
+        events: vec![
+            motion(900.0, 400.0),
+            Synthetic::Key { key: "print".into(), pressed: true },
+            Synthetic::Key { key: "print".into(), pressed: false },
+        ],
+    });
+    c.ok(Request::Synthesize {
+        events: vec![button(true), motion(1000.0, 450.0), motion(1100.0, 500.0), button(false)],
+    });
+    let path = events
+        .by_ref()
+        .find_map(|e| match e {
+            Ok(Event::ScreenshotTaken { path }) => Some(path),
+            _ => None,
+        })
+        .expect("a screenshot");
+    let band = Image::load(std::path::Path::new(&path));
+    keep(&band, "displays-scales-band");
+    assert_eq!((band.width, band.height), (200, 100), "the 1× display's own pixels");
+    for (x, y) in [(0, 0), (100, 50), (199, 99)] {
+        assert_px(&band, x, y, blue, "the window");
+        assert_eq!(alpha(&band, x as u32, y as u32), 255);
+    }
+
+    // Across both: at 2×, the window from (840 − 600) × 2 = 480.
+    let across = shot_of_area(&c, 600, 300, 400, 100);
+    keep(&across, "displays-scales-across");
+    assert_eq!((across.width, across.height), (800, 200));
+    assert!(across.rgba.as_chunks::<4>().0.iter().all(|p| p[3] == 255), "both displays fill it");
+    assert!(!near(across.px(470, 100), blue), "the 1× display's desktop left of the window");
+    assert_px(&across, 490, 100, blue, "the window's left edge, doubled into place");
+    assert_px(&across, 799, 199, blue, "the window at the area's far corner");
+
+    // The whole screen: 1440 × 600 points at 2×, the window at
+    // (1680, 500)–(2480, 1100); the panel ends 400 points down.
+    let full = c.screenshot();
+    keep(&full, "displays-scales-full");
+    assert_eq!((full.width, full.height), (2880, 1200));
+    assert_px(&full, 1690, 510, blue, "the window's near corner");
+    assert_px(&full, 2470, 1090, blue, "the window's far corner");
+    assert!(!near(full.px(2490, 1090), blue), "and no further");
+    assert_eq!(alpha(&full, 2879, 1199), 255, "the 1× display's far corner");
+    assert_eq!(alpha(&full, 100, 1100), 0, "below the panel is off every display");
+}
+
+#[test]
+fn fractional_screenshot_crops_match_the_native_capture() {
+    for scale in [1.25, 1.5, 1.75] {
+        let mode = format!("1920x1080@{scale}");
+        let c = Compositor::start(Options { outputs: &[&mode], renderer: Some("pixman"), ..Default::default() });
+        // A solid window would conceal repeated/skipped rows and columns.
+        let _client = c.client(
+            Spec::new("org.example.pixel-pattern", 0)
+                .pixel_pattern(|x, y| ((x as u32 & 255) << 16) | ((y as u32 & 255) << 8) | ((x ^ y) as u32 & 255)),
+        );
+        let window = c.wait_window("org.example.pixel-pattern");
+        c.ok(Request::Move { id: Some(window.id), x: 200, y: 100 });
+        c.settle();
+        let path = c.dir.join("native.png");
+        c.ok(Request::Screenshot {
+            output: Some("HEADLESS-1".into()),
+            path: Some(path.to_string_lossy().into()),
+            window: None,
+            area: None,
+            clipboard: false,
+        });
+        let native = Image::load(&path);
+        for (x, y, w, h) in [(1, 1, 900, 500), (2, 3, 800, 450)] {
+            let crop = shot_of_area(&c, x, y, w, h);
+            assert_eq!(
+                (crop.width, crop.height),
+                ((w as f64 * scale).round() as u32, (h as f64 * scale).round() as u32)
+            );
+            let sx = (x as f64 * scale).round() as usize;
+            let sy = (y as f64 * scale).round() as usize;
+            let row_bytes = crop.width as usize * 4;
+            for (row, pixels) in crop.rgba.chunks_exact(row_bytes).enumerate() {
+                let start = ((sy + row) * native.width as usize + sx) * 4;
+                assert_eq!(pixels, &native.rgba[start..start + row_bytes], "scale {scale}, crop ({x}, {y}), row {row}");
+            }
+        }
+    }
 }
 
 #[test]

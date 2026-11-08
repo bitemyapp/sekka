@@ -15,6 +15,12 @@ use crate::scene::Purpose;
 use crate::state::State;
 use crate::{Rect, WinId};
 
+mod pixels;
+mod placement;
+
+pub use pixels::Image;
+use placement::{CapturedOutput, Screenshot, layout_rect};
+
 pub enum What {
     /// Every output, side by side as they are laid out.
     Screen,
@@ -23,13 +29,6 @@ pub enum What {
     Area(Rect),
     /// A window with its tab and frame.
     Window(WinId),
-}
-
-/// An image in memory: straight RGBA.
-pub struct Image {
-    pub width: u32,
-    pub height: u32,
-    pub rgba: Vec<u8>,
 }
 
 /// Takes a screenshot; returns where it went.
@@ -59,7 +58,7 @@ pub fn capture(state: &mut State, what: What) -> Result<Image, String> {
     match what {
         What::Output(o) => {
             let c = state.capture_output(&o, false)?;
-            Ok(unpremultiply(c))
+            Image::from_capture(c)
         }
         What::Screen => stitch(state, None),
         What::Area(r) => stitch(state, Some(r)),
@@ -72,74 +71,43 @@ pub fn capture(state: &mut State, what: What) -> Result<Image, String> {
     }
 }
 
-/// Every output at the largest scale, placed by the layout, cropped to an
-/// area if given.
+/// The outputs an area shows, at their largest scale. Geometry planning and
+/// validated pixel buffers keep placement arithmetic out of the capture loop.
 fn stitch(state: &mut State, area: Option<Rect>) -> Result<Image, String> {
     let outputs = state.az.outputs.clone();
-    if outputs.is_empty() {
-        return Err("no outputs".into());
-    }
-    let mut bbox = Rect::default();
-    for o in &outputs {
-        bbox = bbox.union(state.az.output_rect(o));
-    }
+    let outputs = outputs
+        .into_iter()
+        .map(|output| Ok((output.clone(), layout_rect(state.az.output_rect(&output))?)))
+        .collect::<Result<Vec<_>, String>>()?;
+    let bounds = outputs.iter().map(|(_, rect)| *rect).reduce(|a, b| a.merge(b)).ok_or("no outputs")?;
     let crop = match area {
-        Some(a) => a.intersection(bbox).ok_or("the area is off every output")?,
-        None => bbox,
+        Some(area) => layout_rect(area)?.intersection(bounds).ok_or("the area is off every output")?,
+        None => bounds,
     };
-    let scale = outputs.iter().map(|o| o.current_scale().fractional_scale()).fold(1.0, f64::max);
-    let width = (crop.w as f64 * scale).round() as u32;
-    let height = (crop.h as f64 * scale).round() as u32;
-    let mut rgba = vec![0u8; width as usize * height as usize * 4];
-    for o in &outputs {
-        let r = state.az.output_rect(o);
-        if !r.intersects(crop) {
-            continue;
-        }
-        let cap = unpremultiply(state.capture_output(o, false)?);
-        let ox = ((r.x - crop.x) as f64 * scale).round() as i64;
-        let oy = ((r.y - crop.y) as f64 * scale).round() as i64;
-        for y in 0..cap.height as i64 {
-            let dy = oy + y;
-            if dy < 0 || dy >= height as i64 {
-                continue;
-            }
-            let x0 = ox.max(0);
-            let x1 = (ox + cap.width as i64).min(width as i64);
-            if x1 <= x0 {
-                continue;
-            }
-            let src = ((y * cap.width as i64 + (x0 - ox)) * 4) as usize;
-            let dst = ((dy * width as i64 + x0) * 4) as usize;
-            let n = ((x1 - x0) * 4) as usize;
-            rgba[dst..dst + n].copy_from_slice(&cap.rgba[src..src + n]);
-        }
+    let shown: Vec<_> = outputs.into_iter().filter(|(_, rect)| rect.overlaps(crop)).collect();
+    let scale =
+        shown.iter().map(|(output, _)| output.current_scale().fractional_scale()).reduce(f64::max).unwrap_or(1.0);
+    let mut screenshot = Screenshot::new(crop, scale)?;
+    for (output, bounds) in shown {
+        let captured = CapturedOutput::new(
+            bounds,
+            output.current_scale().fractional_scale(),
+            state.capture_output(&output, false)?,
+        )?;
+        screenshot.plan(&captured)?.execute();
     }
-    Ok(Image { width, height, rgba })
-}
-
-fn unpremultiply(c: Capture) -> Image {
-    let mut rgba = c.rgba;
-    for p in rgba.as_chunks_mut::<4>().0 {
-        let a = p[3] as u32;
-        if a != 0 && a != 255 {
-            for ch in &mut p[..3] {
-                *ch = ((*ch as u32 * 255 + a / 2) / a).min(255) as u8;
-            }
-        }
-    }
-    Image { width: c.width, height: c.height, rgba }
+    Ok(screenshot.into_image())
 }
 
 pub fn encode_png(image: &Image) -> Result<Vec<u8>, String> {
     let mut out = Vec::new();
     {
-        let mut enc = png::Encoder::new(&mut out, image.width, image.height);
+        let mut enc = png::Encoder::new(&mut out, image.width(), image.height());
         enc.set_color(png::ColorType::Rgba);
         enc.set_depth(png::BitDepth::Eight);
         enc.set_compression(png::Compression::Fast);
         let mut w = enc.write_header().map_err(|e| e.to_string())?;
-        w.write_image_data(&image.rgba).map_err(|e| e.to_string())?;
+        w.write_image_data(image.rgba()).map_err(|e| e.to_string())?;
     }
     Ok(out)
 }
