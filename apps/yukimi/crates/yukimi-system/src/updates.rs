@@ -91,7 +91,7 @@ fn agent() -> ureq::Agent {
 
 /// A request's answer as text, with failures in words.
 fn get(url: &str, accept: &str) -> Result<String, String> {
-    let host = url.split('/').nth(2).unwrap_or(url).to_owned();
+    let host = yukimi_config::url::host(url).unwrap_or_else(|| url.to_owned());
     let response = agent().get(url).header("Accept", accept).call().map_err(|e| match e {
         ureq::Error::StatusCode(403 | 429) if host == "api.github.com" => {
             "GitHub's limit of 60 checks an hour was reached".to_owned()
@@ -115,7 +115,9 @@ pub fn revision_lock(source: &Locked) -> Result<String, String> {
     if !rev.bytes().all(|b| b.is_ascii_hexdigit()) || rev.len() != 40 {
         return Err("This source has no full commit ID.".into());
     }
-    get(&format!("https://raw.githubusercontent.com/{owner}/{repo}/{rev}/flake.lock"), "text/plain")
+    let url = yukimi_config::url::https("raw.githubusercontent.com", &[&owner, &repo, rev, "flake.lock"], &[])
+        .ok_or("Invalid repository address")?;
+    get(&url, "text/plain")
 }
 
 /// Parse an RFC 3339 time in UTC (`2026-10-08T08:01:05Z`, with or without
@@ -140,7 +142,8 @@ pub fn parse_time(text: &str) -> Option<i64> {
 
 /// The commit a GitHub branch or tag is at, and when it was made.
 fn github(owner: &str, repo: &str, reference: &str) -> Result<Release, String> {
-    let url = format!("https://api.github.com/repos/{owner}/{repo}/commits/{reference}");
+    let url = yukimi_config::url::https("api.github.com", &["repos", owner, repo, "commits", reference], &[])
+        .ok_or("Invalid repository address")?;
     let body: serde_json::Value =
         serde_json::from_str(&get(&url, "application/vnd.github+json")?).map_err(|e| e.to_string())?;
     let rev = body["sha"].as_str().ok_or("GitHub's answer had no commit")?.to_owned();
@@ -150,7 +153,8 @@ fn github(owner: &str, repo: &str, reference: &str) -> Result<Release, String> {
 
 /// The branches of a GitHub repository, for choosing one to follow.
 pub fn github_branches(owner: &str, repo: &str) -> Result<Vec<String>, String> {
-    let url = format!("https://api.github.com/repos/{owner}/{repo}/branches?per_page=100");
+    let url = yukimi_config::url::https("api.github.com", &["repos", owner, repo, "branches"], &[("per_page", "100")])
+        .ok_or("Invalid repository address")?;
     let body: serde_json::Value =
         serde_json::from_str(&get(&url, "application/vnd.github+json")?).map_err(|e| e.to_string())?;
     let mut names: Vec<String> =
@@ -161,10 +165,8 @@ pub fn github_branches(owner: &str, repo: &str) -> Result<Vec<String>, String> {
 
 /// FlakeHub's newest release matching a version (`0.1`, `*`).
 fn flakehub(latest_url: &str) -> Result<Release, String> {
-    let rest = latest_url.strip_prefix("https://api.flakehub.com/f/").ok_or("not a FlakeHub address")?;
-    let body: serde_json::Value =
-        serde_json::from_str(&get(&format!("https://api.flakehub.com/version/{rest}"), "application/json")?)
-            .map_err(|e| e.to_string())?;
+    let url = yukimi_config::lock::flakehub_version_url(latest_url).ok_or("not a FlakeHub address")?;
+    let body: serde_json::Value = serde_json::from_str(&get(&url, "application/json")?).map_err(|e| e.to_string())?;
     Ok(Release {
         rev: Some(body["revision"].as_str().ok_or("FlakeHub's answer had no revision")?.to_owned()),
         last_modified: body["published_at"].as_str().and_then(parse_time),
@@ -185,7 +187,7 @@ pub fn ask(input: &Input) -> Option<Result<Release, String>> {
         // branches.
         "github" | "git" if original.rev.is_none() => {
             let (owner, repo) = original.github_repo()?;
-            Some(github(owner, repo, original.reference.as_deref().unwrap_or("HEAD")))
+            Some(github(&owner, &repo, original.reference.as_deref().unwrap_or("HEAD")))
         }
         "tarball" | "file" => original.flakehub_latest_url().map(|url| flakehub(&url)),
         _ => None,
@@ -275,7 +277,7 @@ pub fn sekka_targets(flake: &str, inputs: &[Input], newest: &mut BTreeMap<String
     // Only the old tarball addresses can move to another branch during
     // prepare. Existing Git sources keep their URL and check_flake's answer.
     if original.kind != "github"
-        || original.github_repo() != Some(("bitemyapp", "sekka"))
+        || !original.github_repo().is_some_and(|(owner, repo)| owner == "bitemyapp" && repo == "sekka")
         || original.rev.is_some()
         || !matches!(original.reference.as_deref(), None | Some("main" | "nightly"))
     {

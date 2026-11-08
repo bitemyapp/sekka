@@ -4,15 +4,7 @@
 //! Malformed URIs and unsupported schemes are never rewritten.
 use std::collections::BTreeMap;
 
-use fluent_uri::{
-    Uri,
-    build::Builder,
-    component::Scheme,
-    pct_enc::{
-        EStr, EString,
-        encoder::{Data, Path, Query},
-    },
-};
+use fluent_uri::{Uri, build::Builder, component::Scheme, pct_enc::EStr};
 
 #[derive(Debug, PartialEq, Eq)]
 enum Source {
@@ -40,31 +32,55 @@ fn revision(value: &str) -> bool {
     value.len() == 40 && value.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
-fn path(segments: &[&str]) -> EString<Path> {
-    let mut path = EString::new();
-    for (i, segment) in segments.iter().enumerate() {
-        if i != 0 {
-            path.push('/');
-        }
-        path.encode_str::<Data>(segment);
-    }
-    path
-}
-
-fn query(params: &BTreeMap<String, String>) -> EString<Query> {
-    let mut query = EString::new();
-    for (i, (key, value)) in params.iter().enumerate() {
-        if i != 0 {
-            query.push('&');
-        }
-        query.encode_str::<Data>(key);
-        query.push('=');
-        query.encode_str::<Data>(value);
-    }
-    query
-}
+use crate::url::{path, query};
 
 impl FlakeUrl {
+    /// A displayable source address from the lock's typed metadata. Commit
+    /// pins remain separate metadata; callers must not parse this label back
+    /// to discover the branch or repository.
+    pub fn source(locked: &crate::lock::Locked) -> Option<Self> {
+        let uri = match locked.kind.as_str() {
+            "github" | "gitlab" | "sourcehut" => Uri::builder()
+                .scheme(Scheme::new(&locked.kind)?)
+                .path(&path(&[locked.owner.as_deref()?, locked.repo.as_deref()?]))
+                .build()
+                .ok()?,
+            "git" => {
+                let transport = Uri::parse(locked.url.as_deref()?).ok()?;
+                if transport.fragment().is_some() {
+                    return None;
+                }
+                let scheme = match transport.scheme().as_str() {
+                    "git" => "git".to_owned(),
+                    "http" | "https" | "ssh" | "file" => format!("git+{}", transport.scheme()),
+                    _ => return None,
+                };
+                Uri::builder()
+                    .scheme(Scheme::new(&scheme)?)
+                    .optional(Builder::authority, transport.authority())
+                    .path(transport.path())
+                    .optional(Builder::query, transport.query())
+                    .build()
+                    .ok()?
+            }
+            _ => return None,
+        };
+        let mut parsed = Self::parse(uri.as_str())?;
+        parsed.reference = locked.reference.clone();
+        parsed.revision = None;
+        if matches!(parsed.source, Source::Forge { .. }) {
+            parsed.ref_location = if locked.reference.as_deref().is_some_and(|r| r.contains('/') || revision(r)) {
+                RefLocation::Query
+            } else {
+                RefLocation::Path
+            };
+            if let Some(host) = &locked.host {
+                parsed.options.insert("host".into(), host.clone());
+            }
+        }
+        Some(parsed)
+    }
+
     pub fn parse(value: &str) -> Option<Self> {
         let uri = Uri::parse(value).ok()?.to_owned();
         // Fragments select a flake output, not an input source.
@@ -312,6 +328,41 @@ mod tests {
             pairs.push((url.to_string(), parsed.render().unwrap()));
             let changed = parsed.with_branch("feature/new").unwrap();
             pairs.push((changed.clone(), FlakeUrl::parse(&changed).unwrap().render().unwrap()));
+        }
+        // Lock metadata reaches the same builder without reconstructing a
+        // URL by concatenating its transport, query and reference strings.
+        for (before, source) in [
+            (
+                "git+https://example.org/r?token=a%2Bb%26c&ref=feature%2Fx%2By",
+                crate::lock::Locked {
+                    kind: "git".into(),
+                    url: Some("https://example.org/r?token=a%2Bb%26c".into()),
+                    reference: Some("feature/x+y".into()),
+                    ..Default::default()
+                },
+            ),
+            (
+                "git://example.org/r?ref=main",
+                crate::lock::Locked {
+                    kind: "git".into(),
+                    url: Some("git://example.org/r".into()),
+                    reference: Some("main".into()),
+                    ..Default::default()
+                },
+            ),
+            (
+                "github:o/r?ref=2111c84ac0b4555518b9482ec436f813d26905ef&host=git.example.org",
+                crate::lock::Locked {
+                    kind: "github".into(),
+                    owner: Some("o".into()),
+                    repo: Some("r".into()),
+                    reference: Some(SHA.into()),
+                    host: Some("git.example.org".into()),
+                    ..Default::default()
+                },
+            ),
+        ] {
+            pairs.push((before.into(), source.describe()));
         }
         let strings = pairs
             .iter()

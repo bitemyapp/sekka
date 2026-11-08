@@ -120,6 +120,7 @@ pub fn incoming(
             s("sound-file").map(|p| NoteSound::File(path_of(&p))).or_else(|| s("sound-name").map(NoteSound::Named))
         },
         pid,
+        kind: super::store::NotificationKind::Application,
     }
 }
 

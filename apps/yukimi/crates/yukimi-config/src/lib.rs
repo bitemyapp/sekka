@@ -19,6 +19,7 @@ mod flake_url;
 pub mod lock;
 pub mod packages;
 pub mod sekka;
+pub mod url;
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum Error {
