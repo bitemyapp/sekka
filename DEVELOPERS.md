@@ -1149,6 +1149,14 @@ once with the rest of the change, so choosing
 Aizome's login screen is a click and a password, with the same switch-or-boot
 planning and Restart button as an update. A changed login screen always stages
 for the next start.
+`calamares.autoLogin` defaults to `null`, preserving an existing
+`services.displayManager.autoLogin` configuration. Its choice reports the
+effective display-manager setting. Selecting a person or no one explicitly
+overrides ordinary definitions of that setting (priority 90), including
+disabling an existing automatic login; `mkForce` policy still wins. On
+standalone Aizome, Settei queries the active greetd service through systemd
+and reads the configuration named by its `ExecStart` arguments, including
+NixOS's store path. It shows that setting as controlled by the configuration.
 `sekka-update --boot` explicitly
 stages the update; `--switch` requests live activation but refuses an unsafe
 transition before committing configuration edits. A target-side NixOS

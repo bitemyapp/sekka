@@ -25,6 +25,28 @@ let
     }).config;
   nobody = installed { };
   kara = installed { calamares.autoLogin = "kara"; };
+  existing = {
+    services.displayManager.autoLogin = {
+      enable = true;
+      user = "adama";
+    };
+  };
+  inherited = installed existing;
+  turnedOff = installed {
+    imports = [ existing ];
+    calamares.autoLogin = "";
+  };
+  changed = installed {
+    imports = [ existing ];
+    calamares.autoLogin = "kara";
+  };
+  forced = installed {
+    calamares.autoLogin = "kara";
+    services.displayManager.autoLogin = {
+      enable = lib.mkForce false;
+      user = lib.mkForce null;
+    };
+  };
   gnome = installed {
     calamares.desktops = lib.mkForce [
       "aizome"
@@ -52,18 +74,36 @@ in
 # Offered either way, as a person's name or empty for no one.
 assert offered "" nobody;
 assert offered "kara" kara;
+assert offered "adama" inherited;
+assert inherited.services.greetd.settings.initial_session.user == "adama";
+assert offered "" turnedOff;
+assert !turnedOff.services.displayManager.autoLogin.enable;
+assert !(turnedOff.services.greetd.settings ? initial_session);
+assert offered "kara" changed;
+assert changed.services.greetd.settings.initial_session.user == "kara";
+# The displayed value is the effective setting, including forced policy.
+assert offered "" forced;
+assert !forced.services.displayManager.autoLogin.enable;
 assert !nobody.services.displayManager.autoLogin.enable;
-assert kara.services.displayManager.autoLogin.enable && kara.services.displayManager.autoLogin.user == "kara";
+assert
+  kara.services.displayManager.autoLogin.enable
+  && kara.services.displayManager.autoLogin.user == "kara";
 # Aizome's login screen starts that person's session through greetd at boot.
 assert !(nobody.services.greetd.settings ? initial_session);
 assert kara.services.greetd.settings.initial_session.user == "kara";
-assert lib.hasInfix "aizome-greeter --session" kara.services.greetd.settings.initial_session.command;
+assert lib.hasInfix "aizome-greeter --session"
+  kara.services.greetd.settings.initial_session.command;
 # GDM gets it from the same option.
-assert gnome.services.displayManager.gdm.enable && gnome.services.displayManager.autoLogin.user == "kara";
+assert
+  gnome.services.displayManager.gdm.enable && gnome.services.displayManager.autoLogin.user == "kara";
 assert builtins.all (c: c.system.build.toplevel.drvPath != "" && c.system.build.etc.drvPath != "") [
   nobody
   kara
   gnome
+  inherited
+  turnedOff
+  changed
+  forced
 ];
 pkgs.writeText "auto-login-choice.json" (
   builtins.toJSON {

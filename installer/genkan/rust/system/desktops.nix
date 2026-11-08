@@ -8,6 +8,7 @@
 }:
 let
   cfg = config.calamares;
+  autoLogin = config.services.displayManager.autoLogin;
   # Login session name for each installer choice.
   sessions = {
     aizome = "aizome";
@@ -230,13 +231,16 @@ in
       '';
     };
     autoLogin = lib.mkOption {
-      type = lib.types.str;
-      default = "";
+      type = lib.types.nullOr lib.types.str;
+      default = null;
       example = "alice";
       description = ''
         The account the computer logs in to by itself at boot, without a
         password, on whichever login screen; empty for none. Settei's Users
         & Groups sets it through Yukimi, which takes anyone with an account.
+        Null preserves services.displayManager.autoLogin. An explicit choice
+        takes precedence over ordinary definitions of that setting; forced
+        system policy still takes precedence over this choice.
       '';
     };
   };
@@ -327,7 +331,7 @@ in
           setting = "calamares.autoLogin";
           title = "Log in automatically";
           people = true;
-          value = cfg.autoLogin;
+          value = if autoLogin.enable && autoLogin.user != null then autoLogin.user else "";
           options = [ ];
         }
       ];
@@ -405,9 +409,12 @@ in
     services.displayManager.defaultSession = sessions.${defaultDesktop};
     # Whichever login screen, it starts that person's default session at
     # boot without asking (Aizome's through greetd's initial session).
-    services.displayManager.autoLogin = lib.mkIf (cfg.autoLogin != "") {
-      enable = true;
-      user = cfg.autoLogin;
+    # Preserve existing NixOS settings until Yukimi makes an explicit choice.
+    # That choice supersedes ordinary definitions, including when turning it
+    # off, while respecting settings deliberately forced by system policy.
+    services.displayManager.autoLogin = lib.mkIf (cfg.autoLogin != null) {
+      enable = lib.mkOverride 90 (cfg.autoLogin != "");
+      user = lib.mkOverride 90 (if cfg.autoLogin == "" then null else cfg.autoLogin);
     };
     services.desktopManager.plasma6.enable = has "plasma";
     services.desktopManager.gnome.enable = has "gnome";

@@ -130,7 +130,8 @@ palette. Search filters the sidebar and highlights options.
   which every login screen it offers reads: Settei proposes it in Yukimi
   (`aizome-yukimi --choose calamares.autoLogin=NAME`, or empty for no one),
   and it applies from the next start. Elsewhere it is AccountsService's
-  flag (GDM's); under greetd it says what `[initial_session]` has.
+  flag (GDM's); under greetd it reads `[initial_session]` from the active
+  service's configuration, including NixOS's store path.
 - **Keyboard**: layouts (searchable list from `aizome-sys`'s xkb data, with
   variants), switching shortcut, key repeat delay and rate, modifier keys
   (swap Alt/Super, Control/Super or Control/Alt on both sides or just one),

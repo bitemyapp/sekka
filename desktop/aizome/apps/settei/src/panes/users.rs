@@ -40,29 +40,19 @@ pub enum AutoLogin {
 
 /// How this computer logs in by itself.
 pub fn auto_login() -> AutoLogin {
-    match choices::read(AUTO_LOGIN) {
-        Some(now) => AutoLogin::Choice(now),
-        None if std::path::Path::new("/etc/greetd").exists() => AutoLogin::Configuration(
-            std::fs::read_to_string("/etc/greetd/config.toml").ok().and_then(|t| greetd_initial_user(&t)),
-        ),
-        None => AutoLogin::Accounts,
+    if let Some(now) = choices::read(AUTO_LOGIN) {
+        return AutoLogin::Choice(now);
     }
+    let config = aizome_sys::Bus::system().and_then(|bus| aizome_sys::users::greetd_config(&bus)).ok().flatten();
+    config.map_or(AutoLogin::Accounts, |path| {
+        AutoLogin::Configuration(std::fs::read_to_string(path).ok().and_then(|t| greetd_initial_user(&t)))
+    })
 }
 
 /// The user of greetd's initial session (`[initial_session]`, `user = "…"`).
 pub fn greetd_initial_user(config: &str) -> Option<String> {
-    let mut section = "";
-    for line in config.lines().map(str::trim) {
-        if line.starts_with('[') {
-            section = line;
-        } else if section == "[initial_session]"
-            && let Some((key, value)) = line.split_once('=')
-            && key.trim() == "user"
-        {
-            return Some(value.trim().trim_matches('"').to_owned()).filter(|v| !v.is_empty());
-        }
-    }
-    None
+    let config: toml::Table = toml::from_str(config).ok()?;
+    config.get("initial_session")?.get("user")?.as_str().filter(|v| !v.is_empty()).map(str::to_owned)
 }
 
 /// Who may be chosen to log in by themselves, by account and as shown:
@@ -757,6 +747,12 @@ mod tests {
                       [initial_session]\ncommand = \"aizome-greeter --session aizome\"\nuser = \"adama\"\n";
         assert_eq!(greetd_initial_user(config).as_deref(), Some("adama"));
         assert_eq!(greetd_initial_user("[default_session]\nuser = \"greeter\"\n"), None);
+        assert_eq!(
+            greetd_initial_user("[initial_session] # at boot\nuser = 'kara' # account\n").as_deref(),
+            Some("kara")
+        );
+        assert_eq!(greetd_initial_user("initial_session = { user = \"kara\" }\n").as_deref(), Some("kara"));
+        assert_eq!(greetd_initial_user("[initial_session]\nuser = 1000\n"), None);
     }
 
     #[test]
