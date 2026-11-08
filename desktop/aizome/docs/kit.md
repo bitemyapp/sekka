@@ -95,7 +95,7 @@ What `launched` and `update` act with:
 | `element_rect(window, name)` | Where the element given `.id(name)` is in a window, as last laid out (to put something by it without a press: the shell's panels asked for over its socket). |
 | `theme() -> &Theme`, `quit()` | |
 | `show_context_menu(window, at, Menu)` | A menu at a point. |
-| `show_menu(window, anchor_rect, Menu, MenuStyle)` | A menu anchored to any rectangle of any window (the shell's bar menus). |
+| `show_menu(window, anchor_rect, Menu, MenuStyle)` | A menu anchored to any rectangle of any window (the shell's bar menus). One menu is open at a time: one opening closes another, and a press outside it closes it, in whichever of the app's windows it lands (the compositor closes menus for a press in another app only). |
 | `show_sheet(parent) -> WindowKey` | A sheet over a window: its content is `view(key)`; close it with `close_window`. |
 | `alert(window, Alert)` | Title, message, buttons; Return and Escape press the default and cancel ones. |
 | `open_panel(window, FileDialog, \|paths\| msg)`, `save_panel(…)` | File panels. |

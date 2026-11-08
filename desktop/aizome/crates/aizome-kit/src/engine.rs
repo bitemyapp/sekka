@@ -1175,13 +1175,40 @@ impl Core {
         self.close_popup(win, platform);
     }
 
+    fn is_menu(&self, win: WinId) -> bool {
+        matches!(self.wins.get(&win).map(|w| &w.kind), Some(WinKind::Popup { kind: PopupKind::Menu { .. }, .. }))
+    }
+
+    /// The window `win`'s menus hang from: itself, or the first window
+    /// under it that isn't a menu.
+    fn menu_owner(&self, mut win: WinId) -> WinId {
+        while let Some(WinKind::Popup { owner, kind: PopupKind::Menu { .. } }) = self.wins.get(&win).map(|w| &w.kind) {
+            win = *owner;
+        }
+        win
+    }
+
+    /// The menus open over the app's windows other than the one `win`'s
+    /// menus hang from. The compositor closes menus for a press in another
+    /// app, but leaves one in another window of this app to it (the Shell
+    /// opens the desktop's menu over the bar): a press there closes them,
+    /// and so does a menu opening there, as in another app (#207).
+    fn menus_elsewhere(&self, win: WinId) -> Vec<WinId> {
+        let top = self.menu_owner(win);
+        self.wins
+            .iter()
+            .filter_map(|(&id, w)| match &w.kind {
+                WinKind::Popup { owner, kind: PopupKind::Menu { .. } } if *owner != top && !self.is_menu(*owner) => {
+                    Some(id)
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
     /// The menus open from `win` (and over them) close.
     fn close_menus(&mut self, win: WinId, platform: &mut dyn Platform) {
-        // Up to the first window that isn't a menu.
-        let mut top = win;
-        while let Some(WinKind::Popup { owner, kind: PopupKind::Menu { .. } }) = self.wins.get(&top).map(|w| &w.kind) {
-            top = *owner;
-        }
+        let top = self.menu_owner(win);
         let menus: Vec<WinId> = self
             .wins
             .get(&top)
@@ -1236,6 +1263,9 @@ impl Core {
         platform: &mut dyn Platform,
     ) -> WinId {
         self.close_menus(win, platform);
+        for m in self.menus_elsewhere(win) {
+            self.close_win(m, platform);
+        }
         self.settle_menu(&mut spec);
         let root = MenuView::element(spec.clone(), look.clone());
         let keyboard = look.keyboard;
@@ -1275,6 +1305,9 @@ impl Core {
     /// Open the in-window menu bar's menu `index`.
     pub fn open_bar_menu(&mut self, win: WinId, index: usize, anchor: Rect, platform: &mut dyn Platform) {
         self.close_menus(win, platform);
+        for m in self.menus_elsewhere(win) {
+            self.close_win(m, platform);
+        }
         let Some(mut spec) = self.menubar.get(index).cloned() else { return };
         self.settle_app_menu(&mut spec, Some(win));
         let root = MenuView::element(spec.clone(), MenuLook::default());
@@ -2144,18 +2177,12 @@ impl Core {
         }
         let mods = self.mods;
         if pressed {
-            // A press in a window closes the menus over it (outside them).
-            let menus: Vec<WinId> = self.wins[&win]
-                .popups
-                .iter()
-                .copied()
-                .filter(|p| {
-                    matches!(
-                        self.wins.get(p).map(|w| &w.kind),
-                        Some(WinKind::Popup { kind: PopupKind::Menu { .. }, .. })
-                    )
-                })
-                .collect();
+            // A press in a window closes the menus over it (outside them),
+            // and, outside a menu, those over the app's other windows.
+            let mut menus = self.menu_popups_of(win);
+            if !self.is_menu(win) {
+                menus.extend(self.menus_elsewhere(win));
+            }
             for m in menus {
                 self.close_win(m, platform);
             }
