@@ -66,6 +66,10 @@ if name == 'nix':
     elif 'path-info' in a:
         assert '--derivation' in a and '--no-update-lock-file' in a, a
         assert any(x.startswith('path:/nix/store/00000000000000000000000000000000-config#') for x in a), a
+        if p('/state/require-evaluation-cache').exists():
+            caches = json.loads(p('/state/caches.json').read_text())
+            assert a[a.index('extra-substituters') + 1].split() == caches['substituters'], a
+            assert a[a.index('extra-trusted-public-keys') + 1].split() == caches['keys'], a
         p('/state/evaluating').touch()
         if p('/state/fail-evaluation').exists(): sys.exit(1)
         if p('/state/wait-evaluation').exists(): time.sleep(60)
@@ -73,16 +77,26 @@ if name == 'nix':
     elif 'eval' in a and any(x.endswith('.config.nix.settings') for x in a): print(p('/state/caches.json').read_text())
     elif 'eval' in a: print('["legacy-host"]')
     elif 'build' in a:
-        assert '/nix/store/00000000000000000000000000000000-system.drv^out' in a, a
-        assert not any('#nixosConfigurations' in x for x in a), a
+        if '/nix/store/00000000000000000000000000000000-system.drv' in a:
+            p(a[a.index('--out-link') + 1]).symlink_to(a[-1])
+            sys.exit(0)
+        assert '--json' in a and '--no-update-lock-file' in a, a
+        assert 'path:/nix/store/00000000000000000000000000000000-config#nixosConfigurations."legacy-host".config.system.build.toplevel' in a, a
+        operation = sorted(p('/var/lib/yukimi/operations').glob('*'))[-1]
+        assert str((operation / 'evaluation-root').readlink()) == '/nix/store/00000000000000000000000000000000-config'
+        assert str((operation / 'derivation-root').readlink()) == '/nix/store/00000000000000000000000000000000-system.drv'
+        changed = p('/state/change-after-evaluation' if '--dry-run' in a else '/state/change-after-planning').exists()
+        result = [{'drvPath': '/nix/store/00000000000000000000000000000000-' + ('changed' if changed else 'system') + '.drv',
+                   'outputs': {'out': '/system-new'}}]
         if '--dry-run' in a:
             p('/state/planned').touch()
+            print(json.dumps(result))
             sys.exit(0)
         p('/state/building').touch()
         if p('/state/fail').exists(): sys.exit(1)
         if p('/state/wait').exists(): time.sleep(60)
         p(a[a.index('--out-link') + 1]).symlink_to('/system-new')
-        print('/system-new')
+        print(json.dumps(result))
     else: sys.exit(2)
 elif name == 'nix-store':
     assert '--add-root' in a and '--indirect' in a and '--realise' in a, a
@@ -238,13 +252,30 @@ class Update(unittest.TestCase):
         self.assertIn('eval-cores', evaluation)
         self.assertEqual(evaluation[evaluation.index('eval-cores') + 1], '8')
         self.assertEqual(sum('path-info' in c for c in commands), 1)
-        self.assertEqual(sum('build' in c and '--dry-run' not in c for c in commands), 1)
+        self.assertEqual(sum('build' in c and '--json' in c and '--dry-run' not in c for c in commands), 1)
         log = next((self.root / 'var/lib/yukimi/operations').glob('*/progress.log')).read_text()
         for phase in ['Preparing the configuration for evaluation', 'Evaluating your configuration',
                       'Checking for cached packages', 'Downloading and building your system',
                       'Setting it up for the next start']:
             self.assertIn(f'Yukimi phase: {phase}; elapsed_ms=', log)
         self.assertFalse(list((self.root / 'var/lib/yukimi/operations').glob('*/*-root')))
+
+    def test_evaluation_can_use_the_new_systems_cache_for_import_from_derivation(self):
+        (self.root / 'state/require-evaluation-cache').touch()
+        self.run_cmd('/bin/sekka-update', '--boot')
+        self.assertTrue((self.root / 'state/activation').exists())
+
+    def test_changed_derivation_is_never_activated(self):
+        for phase in ['evaluation', 'planning']:
+            with self.subTest(phase=phase):
+                changed = self.root / f'state/change-after-{phase}'
+                changed.touch()
+                result = self.run_cmd('/bin/sekka-update', ok=False)
+                changed.unlink()
+                self.assertIn('configuration changed after evaluation', result.stdout + result.stderr)
+                self.unchanged()
+                self.assertFalse((self.root / 'state/activation').exists())
+                self.assertFalse(list((self.root / 'var/lib/yukimi/operations').glob('*/*-root')))
 
     def test_activation_failure_reports_configuration_kept(self):
         (self.root / 'state/fail-activation').touch()
@@ -324,7 +355,7 @@ class Update(unittest.TestCase):
         result = self.run_cmd('/bin/yukimi-helper', 'change', '--sekka', '--update', 'sekka,nixpkgs,applications', '--mode', 'auto')
         self.assertEqual(json.loads(result.stdout)['completion']['action'], 'none')
         commands = [json.loads(line) for line in (self.root / 'state/commands').read_text().splitlines()]
-        self.assertEqual(sum(command[0] == 'nix' and 'build' in command and '--dry-run' not in command for command in commands), 1)
+        self.assertEqual(sum(command[0] == 'nix' and 'build' in command and '--json' in command and '--dry-run' not in command for command in commands), 1)
         self.assertEqual(sum(command[0] == 'systemd-run' for command in commands), 1)
 
     def test_sekka_brings_what_it_pins_and_the_new_systems_caches(self):
@@ -337,7 +368,7 @@ class Update(unittest.TestCase):
         commands = [json.loads(line) for line in (self.root / 'state/commands').read_text().splitlines()]
         update = next(command for command in commands if command[0] == 'nix' and 'update' in command)
         self.assertEqual(update[-1], 'sekka')
-        build = next(command for command in commands if command[0] == 'nix' and 'build' in command)
+        build = next(command for command in commands if command[0] == 'nix' and 'build' in command and '--json' in command)
         option = lambda name: build[build.index(name) + 1]
         self.assertEqual(option('extra-substituters').split(), CACHES['substituters'])
         self.assertEqual(option('extra-trusted-public-keys').split(), CACHES['keys'])
@@ -385,7 +416,7 @@ class Update(unittest.TestCase):
         self.assertEqual((self.config / 'flake.lock').read_text(), ORIGINAL)
         self.assertEqual((self.config / 'flake.nix').read_text(), self.old)
         commands = [json.loads(line) for line in (self.root / 'state/commands').read_text().splitlines()]
-        self.assertEqual(sum(command[0] == 'nix' and 'build' in command and '--dry-run' not in command for command in commands), 1)
+        self.assertEqual(sum(command[0] == 'nix' and 'build' in command and '--json' in command and '--dry-run' not in command for command in commands), 1)
         self.assertFalse(any(command[0] == 'nix' and 'update' in command for command in commands))
 
         # The CLI takes the same choice, replacing rather than duplicating it.
@@ -426,7 +457,7 @@ class Update(unittest.TestCase):
         self.assertIn('"aizome"', configuration.split('calamares.desktops', 1)[1].split(';', 1)[0])
         self.assertIn('./hardware-configuration.nix', configuration)
         commands = [json.loads(line) for line in (self.root / 'state/commands').read_text().splitlines()]
-        self.assertEqual(sum(command[0] == 'nix' and 'build' in command and '--dry-run' not in command for command in commands), 1)
+        self.assertEqual(sum(command[0] == 'nix' and 'build' in command and '--json' in command and '--dry-run' not in command for command in commands), 1)
         # Early updates stay chosen, and --nightly goes back.
         self.run_cmd('/bin/sekka-update')
         self.assertIn('"github:bitemyapp/sekka?ref=main"', (self.config / 'flake.nix').read_text())

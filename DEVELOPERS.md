@@ -1114,8 +1114,11 @@ immutable reference for host selection, cache settings and system evaluation;
 unchanged retries can reuse Nix's persistent evaluation cache. Git flakes keep
 their original reference (and revision/subdirectory metadata), as do flakes
 with local path inputs, whose resolution must remain relative to the original
-configuration. Evaluation uses `nix path-info --derivation`, then cache planning
-and building use that exact `.drv^out`, without evaluating the system again.
+configuration. Evaluation uses `nix path-info --derivation`, including the new
+system's binary caches for import-from-derivation. Cache planning and building
+use the same flake reference so Nix applies its accepted `nixConfig` settings
+on each command and reuses the persistent derivation cache. Both commands check
+that the selected derivation still matches the evaluated one before activation.
 Operation-local GC roots protect the source, derivation and result until
 activation completes; success, failure and cancellation release them.
 
@@ -1269,7 +1272,10 @@ flake to check actual module and dependency compatibility before deployment.
 real Nix in a disposable VM. A traced, inputless cached system checks evaluation-cache
 reuse on an unchanged retry and invalidation after source edits, distinct phase
 timings, and GC-root cleanup. Activation writes only a fixture marker. This is
-a component test; it does not qualify fresh compilation, an ISO or hardware. The namespace tests also
+a component test; it does not qualify fresh compilation, an ISO or hardware.
+Signed-cache fixtures also require substitution during import-from-derivation
+and through accepted flake `nixConfig`, with local compilation disabled, and
+verify that unaccepted flake settings remain untrusted. The namespace tests also
 cover snapshot/evaluation failure and cancellation before building.
 
 Standalone users can import `sekka.nixosModules.tatami` with `programs.tatami.enable = true`, or `sekka.nixosModules.yukimi` with `programs.yukimi.enable = true`, without enabling the whole distro. Set `inputs.sekka.inputs.nixpkgs.follows = "nixpkgs"` in the consuming flake.

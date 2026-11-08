@@ -433,38 +433,63 @@ fn valid_user(name: &str) -> bool {
 fn build_flake(context: &evaluation::Context, flake: &str, host: &str) -> Result<String> {
     let system = format!("{flake}#nixosConfigurations.\"{host}\"");
     let caches = during(12, "Reading the configured binary caches", || Ok(caches(context, &system)))?;
+    let configured_nix = || {
+        let mut command = context.nix();
+        if let Some((substituters, keys)) = &caches {
+            command.args(["--option", "extra-substituters", &substituters.join(" ")]);
+            command.args(["--option", "extra-trusted-public-keys", &keys.join(" ")]);
+        }
+        command
+    };
+    let installable = format!("{system}.config.system.build.toplevel");
     let derivation = during(13, "Evaluating your configuration", || {
-        let mut eval = context.nix();
+        // Import-from-derivation needs the new system's caches here too.
+        let mut eval = configured_nix();
         // Unlike `nix eval ...drvPath`, this uses Nix's persistent derivation
         // cache. Realizing the system happens in the following stages;
         // a custom configuration may still do import-from-derivation here.
         eval.args(["path-info", "--derivation", "--no-update-lock-file", "--log-format", "internal-json", "-v"]);
-        eval.arg(format!("{system}.config.system.build.toplevel"));
+        eval.arg(&installable);
         let path = output(eval, "Evaluating your configuration")?.trim().to_owned();
         context.keep_derivation(&path)?;
         Ok(path)
     })?;
     let build_command = || {
-        let mut build = nix();
-        build.args(["build", "--log-format", "internal-json", "-v", "--print-out-paths"]);
-        if let Some((substituters, keys)) = &caches {
-            build.args(["--option", "extra-substituters", &substituters.join(" ")]);
-            build.args(["--option", "extra-trusted-public-keys", &keys.join(" ")]);
-        }
-        // Build exactly the evaluated derivation, without evaluating again.
-        build.arg(format!("{derivation}^out"));
+        let mut build = configured_nix();
+        build.args(["build", "--no-update-lock-file", "--log-format", "internal-json", "-v", "--json"]);
+        // Nix must read the flake to apply its accepted nixConfig settings.
+        // The immutable reference reuses the persistent derivation cache.
+        // Check the selected derivation as mutable Git/local-input flakes
+        // retain their original references and could have changed meanwhile.
+        build.arg(&installable);
         build
     };
     during(14, "Checking for cached packages", || {
         let mut plan = build_command();
         plan.args(["--dry-run", "--no-link"]);
-        output(plan, "Checking for cached packages").map(|_| ())
+        system_build(&output(plan, "Checking for cached packages")?, &derivation).map(|_| ())
     })?;
     during(15, "Downloading and building your system", || {
         let mut build = build_command();
         build.arg("--out-link").arg(context.result_root());
-        Ok(output(build, "Building the new system")?.trim().to_owned())
+        let built = system_build(&output(build, "Building the new system")?, &derivation)?;
+        built["outputs"]["out"]
+            .as_str()
+            .map(str::to_owned)
+            .ok_or_else(|| Failure("Nix did not return the system output".into()))
     })
+}
+
+fn system_build(json: &str, derivation: &str) -> Result<serde_json::Value> {
+    let mut builds: Vec<serde_json::Value> = serde_json::from_str(json)?;
+    if builds.len() != 1 {
+        return Err(Failure("Nix did not return one system build".into()));
+    }
+    let build = builds.remove(0);
+    if build["drvPath"].as_str() != Some(derivation) {
+        return Err(Failure("The configuration changed after evaluation; retry the update".into()));
+    }
+    Ok(build)
 }
 
 /// The free space, in bytes, of the filesystem holding `path`.

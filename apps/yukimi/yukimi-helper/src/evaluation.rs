@@ -47,8 +47,8 @@ impl Context {
         if !store_path(source) {
             return Err(Failure("Nix returned an invalid configuration snapshot".into()));
         }
-        // Register an indirect GC root for the snapshot. After evaluation,
-        // the same root protects its derivation until activation finishes.
+        // Keep the snapshot available for each command that reads nixConfig,
+        // even when the system derivation does not reference the source tree.
         let mut keep = command("nix-store");
         keep.arg("--add-root").arg(self.source_root()).args(["--indirect", "--realise", source]);
         output(keep, "Keeping the configuration snapshot")?;
@@ -59,10 +59,11 @@ impl Context {
         if !store_path(derivation) || !derivation.ends_with(".drv") {
             return Err(Failure("Nix did not return one system derivation".into()));
         }
-        let pending = self.directory.join("evaluation-root.new");
-        std::os::unix::fs::symlink(derivation, &pending)?;
-        std::fs::rename(pending, self.source_root())?;
-        Ok(())
+        // Without ^out, `nix build` roots the opaque .drv path itself; it
+        // does not build the system. Keep the source root separately.
+        let mut keep = nix();
+        keep.args(["build", "--out-link"]).arg(self.directory.join("derivation-root")).arg(derivation);
+        output(keep, "Keeping the system derivation").map(|_| ())
     }
 }
 
@@ -71,7 +72,7 @@ impl Drop for Context {
         // A crash leaves roots only for the existing operation-log retention
         // period. Normal success, failure and cancellation release them here,
         // after the profile/activation has taken ownership of the new system.
-        for name in ["evaluation-root", "evaluation-root.new", "system-root"] {
+        for name in ["evaluation-root", "derivation-root", "system-root"] {
             let _ = std::fs::remove_file(self.directory.join(name));
         }
     }
