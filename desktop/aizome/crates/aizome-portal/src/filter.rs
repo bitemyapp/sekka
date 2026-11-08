@@ -5,7 +5,7 @@
 //! (`text/plain` takes Markdown and Rust). Folders always show: they're
 //! the way to the files.
 
-use hako::model::mime::MimeDb;
+use aizome_mime::MimeDb;
 
 use crate::request::{Filter, Rule};
 
@@ -36,101 +36,10 @@ impl Filter {
 /// its subclasses, any type of a family (`image/*`), or anything (`*`,
 /// `*/*`).
 pub fn mime_matches(db: &MimeDb, rule: &str, mime: &str) -> bool {
-    let rule = rule.trim().to_ascii_lowercase();
-    if rule == "*" || rule == "*/*" {
-        return true;
-    }
-    if let Some(family) = rule.strip_suffix("/*") {
-        return mime.split('/').next() == Some(family);
-    }
-    db.is_a(mime, &rule) || &*db.canonical(&rule) == mime
+    db.matches(rule, mime)
 }
 
-/// Whether `name` matches the shell pattern `pattern` (`*`, `?`, and
-/// `[…]` classes with ranges and `!` or `^` negation), ignoring case.
-pub fn glob(pattern: &str, name: &str) -> bool {
-    let p: Vec<char> = pattern.to_lowercase().chars().collect();
-    let n: Vec<char> = name.to_lowercase().chars().collect();
-    let (mut pi, mut ni) = (0, 0);
-    // Where the last `*` was, and where in the name it was tried.
-    let mut star: Option<(usize, usize)> = None;
-    while ni < n.len() {
-        if pi < p.len() {
-            match p[pi] {
-                '*' => {
-                    star = Some((pi, ni));
-                    pi += 1;
-                    continue;
-                }
-                '?' => {
-                    pi += 1;
-                    ni += 1;
-                    continue;
-                }
-                '[' => {
-                    if let Some((hit, end)) = class(&p, pi, n[ni])
-                        && hit
-                    {
-                        pi = end;
-                        ni += 1;
-                        continue;
-                    } else if class(&p, pi, n[ni]).is_none() && n[ni] == '[' {
-                        // An unclosed `[` is itself.
-                        pi += 1;
-                        ni += 1;
-                        continue;
-                    }
-                }
-                c if c == n[ni] => {
-                    pi += 1;
-                    ni += 1;
-                    continue;
-                }
-                _ => {}
-            }
-        }
-        // A mismatch: let the last `*` take one more character.
-        match star {
-            Some((sp, sn)) => {
-                pi = sp + 1;
-                ni = sn + 1;
-                star = Some((sp, sn + 1));
-            }
-            None => return false,
-        }
-    }
-    p[pi..].iter().all(|&c| c == '*')
-}
-
-/// The class starting at `p[at]` (a `[`): whether `c` is in it, and where
-/// the pattern goes on after it; `None` when it isn't closed.
-fn class(p: &[char], at: usize, c: char) -> Option<(bool, usize)> {
-    let mut i = at + 1;
-    let negated = matches!(p.get(i), Some('!' | '^'));
-    if negated {
-        i += 1;
-    }
-    let mut hit = false;
-    let mut first = true;
-    while i < p.len() {
-        if p[i] == ']' && !first {
-            return Some((hit != negated, i + 1));
-        }
-        first = false;
-        if p.get(i + 1) == Some(&'-') && p.get(i + 2).is_some_and(|&e| e != ']') {
-            if p[i] <= c && c <= p[i + 2] {
-                hit = true;
-            }
-            i += 3;
-        } else {
-            if p[i] == c {
-                hit = true;
-            }
-            i += 1;
-        }
-    }
-    None
-}
+pub use aizome_mime::glob_matches as glob;
 
 #[cfg(test)]
 mod tests {

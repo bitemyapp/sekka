@@ -118,9 +118,7 @@ impl Root {
     }
     #[zbus(property)]
     fn supported_mime_types(&self) -> Vec<String> {
-        ["video/mp4", "video/x-matroska", "video/webm", "audio/mpeg", "audio/flac", "audio/ogg", "audio/mp4"]
-            .map(String::from)
-            .to_vec()
+        crate::formats::desktop_entry().mime_types.clone()
     }
 }
 

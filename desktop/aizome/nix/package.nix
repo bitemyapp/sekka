@@ -36,6 +36,7 @@
   fontconfig,
   freetype,
   dbus,
+  shared-mime-info,
   libpulseaudio,
   libsecret,
   ffmpeg,
@@ -206,11 +207,15 @@ rustPlatform.buildRustPackage {
   # Hako's show-in-folder service answers on a private bus of its own.
   # Session, GPU and other D-Bus coverage remain in the component VMs.
   doCheck = true;
-  nativeCheckInputs = [ dbus ];
+  nativeCheckInputs = [
+    dbus
+    shared-mime-info
+  ];
   checkPhase = ''
     runHook preCheck
     export AIZOME_FONT_DIR=${fonts}
     export HOTARU_FONT_DIR=${hotaruFonts}
+    export XDG_DATA_DIRS=${shared-mime-info}/share
     # Tests run before postFixup adds the libraries opened with dlopen.
     export LD_LIBRARY_PATH=${lib.makeLibraryPath runtimeLibs}
     # The brand's Japanese glyphs use the same fallback as the desktops.
@@ -230,6 +235,7 @@ rustPlatform.buildRustPackage {
     # One run: dependencies built once for all three packages.
     cargo test --offline --target ${target} --profile release-lto -p aizome-sys -p aizome-shell -p aizome-hako \
       --lib --test file_manager
+    cargo test --offline --target ${target} --profile release-lto -p aizome-mime -p aizome-apps -p aizome-portal
     runHook postCheck
   '';
 

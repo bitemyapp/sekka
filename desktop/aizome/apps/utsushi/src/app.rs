@@ -670,13 +670,10 @@ pub fn display_name(path: &Path) -> String {
 }
 
 /// Whether a file looks like something Utsushi plays (for folders and
-/// drops: by its extension).
+/// drops: a name-only desktop MIME guess, without reading file contents).
 pub fn playable(path: &Path) -> bool {
-    const KINDS: &[&str] = &[
-        "mp4", "m4v", "mkv", "webm", "mov", "avi", "wmv", "mpg", "mpeg", "ts", "m2ts", "mts", "ogv", "flv", "3gp",
-        "mp3", "m4a", "aac", "flac", "ogg", "oga", "opus", "wav", "aiff", "aif", "wv", "ape", "wma", "mka", "alac",
-    ];
-    path.extension().and_then(|e| e.to_str()).is_some_and(|e| KINDS.contains(&e.to_ascii_lowercase().as_str()))
+    let mime = aizome_mime::MimeDb::get().for_file(path, false);
+    crate::formats::desktop_entry().supports_mime(&mime)
 }
 
 /// Paths to play from what was given: files as they are, folders' playable
@@ -1206,6 +1203,9 @@ mod tests {
     fn what_plays_is_known_by_its_name() {
         assert!(playable(Path::new("/a/B.MKV")));
         assert!(playable(Path::new("song.flac")));
+        for name in ["video.wmv", "song.wma", "audio.aiff", "video.3g2", "video.ogm"] {
+            assert!(playable(Path::new(name)), "{name}");
+        }
         assert!(!playable(Path::new("notes.txt")));
         assert!(!playable(Path::new("folder")));
     }

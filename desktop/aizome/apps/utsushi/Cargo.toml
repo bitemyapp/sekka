@@ -16,6 +16,8 @@ name = "aizome-utsushi"
 path = "src/main.rs"
 
 [dependencies]
+aizome-apps.workspace = true
+aizome-mime.workspace = true
 aizome-kit.workspace = true
 aizome-media = { path = "../../crates/aizome-media" }
 serde.workspace = true

@@ -22,6 +22,7 @@ default = ["gui"]
 gui = ["dep:aizome-kit", "dep:aizome-sys", "dep:aizome-ipc", "dep:aizome-search", "dep:aizome-config", "dep:sidestep-engine", "dep:zbus"]
 
 [dependencies]
+aizome-mime.workspace = true
 aizome-kit = { workspace = true, optional = true }
 aizome-sys = { workspace = true, optional = true }
 aizome-ipc = { workspace = true, optional = true }

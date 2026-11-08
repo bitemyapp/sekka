@@ -16,6 +16,7 @@ name = "aizome-sumi"
 path = "src/main.rs"
 
 [dependencies]
+aizome-mime.workspace = true
 aizome-kit.workspace = true
 serde.workspace = true
 serde_json.workspace = true

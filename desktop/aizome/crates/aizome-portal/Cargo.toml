@@ -12,6 +12,7 @@ name = "aizome-portal"
 path = "src/main.rs"
 
 [dependencies]
+aizome-mime.workspace = true
 aizome-kit.workspace = true
 aizome-ipc.workspace = true
 aizome-search.workspace = true

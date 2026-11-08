@@ -4,7 +4,7 @@
 
 pub mod entry;
 pub mod format;
-pub mod mime;
+pub use aizome_mime as mime;
 pub mod places;
 pub mod thumbs;
 pub mod uri;
