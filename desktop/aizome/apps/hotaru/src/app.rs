@@ -2123,9 +2123,15 @@ impl Program for Hotaru {
                 self.shape_pane(id, true);
             }
             Msg::Key(id, event) => {
+                // Typing replaces a selection. A modifier pressed on its own,
+                // on its way to ❖C or ⌃⇧C, or a key let go, leaves it to copy.
+                let typing = event.action != hotaru_core::input::KeyAction::Release
+                    && !matches!(event.key, hotaru_core::input::Key::Modifier(_));
                 let mut ended = false;
                 if let Some(pane) = self.panes.iter_mut().find(|pane| pane.id == id) {
-                    pane.selection = None;
+                    if typing {
+                        pane.selection = None;
+                    }
                     ended = pane.ended;
                 }
                 // A kept pane whose program ended closes on any key.

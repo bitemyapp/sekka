@@ -872,6 +872,14 @@ impl<P: Program> Harness<P> {
         self.rt.flush(&mut self.platform);
     }
 
+    /// One key event as the compositor sends it: a press without its
+    /// release, a modifier going down on its own.
+    pub fn key_event(&mut self, key: WindowKey, ev: KeyEvent) {
+        let win = self.keyboard_window(key);
+        self.rt.core.key(win, ev, &mut self.platform);
+        self.rt.flush(&mut self.platform);
+    }
+
     pub fn named(&mut self, key: WindowKey, k: NamedKey, mods: Modifiers) {
         self.key(key, Key::Named(k), mods);
     }
