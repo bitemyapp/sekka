@@ -21,7 +21,7 @@ use smithay::reexports::calloop::{Interest, LoopHandle, LoopSignal, Mode, PostAc
 use smithay::reexports::wayland_server::backend::{ClientData, ClientId, DisconnectReason};
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::reexports::wayland_server::{Display, DisplayHandle};
-use smithay::utils::{Clock, Logical, Monotonic, Point, Rectangle, Size};
+use smithay::utils::{Clock, Logical, Monotonic, Physical, Point, Rectangle, Size};
 use smithay::wayland::alpha_modifier::AlphaModifierState;
 use smithay::wayland::commit_timing::CommitTimingManagerState;
 use smithay::wayland::compositor::{CompositorClientState, CompositorState};
@@ -665,18 +665,17 @@ impl Aizome {
     /// An output's rectangle in the global layout, in points.
     pub fn output_geometry(&self, output: &Output) -> Rectangle<i32, Logical> {
         let loc = output.current_location();
-        let size = output
-            .current_mode()
-            .map(|m| {
-                output
-                    .current_transform()
-                    .transform_size(m.size)
-                    .to_f64()
-                    .to_logical(output.current_scale().fractional_scale())
-                    .to_i32_round()
-            })
+        let size = self
+            .output_pixels(output)
+            .map(|size| size.to_f64().to_logical(output.current_scale().fractional_scale()).to_i32_round())
             .unwrap_or_else(|| Size::from((0, 0)));
         Rectangle::new(loc, size)
+    }
+
+    /// An output's size in pixels, as it's drawn and captured: its mode's,
+    /// turned by its transform.
+    pub fn output_pixels(&self, output: &Output) -> Option<Size<i32, Physical>> {
+        output.current_mode().map(|m| output.current_transform().transform_size(m.size))
     }
 
     pub fn output_rect(&self, output: &Output) -> Rect {

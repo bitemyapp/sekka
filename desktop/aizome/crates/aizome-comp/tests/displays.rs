@@ -202,8 +202,18 @@ fn screenshots_across_displays_of_different_scales() {
 
 #[test]
 fn fractional_screenshot_crops_match_the_native_capture() {
-    for scale in [0.5_f64, 0.75, 1.25, 1.5, 1.75] {
-        let mode = format!("1920x1080@{scale}");
+    // 1920×1200 at 175% and 2560×1600 at 150% aren't a whole number of
+    // points: 686 and 1707 × 1067 points would round back to a pixel past
+    // the capture.
+    for (pixels, scale) in [
+        ((1920, 1080), 0.5_f64),
+        ((1920, 1080), 0.75),
+        ((1920, 1080), 1.25),
+        ((1920, 1080), 1.5),
+        ((1920, 1200), 1.75),
+        ((2560, 1600), 1.5),
+    ] {
+        let mode = format!("{}x{}@{scale}", pixels.0, pixels.1);
         let c = Compositor::start(Options { outputs: &[&mode], renderer: Some("pixman"), ..Default::default() });
         // A solid window would conceal repeated/skipped rows and columns.
         let _client = c.client(
@@ -222,9 +232,10 @@ fn fractional_screenshot_crops_match_the_native_capture() {
             clipboard: false,
         });
         let native = Image::load(&path);
+        assert_eq!((native.width, native.height), pixels);
         // Inside the output, and from mid-pixel to its far corner (where an
         // area dragged past the edge is clipped).
-        let (pw, ph) = ((1920.0 / scale).round() as i32, (1080.0 / scale).round() as i32);
+        let (pw, ph) = ((f64::from(pixels.0) / scale).round() as i32, (f64::from(pixels.1) / scale).round() as i32);
         for (x, y, w, h) in [
             (1, 1, 900, 500),
             (2, 3, 800, 450),
@@ -236,12 +247,16 @@ fn fractional_screenshot_crops_match_the_native_capture() {
             (pw - 1, ph - 1, 1, 1),
         ] {
             let crop = shot_of_area(&c, x, y, w, h);
-            // Edges round on the output's own pixel grid. A thin crop
-            // retains one native pixel even when its edges round together.
-            let edge = |at: i32| (at as f64 * scale).round() as u32;
-            assert_eq!((crop.width, crop.height), ((edge(x + w) - edge(x)).max(1), (edge(y + h) - edge(y)).max(1)));
-            let sx = edge(x).min(native.width - 1) as usize;
-            let sy = edge(y).min(native.height - 1) as usize;
+            // Edges round on the output's own pixel grid, and its far edges
+            // are where its capture ends. A thin crop retains one native
+            // pixel even when its edges round together.
+            let edge = |at: i32, points: i32, pixels: u32| {
+                if at < points { (at as f64 * scale).round() as u32 } else { pixels }
+            };
+            let (ex, ey) = (|at| edge(at, pw, native.width), |at| edge(at, ph, native.height));
+            assert_eq!((crop.width, crop.height), ((ex(x + w) - ex(x)).max(1), (ey(y + h) - ey(y)).max(1)));
+            let sx = ex(x).min(native.width - 1) as usize;
+            let sy = ey(y).min(native.height - 1) as usize;
             assert!(
                 sx + crop.width as usize <= native.width as usize
                     && sy + crop.height as usize <= native.height as usize,

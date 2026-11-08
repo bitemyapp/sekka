@@ -73,7 +73,8 @@ pub fn capture(state: &mut State, what: What) -> Result<Image, String> {
 
 /// The outputs an area shows, at their largest scale and on the pixel grid
 /// of the first output at it, so an area of that output keeps its pixels
-/// whole up to its edges.
+/// whole up to its edges, even where its mode's size isn't a whole number
+/// of points.
 fn stitch(state: &mut State, area: Option<Rect>) -> Result<Image, String> {
     let outputs = state.az.outputs.clone();
     let outputs = outputs
@@ -88,12 +89,13 @@ fn stitch(state: &mut State, area: Option<Rect>) -> Result<Image, String> {
     // Within the outputs' bounds, an area can still miss them all: below a
     // shorter output beside a taller one.
     let shown: Vec<_> = outputs.into_iter().filter(|(_, rect)| rect.overlaps(crop)).collect();
-    let (scale, grid) = shown
+    let (scale, grid, output) = shown
         .iter()
-        .map(|(output, rect)| (output.current_scale().fractional_scale(), rect.loc))
+        .map(|(output, rect)| (output.current_scale().fractional_scale(), *rect, output))
         .reduce(|a, b| if b.0 > a.0 { b } else { a })
         .ok_or("the area is off every output")?;
-    let mut screenshot = Screenshot::new(crop, grid, scale)?;
+    let pixels = state.az.output_pixels(output).ok_or("the output has no mode")?;
+    let mut screenshot = Screenshot::new(crop, grid, (pixels.w as u32, pixels.h as u32).into(), scale)?;
     for (output, bounds) in shown {
         let captured = CapturedOutput::new(
             bounds,

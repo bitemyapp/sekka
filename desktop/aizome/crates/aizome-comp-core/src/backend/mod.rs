@@ -415,8 +415,7 @@ where
     R: Renderer + ImportAll + ImportMem + Offscreen<T> + Bind<T> + ExportMem + crate::blur::BlurRenderer,
     R::TextureId: Clone + Send + 'static,
 {
-    let mode = output.current_mode().ok_or("the output has no mode")?;
-    let size = output.current_transform().transform_size(mode.size);
+    let size = az.output_pixels(output).ok_or("the output has no mode")?;
     let scale = output.current_scale().fractional_scale();
     let (elements, clear) = scene_for::<R, T>(renderer, az, output, scene, clear);
     let buffer_size: Size<i32, BufferCoords> = Size::from((size.w, size.h));
