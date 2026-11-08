@@ -172,6 +172,9 @@ budget covers the roughly 800 MiB of heap, mapped code and shared buffers.
 `systemd-oomd`'s unit already asks for 64 MiB, which had no effect while
 `system.slice` granted nothing. Services that aren't installed (BlueZ,
 RealtimeKit, PipeWire's) get no budget.
+PipeWire's budgets follow its services: by default they belong to
+`memoryReserve.session`; with `services.pipewire.systemWide = true`, they
+belong to `memoryReserve.system` and count toward `system.slice` instead.
 
 A service is protected only as far as every ancestor is. The module sets
 `session.slice`, `user@.service`, every user's `user-UID.slice` (through a
@@ -190,9 +193,11 @@ protected memory rather than run out. The budgets are NixOS defaults in Aizome's
 module (the IBus one in Sekka's input-method module), independent of
 `calamares.tuning.enable`. Change them through
 `programs.aizome.memoryReserve.session` and `.system`, in MiB, so the
-ancestors follow; 0 removes a service. A `MemoryLow` set on one of these units
-directly overrides the module's drop-in but leaves the ancestors at the old
-sum.
+ancestors follow; 0 removes a service, and disabling all reserves produces an
+empty drop-in package. An explicit `serviceConfig.MemoryLow` on one of these
+units, including 0, suppresses its default drop-in but leaves the ancestors
+at the old sum. This works for both packaged and NixOS-defined services;
+use the reserve options when the ancestors should follow the new size.
 
 The reserve changes where reclaim happens: unprotected workloads can lose
 pages and run more slowly before the desktop does. It introduces no new OOM
@@ -203,7 +208,9 @@ OOM killer; keeping the desktop resident does not guarantee that every job
 survives, and concentrating reclaim on workloads can increase their pressure.
 
 `checks.aizome-memory-policy` evaluates the budgets, sums, drop-ins and
-overrides for Aizome alone, with IBus, customized, and without Aizome. The
+overrides for Aizome alone, with IBus, customized, and without Aizome. It also
+builds empty reserve packages, checks explicit service overrides, and covers
+user and system-wide audio with optional audio services disabled. The
 `aizome-login` VM test reads every budgeted unit's `MemoryLow` and the cgroup
 files of the ancestors after a real login. A bounded cgroup reclaim experiment
 showed that protected pages remained resident while an unprotected control was

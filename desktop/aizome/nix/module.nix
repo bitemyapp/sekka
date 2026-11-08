@@ -108,8 +108,20 @@ let
   # slices and user manager above these services get the sums.
   reserve = lib.mapAttrs (_: lib.filterAttrs (_: mib: mib > 0)) cfg.memoryReserve;
   reserveSum = units: "${toString (lib.foldl' builtins.add 0 (lib.attrValues units))}M";
-  memoryDropIns = pkgs.runCommand "aizome-memory-reserve" { } (
-    lib.concatStrings (
+  # A NixOS-defined service carries serviceConfig in its main unit, which
+  # package drop-ins would override. Leave explicit MemoryLow settings
+  # (including 0) to NixOS for both module- and package-provided services.
+  # Keep the ancestor sums based on memoryReserve, as documented.
+  defaultReserves =
+    services:
+    lib.filterAttrs (
+      unit: _:
+      (lib.attrByPath [ (lib.removeSuffix ".service" unit) "serviceConfig" "MemoryLow" ] null services)
+      == null
+    );
+  memoryDropIns = pkgs.runCommand "aizome-memory-reserve" { } ''
+    mkdir -p "$out"
+    ${lib.concatStrings (
       lib.concatLists (
         lib.mapAttrsToList
           (
@@ -121,12 +133,12 @@ let
             '') units
           )
           {
-            user = reserve.session;
-            system = reserve.system;
+            user = defaultReserves config.systemd.user.services reserve.session;
+            system = defaultReserves config.systemd.services reserve.system;
           }
       )
-    )
-  );
+    )}
+  '';
   # wf-recorder (the fallback recorder) puts its wl_shm buffers in files in
   # /tmp, which on most NixOS systems is on disk: every frame the compositor
   # copies would be written out (over 1 GB/s at 2880 × 1800 and 60 fps) and
@@ -225,7 +237,7 @@ in
           `aizome.service` 1024, `aizome-portal.service` 32, the session bus
           16, `xdg-desktop-portal.service` 16, and PipeWire's `pipewire`,
           `pipewire-pulse` and `wireplumber` services 32, 48 and 32, each
-          where installed.
+          where installed as user services.
         '';
         example = {
           "aizome.service" = 1536;
@@ -249,14 +261,17 @@ in
         defaultText = lib.literalMD ''
           `systemd-logind.service` 16, `systemd-udevd.service` 64, the system
           bus 32, and, where enabled, `rtkit-daemon.service` 8,
-          `bluetooth.service` 16 and `systemd-oomd.service` 64.
+          `bluetooth.service` 16 and `systemd-oomd.service` 64. With system-wide
+          PipeWire, its `pipewire`, `pipewire-pulse` and `wireplumber` services
+          receive 32, 48 and 32 respectively, each where enabled.
         '';
         description = ''
           The same, for system services the desktop waits on: logind (the
           compositor's seat and input and display devices), udev (hotplug),
           the system bus, RealtimeKit (realtime audio threads), BlueZ
           (Bluetooth keyboards and mice deliver every event through it) and
-          systemd-oomd. `system.slice` gets the sum.
+          systemd-oomd, and PipeWire's services when `services.pipewire.systemWide`
+          is enabled. `system.slice` gets the sum.
         '';
       };
     };
@@ -332,6 +347,13 @@ in
         bus =
           if config.services.dbus.implementation == "broker" then "dbus-broker.service" else "dbus.service";
         pipewire = config.services.pipewire;
+        audio = lib.optionalAttrs pipewire.enable (
+          {
+            "pipewire.service" = 32;
+          }
+          // lib.optionalAttrs pipewire.pulse.enable { "pipewire-pulse.service" = 48; }
+          // lib.optionalAttrs pipewire.wireplumber.enable { "wireplumber.service" = 32; }
+        );
       in
       {
         session = lib.mapAttrs (_: lib.mkDefault) (
@@ -344,13 +366,7 @@ in
           }
           # Apps ask the Settings portal for the color scheme as they start.
           // lib.optionalAttrs config.xdg.portal.enable { "xdg-desktop-portal.service" = 16; }
-          // lib.optionalAttrs pipewire.enable (
-            {
-              "pipewire.service" = 32;
-            }
-            // lib.optionalAttrs pipewire.pulse.enable { "pipewire-pulse.service" = 48; }
-            // lib.optionalAttrs pipewire.wireplumber.enable { "wireplumber.service" = 32; }
-          )
+          // lib.optionalAttrs (!pipewire.systemWide) audio
         );
         system = lib.mapAttrs (_: lib.mkDefault) (
           {
@@ -369,6 +385,7 @@ in
           # oomd's own unit asks for 64 MiB, which has no effect unless
           # system.slice grants it.
           // lib.optionalAttrs config.systemd.oomd.enable { "systemd-oomd.service" = 64; }
+          // lib.optionalAttrs pipewire.systemWide audio
         );
       };
     systemd.slices.system.sliceConfig.MemoryLow = lib.mkDefault (reserveSum reserve.system);
