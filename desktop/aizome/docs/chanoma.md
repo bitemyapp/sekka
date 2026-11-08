@@ -21,7 +21,7 @@ services.displayManager.autoLogin = { enable = true; user = "tv"; };
 entry and icon, kept out of Aizome's own output so desktops without it
 don't list it), the cores (`programs.aizome.chanoma.cores`; snes9x and
 Genesis Plus GX, whose licences forbid selling them, only where unfree
-packages are allowed) and a PlayStation BIOS
+packages are allowed; PCSX2 only on x86-64) and a PlayStation BIOS
 (`programs.aizome.chanoma.bios`: OpenBIOS, below), exports
 `CHANOMA_CORES`, `CHANOMA_BIOS` and `CHANOMA_BROWSER` to the session,
 installs the browser (`programs.aizome.chanoma.browser`: Google Chrome
@@ -43,12 +43,13 @@ explicitly (and Chanoma also looks in NixOS's profiles).
 | Module | |
 |---|---|
 | `pad/` | Controllers from `/dev/input`: hot-plug through inotify, the exclusive grab, player slots, mappings, menu navigation with repeat, batteries, rumble |
-| `retro/` | The libretro frontend: the C interface, the host (callbacks, environment, core options), video, sound, and a session thread per game |
+| `retro/` | The libretro frontend: the C interface, the host (callbacks, environment, core options), video, OpenGL for the cores that draw with it, sound, the consoles' BIOS images, and a session thread per game |
 | `browser.rs` | Services in Chrome: profiles, kiosk flags, the window followed through the compositor's IPC, input through it |
 | `devtools.rs` | Services kept to their sites, and Chanoma's keyboard asking and typing on their pages, over the browser's DevTools pipe |
 | `services.rs` | The services, the sites each one's pages may go to, and which need Chanoma's keyboard |
 | `rules.rs` | The PIN, wrong-PIN lockout, what kids may open, daily limits, bedtime, grants |
 | `library.rs` | Systems, cores, games and videos found in the folders, each read once, and what each holds |
+| `disc.rs` | Which system's a disc is, from what's on it (cue sheets, ISOs, CHDs, CSOs) |
 | `folders.rs` | Adding a folder: the places to start from, the folders that look like a collection, a folder's folders and what's directly in each, what the files index knows of one |
 | `art.rs` | Games' pictures beyond those beside them: what `gamelist.xml` names, and box art fetched from libretro-thumbnails and kept |
 | `app/` | The program: screens, input, home shelves, playing, settings, time, search, a forgotten PIN |
@@ -68,9 +69,10 @@ nothing on it. A first start, with nothing in the index yet, goes
 straight to Home, which shows the folders being read.
 
 How long it took goes to the journal on its own (`chanoma: Home, with N
-games, T after starting`: the `aizome_chanoma::start` target).
-The rest of Chanoma's info stays out of it, what's typed over a page
-among it. On a laptop docked to the television with its lid closed, the
+games, T after starting`: the `aizome_chanoma::start` target), as does
+the GPU a game drawn with OpenGL draws on and whether its frames are
+shared with the compositor (`aizome_chanoma::retro::gl`). The rest of
+Chanoma's info stays out of it, what's typed over a page among it. On a laptop docked to the television with its lid closed, the
 compositor knows the lid as it starts ([compositor.md](compositor.md),
 "The lid"), so Chanoma opens on the television rather than the panel
 behind the lid.
@@ -225,10 +227,29 @@ pausing, saving and leaving are Chanoma's.
   table, XRGB8888), core options in all three forms (with Chanoma's
   preferences over a core's defaults: the Game Boy's green palette),
   system and save folders, rumble, input bitmasks, geometry and timing
-  changes. Hardware rendering is declined: cores that need OpenGL or
-  Vulkan don't run (Nintendo 64, Dreamcast and later; the PlayStation
-  plays through PCSX-ReARMed's software renderer).
-  Logging is declined too (a C varargs callback).
+  changes, and OpenGL (below). Vulkan is declined, as is logging (a C
+  varargs callback).
+- **OpenGL** (`retro/gl.rs`), for the Dreamcast's core (Flycast) and the
+  PlayStation 2's (PCSX2, Play!): the context the core asks for (OpenGL,
+  its core profile, or OpenGL ES 3), made through EGL as it asks
+  (`libEGL.so.1`, libglvnd's, opened at run time) on the compositor's
+  GPU (the device its linux-dmabuf feedback names), with no window. The
+  core draws in a framebuffer of Chanoma's, as large as its largest
+  picture, with the depth and stencil it asked for; `context_reset` comes
+  once that's there, after the game loads, and `context_destroy` before
+  it's unloaded, then the context goes. Each frame is copied on the GPU
+  (`glBlitFramebuffer`, the right way up: GL's first line is the
+  picture's last) into one of three textures exported as dmabufs
+  (`EGL_MESA_image_dma_buf_export`), said to be XBGR8888 so the core's
+  alpha isn't taken for the picture's, which the video sink shows as they
+  are: nothing is read back. Where the compositor doesn't take them (no
+  linux-dmabuf, another GPU, Mesa's software renderer) the frame is read
+  back and goes as a software core's do, and the journal says so. The copy
+  puts back the GL state it changes (the framebuffers bound, the scissor,
+  rasterizer discard, sRGB), so the core's next frame finds its own; the
+  picture of where a game was left is read from the last frame's texture.
+  The core is asked to prefer OpenGL's core profile, and told its context
+  is its own (`SET_HW_SHARED_CONTEXT`).
 - **The callbacks** go in libretro's order: the environment before
   `retro_init`, the rest after it, before the game loads. Given before,
   Mesen (the NES's core) reached for its renderer, which `retro_init`
@@ -249,6 +270,26 @@ pausing, saving and leaving are Chanoma's.
   their own console's BIOS comes first and OpenBIOS after; with neither,
   it imitates one itself (and says so on the screen). Only PCSX-ReARMed
   has been tried with OpenBIOS.
+- **A BIOS kept by the games** (`retro/bios.rs`): a `bios` folder in a
+  game's folder or one above it, up to beside the games folder it's in
+  (`roms/../bios`, as Batocera and RetroBat keep theirs). Of its files
+  only those Chanoma's cores look for are linked into the system folder,
+  each where its core looks and whatever the case of its name: the
+  Saturn's (`sega_101.bin`, `mpr-17933.bin`, `saturn_bios.bin`), the
+  Dreamcast's (`dc_boot.bin`, `dc_flash.bin`, under `dc`), the
+  PlayStation's (`scph5501.bin` and the like) and the Game Boy Advance's;
+  and one PlayStation 2 BIOS (4 MiB, from `pcsx2/bios`, `ps2` or the
+  folder itself), North America's models first, under `pcsx2/bios`. The
+  folders they go in are Chanoma's, so no core writes on the drive's.
+  A file of the grown-up's own in the system folder stays, and links to
+  a drive taken out go.
+- **Which core**: a system's cores are tried best first; one that plays
+  nothing without its console's BIOS (Beetle Saturn, PCSX2) is chosen only
+  where that's there, else the next (Yabause and Play!, which stand in
+  for it). Flycast stands in for the Dreamcast's BIOS by itself where it
+  isn't there. Flycast draws at twice the console's 640 by 480
+  (`reicast_internal_resolution`: its options keep Reicast's names), for
+  a television.
 - **Picture**: each frame is converted to XRGB8888 and enlarged by a whole
   number with nearest-neighbour into a memfd of three frames, then shown
   through the window's video sink (`docs/kit.md`, Video); the compositor
@@ -666,10 +707,27 @@ folder…*, so pressing again adds another; from Home's, to Home.
 
 What's found in a folder, whatever was added:
 
-- **Games** by their system's folder (`snes`) or their extension. A cue
-  sheet or playlist known only by its extension (not in a system's
-  folder) is a game's only if it names a disc image (`.bin`, `.chd`…),
-  not an album's music or a playlist of videos.
+- **Games** by their system's folder (`snes`, `Sega - Saturn`, `ps2`) or
+  their extension. A cue sheet or playlist known only by its extension
+  (not in a system's folder) is a game's only if it names a disc image
+  (`.bin`, `.chd`…), not an album's music or a playlist of videos.
+- **Discs** that several systems' come as (a cue sheet, a CHD, an ISO, a
+  CSO), outside a system's folder, by what's on them (`disc.rs`): a
+  Saturn's data track starts `SEGA SEGASATURN `, a Dreamcast's
+  `SEGA SEGAKATANA `; a PlayStation's `SYSTEM.CNF` boots with `BOOT`, a
+  PlayStation 2's with `BOOT2`. A cue sheet's data tracks are read in
+  order (a Dreamcast's in Redump's form has its system area in the
+  high-density area's), a CloneCD image's `.img`, an ISO's sectors whole
+  or user data alone; a CHD's track list says a GD-ROM (a Dreamcast's)
+  before anything is decompressed, and a CD's or a DVD's first sectors are
+  read through the `chd` crate, as a CSO's are through its blocks. A GDI
+  or CDI is a Dreamcast's, a PBP a PlayStation's, by name. Anything else
+  is no game of Chanoma's: a Mega-CD's, a PC Engine CD's, a PSP's, a
+  computer's installer. What a disc is is read once, on the refreshing
+  pass, and kept in the files index beside it (`chanoma.disc`, with its
+  serial); a start's first look takes what was kept. Before, every cue
+  sheet and CHD outside a system's folder was the PlayStation's, a
+  Saturn's or a Mega-CD's included.
 - **Films and shows**, but not videos in a system's folder
   (`roms/snes/videos`, as ES-DE scrapes them): those are games' clips. A
   video's shelf is the folder it's in, past seasons, discs and extras
@@ -749,7 +807,7 @@ with whatever kids' choice it had.
 The module installs RetroArch's game databases for Chanoma's systems
 (`programs.aizome.chanoma.metadata`, the `chanoma-metadata` package,
 `nix/chanoma-metadata.nix`): the `rdb/` files of libretro-database (CC
-BY-SA 4.0, credited in the settings' Chanoma section), 17 files, 21 MB,
+BY-SA 4.0, credited in the settings' Chanoma section), 20 files, 27 MB,
 fetched one by one at a pinned commit (the repository is close to a
 gigabyte), unchanged. `metadata.rs` reads them (`RARCHDB\0`, an offset,
 then a MessagePack map a game until a nil) when the library is read, and
@@ -762,10 +820,11 @@ play, who made it.
   kept as a fact in the files index (forgotten when the file changes): a
   zip's CRCs from its central directory (nothing unpacked); a
   cartridge's CRC, and an NES game's without its 16-byte header (64 MiB at
-  most); for a PlayStation disc, the serial its `SYSTEM.CNF` boots
-  (`BOOT = cdrom:\SCUS_949.00;1` is `SCUS-94900`), read from the first
-  track named by its cue sheet (or a playlist's first disc), in
-  2,352-, 2,336- or 2,048-byte sectors. CHD and PBP discs aren't read.
+  most); for a disc, its serial, read as its system is (`disc.rs`, above,
+  and kept with it): the one a PlayStation's or a PlayStation 2's
+  `SYSTEM.CNF` boots (`BOOT = cdrom:\SCUS_949.00;1` is `SCUS-94900`), or
+  a Saturn's or a Dreamcast's product number from its system area
+  (`MK-81009`). PBP, CDI and ZSO discs aren't read.
 - A game named twice in a database (a release per disc or revision) takes
   what any of its entries says.
 - **Read once a start, all at once**: the systems' databases are read on
@@ -898,7 +957,14 @@ cargo run --release -p aizome-chanoma --example library -- FOLDER… \
   drivers, events into buttons and axes, navigation repeats and stick
   hysteresis, the sound ring and resampler, pixel conversion and
   enlargement, core options, game and video scanning (systems by folder
-  and extension, cue sheets' tracks, box art, shows) through the files
+  and extension, cue sheets' tracks, box art, shows), discs told apart by
+  what's on them (Saturn, Dreamcast, PlayStation and PlayStation 2 discs
+  as cue sheets, CloneCD images, ISOs, GDIs, CSOs and CHDs of CDs, DVDs
+  and GD-ROMs the tests write; a Mega-CD's, a PSP's and a computer's
+  none of them; read once, then known from the index), BIOS images by a
+  collection's games offered as the cores look (the PlayStation 2's,
+  North America's first; a grown-up's own kept; a drive's taken out let
+  go) and the core chosen by them, through the files
   index, layouts, and a language chosen found again in the next episode
   (by name, `en` as `eng`; by place without one; none rather than
   another language), and the sites a page may be on (subdomains; not
@@ -1010,13 +1076,27 @@ cargo run --release -p aizome-chanoma --example library -- FOLDER… \
   `gamelist.xml` says each game's picture, its box first; search ranks
   a name's start, its words' starts and the system's names, accents as
   typed; the PIN pad's foot holds *Forgot it?*.
+- **OpenGL** (`tests/gl.rs`, opt-in, with a GPU through EGL): a core the
+  test writes asks for OpenGL 3.3's core profile as its game loads, and
+  draws red over blue in the framebuffer it's given, leaving a scissor
+  on. Through a whole session: `context_reset` once the game's loaded, the
+  frames copied the right way up (the picture where it was left is red
+  at the top), its scissor still on at its next frame, and
+  `context_destroy` before `retro_unload_game`. On 2026-11-08 on
+  wx-workstation's `/dev/dri/renderD128`, its frames read back (no
+  compositor): passed.
 - **Real cores** (`tests/cores.rs`, opt-in): every system's cores from
   nixpkgs load and list the extensions Chanoma sends them; gambatte,
   SameBoy and mGBA play a Game Boy game the test writes, whose screen
   turns black while a direction is held, through whole sessions with the
   controller state, and carry on from their saved state. On 2026-10-31
   with nixpkgs' cores of that date: all three passed (mean brightness
-  249–252 untouched, 3 with Right held).
+  249–252 untouched, 3 with Right held). On 2026-11-08 the Saturn's,
+  Dreamcast's and PlayStation 2's (Beetle Saturn, Yabause, Flycast,
+  PCSX2, Play!) loaded and took every extension Chanoma sends them, but
+  for Play! and a playlist (`.m3u`), which goes to PCSX2. No Saturn,
+  Dreamcast or PlayStation 2 game has been played in the tests: there's
+  none free to.
 - **PlayStation games with OpenBIOS** (`tests/cores.rs`'s
   `playstation_games_start_with_a_bios`, opt-in, with
   `CHANOMA_TEST_PSX_GAMES`, `_SYSTEM`, `_OUT` and `_STAGES`): each game
@@ -1183,8 +1263,16 @@ before calling any of it tested on hardware.
   every PIN.
 - DRM-protected services need Google Chrome; nixpkgs' Chromium has no
   Widevine.
-- No hardware-rendered cores; no disc swapping for multi-disc games; no
-  touch screens (the DS).
+- No Vulkan cores; no disc swapping for multi-disc games; no touch
+  screens (the DS). The Nintendo 64 and GameCube have no system here.
+- OpenGL cores' frames have gone through the tests' own core, read back;
+  sharing them with the compositor as dmabufs, and the Dreamcast's and
+  PlayStation 2's real cores with real games, haven't been tried in the
+  tests. Play! (the PlayStation 2 without its BIOS) plays fewer games than
+  PCSX2, and no playlists.
+- Discs are told apart only among Chanoma's four disc systems: a disc of
+  another (a Mega-CD's, a PC Engine CD's) isn't shown, even in a folder
+  not named for it.
 - OpenBIOS has been checked with PCSX-ReARMed on forty games' first
   minute: not saving to a memory card and loading again, the BIOS's own
   screens (the memory card manager, the CD player), games from Europe or

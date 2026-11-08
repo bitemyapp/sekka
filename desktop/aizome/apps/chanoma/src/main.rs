@@ -22,10 +22,13 @@ all from a controller, with a grown-up's PIN on what kids may do.
 fn main() {
     // Before any thread starts: a signal to stop then puts things away.
     aizome_chanoma::signals::block();
-    // Warnings, and how long starting took (a television's journal says
-    // it; what's typed over a page, at info, it doesn't).
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn,aizome_chanoma::start=info"))
-        .init();
+    // Warnings, how long starting took and the GPU a game draws on (a
+    // television's journal says them; what's typed over a page, at info,
+    // it doesn't).
+    env_logger::Builder::from_env(
+        env_logger::Env::default().default_filter_or("warn,aizome_chanoma::start=info,aizome_chanoma::retro::gl=info"),
+    )
+    .init();
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.iter().any(|a| a == "--help" || a == "-h") {
         println!("{HELP}");

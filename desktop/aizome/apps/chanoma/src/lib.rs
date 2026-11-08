@@ -12,7 +12,8 @@
 //! - [`folders`]: choosing a games or videos folder from the sofa.
 //! - [`library`], [`collection`] and [`metadata`]: the games and videos
 //!   found (through the files index Aizome's apps share), which of them
-//!   show, and what the games' databases say of them; [`zip`]: games kept
+//!   show, and what the games' databases say of them; [`disc`]: which
+//!   system's a disc is, from what's on it; [`zip`]: games kept
 //!   zipped.
 //! - [`app`] and [`ui`]: the program and what it draws.
 
@@ -22,6 +23,7 @@ pub mod browser;
 pub mod clock;
 pub mod collection;
 pub mod devtools;
+pub mod disc;
 pub mod folders;
 pub mod instance;
 pub mod library;

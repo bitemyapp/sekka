@@ -104,6 +104,35 @@ pub const RETRO_ENVIRONMENT_SET_VARIABLE: c_uint = 70;
 pub const RETRO_ENVIRONMENT_GET_THROTTLE_STATE: c_uint = 71 | RETRO_ENVIRONMENT_EXPERIMENTAL;
 pub const RETRO_ENVIRONMENT_GET_SAVESTATE_CONTEXT: c_uint = 72 | RETRO_ENVIRONMENT_EXPERIMENTAL;
 pub const RETRO_ENVIRONMENT_GET_JIT_CAPABLE: c_uint = 74;
+pub const RETRO_ENVIRONMENT_GET_HW_RENDER_INTERFACE: c_uint = 41 | RETRO_ENVIRONMENT_EXPERIMENTAL;
+pub const RETRO_ENVIRONMENT_SET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE: c_uint = 43 | RETRO_ENVIRONMENT_EXPERIMENTAL;
+pub const RETRO_ENVIRONMENT_SET_HW_SHARED_CONTEXT: c_uint = 44 | RETRO_ENVIRONMENT_EXPERIMENTAL;
+
+pub const RETRO_HW_CONTEXT_OPENGL: c_uint = 1;
+pub const RETRO_HW_CONTEXT_OPENGLES2: c_uint = 2;
+pub const RETRO_HW_CONTEXT_OPENGL_CORE: c_uint = 3;
+pub const RETRO_HW_CONTEXT_OPENGLES3: c_uint = 4;
+pub const RETRO_HW_CONTEXT_OPENGLES_VERSION: c_uint = 5;
+/// What a hardware-rendered frame's data is: it's in the framebuffer.
+pub const RETRO_HW_FRAME_BUFFER_VALID: *const c_void = usize::MAX as *const c_void;
+
+/// What a core asks of the frontend's OpenGL, and the two functions it's
+/// given for it.
+#[repr(C)]
+pub struct retro_hw_render_callback {
+    pub context_type: c_uint,
+    pub context_reset: Option<unsafe extern "C" fn()>,
+    pub get_current_framebuffer: Option<unsafe extern "C" fn() -> usize>,
+    pub get_proc_address: Option<unsafe extern "C" fn(sym: *const c_char) -> *mut c_void>,
+    pub depth: bool,
+    pub stencil: bool,
+    pub bottom_left_origin: bool,
+    pub version_major: c_uint,
+    pub version_minor: c_uint,
+    pub cache_context: bool,
+    pub context_destroy: Option<unsafe extern "C" fn()>,
+    pub debug_context: bool,
+}
 
 pub const RETRO_PIXEL_FORMAT_0RGB1555: c_uint = 0;
 pub const RETRO_PIXEL_FORMAT_XRGB8888: c_uint = 1;

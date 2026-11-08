@@ -303,18 +303,30 @@ in
             handy
             beetle-ngp
             beetle-wswan
+            # The Saturn's: Beetle Saturn with the console's BIOS, Yabause
+            # without it.
+            beetle-saturn
+            yabause
+            # Through OpenGL: the Dreamcast's, and the PlayStation 2's
+            # without its BIOS.
+            flycast
+            play
           ]
+          # The PlayStation 2's with its BIOS, on x86-64 alone.
+          ++ lib.optionals pkgs.stdenv.hostPlatform.isx86_64 [ pcsx2 ]
           # Faster for the Super NES, and the Mega Drive's only one here;
           # both under licences that forbid selling them (unfree in Nixpkgs).
           ++ lib.optionals (config.nixpkgs.config.allowUnfree or false) [
             snes9x
             genesis-plus-gx
           ];
-        defaultText = lib.literalExpression "with pkgs.libretro; [ mesen bsnes gambatte mgba smsplus-gx beetle-pce-fast pcsx-rearmed stella handy beetle-ngp beetle-wswan ] ++ (snes9x and genesis-plus-gx where unfree packages are allowed)";
+        defaultText = lib.literalExpression "with pkgs.libretro; [ mesen bsnes gambatte mgba smsplus-gx beetle-pce-fast pcsx-rearmed stella handy beetle-ngp beetle-wswan beetle-saturn yabause flycast play ] ++ (pcsx2 on x86-64) ++ (snes9x and genesis-plus-gx where unfree packages are allowed)";
         description = ''
-          The libretro cores Chanoma plays games with. Cores that need
-          OpenGL or Vulkan (Nintendo 64, Dreamcast and later) don't run
-          in Chanoma.
+          The libretro cores Chanoma plays games with. Cores that draw
+          with OpenGL (the Dreamcast's, the PlayStation 2's) run on the
+          compositor's GPU; those that need Vulkan don't run in Chanoma.
+          A system's best core needing the console's BIOS (Beetle Saturn,
+          PCSX2) plays only where it's there; otherwise the next does.
         '';
       };
       bios = lib.mkOption {

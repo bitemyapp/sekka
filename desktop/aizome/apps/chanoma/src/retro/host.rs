@@ -10,7 +10,10 @@ use std::ffi::{CStr, CString, c_char, c_uint, c_void};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicPtr, Ordering};
 
+use aizome_kit::sidestep_ui::video::VideoCaps;
+
 use super::ffi::*;
+use super::gl::{self, Gl};
 use super::video::Screen;
 use crate::pad::{Axis, Button, Shared};
 
@@ -126,6 +129,14 @@ impl Options {
     }
 }
 
+/// A core's OpenGL, and its own functions for it.
+pub struct Hw {
+    pub gl: Gl,
+    /// Called once the framebuffer's there, and before the core goes.
+    pub reset: Option<unsafe extern "C" fn()>,
+    pub destroy: Option<unsafe extern "C" fn()>,
+}
+
 /// What the running core may ask of the frontend.
 pub struct Host {
     pub system_dir: CString,
@@ -148,6 +159,12 @@ pub struct Host {
     /// The core asked to end.
     pub shutdown: bool,
     pub messages: Vec<String>,
+    /// What the compositor takes, for a core's OpenGL frames.
+    pub caps: Option<VideoCaps>,
+    /// The core draws with OpenGL.
+    pub hw: Option<Hw>,
+    /// Its frames read back, where the compositor can't take them.
+    hw_read: Vec<u32>,
 }
 
 impl Host {
@@ -169,6 +186,28 @@ impl Host {
             rumble_state: [[0; 2]; 4],
             shutdown: false,
             messages: Vec::new(),
+            caps: None,
+            hw: None,
+            hw_read: Vec::new(),
+        }
+    }
+
+    /// A frame the core drew with OpenGL, `width` by `height`.
+    fn hw_frame(&mut self, width: c_uint, height: c_uint) {
+        let Some(hw) = &mut self.hw else { return };
+        if !hw.gl.present(width, height, self.screen.sink(), &mut self.hw_read) && !self.hw_read.is_empty() {
+            // Read back: shown as a software core's frames are.
+            // SAFETY: `width` by `height` pixels, four bytes each.
+            unsafe { self.screen.frame(self.hw_read.as_ptr().cast(), width, height, width as usize * 4) };
+            self.hw_read.clear();
+        }
+    }
+
+    /// The last frame as RGBA, for a picture of where a game was left.
+    pub fn last_rgba(&self) -> Option<(u32, u32, Vec<u8>)> {
+        match &self.hw {
+            Some(hw) => hw.gl.last_rgba(),
+            None => self.screen.last_rgba(),
         }
     }
 
@@ -411,8 +450,34 @@ impl Host {
                 | RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME
                 | RETRO_ENVIRONMENT_SET_CONTENT_INFO_OVERRIDE
                 | RETRO_ENVIRONMENT_SET_MINIMUM_AUDIO_LATENCY => true,
-                // Hardware rendering (OpenGL, Vulkan cores), logging (a C
-                // varargs function), and the rest: not offered.
+                // OpenGL, made now (the core may ask for another kind if
+                // this one isn't there), set up once the game's loaded.
+                RETRO_ENVIRONMENT_SET_HW_RENDER => {
+                    let cb = &mut *(data as *mut retro_hw_render_callback);
+                    let wanted = gl::Wanted {
+                        kind: cb.context_type,
+                        major: cb.version_major,
+                        minor: cb.version_minor,
+                        depth: cb.depth,
+                        stencil: cb.stencil,
+                        bottom_left: cb.bottom_left_origin,
+                    };
+                    // One context at a time: the one asked for before goes.
+                    self.hw = None;
+                    let Some(g) = Gl::new(wanted, self.caps.clone()) else { return false };
+                    log::info!("chanoma: OpenGL for the game core ({wanted:?})");
+                    cb.get_current_framebuffer = Some(gl::current_framebuffer);
+                    cb.get_proc_address = Some(gl::proc_address);
+                    self.hw = Some(Hw { gl: g, reset: cb.context_reset, destroy: cb.context_destroy });
+                    self.screen.set_format(RETRO_PIXEL_FORMAT_XRGB8888);
+                    true
+                }
+                RETRO_ENVIRONMENT_GET_PREFERRED_HW_RENDER => put(data, RETRO_HW_CONTEXT_OPENGL_CORE),
+                // Nothing of Chanoma's draws in the core's context between
+                // its frames: only the copy, which puts back what it changes.
+                RETRO_ENVIRONMENT_SET_HW_SHARED_CONTEXT => true,
+                // Vulkan's, logging (a C varargs function), and the rest:
+                // not offered.
                 _ => false,
             }
         }
@@ -462,6 +527,10 @@ unsafe extern "C" fn environment(cmd: c_uint, data: *mut c_void) -> bool {
 }
 
 unsafe extern "C" fn video_refresh(data: *const c_void, width: c_uint, height: c_uint, pitch: usize) {
+    if data == RETRO_HW_FRAME_BUFFER_VALID {
+        with_host(|h| h.hw_frame(width, height));
+        return;
+    }
     // SAFETY: libretro's frame, as the callback defines it.
     with_host(|h| unsafe { h.screen.frame(data.cast(), width, height, pitch) });
 }
