@@ -178,6 +178,10 @@ let
       # Koe set up from its window, and its service on, off and at the
       # next start (vm-koe-test.nix).
       koe = import ./vm-koe-test.nix { inherit pkgs self; };
+      # Files dragged between X11 windows, from Wayland to X11 and from X11
+      # to Wayland, through the patched xwayland-satellite
+      # (vm-xwayland-dnd-test.nix).
+      xwayland-dnd = import ./vm-xwayland-dnd-test.nix { inherit pkgs self; };
     });
 
     devShells = forAll (pkgs: {

@@ -1919,6 +1919,72 @@ of the instance. The UI tests check that reveal requests select the files,
 one window to a folder, and that the last window takes the token. These are
 component checks, not browser or ISO qualification.
 
+### Drag and drop with X11 apps
+
+Aizome runs X11 apps through `xwayland-satellite`, which places every X11
+window on the X screen without knowing where Aizome shows it (Wayland
+doesn't tell a client where its windows are), and in 0.8.3 has no bridge
+between Wayland and X11 drag and drop. So nothing dragged from a Wayland
+app (Hako, a browser) could be dropped on an X11 window, and an X11 app's
+drag looked for its XDND target at the pointer's position on the X screen,
+where some other X11 window, or none, usually was. Audio workstations
+showed it most: their plug-in windows are X11 windows of their own.
+
+The NixOS module builds satellite with two patches, in
+`desktop/aizome/nix`:
+
+- `xwayland-satellite-wayland-to-x11-dnd.patch` is upstream's open
+  [pull request 534](https://github.com/Supreeeme/xwayland-satellite/pull/534)
+  (commit `390df89`, unchanged). Satellite is the XDND source for a Wayland
+  drag over one of its windows and serves XdndSelection from the Wayland
+  offer. Drop it once a satellite release with it reaches Nixpkgs.
+- `xwayland-satellite-x11-drags.patch` is Sekka's, on top of it, and not
+  yet sent upstream. When an X11 client takes XdndSelection while a button
+  is held on one of satellite's windows, satellite starts a Wayland drag
+  from that window, and the compositor reports the surface under the
+  pointer. Over an X11 window, satellite raises it and moves Xwayland's
+  pointer to the matching point on the X screen, so the X11 client finds
+  that window and runs XDND with it as on an X server. The pointer stays on
+  the drag's own window and is offset from it, because entering another
+  surface makes Xwayland release the held button. Over a Wayland window,
+  an XdndAware proxy above every X11 window is the client's target, and the
+  Wayland client reads the data through XdndSelection conversions. The
+  drop ends with the button release that the compositor kept. Only copy is
+  offered, and DELETE and TIMESTAMP are not offered as types, so a Wayland
+  target can't make the X11 client delete what it dragged. Windows of type
+  `_NET_WM_WINDOW_TYPE_DND` (drag icons) get an empty input region, so an
+  icon under the pointer is never the drop target.
+
+Both follow XDND and EWMH alone: nothing names an app. Whether a drop lands
+is still the target's choice. A plug-in window gets one only if the
+plug-in or its host accepts XDND there. A source that looks for XdndAware
+only on top-level windows finds none on a host that doesn't forward drops
+to its plug-ins. During a carried drag the X11 app's own cursor isn't
+shown, as the compositor holds the pointer. GTK targets ask for the document
+portal's types first, so a GTK app as Wayland target needs the session's
+document portal.
+
+```sh
+nix build .#aizome-checks.xwayland-dnd -L
+```
+
+The VM check drags a file with the real pointer from an X11 window to an
+X11 window, from a Wayland window to an X11 window (GTK 3's dragon-drop as
+source and target), and from an X11 window into Hako, with each target
+placed apart from its source and away from the X screen's origin. It fails
+at the first drag with Nixpkgs' unpatched satellite. On 8 November 2026,
+in a headless Aizome on this workstation, files dragged from a Wayland
+source reached Serum 2's oscillators (the native Linux VST3 beta) in REAPER
+7.84 and Bitwig Studio 6.1.4, and an X11 drag reached them in REAPER.
+Bitwig's own drags (browser to arranger and to the device chain) still
+worked. Bitwig's browser doesn't send XDND to plug-in windows, even with
+the windows lined up as on an X server, and REAPER's Media Explorer drags
+stay inside REAPER, so neither drops into Serum. Satellite's 84 unit and 31
+integration tests pass with the patches when built with upstream's test
+harness fix `b5690b5` (the package itself, like Nixpkgs', doesn't run
+them). These are component and VM checks, not ISO or physical-hardware
+qualification.
+
 ### Sukumo
 
 Sukumo, Aizome's toolkit, is in `desktop/aizome/sukumo`: the Wayland engine
