@@ -1,0 +1,214 @@
+#!/usr/bin/env bash
+# Install or remove software for everyone on a Sekka computer through
+# Yukimi's helper, as Yukimi's window does: Nixpkgs packages in yukimi.nix,
+# catalog applications in calamares.applications. The helper takes each
+# add/remove request under its lock, preserving changes made during the dialog.
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage: software list
+       software catalog
+       software add NAME...         Nixpkgs packages, for everyone
+       software remove NAME...
+       software add-app ID...       catalog applications (software catalog)
+       software remove-app ID...
+
+Changes are built first and applied by Yukimi's helper after one password
+in the desktop's dialog: live when that is safe, otherwise for the next
+start. A failed build changes nothing.
+EOF
+}
+
+nixos=${SEKKA_NIXOS:-/etc/nixos}
+facts=${SEKKA_YUKIMI_FACTS:-/etc/yukimi/system.json}
+helper=$(readlink -f "${YUKIMI_HELPER:-/run/current-system/sw/bin/yukimi-helper}")
+host=$(</proc/sys/kernel/hostname)
+
+# yukimi.nix's two lists, read by evaluating it with a lib and pkgs that
+# hand back the names instead of packages.
+yukimi_lists() {
+  if [ ! -e "$nixos/yukimi.nix" ]; then
+    printf '\n\n'
+    return
+  fi
+  nix eval --raw --impure --expr "
+    let
+      lib = {
+        splitString = _: name: [ name ];
+        getAttrFromPath = path: _: builtins.concatStringsSep \".\" path;
+        genAttrs = names: f: builtins.listToAttrs (map (name: { inherit name; value = f name; }) names);
+      };
+      module = import $nixos/yukimi.nix { inherit lib; pkgs = { }; };
+    in
+    builtins.concatStringsSep \" \" (module.environment.systemPackages or [ ]) + \"\n\"
+    + builtins.concatStringsSep \" \" (builtins.attrNames (module.programs or { })) + \"\n\""
+}
+
+configuration() {
+  local names
+  names=$(nix eval --raw "$nixos#nixosConfigurations" --apply "configurations:
+    let names = builtins.attrNames configurations; in
+    if builtins.elem \"$host\" names then \"$host\"
+    else if builtins.length names == 1 then builtins.head names
+    else \"\"")
+  if [ -z "$names" ]; then
+    echo "software: no configuration in $nixos is named $host" >&2
+    exit 1
+  fi
+  printf '%s' "$names"
+}
+
+applications() {
+  local system
+  system=$(configuration)
+  nix eval --raw "$nixos#nixosConfigurations.\"$system\".config.calamares.applications" \
+    --apply 'builtins.concatStringsSep " "'
+}
+
+# The catalog's entries as "id<TAB>name<TAB>description" lines.
+catalog() {
+  nix eval --raw --impure --expr "
+    let
+      json = file: builtins.fromJSON (builtins.unsafeDiscardStringContext (builtins.readFile file));
+      facts = json $facts;
+      entries = builtins.concatMap (c: json c.file)
+        (builtins.filter (c: (c.setting or null) == \"calamares.applications\") facts.catalogs);
+    in
+    builtins.concatStringsSep \"\" (map (e: \"\${e.id}\t\${e.name}\t\${e.description or \"\"}\n\") entries)"
+}
+
+# Yukimi's helper reports progress as Nix's internal-json log: keep its
+# stages, warnings and errors, readable, and leave out the rest.
+decode() {
+  sed -nE \
+    -e '/^@nix /!{p;d}' \
+    -e 's/^@nix \{"action":"start".*"level":0,.*"text":"(([^"\\]|\\.)*)".*/\1/p' \
+    -e 's/^@nix \{"action":"msg".*"level":[0-3],.*"msg":"(([^"\\]|\\.)*)".*/\1/p' |
+    sed -E -e 's/\\u001b\[[0-9;]*m//g' -e 's/\\n/\n/g' -e 's/\\t/\t/g' -e 's/\\"/"/g' -e 's/\\\\/\\/g'
+}
+
+run_helper() {
+  echo "Asking for an administrator's password to change the system."
+  local status=0
+  # The result on standard output, the progress decoded on standard error.
+  {
+    pkexec --disable-internal-agent "$helper" "$@" </dev/null 2>&1 1>&3 3>&- | decode >&2 3>&-
+    status=${PIPESTATUS[0]}
+  } 3>&1 || true
+  case $status in
+    0) sekka-update --status 2>/dev/null || true ;;
+    126) echo "software: the password dialog was dismissed; nothing was changed." >&2 ;;
+    127) echo "software: no authorization. If pkexec said it must be setuid root, run this outside your sandbox; if no authentication agent was found, there is no desktop session to ask in." >&2 ;;
+    *) echo "software: the change failed; see the helper's result above and check sekka-update --status before retrying." >&2 ;;
+  esac
+  return "$status"
+}
+
+comma_list() {
+  local IFS=,
+  printf '%s' "$*"
+}
+
+command=${1:-}
+[ $# -gt 0 ] && shift
+case $command in
+  list)
+    lists=$(yukimi_lists)
+    packages=$(sed -n 1p <<<"$lists")
+    programs=$(sed -n 2p <<<"$lists")
+    echo "Packages for everyone (yukimi.nix): ${packages:-none}"
+    echo "NixOS programs (yukimi.nix): ${programs:-none}"
+    apps=$(applications)
+    echo "Catalog applications (calamares.applications): ${apps:-none}"
+    echo "Also see environment.systemPackages in $nixos/configuration.nix, and 'nix profile list' for your own."
+    ;;
+  catalog)
+    catalog
+    ;;
+  add | remove)
+    [ $# -gt 0 ] || { usage >&2; exit 2; }
+    lists=$(yukimi_lists)
+    packages=$(sed -n 1p <<<"$lists")
+    if [ "$command" = add ]; then
+      new=()
+      for name in "$@"; do
+        case " $packages " in
+          *" $name "*) ;;
+          *) new+=("$name") ;;
+        esac
+      done
+      if [ ${#new[@]} -eq 0 ]; then
+        echo "Already installed for everyone: $*"
+        exit 0
+      fi
+      system=$(configuration)
+      for name in "$@"; do
+        case $name in
+          *[!A-Za-z0-9._+-]* | .* | *. | *..*)
+            echo "software: $name isn't a Nixpkgs attribute name" >&2
+            exit 2
+            ;;
+        esac
+        if ! error=$(nix eval --raw "$nixos#nixosConfigurations.\"$system\".pkgs.$name.drvPath" 2>&1 >/dev/null); then
+          echo "software: $name can't be installed from this system's Nixpkgs:" >&2
+          tail -n 5 <<<"$error" >&2
+          exit 1
+        fi
+      done
+    else
+      for name in "$@"; do
+        case " $packages " in
+          *" $name "*) ;;
+          *)
+            echo "software: $name isn't in yukimi.nix; see 'software list'" >&2
+            exit 1
+            ;;
+        esac
+      done
+    fi
+    run_helper change "--$command-packages" "$(comma_list "$@")" --mode auto
+    ;;
+  add-app | remove-app)
+    [ $# -gt 0 ] || { usage >&2; exit 2; }
+    apps=$(applications)
+    known=$(catalog | cut -f1)
+    for id in "$@"; do
+      if ! grep -qxF -- "$id" <<<"$known"; then
+        echo "software: $id isn't in the catalog; see 'software catalog'" >&2
+        exit 1
+      fi
+      if [ "$command" = remove-app ]; then
+        case " $apps " in
+          *" $id "*) ;;
+          *)
+            echo "software: $id isn't installed from the catalog" >&2
+            exit 1
+            ;;
+        esac
+      fi
+    done
+    if [ "$command" = add-app ]; then
+      new=()
+      for id in "$@"; do
+        case " $apps " in
+          *" $id "*) ;;
+          *) new+=("$id") ;;
+        esac
+      done
+      if [ ${#new[@]} -eq 0 ]; then
+        echo "Already installed for everyone: $*"
+        exit 0
+      fi
+    fi
+    operation=${command%-app}
+    run_helper change --setting calamares.applications "--$operation-applications" "$(comma_list "$@")" --mode auto
+    ;;
+  -h | --help | help)
+    usage
+    ;;
+  *)
+    usage >&2
+    exit 2
+    ;;
+esac

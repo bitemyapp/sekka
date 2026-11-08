@@ -5,6 +5,7 @@ Run after building Yukimi: python3 tests/test_sekka_update.py /nix/store/...-yuk
 Only Nix builds/profile changes and systemd activation are stubbed. No host
 configuration, profile, service, device, or credential is writable/visible.
 """
+import fcntl
 import json
 import os
 from pathlib import Path
@@ -44,7 +45,7 @@ CACHES = {'substituters': ['https://cache.nixos.org/', 'https://cache.numtide.co
           'keys': ['cache.nixos.org-1:x=', 'niks3.numtide.com-1:y=']}
 
 FAKE = r'''
-import json, os, pathlib, signal, subprocess, sys, time
+import json, os, pathlib, re, signal, subprocess, sys, time
 p = pathlib.Path
 name = p(sys.argv[0]).name
 a = sys.argv[1:]
@@ -57,6 +58,11 @@ if name == 'nix':
         assert 'inputs.sekka.url' in p('/etc/nixos/flake.nix').read_text()
         p('/etc/nixos/flake.lock').write_text(p('/state/updated.lock').read_text())
     elif 'eval' in a and any(x.endswith('.config.nix.settings') for x in a): print(p('/state/caches.json').read_text())
+    elif 'eval' in a and any(x.endswith('.config.calamares.applications') for x in a):
+        config = p('/etc/nixos/configuration.nix').read_text()
+        found = re.search(r'calamares.applications\s*=\s*\[([^]]*)\]', config)
+        if found: print(json.dumps(re.findall(r'"([^"\n]*)"', found[1])))
+        else: print(p('/state/effective-applications.json').read_text())
     elif 'eval' in a: print('["legacy-host"]')
     elif 'build' in a:
         p('/state/building').touch()
@@ -170,6 +176,150 @@ class Update(unittest.TestCase):
         self.assertEqual((self.config / 'flake.nix').read_text(), self.old)
         self.assertEqual((self.config / 'flake.lock').read_text(), ORIGINAL)
         self.assertFalse((self.root / 'state/activation').exists())
+
+    def prepared_configuration(self, edits):
+        plan = self.root / 'prepared'
+        shutil.copytree(self.config, plan / 'before')
+        shutil.copytree(self.config, plan / 'after')
+        for name, text in edits.items():
+            target = plan / 'after' / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(text)
+        # The production script builds this immutable snapshot before pkexec.
+        # No profile or host configuration is changed by adding test data.
+        return subprocess.check_output(['nix', 'store', 'add-path', str(plan)], text=True).strip()
+
+    def test_prepared_files_save_the_original_generation_and_rollback_modules(self):
+        original = (self.config / 'configuration.nix').read_text()
+        plan = self.prepared_configuration({
+            'configuration.nix': '{ imports = [ ./hardware-configuration.nix ./results/extra.nix ]; }',
+            'results/extra.nix': '{ services.openssh.enable = true; }',
+        })
+        self.run_cmd('/bin/yukimi-helper', 'change', '--configuration', plan)
+        history = self.root / 'var/lib/yukimi/configurations'
+        self.assertEqual((history / 'generation-1/configuration.nix').read_text(), original)
+        self.assertTrue((history / 'generation-2/results/extra.nix').is_file())
+        self.run_cmd('/bin/yukimi-helper', 'rollback', '1')
+        self.assertEqual((self.config / 'configuration.nix').read_text(), original)
+        self.assertFalse((self.config / 'results/extra.nix').exists())
+
+    def test_prepared_build_failure_restores_all_files(self):
+        original = (self.config / 'configuration.nix').read_text()
+        plan = self.prepared_configuration({'configuration.nix': '{ services.openssh.enable = true; }',
+                                            'extra.nix': '{ }'})
+        (self.root / 'state/fail').touch()
+        self.run_cmd('/bin/yukimi-helper', 'change', '--configuration', plan, ok=False)
+        self.assertEqual((self.config / 'configuration.nix').read_text(), original)
+        self.assertFalse((self.config / 'extra.nix').exists())
+        self.unchanged()
+
+    def test_prepared_change_checks_its_base_before_writing(self):
+        plan = self.prepared_configuration({'configuration.nix': '{ services.openssh.enable = true; }'})
+        (self.config / 'configuration.nix').write_text('{ services.printing.enable = true; }')
+        result = self.run_cmd('/bin/yukimi-helper', 'change', '--configuration', plan, ok=False)
+        self.assertIn('changed after preparation', result.stderr)
+        self.assertEqual((self.config / 'configuration.nix').read_text(), '{ services.printing.enable = true; }')
+        self.assertFalse((self.root / 'state/building').exists())
+
+    def test_prepared_change_cannot_write_while_another_operation_holds_the_lock(self):
+        original = (self.config / 'configuration.nix').read_text()
+        plan = self.prepared_configuration({'configuration.nix': '{ services.openssh.enable = true; }'})
+        with (self.root / 'run/lock/yukimi.lock').open('w') as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            result = self.run_cmd('/bin/yukimi-helper', 'change', '--configuration', plan, ok=False)
+        self.assertIn('Another Yukimi operation', result.stderr)
+        self.assertEqual((self.config / 'configuration.nix').read_text(), original)
+        self.assertFalse((self.root / 'state/building').exists())
+
+    def test_prepared_change_restores_files_when_its_client_is_terminated(self):
+        original = (self.config / 'configuration.nix').read_text()
+        plan = self.prepared_configuration({'configuration.nix': '{ services.openssh.enable = true; }',
+                                            'extra.nix': '{ }'})
+        (self.root / 'state/wait').touch()
+        process = subprocess.Popen(self.base + ['/bin/yukimi-helper', 'change', '--configuration', plan],
+                                   start_new_session=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        try:
+            for _ in range(100):
+                if (self.root / 'state/building').exists(): break
+                time.sleep(.05)
+            self.assertTrue((self.root / 'state/building').exists())
+            self.assertTrue((self.config / 'extra.nix').exists())
+            os.killpg(process.pid, signal.SIGTERM)
+            process.communicate(timeout=10)
+            self.assertNotEqual(process.returncode, 0)
+            self.assertEqual((self.config / 'configuration.nix').read_text(), original)
+            self.assertFalse((self.config / 'extra.nix').exists())
+            self.unchanged()
+        finally:
+            if process.poll() is None: process.kill()
+            process.wait()
+            process.stdout.close()
+            process.stderr.close()
+
+    def test_prepared_activation_failure_keeps_committed_files(self):
+        plan = self.prepared_configuration({'configuration.nix': '{ services.openssh.enable = true; }'})
+        (self.root / 'state/fail-activation').touch()
+        result = self.run_cmd('/bin/yukimi-helper', 'change', '--configuration', plan, ok=False)
+        self.assertIn('System changes had already begun', result.stdout)
+        self.assertEqual((self.config / 'configuration.nix').read_text(), '{ services.openssh.enable = true; }')
+
+    def test_prepared_change_refuses_managed_files(self):
+        original = (self.config / 'configuration.nix').read_text()
+        plan = self.prepared_configuration({'flake.nix': '{ }'})
+        self.run_cmd('/bin/yukimi-helper', 'change', '--configuration', plan, ok=False)
+        self.assertEqual((self.config / 'configuration.nix').read_text(), original)
+        self.unchanged()
+
+    def test_prepared_change_refuses_symlinks_and_mutable_plans(self):
+        plan = self.root / 'prepared'
+        shutil.copytree(self.config, plan / 'before')
+        shutil.copytree(self.config, plan / 'after')
+        (plan / 'after/extra.nix').symlink_to('/etc/passwd')
+        stored = subprocess.check_output(['nix', 'store', 'add-path', str(plan)], text=True).strip()
+        self.run_cmd('/bin/yukimi-helper', 'change', '--configuration', stored, ok=False)
+        self.assertFalse((self.config / 'extra.nix').exists())
+        self.run_cmd('/bin/yukimi-helper', 'change', '--configuration', '/prepared', ok=False)
+        self.unchanged()
+
+    def test_package_deltas_preserve_existing_packages_and_programs(self):
+        self.run_cmd('/bin/yukimi-helper', 'change', '--packages', 'ripgrep,git', '--programs', 'steam')
+        # Another client's old list is irrelevant: it submits only its intent.
+        self.run_cmd('/bin/yukimi-helper', 'change', '--add-packages', 'hello')
+        text = (self.config / 'yukimi.nix').read_text()
+        for name in ['ripgrep', 'git', 'hello', 'steam']:
+            self.assertIn('"' + name + '"', text)
+        self.run_cmd('/bin/yukimi-helper', 'change', '--remove-packages', 'ripgrep')
+        text = (self.config / 'yukimi.nix').read_text()
+        self.assertNotIn('"ripgrep"', text)
+        for name in ['git', 'hello', 'steam']:
+            self.assertIn('"' + name + '"', text)
+
+    def test_application_deltas_preserve_current_choices(self):
+        (self.root / 'etc/yukimi').mkdir(exist_ok=True)
+        (self.root / 'state/catalog.json').write_text(json.dumps([
+            {'id': name, 'name': name, 'description': '', 'category': 'Test'}
+            for name in ['codex', 'fish', 'docker']]))
+        (self.root / 'etc/yukimi/system.json').write_text(json.dumps({'catalogs': [
+            {'file': '/state/catalog.json', 'setting': 'calamares.applications'}]}))
+        (self.config / 'configuration.nix').write_text('{ calamares.applications = [ "codex" "fish" ]; }')
+        self.run_cmd('/bin/yukimi-helper', 'change', '--setting', 'calamares.applications',
+                     '--add-applications', 'docker')
+        text = (self.config / 'configuration.nix').read_text()
+        for name in ['codex', 'fish', 'docker']:
+            self.assertIn('"' + name + '"', text)
+        self.run_cmd('/bin/yukimi-helper', 'change', '--setting', 'calamares.applications',
+                     '--remove-applications', 'codex')
+        text = (self.config / 'configuration.nix').read_text()
+        self.assertNotIn('"codex"', text)
+        self.assertIn('"fish"', text)
+        self.assertIn('"docker"', text)
+        (self.config / 'configuration.nix').write_text('{ }')
+        (self.root / 'state/effective-applications.json').write_text('["codex", "fish"]')
+        self.run_cmd('/bin/yukimi-helper', 'change', '--setting', 'calamares.applications',
+                     '--add-applications', 'docker')
+        text = (self.config / 'configuration.nix').read_text()
+        for name in ['codex', 'fish', 'docker']:
+            self.assertIn('"' + name + '"', text)
 
     def test_preview_and_invalid_args_do_not_mutate(self):
         result = self.run_cmd('/bin/sekka-update', '--print-flake')
