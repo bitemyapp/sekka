@@ -229,6 +229,16 @@ in
         GNOME sessions without a lock screen.
       '';
     };
+    autoLogin = lib.mkOption {
+      type = lib.types.str;
+      default = "";
+      example = "alice";
+      description = ''
+        The account the computer logs in to by itself at boot, without a
+        password, on whichever login screen; empty for none. Settei's Users
+        & Groups sets it through Yukimi, which takes anyone with an account.
+      '';
+    };
   };
   config = {
     # Yukimi, for seeing and changing what is installed without editing
@@ -311,6 +321,15 @@ in
             }
           ];
         }
+        # Anyone with an account, or no one (Settei's Users & Groups
+        # proposes it): Yukimi checks the account exists as it writes it.
+        {
+          setting = "calamares.autoLogin";
+          title = "Log in automatically";
+          people = true;
+          value = cfg.autoLogin;
+          options = [ ];
+        }
       ];
     assertions = [
       {
@@ -384,6 +403,12 @@ in
       environment.XCURSOR_PATH = "/run/current-system/sw/share/icons:${pkgs.kdePackages.breeze}/share/icons";
     };
     services.displayManager.defaultSession = sessions.${defaultDesktop};
+    # Whichever login screen, it starts that person's default session at
+    # boot without asking (Aizome's through greetd's initial session).
+    services.displayManager.autoLogin = lib.mkIf (cfg.autoLogin != "") {
+      enable = true;
+      user = cfg.autoLogin;
+    };
     services.desktopManager.plasma6.enable = has "plasma";
     services.desktopManager.gnome.enable = has "gnome";
     services.xserver.desktopManager.xfce.enable = has "xfce";

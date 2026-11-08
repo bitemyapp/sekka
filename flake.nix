@@ -713,6 +713,7 @@
         tuning-policy = import ./nix/scheduling/policy-test.nix { inherit nixpkgs system; };
         boot-splash = import ./nix/boot-splash-test.nix { inherit pkgs; };
         boot-splash-choice = import ./nix/boot-splash-choice-test.nix { inherit pkgs inputs; };
+        auto-login-choice = import ./nix/auto-login-choice-test.nix { inherit pkgs inputs; };
         prebuilt-binaries = import ./nix/prebuilt-binaries-vm-test.nix { inherit pkgs; };
         fish = import ./nix/fish-vm-test.nix {
           inherit pkgs;

@@ -126,7 +126,11 @@ palette. Search filters the sidebar and highlights options.
   screen off, show the clock.
 - **Users & Groups**: the current user's name, picture, password; other
   accounts (AccountsService), admin or standard, add and remove, automatic
-  login.
+  login. On Sekka automatic login is the system's `calamares.autoLogin`,
+  which every login screen it offers reads: Settei proposes it in Yukimi
+  (`aizome-yukimi --choose calamares.autoLogin=NAME`, or empty for no one),
+  and it applies from the next start. Elsewhere it is AccountsService's
+  flag (GDM's); under greetd it says what `[initial_session]` has.
 - **Keyboard**: layouts (searchable list from `aizome-sys`'s xkb data, with
   variants), switching shortcut, key repeat delay and rate, modifier keys
   (swap Alt/Super, Control/Super or Control/Alt on both sides or just one),
@@ -294,9 +298,10 @@ It also changes what used to take typing `sudo` commands:
   Sekka keeps that choice through later updates.
 - **Desktops**: the system's own choices, as Sekka declares them
   (`programs.yukimi.choices` in `/etc/yukimi/system.json`): which
-  desktops are installed, which starts by default, the login screen, and
-  the boot splash (a `boolean` choice, `true` or `false`, which the helper
-  writes as a Nix boolean).
+  desktops are installed, which starts by default, the login screen, who
+  logs in by themselves (a `people` choice: anyone with an account, or no
+  one), and the boot splash (a `boolean` choice, `true` or `false`, which
+  the helper writes as a Nix boolean).
   - Picking changes nothing. Apply asks, then builds once
     (`change --choose SETTING=VALUE[,VALUE]… --mode auto`).
   - A change the running system can't take now, such as another login

@@ -1362,6 +1362,13 @@ impl Yukimi {
         if let Some(page) = launch.page {
             self.show(page, cx);
         }
+        // Settei may propose someone added since Yukimi read the accounts.
+        if !launch.choose.is_empty() {
+            let people = yukimi_system::people::read();
+            let mut model = (*self.model).clone();
+            model.setup.facts.choices = model.setup.facts.choices.iter().map(|c| c.with_people(&people)).collect();
+            self.model = Arc::new(model);
+        }
         let mut proposed = false;
         for (setting, values) in launch.choose {
             match self.choices().iter().find(|c| c.setting == setting) {
@@ -1905,14 +1912,19 @@ pub fn launch_from_args(args: &[String]) -> Result<Launch, String> {
             "--choose" => {
                 let value = it.next().ok_or("--choose takes SETTING=VALUE[,VALUE]")?;
                 let (setting, values) = value.split_once('=').ok_or("--choose takes SETTING=VALUE[,VALUE]")?;
-                let values: Vec<String> =
+                let mut values: Vec<String> =
                     values.split(',').map(str::trim).filter(|v| !v.is_empty()).map(str::to_owned).collect();
+                // No value: the empty one, which is no one for who logs in by
+                // themselves (other choices refuse it once read).
+                if values.is_empty() {
+                    values.push(String::new());
+                }
                 let named = |s: &str| {
                     !s.is_empty()
                         && s.split('.')
                             .all(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_alphanumeric() || c == '-'))
                 };
-                if !named(setting) || values.is_empty() || launch.choose.iter().any(|(s, _)| s == setting) {
+                if !named(setting) || launch.choose.iter().any(|(s, _)| s == setting) {
                     return Err(format!("--choose {value:?} isn't SETTING=VALUE[,VALUE]"));
                 }
                 launch.choose.push((setting.to_owned(), values));

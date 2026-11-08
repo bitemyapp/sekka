@@ -131,6 +131,9 @@ The `greeter-x11` VM check covers Xfce followed by an Aizome login.
 `services.displayManager.autoLogin` becomes greetd's initial session,
 `aizome-greeter --session ID`. It starts the default session at boot with
 the environment the greeter would give it, without showing the greeter.
+AccountsService's automatic-login flag only reaches GDM, so on Sekka the
+setting is `calamares.autoLogin`, which Settei's Users & Groups proposes in
+Yukimi (see [apps.md](apps.md)).
 
 On Sekka, `calamares.loginScreen` (`auto`) picks Aizome's login screen
 whenever Aizome is chosen, listing each chosen desktop once. The exception

@@ -1133,14 +1133,19 @@ previous version.
 The system's own choices travel with an update or go alone: the Nix module
 declares which settings of the main configuration file Yukimi may write, and
 to which values (`programs.yukimi.choices`, listed in `/etc/yukimi/system.json`;
-Sekka declares `calamares.desktops`, `calamares.defaultDesktop` and
-`calamares.loginScreen` in `installer/genkan/rust/system/desktops.nix`, and
-`calamares.bootSplash.enable` in `installer/genkan/rust/system/boot-splash/`).
+Sekka declares `calamares.desktops`, `calamares.defaultDesktop`,
+`calamares.loginScreen` and `calamares.autoLogin` in
+`installer/genkan/rust/system/desktops.nix`, and `calamares.bootSplash.enable`
+in `installer/genkan/rust/system/boot-splash/`).
 `yukimi-helper change --choose SETTING=VALUE[,VALUE]` (and `sekka-update
 --choose`) refuses any other setting or value, writes a string, a list of
 strings or a boolean as declared (a `boolean` choice's options are `true` and
-`false`, given as strings so older readers of `system.json` still parse it),
-and builds once with the rest of the change, so choosing
+`false`, given as strings so older readers of `system.json` still parse it).
+A `people` choice (`calamares.autoLogin`, who logs in by themselves) takes no
+value for no one, written as `""`, or a name the helper checks against
+`/etc/passwd` as it writes it: an account from uid 1000 to 59999 with a login
+shell, so people added in Settei after installing count. The helper builds
+once with the rest of the change, so choosing
 Aizome's login screen is a click and a password, with the same switch-or-boot
 planning and Restart button as an update. A changed login screen always stages
 for the next start.

@@ -762,9 +762,12 @@ fn a_launch_proposes_and_changes_nothing_by_itself() {
         Launch { page: None, choose: vec![("calamares.loginScreen".into(), vec!["aizome".into()])], early: Some(true) }
     );
     assert_eq!(launch_from_args(&args(&["--page", "desktops"])).unwrap().page, Some(Page::Desktops));
-    for bad in [&["--choose"][..], &["--choose", "x"], &["--choose", "a b=c"], &["--choose", "a="], &["--page", "x"]] {
+    for bad in [&["--choose"][..], &["--choose", "x"], &["--choose", "a b=c"], &["--page", "x"]] {
         assert!(launch_from_args(&args(bad)).is_err(), "{bad:?}");
     }
+    // No value: the empty one (no one logs in by themselves).
+    let no_one = launch_from_args(&args(&["--choose", "calamares.autoLogin="])).unwrap();
+    assert_eq!(no_one.choose, [("calamares.autoLogin".to_owned(), vec![String::new()])]);
     assert!(launch_from_args(&args(&["--choose", "a=b", "--choose", "a=c"])).is_err(), "once each");
 
     // A running Yukimi handed a launch shows what it proposes.

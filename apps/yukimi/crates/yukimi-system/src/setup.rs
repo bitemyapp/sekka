@@ -59,6 +59,11 @@ pub struct Choice {
     /// desktop must be one of the desktops. Yukimi offers only those.
     #[serde(default)]
     pub within: Option<String>,
+    /// One of the computer's people, or no one (an empty string): who logs
+    /// in by themselves. Anyone with an account when it's written may be
+    /// chosen, not only the options, which may add values of their own.
+    #[serde(default)]
+    pub people: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
@@ -102,6 +107,21 @@ impl Choice {
     /// Whether `values` may be written: declared ones, one for a string or
     /// a boolean (`true` or `false`), at least one and no repeats for a list.
     pub fn allows(&self, values: &[String]) -> Result<(), String> {
+        self.allows_people(values, |_| false)
+    }
+
+    /// As [`allows`](Choice::allows), where a `people` choice may also name
+    /// anyone `is_person` says has an account on this computer, or no one.
+    pub fn allows_people(&self, values: &[String], is_person: impl Fn(&str) -> bool) -> Result<(), String> {
+        if self.people {
+            return match values {
+                [] => Ok(()),
+                [v] if v.is_empty() || self.options.iter().any(|o| &o.id == v) => Ok(()),
+                [v] if crate::people::valid_name(v) && is_person(v) => Ok(()),
+                [v] => Err(format!("{v:?} isn't one of the people on this computer")),
+                _ => Err(format!("{} takes one person", self.setting)),
+            };
+        }
         if let Some(bad) = values.iter().find(|v| !self.options.iter().any(|o| &o.id == *v)) {
             return Err(format!("{bad:?} isn't one of the choices for {}", self.setting));
         }
@@ -120,6 +140,33 @@ impl Choice {
                 }
             }
         }
+    }
+
+    /// A `people` choice as Yukimi offers it: no one, its own options, then
+    /// each of `people` (by full name, when they have one). Others as they
+    /// are.
+    pub fn with_people(&self, people: &[crate::people::Person]) -> Choice {
+        if !self.people {
+            return self.clone();
+        }
+        let option = |id: &str, title: &str, detail: Option<String>| ChoiceOption {
+            id: id.to_owned(),
+            title: title.to_owned(),
+            detail,
+            needs: None,
+        };
+        let mut options = vec![option("", "No one", Some("Everyone signs in at the login screen.".into()))];
+        options.extend(self.options.iter().filter(|o| !o.id.is_empty()).cloned());
+        for p in people {
+            if options.iter().any(|o| o.id == p.name) {
+                continue;
+            }
+            options.push(match &p.full_name {
+                Some(full) => option(&p.name, full, Some(p.name.clone())),
+                None => option(&p.name, &p.name, None),
+            });
+        }
+        Choice { options, ..self.clone() }
     }
 }
 
@@ -396,5 +443,38 @@ mod tests {
         assert!(splash.allows(&v(&["true", "false"])).is_err(), "one value");
         assert!(splash.allows(&v(&["yes"])).is_err(), "not declared");
         assert!(wrong.allows(&v(&["on"])).is_err(), "declared, but not true or false");
+    }
+
+    #[test]
+    fn a_people_choice_is_anyone_with_an_account_or_no_one() {
+        use crate::people::Person;
+        let facts: Facts = serde_json::from_str(
+            r#"{"choices":[{"setting":"calamares.autoLogin","title":"Log in automatically","people":true,
+                "value":"","options":[]}]}"#,
+        )
+        .unwrap();
+        let login = &facts.choices[0];
+        assert!(login.people);
+        let v = |s: &[&str]| s.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        let here = |name: &str| ["adama", "kara"].contains(&name);
+        assert!(login.allows_people(&v(&["kara"]), here).is_ok(), "added after the system was built");
+        assert!(login.allows_people(&v(&[]), here).is_ok(), "no one");
+        assert!(login.allows_people(&v(&[""]), here).is_ok(), "no one, as the empty value");
+        assert!(login.allows_people(&v(&["starbuck"]), here).is_err(), "no such account");
+        assert!(login.allows_people(&v(&["adama", "kara"]), here).is_err(), "one person");
+        assert!(login.allows(&v(&["adama"])).is_err(), "only with the computer's people");
+        // As Yukimi offers it: no one first, then each person.
+        let people = [
+            Person { name: "adama".into(), full_name: Some("William Adama".into()) },
+            Person { name: "kara".into(), full_name: None },
+        ];
+        let offered = login.with_people(&people);
+        let ids: Vec<&str> = offered.options.iter().map(|o| o.id.as_str()).collect();
+        let titles: Vec<&str> = offered.options.iter().map(|o| o.title.as_str()).collect();
+        assert_eq!(ids, ["", "adama", "kara"]);
+        assert_eq!(titles, ["No one", "William Adama", "kara"]);
+        assert!(offered.allows(&v(&["kara"])).is_ok());
+        assert!(offered.allows(&v(&["starbuck"])).is_err());
+        assert_eq!(login.value.values(), [""]);
     }
 }
