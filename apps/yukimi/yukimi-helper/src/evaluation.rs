@@ -2,6 +2,12 @@
 //! One finalized configuration and derivation for the entire transaction.
 use super::*;
 
+/// The binary caches and their keys a configuration names, if any.
+pub type Caches = Option<(Vec<String>, Vec<String>)>;
+
+/// The last snapshot's system and the caches its configuration names.
+const KNOWN_CACHES: &str = "/var/lib/yukimi/configured-caches.json";
+
 pub struct Context {
     directory: PathBuf,
     cores: Option<u32>,
@@ -36,15 +42,18 @@ impl Context {
         lock.args(["flake", "lock"]).arg(setup.flake());
         output(lock, "Finalizing the configuration inputs")?;
         // Let Nix select the source, including Git tracking rules and a
-        // flake inside a larger repository. Do not use the deliberately
-        // lossy generation-backup copier as a build snapshot.
-        let mut metadata = nix();
-        metadata.args(["flake", "metadata", "--json", "--no-update-lock-file", "--option", "lazy-trees", "false"]);
-        metadata.arg(setup.flake());
-        let metadata: serde_json::Value = serde_json::from_str(&output(metadata, "Snapshotting the configuration")?)?;
+        // flake inside a larger repository (reached through a symlink, say),
+        // and decide from what it selected. With lazy trees this copies
+        // nothing, so a Git work tree is never copied only to be set aside.
+        if !snapshot(&metadata(setup, &[])?) {
+            return Ok(setup.flake());
+        }
+        // Copy the plain directory. Do not use the deliberately lossy
+        // generation-backup copier as a build snapshot.
+        let copied = metadata(setup, &["--option", "lazy-trees", "false"])?;
         let source =
-            metadata["path"].as_str().ok_or_else(|| Failure("Nix did not return a configuration snapshot".into()))?;
-        if !store_path(source) {
+            copied["path"].as_str().ok_or_else(|| Failure("Nix did not return a configuration snapshot".into()))?;
+        if !snapshot(&copied) || !store_path(source) {
             return Err(Failure("Nix returned an invalid configuration snapshot".into()));
         }
         // Keep the snapshot available for each command that reads nixConfig,
@@ -52,7 +61,34 @@ impl Context {
         let mut keep = command("nix-store");
         keep.arg("--add-root").arg(self.source_root()).args(["--indirect", "--realise", source]);
         output(keep, "Keeping the configuration snapshot")?;
-        Ok(reference(&metadata, &setup.flake(), setup.git, source))
+        Ok(format!("path:{source}"))
+    }
+
+    /// The binary caches a snapshot's configuration names, as found by an
+    /// earlier operation. `nix eval` never uses Nix's evaluation cache, so
+    /// reading them costs most of an evaluation; an immutable snapshot,
+    /// evaluated purely, always names the same ones.
+    pub fn known_caches(&self, system: &str) -> Option<Caches> {
+        if !system.starts_with("path:/nix/store/") {
+            return None;
+        }
+        let text = std::fs::read_to_string(KNOWN_CACHES).ok()?;
+        let (known, caches): (String, Caches) = serde_json::from_str(&text).ok()?;
+        (known == system).then_some(caches)
+    }
+
+    /// Remember what a snapshot's configuration names, for the next retry.
+    /// Losing this only costs that evaluation again.
+    pub fn remember_caches(&self, system: &str, caches: &Caches) {
+        if !system.starts_with("path:/nix/store/") {
+            return;
+        }
+        let pending = Path::new(KNOWN_CACHES).with_extension("new");
+        if let Ok(json) = serde_json::to_vec(&(system, caches))
+            && std::fs::write(&pending, json).is_ok()
+        {
+            let _ = std::fs::rename(&pending, KNOWN_CACHES);
+        }
     }
 
     pub fn keep_derivation(&self, derivation: &str) -> Result<()> {
@@ -88,18 +124,23 @@ fn store_path(path: &str) -> bool {
         })
 }
 
-fn reference(metadata: &serde_json::Value, original: &str, git: bool, source: &str) -> String {
+fn metadata(setup: &Setup, options: &[&str]) -> Result<serde_json::Value> {
+    let mut metadata = nix();
+    metadata.args(["flake", "metadata", "--json", "--no-update-lock-file"]).args(options).arg(setup.flake());
+    Ok(serde_json::from_str(&output(metadata, "Snapshotting the configuration")?)?)
+}
+
+/// Whether the flake Nix selected is a plain directory without local
+/// inputs, whose store copy can stand in for it.
+fn snapshot(metadata: &serde_json::Value) -> bool {
     let local_inputs = metadata["locks"]["nodes"].as_object().is_some_and(|nodes| {
         nodes.values().any(|node| node["locked"]["type"] == "path" || node.get("parent").is_some())
     });
-    if git || local_inputs {
-        // Git already has a stable evaluator fingerprint. Keep its self.rev,
-        // dirtyRev and subdirectory semantics. Relative/mutable path inputs
-        // must also keep their original resolution base.
-        original.to_owned()
-    } else {
-        format!("path:{source}")
-    }
+    // Git already has a stable evaluator fingerprint. Keep its self.rev,
+    // dirtyRev and subdirectory semantics: its source is the whole work
+    // tree, not the flake's directory. Relative/mutable path inputs must
+    // also keep their original resolution base.
+    metadata["locked"]["type"] == "path" && metadata["locked"].get("dir").is_none() && !local_inputs
 }
 
 #[cfg(test)]
@@ -108,17 +149,24 @@ mod tests {
 
     #[test]
     fn snapshot_keeps_git_metadata_and_local_input_resolution() {
-        let source = "/nix/store/00000000000000000000000000000000-source";
-        let original = "/home/example/config";
-        let locked = serde_json::json!({"locks": {"nodes": {"root": {}, "nixpkgs": {"locked": {"type": "github"}}}}});
-        assert_eq!(reference(&locked, original, false, source), format!("path:{source}"));
-        assert_eq!(reference(&locked, original, true, source), original);
+        let directory = serde_json::json!({"type": "path", "path": "/home/example/config"});
+        let nodes = serde_json::json!({"root": {}, "nixpkgs": {"locked": {"type": "github"}}});
+        assert!(snapshot(&serde_json::json!({"locked": directory, "locks": {"nodes": nodes}})));
+        // Nix decides, not a search for .git: a symlink into a repository
+        // makes a Git flake in a subdirectory, whose source is the whole tree.
+        for locked in [
+            serde_json::json!({"type": "git", "url": "file:///home/example/dotfiles", "dir": "nixos"}),
+            serde_json::json!({"type": "git", "url": "file:///home/example/config"}),
+            serde_json::json!({"type": "path", "path": "/home/example", "dir": "config"}),
+        ] {
+            assert!(!snapshot(&serde_json::json!({"locked": locked, "locks": {"nodes": nodes}})));
+        }
         for node in [
             serde_json::json!({"locked": {"type": "path", "path": "../local"}}),
             serde_json::json!({"parent": ["root"]}),
         ] {
-            let metadata = serde_json::json!({"locks": {"nodes": {"local": node}}});
-            assert_eq!(reference(&metadata, original, false, source), original);
+            let metadata = serde_json::json!({"locked": directory, "locks": {"nodes": {"local": node}}});
+            assert!(!snapshot(&metadata));
         }
     }
 

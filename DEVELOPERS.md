@@ -1108,13 +1108,20 @@ The ordinary GUI action updates Sekka, and with it everything that follows
 it, along with any other source with a newer revision; the CLI updates only
 Sekka. Sources that don't follow Sekka keep their own rows.
 
-Once configuration edits and input updates are complete, Yukimi asks Nix for
-the configuration's store snapshot. For ordinary directory flakes it uses that
-immutable reference for host selection, cache settings and system evaluation;
-unchanged retries can reuse Nix's persistent evaluation cache. Git flakes keep
-their original reference (and revision/subdirectory metadata), as do flakes
-with local path inputs, whose resolution must remain relative to the original
-configuration. Evaluation uses `nix path-info --derivation`, including the new
+Once configuration edits and input updates are complete, Yukimi asks Nix which
+source the configuration is. When Nix resolves it to an ordinary directory
+flake, Yukimi copies that directory to the store and uses the immutable
+snapshot for host selection, cache settings and system evaluation; unchanged
+retries can reuse Nix's persistent evaluation cache. Nix's resolution decides,
+not a search for `.git`: a configuration reached through a symlink into a Git
+repository is a flake in that repository's subdirectory. Git flakes keep their
+original reference (and revision/subdirectory metadata), as do flakes with
+local path inputs, whose resolution must remain relative to the original
+configuration; neither is copied for a snapshot. `nix eval` never uses the
+evaluation cache, so the cache settings an unchanged snapshot names are
+remembered in `/var/lib/yukimi/configured-caches.json` rather than evaluated
+again; those of a Git flake are read on every update. Evaluation uses
+`nix path-info --derivation`, including the new
 system's binary caches for import-from-derivation. Cache planning and building
 use the same flake reference so Nix applies its accepted `nixConfig` settings
 on each command and reuses the persistent derivation cache. Both commands check
@@ -1270,8 +1277,9 @@ flake to check actual module and dependency compatibility before deployment.
 
 `nix build .#checks.x86_64-linux.yukimi-evaluation` runs the packaged helper with
 real Nix in a disposable VM. A traced, inputless cached system checks evaluation-cache
-reuse on an unchanged retry and invalidation after source edits, distinct phase
-timings, and GC-root cleanup. Activation writes only a fixture marker. This is
+and cache-setting reuse on an unchanged retry and invalidation after source edits,
+distinct phase timings, GC-root cleanup, and a configuration reached through a
+symlink into a Git repository. Activation writes only a fixture marker. This is
 a component test; it does not qualify fresh compilation, an ISO or hardware.
 Signed-cache fixtures also require substitution during import-from-derivation
 and through accepted flake `nixConfig`, with local compilation disabled, and

@@ -556,7 +556,10 @@ fn with_room<T>(work: impl FnOnce() -> Result<T>) -> Result<T> {
 
 /// The binary caches and their keys a system's configuration names, if it
 /// names any. A configuration that doesn't evaluate is reported by the build.
-fn caches(context: &evaluation::Context, system: &str) -> Option<(Vec<String>, Vec<String>)> {
+fn caches(context: &evaluation::Context, system: &str) -> evaluation::Caches {
+    if let Some(known) = context.known_caches(system) {
+        return known;
+    }
     let mut eval = context.nix();
     eval.args(["eval", "--json", "--no-update-lock-file", &format!("{system}.config.nix.settings"), "--apply"]);
     eval.arg(
@@ -575,14 +578,17 @@ fn caches(context: &evaluation::Context, system: &str) -> Option<(Vec<String>, V
             .collect()
     };
     let (substituters, keys) = (words("substituters"), words("keys"));
-    (!substituters.is_empty() && !keys.is_empty()).then_some((substituters, keys))
+    // Only an evaluation that finished: a failure may be transient.
+    let caches = (!substituters.is_empty() && !keys.is_empty()).then_some((substituters, keys));
+    context.remember_caches(system, &caches);
+    caches
 }
 
 /// Build the new system: a flake's configuration for this computer (or its
 /// only one), or `configuration.nix` with the channels' Nixpkgs.
 fn build(setup: &Setup, context: &evaluation::Context) -> Result<String> {
     if setup.kind == Kind::Channels {
-        let mut build = nix();
+        let mut build = context.nix();
         build.args(["build", "--impure", "--log-format", "internal-json", "-v", "--no-link", "--print-out-paths"]);
         build.args(["--file", "<nixpkgs/nixos>", "system"]);
         build.env("NIXOS_CONFIG", setup.dir.join("configuration.nix"));

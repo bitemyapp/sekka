@@ -50,6 +50,10 @@ name = p(sys.argv[0]).name
 a = sys.argv[1:]
 with open('/state/commands', 'a') as out: out.write(json.dumps([name] + a) + '\n')
 if name == 'nix':
+    # Nix may resolve the configuration to a Git flake in a subdirectory
+    # (a symlink into a repository), which must keep its own reference.
+    git = p('/state/git-configuration').exists()
+    flake = '/etc/nixos' if git else 'path:/nix/store/00000000000000000000000000000000-config'
     if 'update' in a:
         assert 'sekka' in a, a
         # The other inputs follow Sekka's own and move with it.
@@ -62,10 +66,12 @@ if name == 'nix':
     elif 'metadata' in a:
         if p('/state/fail-snapshot').exists(): sys.exit(1)
         assert '--no-update-lock-file' in a, a
-        print(json.dumps({'path': '/nix/store/00000000000000000000000000000000-config', 'locks': {'nodes': {}}}))
+        assert not (git and 'lazy-trees' in a), 'a Git work tree was copied to the store'
+        locked = {'type': 'git', 'url': 'file:///home/example/dotfiles', 'dir': 'nixos'} if git else {'type': 'path', 'path': '/etc/nixos'}
+        print(json.dumps({'path': '/nix/store/00000000000000000000000000000000-config', 'locked': locked, 'locks': {'nodes': {}}}))
     elif 'path-info' in a:
         assert '--derivation' in a and '--no-update-lock-file' in a, a
-        assert any(x.startswith('path:/nix/store/00000000000000000000000000000000-config#') for x in a), a
+        assert any(x.startswith(flake + '#') for x in a), a
         if p('/state/require-evaluation-cache').exists():
             caches = json.loads(p('/state/caches.json').read_text())
             assert a[a.index('extra-substituters') + 1].split() == caches['substituters'], a
@@ -81,9 +87,10 @@ if name == 'nix':
             p(a[a.index('--out-link') + 1]).symlink_to(a[-1])
             sys.exit(0)
         assert '--json' in a and '--no-update-lock-file' in a, a
-        assert 'path:/nix/store/00000000000000000000000000000000-config#nixosConfigurations."legacy-host".config.system.build.toplevel' in a, a
+        assert flake + '#nixosConfigurations."legacy-host".config.system.build.toplevel' in a, a
         operation = sorted(p('/var/lib/yukimi/operations').glob('*'))[-1]
-        assert str((operation / 'evaluation-root').readlink()) == '/nix/store/00000000000000000000000000000000-config'
+        if git: assert not (operation / 'evaluation-root').is_symlink()
+        else: assert str((operation / 'evaluation-root').readlink()) == '/nix/store/00000000000000000000000000000000-config'
         assert str((operation / 'derivation-root').readlink()) == '/nix/store/00000000000000000000000000000000-system.drv'
         changed = p('/state/change-after-evaluation' if '--dry-run' in a else '/state/change-after-planning').exists()
         result = [{'drvPath': '/nix/store/00000000000000000000000000000000-' + ('changed' if changed else 'system') + '.drv',
@@ -264,6 +271,29 @@ class Update(unittest.TestCase):
         (self.root / 'state/require-evaluation-cache').touch()
         self.run_cmd('/bin/sekka-update', '--boot')
         self.assertTrue((self.root / 'state/activation').exists())
+
+    def test_unchanged_snapshot_reads_its_cache_settings_once(self):
+        # `nix eval` never uses Nix's evaluation cache; the snapshot can't change.
+        (self.root / 'state/require-evaluation-cache').touch()
+        for _ in range(2):
+            self.run_cmd('/bin/sekka-update', '--boot')
+        commands = [json.loads(line) for line in (self.root / 'state/commands').read_text().splitlines()]
+        self.assertEqual(sum(any(x.endswith('.config.nix.settings') for x in c) for c in commands), 1)
+        builds = [c for c in commands if c[0] == 'nix' and 'build' in c and '--json' in c and '--dry-run' not in c]
+        self.assertEqual(len(builds), 2)
+        for build in builds:
+            self.assertEqual(build[build.index('extra-substituters') + 1].split(), CACHES['substituters'])
+
+    def test_git_flake_keeps_its_reference_and_is_not_copied(self):
+        (self.root / 'state/git-configuration').touch()
+        for _ in range(2):
+            result = self.run_cmd('/bin/yukimi-helper', 'change', '--mode', 'boot')
+            self.assertTrue(json.loads(result.stdout)['ok'])
+        commands = [json.loads(line) for line in (self.root / 'state/commands').read_text().splitlines()]
+        self.assertFalse(any(c[0] == 'nix-store' for c in commands))
+        # A work tree can change, so its cache settings are read each time.
+        self.assertEqual(sum(any(x.endswith('.config.nix.settings') for x in c) for c in commands), 2)
+        self.assertFalse(list((self.root / 'var/lib/yukimi/operations').glob('*/*-root')))
 
     def test_changed_derivation_is_never_activated(self):
         for phase in ['evaluation', 'planning']:

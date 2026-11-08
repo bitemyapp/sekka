@@ -142,7 +142,8 @@ in
       '';
     };
     evaluationCores = lib.mkOption {
-      type = lib.types.nullOr lib.types.ints.unsigned;
+      # The helper reads it as 32 bits; a larger value would void every fact.
+      type = lib.types.nullOr lib.types.ints.u32;
       default = null;
       description = ''
         Evaluator thread limit for Nix implementations supporting eval-cores

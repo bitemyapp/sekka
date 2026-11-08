@@ -21,7 +21,7 @@ let
     {
       outputs = _: {
         nixosConfigurations.machine.config = {
-          nix.settings = {};
+          nix.settings = builtins.trace "YUKIMI_SETTINGS_EVAL" {};
           system.build.toplevel = builtins.trace "YUKIMI_EVAL_CACHE_MISS" {
             type = "derivation";
             name = "yukimi-evaluation-system";
@@ -60,7 +60,10 @@ pkgs.testers.runNixOSTest {
       # Cache regressions must fail instead of silently compiling locally.
       max-jobs = 0;
     };
-    environment.systemPackages = [ helper ];
+    environment.systemPackages = [
+      helper
+      pkgs.git
+    ];
     environment.etc."yukimi/system.json".text = builtins.toJSON { evaluationCores = 8; };
   };
   testScript = ''
@@ -86,6 +89,9 @@ pkgs.testers.runNixOSTest {
     assert first["system"] == second["system"]
     assert "YUKIMI_EVAL_CACHE_MISS" in first_log, first_log
     assert "YUKIMI_EVAL_CACHE_MISS" not in second_log, second_log
+    # Nor are the unchanged snapshot's cache settings evaluated again.
+    assert "YUKIMI_SETTINGS_EVAL" in first_log, first_log
+    assert "YUKIMI_SETTINGS_EVAL" not in second_log, second_log
     for phase in ["Evaluating your configuration", "Checking for cached packages", "Downloading and building your system"]:
         assert f"Yukimi phase: {phase}; elapsed_ms=" in second_log, second_log
     # New source bytes invalidate the snapshot/cache even though the builder
@@ -93,6 +99,7 @@ pkgs.testers.runNixOSTest {
     machine.succeed("echo '# changed' >> /etc/nixos/flake.nix")
     third, third_log = update()
     assert "YUKIMI_EVAL_CACHE_MISS" in third_log, third_log
+    assert "YUKIMI_SETTINGS_EVAL" in third_log, third_log
     assert third["system"] == first["system"]
 
     # Import fixture bytes as fixed-output paths, publish them, then remove
@@ -128,7 +135,7 @@ pkgs.testers.runNixOSTest {
 
     with subtest("new system caches are available to import-from-derivation"):
         expression, target = cached_derivation("yukimi-ifd", "echo cached > $out")
-        text = original.replace("nix.settings = {};", "nix.settings = { substituters = [ "
+        text = original.replace('nix.settings = builtins.trace "YUKIMI_SETTINGS_EVAL" {};', "nix.settings = { substituters = [ "
                                 + json.dumps(cache) + " ]; trusted-public-keys = [ " + json.dumps(key) + " ]; };")
         text = text.replace('builtins.trace "YUKIMI_EVAL_CACHE_MISS"',
                             "assert builtins.readFile (" + expression + ') == "cached\\n"; builtins.trace "YUKIMI_EVAL_CACHE_MISS"')
@@ -162,5 +169,17 @@ pkgs.testers.runNixOSTest {
         assert result["system"] == target, result
         # The rejected attempt already evaluated this unchanged source.
         assert "YUKIMI_EVAL_CACHE_MISS" not in log, log
+
+    with subtest("a symlink into a Git repository keeps the repository's flake"):
+        # Nix resolves the link to a flake in the repository's subdirectory,
+        # whose store source is the whole work tree, not the flake's directory.
+        machine.succeed("mkdir -p /root/dotfiles/nixos; printf %s " + shlex.quote(original)
+                        + " > /root/dotfiles/nixos/flake.nix; ln -s /root/dotfiles/nixos /root/configuration")
+        machine.succeed("cd /root/dotfiles && git init -q && git add -A && nix flake lock ./nixos && git add -A"
+                        + " && git -c user.name=Yukimi -c user.email=yukimi@example.invalid commit -qm fixture")
+        facts = {"evaluationCores": 8, "configuration": "/root/configuration"}
+        machine.succeed("rm /etc/yukimi/system.json; printf %s " + shlex.quote(json.dumps(facts)) + " > /etc/yukimi/system.json")
+        result, log = update()
+        assert result["system"] == first["system"], result
   '';
 }
