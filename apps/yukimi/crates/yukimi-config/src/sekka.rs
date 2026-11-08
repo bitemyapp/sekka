@@ -44,13 +44,19 @@ const TARBALL_EARLY: &str = "github:bitemyapp/sekka?ref=main";
 
 /// Whether a Sekka address is the early-updates choice.
 pub fn early(url: &str) -> bool {
-    url == EARLY || url == TARBALL_EARLY
+    if url == TARBALL_EARLY {
+        return true;
+    }
+    let Some((base, query)) = url.split_once('?') else { return false };
+    base == "git+https://github.com/bitemyapp/sekka"
+        && !query.split('&').any(|param| param.split('=').next() == Some("rev"))
+        && matches!(crate::branch::of(url).as_deref(), Some("main" | "refs/heads/main"))
 }
 
-/// Return the flake to update. A system following `main` (or the default
-/// branch) by default follows `nightly` instead; early updates ([`EARLY`]),
-/// other Sekka branches and pins stay as chosen, with branches fetched with
-/// Git ([`fetched_with_git`]). Inputs at the addresses Sekka's
+/// Return the flake to update. A system following the installer's original
+/// `github:` address for `main` (or the default branch) follows `nightly`
+/// instead; early updates ([`EARLY`]), custom refs and Git addresses stay as
+/// chosen ([`fetched_with_git`]). Inputs at the addresses Sekka's
 /// installations have always used then follow Sekka's own ([`follow_sekka`]).
 pub fn prepare(text: &str) -> Result<String, String> {
     let text = if let Some(url) = edit::string_value(text, &["inputs", "sekka", "url"]).map_err(|e| e.to_string())? {
@@ -164,33 +170,21 @@ fn official(url: &str, repo: &str) -> bool {
         || url.strip_prefix(&git).is_some_and(|s| s.starts_with('?'))
 }
 
-/// The address a `github:` Sekka address is fetched with Git at, when it
-/// follows a branch: `main` (or the default branch) as followed by default
-/// becomes [`NIGHTLY`], early updates [`EARLY`], and any other branch the
-/// same branch. `None` for addresses that stay as they are: pins to one
-/// commit, which never download again, addresses with settings of their
-/// own, and those already fetched with Git.
+/// Fetch the installation's known `github:` addresses with Git: the old
+/// default and `main` become [`NIGHTLY`], and early updates become [`EARLY`].
+/// Keep custom refs unchanged: GitHub accepts tags and pull-request refs
+/// where Git's unqualified `ref` selects `refs/heads/<name>`. Without asking
+/// the remote, an arbitrary name cannot safely be treated as a branch.
+/// Pins, custom settings and existing Git addresses also stay unchanged.
 pub fn fetched_with_git(url: &str) -> Option<String> {
-    let rest = url.strip_prefix("github:bitemyapp/sekka")?;
-    if url == TARBALL_EARLY {
-        return Some(EARLY.to_owned());
+    match url {
+        "github:bitemyapp/sekka"
+        | "github:bitemyapp/sekka/main"
+        | "github:bitemyapp/sekka/nightly"
+        | "github:bitemyapp/sekka?ref=nightly" => Some(NIGHTLY.to_owned()),
+        TARBALL_EARLY => Some(EARLY.to_owned()),
+        _ => None,
     }
-    let branch = match rest.split_once('?') {
-        // Only `?ref=`, which names a branch.
-        Some((path, query)) => {
-            (path.is_empty() && !query.contains('&')).then(|| query.strip_prefix("ref=")).flatten()?.to_owned()
-        }
-        None if rest.is_empty() => "main".to_owned(),
-        None => rest.strip_prefix('/')?.to_owned(),
-    };
-    let commit = branch.len() == 40 && branch.bytes().all(|b| b.is_ascii_hexdigit());
-    if commit || !crate::branch::valid(&branch) {
-        return None;
-    }
-    Some(match branch.as_str() {
-        "main" => NIGHTLY.to_owned(),
-        _ => format!("git+https://github.com/bitemyapp/sekka?ref={branch}&shallow=1"),
-    })
 }
 
 fn migrate(text: &str) -> Option<String> {
@@ -367,17 +361,26 @@ mod tests {
         let nightly = prepare(OLD).unwrap();
         let topic = nightly.replace(NIGHTLY, "git+https://github.com/bitemyapp/sekka?ref=topic&shallow=1");
         assert_eq!(prepare(&topic).unwrap(), topic);
-        // A branch followed as a tarball is followed with Git.
-        for tarball in ["github:bitemyapp/sekka/topic", "github:bitemyapp/sekka?ref=topic"] {
-            assert_eq!(prepare(&nightly.replace(NIGHTLY, tarball)).unwrap(), topic, "{tarball}");
-        }
-        let slashed = nightly.replace(NIGHTLY, "github:bitemyapp/sekka?ref=feature/x");
-        assert!(
-            prepare(&slashed).unwrap().contains("\"git+https://github.com/bitemyapp/sekka?ref=feature/x&shallow=1\"")
-        );
         // Without shallow=1, as someone wrote it themselves.
         let deep = nightly.replace(NIGHTLY, "git+https://github.com/bitemyapp/sekka?ref=nightly");
         assert_eq!(prepare(&deep).unwrap(), deep);
+    }
+
+    #[test]
+    fn custom_github_refs_keep_their_address() {
+        let nightly = prepare(OLD).unwrap();
+        // GitHub accepts branches, tags and pull-request refs here. Bare
+        // Git refs would instead fetch refs/heads/<name>, so guessing from
+        // the spelling can break a working source (even a tag named topic).
+        for reference in ["topic", "feature/x", "v1.0.0", "pull/348/head", "refs/tags/main", "refs/heads/topic"] {
+            for url in
+                [format!("github:bitemyapp/sekka/{reference}"), format!("github:bitemyapp/sekka?ref={reference}")]
+            {
+                let custom = nightly.replace(NIGHTLY, &url);
+                assert_eq!(prepare(&custom).unwrap(), custom, "{url}");
+                assert_eq!(fetched_with_git(&url), None, "{url}");
+            }
+        }
     }
 
     #[test]
@@ -398,7 +401,12 @@ mod tests {
     fn follows_nightly_instead_of_main() {
         let nightly = prepare(OLD).unwrap();
         assert_eq!(edit::string_value(&nightly, &["inputs", "sekka", "url"]).unwrap().as_deref(), Some(NIGHTLY));
-        for main in ["github:bitemyapp/sekka/main", "github:bitemyapp/sekka", "github:bitemyapp/sekka/nightly"] {
+        for main in [
+            "github:bitemyapp/sekka/main",
+            "github:bitemyapp/sekka",
+            "github:bitemyapp/sekka/nightly",
+            "github:bitemyapp/sekka?ref=nightly",
+        ] {
             let text = nightly.replace(NIGHTLY, main);
             assert_eq!(prepare(&text).unwrap(), nightly, "{main}");
         }
@@ -416,6 +424,35 @@ mod tests {
         // Turning early updates off and on again, as the helper does.
         assert_eq!(crate::branch::with(EARLY, "nightly").as_deref(), Some(NIGHTLY));
         assert_eq!(crate::branch::with(NIGHTLY, "main").as_deref(), Some(EARLY));
+    }
+
+    #[test]
+    fn early_updates_recognize_the_git_ref() {
+        let nightly = prepare(OLD).unwrap();
+        for url in [
+            EARLY,
+            "git+https://github.com/bitemyapp/sekka?ref=main",
+            "git+https://github.com/bitemyapp/sekka?shallow=1&ref=main",
+            "git+https://github.com/bitemyapp/sekka?ref=main&shallow=0",
+            "git+https://github.com/bitemyapp/sekka?submodules=1&ref=refs/heads/main&shallow=1",
+        ] {
+            let chosen = nightly.replace(NIGHTLY, url);
+            assert!(early(url), "{url}");
+            assert_eq!(prepare(&chosen).unwrap(), chosen, "{url}");
+            // The UI can turn early updates off even with custom Git options.
+            assert!(!early(&crate::branch::with(url, "nightly").unwrap()), "{url}");
+        }
+        for url in [
+            NIGHTLY,
+            "git+https://github.com/bitemyapp/sekka",
+            "git+https://github.com/bitemyapp/sekka?ref=refs/tags/main",
+            "git+https://github.com/someone/sekka?ref=main",
+            "git+https://github.com/bitemyapp/sekka-extra?ref=main",
+            "git+https://github.com/bitemyapp/sekka?ref=main&rev=2111c84ac0b4555518b9482ec436f813d26905ef",
+            "git+https://github.com/bitemyapp/sekka?rev=2111c84ac0b4555518b9482ec436f813d26905ef&ref=main",
+        ] {
+            assert!(!early(url), "{url}");
+        }
     }
 
     #[test]

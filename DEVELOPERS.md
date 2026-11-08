@@ -1074,7 +1074,8 @@ supplies the capture rectangle; it does not qualify the exact ISO's GUI journey.
 Update the distro through **Yukimi → Updates → Update** or `sekka-update`.
 Both use the privileged helper transaction: recognize/migrate the flake,
 back up the configuration, update the selected inputs, and build the host once.
-A flake following Sekka's `main` (or its default branch) is moved to
+A flake at the installer's original `github:` address for Sekka's `main`
+(or its default branch) is moved to
 `nightly`, and each of the other inputs still at the address Sekka's
 installations have used is made to follow Sekka's (`yukimi_config::sekka`).
 Early updates are the exception: `git+https://github.com/bitemyapp/sekka?ref=main&shallow=1`, written
@@ -1082,10 +1083,13 @@ only when chosen (Early updates in Aizome's Yukimi, `sekka-update --early`,
 or the helper's `--follow sekka=main`), stays, so the system gets every change
 as soon as it's merged, before the nightly checks; whatever the binary cache
 doesn't have yet builds on the machine. `--nightly` (`--follow sekka=nightly`)
-goes back.
-A Sekka branch still named as a `github:` tarball, as installations had it
-before, moves to the same branch through Git (`sekka::fetched_with_git`);
-a pin to one commit stays, since it never downloads again.
+goes back. Git addresses following `main` are recognized as early updates
+with or without `shallow=1` and regardless of query parameter order.
+The known default, nightly and early-update `github:` addresses move to Git
+(`sekka::fetched_with_git`). Custom refs, pins and addresses with additional
+settings stay unchanged: a GitHub ref can be a tag or pull-request ref,
+where an unqualified Git ref would instead name a branch. Existing Git
+addresses also stay unchanged, and update checks retain their own targets.
 One given an address of one's own keeps it, and Sekka follows it; that
 system may then build Sekka's packages itself. The build passes the binary
 caches the new configuration names (as root, so the daemon accepts them), so
