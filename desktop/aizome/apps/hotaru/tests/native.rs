@@ -2216,6 +2216,50 @@ fn kitty_clipboard_child() {
     }
 }
 
+/// ❖ goes down on its own before C, as a key of its own (#296): the
+/// selection it would copy stays, and ❖C copies it.
+#[test]
+fn the_command_key_going_down_keeps_the_selection_for_command_c() {
+    use aizome_kit::Vec2;
+    use aizome_kit::sidestep_ui::{Key, KeyEvent, Modifiers, PointerButton};
+    let mut h = Harness::new(Hotaru::new(PtyCommand::new("cat")));
+    let id = h.program().active_pane().unwrap().id;
+    h.send(Msg::Input(id, b"hello world\n".to_vec()));
+    assert!(h.settle(Duration::from_secs(5), |app| app.active_pane().unwrap().snapshot.plain_text().contains("hello")));
+    // Late fonts resize the grid, which would clear the selection.
+    settle_grid(&mut h);
+    let win = h.window();
+    let pane = h.program().active_pane().unwrap();
+    let metrics = pane.font_metrics().unwrap();
+    let origin = h.find_id(win, &format!("terminal-{id}")).unwrap().origin() + Vec2::new(10., 10.);
+    let word = origin + Vec2::new(8.5 * metrics.cell_width(), metrics.cell_height() * 0.4);
+    h.press(win, word, PointerButton::Left, 2);
+    h.release(win, word, PointerButton::Left);
+    assert!(pump(&mut h, |h| h.platform.primary.as_deref() == Some("world")));
+    let selected = |h: &Harness<Hotaru>| h.program().active_pane().unwrap().selection.is_some();
+    // Left ❖ (evdev 125), down and up.
+    let command_key = |pressed: bool| KeyEvent {
+        key: Key::Unidentified,
+        text: None,
+        pressed,
+        repeat: false,
+        code: 125,
+        modifiers: if pressed { Modifiers::NONE } else { Modifiers::SUPER },
+        composing: None,
+        native: Default::default(),
+    };
+    h.key_event(win, command_key(true));
+    assert!(selected(&h), "❖ going down leaves the selection");
+    h.command(win, 'c');
+    assert!(pump(&mut h, |h| h.platform.clipboard.is_some()));
+    assert_eq!(h.platform.clipboard.as_deref(), Some("world"));
+    h.key_event(win, command_key(false));
+    assert!(selected(&h), "and so does letting it go");
+    // Typing still replaces it.
+    h.type_text(win, "x");
+    assert!(!selected(&h));
+}
+
 #[test]
 fn selecting_words_and_lines_fills_the_primary_selection_and_a_middle_click_pastes_it() {
     use aizome_kit::Vec2;
