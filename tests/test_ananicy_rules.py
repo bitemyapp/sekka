@@ -26,6 +26,12 @@ class RuleFilter(unittest.TestCase):
         self.assertEqual(rules.filtered(source, {"bash"}), source)
         self.assertEqual(rules.filtered(rules.filtered(source, {"bash"}), {"bash"}), source)
 
+    def test_refuses_removed_rules_it_cannot_parse(self):
+        # Ananicy might still read these as rules for bash and fish.
+        for line in ('{ "name": "bash", "type": "Doc-View" } # shell\n', ' {"name":"fish"}+\n'):
+            with self.assertRaises(ValueError, msg=line):
+                rules.filtered(line, {"bash", "fish"})
+
 
 if __name__ == "__main__":
     unittest.main()

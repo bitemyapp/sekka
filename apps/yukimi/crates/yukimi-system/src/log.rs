@@ -166,17 +166,18 @@ fn fetched_url(activity: &Activity) -> &str {
 /// What a source fetched from `url` is called: `bitemyapp/sekka` for a
 /// repository on GitHub or GitLab or a FlakeHub flake, else the host.
 fn source_name(url: &str) -> String {
-    let rest = url.split_once("://").map_or(url, |(_, rest)| rest);
-    let (host, path) = rest.split_once('/').unwrap_or((rest, ""));
-    let path = path.split(['?', '#']).next().unwrap_or_default();
-    let parts: Vec<&str> = path.split('/').filter(|p| !p.is_empty()).collect();
-    let pair = |owner: &str, repo: &str| format!("{owner}/{}", repo.trim_end_matches(".git"));
-    match (host, parts.as_slice()) {
+    // Other addresses (with user info, another port, SSH) are named by host.
+    let Some((host, parts)) = yukimi_config::url::https_parts(url) else {
+        return yukimi_config::url::host(url).unwrap_or_else(|| url.to_owned());
+    };
+    let parts: Vec<&str> = parts.iter().map(String::as_str).filter(|p| !p.is_empty()).collect();
+    let pair = |owner: &str, repo: &str| format!("{owner}/{}", repo.strip_suffix(".git").unwrap_or(repo));
+    match (host.as_str(), parts.as_slice()) {
         ("api.github.com", ["repos", owner, repo, ..])
         | ("github.com" | "codeload.github.com" | "gitlab.com", [owner, repo, ..])
         | ("api.flakehub.com", ["f", "pinned", owner, repo, ..])
         | ("flakehub.com", ["f", owner, repo, ..]) => pair(owner, repo),
-        _ => host.to_owned(),
+        _ => host,
     }
 }
 
@@ -196,6 +197,15 @@ impl Activity {
             FILE_TRANSFER => !from_binary_cache(fetched_url(self)),
             _ => false,
         }
+    }
+
+    /// Whether it only asks GitHub which commit a branch is at: a few
+    /// kilobytes before a `github:` source's tarball, not the source.
+    fn looks_up_commit(&self) -> bool {
+        self.kind == FILE_TRANSFER
+            && yukimi_config::url::https_parts(fetched_url(self)).is_some_and(|(host, parts)| {
+                host == "api.github.com" && parts.len() > 4 && parts[0] == "repos" && parts[3] == "commits"
+            })
     }
 }
 
@@ -300,7 +310,7 @@ impl Progress {
                         self.bytes.0 =
                             self.bytes.0.saturating_sub(activity.done) + activity.expected.max(activity.done);
                     }
-                    FILE_TRANSFER if activity.is_source_fetch() && activity.done > 0 => {
+                    FILE_TRANSFER if activity.is_source_fetch() && !activity.looks_up_commit() && activity.done > 0 => {
                         let name = source_name(fetched_url(&activity));
                         self.push_log(format!("Downloaded {name}: {}", crate::human_size(activity.done)));
                     }
@@ -396,6 +406,9 @@ impl Progress {
                 COPY_PATH => Some(format!("Downloading {name}")),
                 // Part of copying a path, which says what it is.
                 FILE_TRANSFER if !activity.is_source_fetch() => None,
+                FILE_TRANSFER if activity.looks_up_commit() => {
+                    Some(format!("Fetching {}", source_name(fetched_url(activity))))
+                }
                 FILE_TRANSFER => {
                     let source = source_name(fetched_url(activity));
                     Some(match (activity.done, activity.expected) {
@@ -469,6 +482,7 @@ impl Progress {
                 }
                 _ => None,
             },
+            _ if activity.looks_up_commit() => None,
             _ if activity.expected > 0 => Some((activity.done as f64 / activity.expected as f64).clamp(0.0, 1.0)),
             _ => None,
         }
@@ -549,6 +563,23 @@ mod tests {
         assert_eq!(p.current(), None);
     }
 
+    /// Before a `github:` tarball, Nix asks GitHub's API which commit the
+    /// branch is at: a few kilobytes that aren't the source.
+    #[test]
+    fn commit_lookups_are_not_downloads() {
+        let mut p = Progress::default();
+        let url = "https://api.github.com/repos/bitemyapp/sekka/commits/nightly";
+        let logged = p.logged;
+        p.feed(&format!(
+            r#"@nix {{"action":"start","fields":["{url}"],"id":1,"level":4,"parent":0,"text":"downloading '{url}'","type":101}}"#
+        ));
+        p.feed(r#"@nix {"action":"result","fields":[2155,2155,0,0],"id":1,"type":105}"#);
+        assert_eq!(p.current().as_deref(), Some("Fetching bitemyapp/sekka"));
+        assert_eq!(p.fraction(), None);
+        p.feed(r#"@nix {"action":"stop","id":1}"#);
+        assert_eq!(p.since(logged).collect::<Vec<_>>(), [format!("downloading '{url}'")]);
+    }
+
     /// A `git+https:` input: Nix reports the fetch, and Git its progress,
     /// as plain lines.
     #[test]
@@ -609,6 +640,10 @@ mod tests {
             (format!("https://codeload.github.com/bitemyapp/sekka/tar.gz/{REV}"), "bitemyapp/sekka"),
             ("https://github.com/bitemyapp/sekka".into(), "bitemyapp/sekka"),
             ("https://github.com/o/r.git?ref=main".into(), "o/r"),
+            ("https://GitHub.com:443/bit%65myapp/sekka/".into(), "bitemyapp/sekka"),
+            // Credentials and ports are never shown.
+            ("https://token@github.com/o/r".into(), "github.com"),
+            ("ssh://git@example.org:2222/r.git".into(), "example.org"),
             ("https://api.flakehub.com/f/pinned/NixOS/nixpkgs/0.1.1%2Brev-1/1/source.tar.gz".into(), "NixOS/nixpkgs"),
             (
                 "https://install.determinate.systems/flake-registry/stable/flake-registry.json".into(),

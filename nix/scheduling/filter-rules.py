@@ -2,12 +2,19 @@
 """Remove named processes from Ananicy's JSON-lines rule files.
 
 Comments and surviving records retain their original bytes. Invalid upstream
-records are left for Ananicy to diagnose, rather than guessing their meaning.
+records are left for Ananicy to diagnose, rather than guessing their meaning,
+except one that still begins with a record for a removed name (followed by a
+comment, say): Ananicy might apply it, so the build stops instead.
 """
 import io
 import json
 from pathlib import Path
 import sys
+
+
+def excluded_name(rule, excluded):
+    name = rule.get("name") if isinstance(rule, dict) else None
+    return isinstance(name, str) and name in excluded
 
 
 def filtered(text, excluded):
@@ -16,10 +23,15 @@ def filtered(text, excluded):
         try:
             rule = json.loads(line)
         except json.JSONDecodeError:
+            try:
+                leading, _ = json.JSONDecoder().raw_decode(line.lstrip())
+            except json.JSONDecodeError:
+                leading = None
+            if excluded_name(leading, excluded):
+                raise ValueError(f"cannot remove this rule: {line.strip()}")
             kept.append(line)
             continue
-        name = rule.get("name") if isinstance(rule, dict) else None
-        if not isinstance(name, str) or name not in excluded:
+        if not excluded_name(rule, excluded):
             kept.append(line)
     return "".join(kept)
 
@@ -28,7 +40,10 @@ def main():
     root, *names = sys.argv[1:]
     for path in Path(root).rglob("*.rules"):
         text = path.read_bytes().decode("utf-8")
-        result = filtered(text, set(names))
+        try:
+            result = filtered(text, set(names))
+        except ValueError as error:
+            sys.exit(f"{path}: {error}")
         if result != text:
             path.write_bytes(result.encode("utf-8"))
 

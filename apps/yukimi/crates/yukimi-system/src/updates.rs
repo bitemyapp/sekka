@@ -216,6 +216,14 @@ fn lock_anew(flake: &str, input: &str, scratch: &Path) -> Result<Release, String
     Ok(Release::of(&locked))
 }
 
+/// Whether Nix may lock an input anew when its host couldn't be asked. Not a
+/// Git source: Nix would clone it into this user's own cache, all of it the
+/// first time (hundreds of megabytes for Sekka), for an answer that GitHub
+/// gives again once its hourly limit has passed.
+fn retry_with_nix(input: &Input) -> bool {
+    input.original.as_ref().or(input.locked.as_ref()).is_none_or(|source| source.kind != "git")
+}
+
 /// The gist of an error: its first line, without an "error:" label.
 pub fn first_line(error: &str) -> String {
     error
@@ -236,6 +244,7 @@ pub fn check_flake(flake: &str, inputs: &[Input], scratch: &Path) -> BTreeMap<St
             .map(|input| {
                 scope.spawn(move || match ask(input) {
                     Some(Ok(release)) => Ok(release),
+                    Some(Err(asked)) if !retry_with_nix(input) => Err(asked),
                     // When the host can't be asked (offline, or GitHub's hourly
                     // limit), Nix may still get through.
                     Some(Err(asked)) => lock_anew(flake, &input.name, scratch).map_err(|_| asked),
@@ -503,6 +512,23 @@ mod tests {
             sekka_targets(&flake, &inputs, &mut newest);
             assert_eq!(newest["sekka"], Ok(target.clone()), "{query}");
         }
+    }
+
+    #[test]
+    fn git_sources_wait_for_github_rather_than_cloning() {
+        let lock = FlakeLock::parse(
+            r#"{ "root": "root", "version": 7, "nodes": {
+              "root": { "inputs": { "sekka": "sekka", "tatami": "tatami" } },
+              "sekka": { "locked": { "type": "git", "url": "https://github.com/bitemyapp/sekka", "ref": "nightly", "rev": "1" },
+                         "original": { "type": "git", "url": "https://github.com/bitemyapp/sekka", "ref": "nightly", "shallow": true } },
+              "tatami": { "locked": { "type": "github", "owner": "bitemyapp", "repo": "tatami", "rev": "1" },
+                          "original": { "type": "github", "owner": "bitemyapp", "repo": "tatami" } } } }"#,
+        )
+        .unwrap();
+        // GitHub's limit reached: a tarball source may still be locked by
+        // Nix, but a Git one would be cloned into the user's cache.
+        assert!(!retry_with_nix(&lock.input("sekka").unwrap()));
+        assert!(retry_with_nix(&lock.input("tatami").unwrap()));
     }
 
     /// Asks GitHub; run with `cargo test -- --ignored` when online.

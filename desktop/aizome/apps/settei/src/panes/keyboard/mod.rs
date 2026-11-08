@@ -545,11 +545,9 @@ impl Keyboard {
                 .collect();
             out.push(vcx.section(sec.title, rows));
         }
-        let custom: Vec<(Chord, String)> =
-            map.iter().filter(|(_, a)| a.starts_with("spawn ")).map(|(c, a)| (c.clone(), a.clone())).collect();
-        let mut rows: Vec<form::Row<Msg>> = custom
+        let mut rows: Vec<form::Row<Msg>> = keys::commands(&map)
             .into_iter()
-            .map(|(c, a)| {
+            .map(|(c, command)| {
                 let mut caps = row![].spacing(3.0).align(Align::Center);
                 for g in c.glyphs() {
                     caps = caps.push(keycap(g));
@@ -557,7 +555,7 @@ impl Keyboard {
                 caps = caps.push(space(6.0)).push(
                     icon_button(Icon::Minus).toolbar().on_press(Msg::RemoveCommand(c.to_config())).tooltip("Remove"),
                 );
-                form::row(keys::command_label(a.trim_start_matches("spawn ")), caps)
+                form::row(keys::command_label(&command), caps)
                     .leading(icon(Icon::SquareTerminal).size(16.0).role(Role::Text3))
                     .compact()
             })

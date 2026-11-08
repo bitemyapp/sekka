@@ -124,7 +124,10 @@ fn a_replaced_shell_cannot_restore_retired_keyboard_offers_in_its_final_handoff(
     use aizome_shell::carry::Carried;
     use aizome_shell::notifications::store::Notification;
     let mut h = scene(false);
+    // As a shell from before the state had a version handed it over: only
+    // such a shell posted these offers.
     let old = Carried {
+        version: 0,
         notes: vec![
             Notification {
                 id: 900,

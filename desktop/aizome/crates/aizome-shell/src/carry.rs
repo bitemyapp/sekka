@@ -16,15 +16,15 @@ use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 
-use crate::notifications::store::{Notification, NotificationKind};
+use crate::notifications::store::Notification;
 
 pub const VERSION: u32 = 1;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Carried {
-    /// Missing in the original format. Only that format needs text-based
-    /// identification of retired notifications.
+    /// Missing in the original format, the only one that can hold the
+    /// retired keyboard offers.
     #[serde(default)]
     pub version: u32,
     /// The shell that wrote it.
@@ -58,11 +58,12 @@ impl Carried {
     /// Retire the old automatic keyboard offers, including a previous
     /// shell's final handoff. They aren't actionable history: setup is
     /// optional, and their shell-local actions weren't carried with them.
+    /// Nothing posts them any more, so only state from before versions can
+    /// hold them, and a versioned notification is never judged by its text.
     pub fn for_restore(mut self) -> Self {
         if self.version == 0 {
-            for n in &mut self.notes {
-                if n.kind == NotificationKind::Application
-                    && n.app_name == "Settei"
+            self.notes.retain(|n| {
+                !(n.app_name == "Settei"
                     && n.summary.starts_with("Set up ")
                     && n.summary.ends_with('?')
                     && n.body == "Press the key beside its space bar, and Settei suggests where ❖ goes on it."
@@ -71,14 +72,10 @@ impl Carried {
                             ("default".into(), "Set Up…".into()),
                             ("set-up".into(), "Set Up…".into()),
                             ("same".into(), "Same as Others".into()),
-                        ]
-                {
-                    n.kind = NotificationKind::KeyboardSetup;
-                }
-            }
+                        ])
+            });
             self.version = VERSION;
         }
-        self.notes.retain(|n| n.kind != NotificationKind::KeyboardSetup);
         self
     }
 }
@@ -160,7 +157,7 @@ pub fn mark(notes: &[Notification], folded: &[(String, bool)], open: &[String]) 
     use std::hash::{Hash, Hasher};
     let mut h = std::collections::hash_map::DefaultHasher::new();
     for n in notes {
-        (n.id, n.kind, n.read, n.at, &n.summary, &n.body, n.actions.len()).hash(&mut h);
+        (n.id, n.read, n.at, &n.summary, &n.body, n.actions.len()).hash(&mut h);
     }
     folded.hash(&mut h);
     open.hash(&mut h);
@@ -172,30 +169,23 @@ mod tests {
     use super::*;
 
     #[test]
-    fn versioned_state_uses_kinds_instead_of_presentational_text() {
+    fn versioned_state_is_never_judged_by_its_text() {
         let c = Carried {
-            notes: vec![
-                Notification {
-                    kind: NotificationKind::KeyboardSetup,
-                    summary: "Texte traduit".into(),
-                    ..Default::default()
-                },
-                Notification {
-                    app_name: "Settei".into(),
-                    summary: "Set up keyboard?".into(),
-                    body: "Press the key beside its space bar, and Settei suggests where ❖ goes on it.".into(),
-                    actions: vec![
-                        ("default".into(), "Set Up…".into()),
-                        ("set-up".into(), "Set Up…".into()),
-                        ("same".into(), "Same as Others".into()),
-                    ],
-                    ..Default::default()
-                },
-            ],
+            notes: vec![Notification {
+                app_name: "Settei".into(),
+                summary: "Set up keyboard?".into(),
+                body: "Press the key beside its space bar, and Settei suggests where ❖ goes on it.".into(),
+                actions: vec![
+                    ("default".into(), "Set Up…".into()),
+                    ("set-up".into(), "Set Up…".into()),
+                    ("same".into(), "Same as Others".into()),
+                ],
+                ..Default::default()
+            }],
             ..Default::default()
         };
         let restored = serde_json::from_str::<Carried>(&serde_json::to_string(&c).unwrap()).unwrap().for_restore();
-        assert_eq!(restored.notes, c.notes[1..], "new application notifications are never classified by their text");
+        assert_eq!(restored.notes, c.notes, "an application's notification stays, whatever it says");
         assert_eq!(restored.version, VERSION);
     }
 
@@ -223,9 +213,6 @@ mod tests {
         let c = Carried { version: 0, notes, next_id: 10, ..Default::default() };
         let mut legacy = serde_json::to_value(&c).unwrap();
         legacy.as_object_mut().unwrap().remove("version");
-        for note in legacy["notes"].as_array_mut().unwrap() {
-            note.as_object_mut().unwrap().remove("kind");
-        }
         let restored = serde_json::from_value::<Carried>(legacy).unwrap().for_restore();
         assert_eq!(restored.version, VERSION);
         assert_eq!(restored.notes, c.notes[2..], "unrelated notifications keep their content and IDs");

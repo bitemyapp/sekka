@@ -32,7 +32,7 @@ fn revision(value: &str) -> bool {
     value.len() == 40 && value.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
-use crate::url::{path, query};
+use crate::url::{github_repository, path, query};
 
 impl FlakeUrl {
     /// A displayable source address from the lock's typed metadata. Commit
@@ -155,19 +155,15 @@ impl FlakeUrl {
                     && actual_repo == repo
                     && self.options.get("host").is_none_or(|host| host == "github.com")
             }
+            // The same repository rule as lock metadata's (`Locked::github_repo`).
             Source::Git => {
-                let Some(authority) = self.uri.authority() else { return false };
                 self.uri.scheme().as_str() == "git+https"
-                    && authority.userinfo().is_none()
-                    && authority.host().eq_ignore_ascii_case("github.com")
-                    && (authority.port().is_none() || authority.port_to_u16() == Ok(Some(443)))
                     && self
                         .uri
-                        .path()
-                        .split('/')
-                        .map(|p| p.decode().to_string().ok().map(|s| s.into_owned()))
-                        .collect::<Option<Vec<_>>>()
-                        .is_some_and(|parts| parts == ["", owner, repo])
+                        .as_str()
+                        .strip_prefix("git+")
+                        .and_then(github_repository)
+                        .is_some_and(|(actual_owner, actual_repo)| actual_owner == owner && actual_repo == repo)
             }
         }
     }

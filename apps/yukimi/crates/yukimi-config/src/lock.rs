@@ -84,14 +84,7 @@ impl Locked {
             "github" if self.host.as_deref().unwrap_or("github.com").eq_ignore_ascii_case("github.com") => {
                 Some((self.owner.clone()?, self.repo.clone()?))
             }
-            "git" => {
-                let (host, parts) = url::https_parts(self.url.as_deref()?)?;
-                let [owner, repo] = parts.as_slice() else { return None };
-                let repo = repo.strip_suffix(".git").unwrap_or(repo);
-                let name =
-                    |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_alphanumeric() || b"._-".contains(&b));
-                (host == "github.com" && name(owner) && name(repo)).then(|| (owner.clone(), repo.to_owned()))
-            }
+            "git" => url::github_repository(self.url.as_deref()?),
             _ => None,
         }
     }
@@ -583,8 +576,10 @@ mod tests {
             tarball.compare_url(rev).unwrap(),
             format!("https://github.com/bitemyapp/sekka/compare/5d1d471..{rev}")
         );
-        let dotted = Locked { url: Some("https://github.com/o/r.git".into()), ..sekka.clone() };
-        assert_eq!(dotted.github_repo(), Some(("o".into(), "r".into())));
+        for spelled in ["https://github.com/o/r.git", "https://github.com/o/r/"] {
+            let dotted = Locked { url: Some(spelled.into()), ..sekka.clone() };
+            assert_eq!(dotted.github_repo(), Some(("o".into(), "r".into())), "{spelled}");
+        }
         for elsewhere in
             ["https://example.org/o/r", "https://github.com/o", "https://github.com/o/r/tree/x", "file:///x"]
         {
