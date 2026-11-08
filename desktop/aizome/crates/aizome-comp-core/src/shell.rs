@@ -103,7 +103,14 @@ impl CompositorHandler for State {
     }
 
     fn commit(&mut self, surface: &WlSurface) {
-        let fresh_shm = crate::backend::fresh_shm_buffers(surface);
+        // A sync subsurface's state is applied with its parent's commit,
+        // which calls this for the child first and then for the parent.
+        // smithay takes the child's buffer only in the parent's call (its
+        // handler skips sync subsurfaces), and the parent's tree holds it
+        // then, so releasing it here too would release one commit twice:
+        // GTK frees a buffer it is about to draw into on the second.
+        let fresh_shm =
+            if is_sync_subsurface(surface) { Vec::new() } else { crate::backend::fresh_shm_buffers(surface) };
         // A layer surface taking its buffer down leaves its last frame for
         // the logic to move away (before the buffer is let go).
         self.ghost_if_unmapping(surface);
