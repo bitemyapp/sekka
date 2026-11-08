@@ -1509,6 +1509,25 @@ CI don't run them, just as they didn't run in Aizome's repository. Sekka's own
 Aizome checks (`aizome-login`, `aizome-greeter-desktops`, `aizome-ibus`,
 `aizome-ibus-policy`) still run with the others.
 
+`nix build .#checks.x86_64-linux.aizome-robustness` runs the core, logic,
+shell and portal unit tests, the portal's private-bus tests, and the
+headless compositor's churn, recovery, reload, display-lock, protocol and
+pacing suites. This check runs in `nix flake check` and the trusted PR
+workflow. It checks client survival and desktop state through reloads,
+including a panic after damaging the model; ordinary churn must report
+zero rollbacks. The shell replacement test requires its private D-Bus
+daemon rather than passing by skipping. These component tests do not
+qualify an ISO, a GPU driver, or physical hardware. Sukumo's separate
+`sukumo` check covers aligned pixel access and text-worker panic propagation.
+
+System actions initiated by the shell retain their asynchronous results
+and report failures through notifications. A failed text-layout batch
+finishes its workers, discards the failed worker's shaping context and
+propagates the panic; it no longer silently replaces text with an empty
+layout. PAM's owned password copy uses zeroizing mutable storage, including
+on error exits; caller-owned input and PAM-owned conversation responses
+remain their owners' responsibility.
+
 The package version is a plain `0.1.0`. Aizome's flake added its own revision
 to it. Inside Sekka that revision would be Sekka's, and every Sekka commit
 would rebuild Aizome. The source hash already tells the builds apart.

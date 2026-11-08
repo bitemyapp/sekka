@@ -407,7 +407,7 @@ pkgs.testers.runNixOSTest {
         )
         machine.wait_until_succeeds("ls /run/user/1000/ | grep -q '^aizome\\..*\\.sock$'", timeout=60)
         machine.succeed("grep -q 'stalled for' /home/alice/.local/state/aizome/stall.log")
-        machine.succeed("grep -q 'backtrace' /home/alice/.local/state/aizome/stall.log")
+        machine.succeed("grep -q 'kernel stack:' /home/alice/.local/state/aizome/stall.log")
         print(machine.succeed("cat /home/alice/.local/state/aizome/stall.log"))
         machine.wait_until_succeeds(
             "su - alice -c 'export XDG_RUNTIME_DIR=/run/user/1000 AIZOME_SOCKET=$(ls /run/user/1000/aizome.wayland-*.sock); "

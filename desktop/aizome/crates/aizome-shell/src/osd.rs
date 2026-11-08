@@ -145,16 +145,16 @@ impl Shell {
                 if let Some(a) = &self.sys.audio {
                     match action {
                         "volume-up" => {
-                            let _ = a.step_volume(STEP);
+                            self.sys.observe("Set volume", a.step_volume(STEP));
                             v = (v + STEP).min(1.0);
                             m = false;
                         }
                         "volume-down" => {
-                            let _ = a.step_volume(-STEP);
+                            self.sys.observe("Set volume", a.step_volume(-STEP));
                             v = (v - STEP).max(0.0);
                         }
                         _ => {
-                            let _ = a.toggle_mute();
+                            self.sys.observe("Set mute", a.toggle_mute());
                             m = !m;
                         }
                     }
@@ -169,7 +169,7 @@ impl Shell {
                     .and_then(|a| a.snapshot().default_input().map(|d| d.muted))
                     .unwrap_or(false);
                 if let Some(a) = &self.sys.audio {
-                    let _ = a.toggle_microphone_mute();
+                    self.sys.observe("Set microphone mute", a.toggle_microphone_mute());
                 }
                 Osd { kind: OsdKind::Microphone, value: 1.0, muted: !m }
             }
@@ -186,14 +186,14 @@ impl Shell {
                     .and_then(|b| b.snapshot().primary().map(|d| d.fraction()))
                     .unwrap_or(0.5);
                 if let Some(b) = &self.sys.backlight {
-                    let _ = b.step(if up { 0.05 } else { -0.05 });
+                    self.sys.observe("Set brightness", b.step(if up { 0.05 } else { -0.05 }));
                     v = (v + if up { 0.05 } else { -0.05 }).clamp(0.0, 1.0);
                 }
                 Osd { kind: OsdKind::Brightness, value: v, muted: false }
             }
             "kbd-brightness-up" | "kbd-brightness-down" | "kbd-brightness" => {
                 if let Some(u) = &self.sys.upower {
-                    let _ = u.cycle_keyboard_brightness();
+                    self.sys.observe("Set keyboard brightness", u.cycle_keyboard_brightness());
                 }
                 let level = self
                     .sys

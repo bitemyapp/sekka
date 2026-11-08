@@ -19,19 +19,41 @@ type Options = HashMap<String, OwnedValue>;
 struct Bus {
     daemon: Child,
     address: String,
+    dir: PathBuf,
 }
 
 impl Bus {
     fn new() -> Bus {
+        static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        let id = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let dir = scratch(&format!("bus-{}-{id}", std::process::id()));
+        let config = dir.join("bus.conf");
+        // No host /etc configuration or service activation in this fixture.
+        std::fs::write(
+            &config,
+            r#"<busconfig>
+  <type>session</type>
+  <listen>unix:tmpdir=/tmp</listen>
+  <auth>EXTERNAL</auth>
+  <policy context="default">
+    <allow send_destination="*" eavesdrop="true"/>
+    <allow eavesdrop="true"/>
+    <allow own="*"/>
+  </policy>
+</busconfig>"#,
+        )
+        .unwrap();
         let mut daemon = Command::new("dbus-daemon")
-            .args(["--session", "--nofork", "--print-address"])
+            .arg(format!("--config-file={}", config.display()))
+            .args(["--nofork", "--print-address"])
             .stdout(Stdio::piped())
-            .stderr(Stdio::null())
+            .stderr(Stdio::inherit())
             .spawn()
             .expect("dbus-daemon is required");
         let mut address = String::new();
         BufReader::new(daemon.stdout.take().unwrap()).read_line(&mut address).unwrap();
-        Bus { daemon, address: address.trim().to_owned() }
+        assert!(!address.trim().is_empty(), "dbus-daemon exited without reporting its address");
+        Bus { daemon, address: address.trim().to_owned(), dir }
     }
 
     fn connect(&self) -> zbus::blocking::Connection {
@@ -61,6 +83,7 @@ impl Drop for Bus {
     fn drop(&mut self) {
         let _ = self.daemon.kill();
         let _ = self.daemon.wait();
+        let _ = std::fs::remove_dir_all(&self.dir);
     }
 }
 

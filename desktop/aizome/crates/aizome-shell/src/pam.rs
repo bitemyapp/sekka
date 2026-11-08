@@ -6,6 +6,9 @@
 use std::ffi::{CStr, CString, c_char, c_int, c_void};
 use std::ptr;
 
+mod secret;
+use secret::Password;
+
 /// Checks a password for a user.
 pub trait Authenticator: Send + Sync + 'static {
     /// `Ok` when `password` is `user`'s; else what PAM said.
@@ -80,7 +83,7 @@ unsafe extern "C" {
 /// What the conversation answers with, and what PAM said.
 struct Conversation {
     user: CString,
-    password: CString,
+    password: Password,
     said: Vec<String>,
 }
 
@@ -110,7 +113,7 @@ extern "C" fn converse(
             unsafe { CStr::from_ptr(m.msg) }.to_string_lossy().into_owned()
         };
         let reply: Option<&CStr> = match m.msg_style {
-            PAM_PROMPT_ECHO_OFF => Some(&conv.password),
+            PAM_PROMPT_ECHO_OFF => Some(conv.password.as_c_str()),
             PAM_PROMPT_ECHO_ON => Some(&conv.user),
             PAM_ERROR_MSG | PAM_TEXT_INFO => {
                 if !text.is_empty() {
@@ -147,7 +150,7 @@ impl Authenticator for Pam {
         let service = CString::new(self.service.as_str()).map_err(|e| e.to_string())?;
         let mut conv = Box::new(Conversation {
             user: CString::new(user).map_err(|e| e.to_string())?,
-            password: CString::new(password).map_err(|_| "The password can't hold a NUL".to_string())?,
+            password: Password::new(password)?,
             said: Vec::new(),
         });
         let pam_conv = PamConv { conv: converse, appdata_ptr: &mut *conv as *mut Conversation as *mut c_void };
@@ -179,9 +182,8 @@ impl Authenticator for Pam {
                 })
             };
             pam_end(handle, r);
-            // Wipe the password's bytes now PAM is done with them.
-            let bytes = conv.password.as_ptr() as *mut u8;
-            ptr::write_bytes(bytes, 0, conv.password.as_bytes().len());
+            // Password's owned storage is zeroized on drop, including
+            // pam_start failures and unwinding. Never write through CStr.
             match err {
                 None => Ok(()),
                 Some(e) => Err(conv.said.last().cloned().unwrap_or(e)),

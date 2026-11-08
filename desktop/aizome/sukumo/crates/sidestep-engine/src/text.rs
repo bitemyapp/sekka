@@ -61,6 +61,12 @@ pub struct Ctx {
 
 thread_local!(static CTX: RefCell<Option<Ctx>> = const { RefCell::new(None) });
 
+/// A failed layout may leave the shaping scratch state incomplete. Workers
+/// start fresh on their next batch instead of reusing that state.
+fn discard_ctx() {
+    CTX.with(|cell| *cell.borrow_mut() = None);
+}
+
 /// Run `f` with this thread's text state. `f` must not call back into
 /// Objective-C code that could draw or measure text.
 pub fn with_ctx<R>(f: impl FnOnce(&mut Ctx) -> R) -> R {

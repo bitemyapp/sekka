@@ -1822,6 +1822,18 @@ impl Shell {
     /// What every update ends with: surfaces sized to their content, the
     /// geometry drags need.
     pub fn after_update(&mut self, cx: &mut Cx<Msg>) {
+        // Also poll immediately-ready tasks here: they need not emit a wake.
+        for (action, error) in self.sys.action_errors() {
+            log::warn!("{action}: {error}");
+            let n = crate::notifications::store::Incoming {
+                app_name: "Aizome".into(),
+                summary: format!("Action failed: {action}"),
+                body: error,
+                ..Default::default()
+            };
+            let id = self.fresh_note_id();
+            self.take_note(crate::notifications::server::NoteEvent::Notify(id, Box::new(n)), cx);
+        }
         self.sync_lock_surfaces(cx);
         if self.opts.live && self.carry_ready && !self.retiring {
             self.save_carried(false);
@@ -2093,6 +2105,26 @@ impl Shell {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_failed_system_action_is_visible_without_a_service_wake() {
+        let mut h = aizome_kit::testing::Harness::new(Shell::new(Options::default()));
+        h.program().sys.observe(
+            "Connect headphones",
+            aizome_sys::Task::<()>::ready(Err(aizome_sys::Error::Failed("connection refused".into()))),
+        );
+        h.send(Msg::Nothing);
+        assert!(
+            h.program()
+                .notes
+                .list
+                .iter()
+                .any(|n| n.summary == "Action failed: Connect headphones" && n.body.contains("connection refused"))
+        );
+        let count = h.program().notes.list.len();
+        h.send(Msg::Sys);
+        assert_eq!(h.program().notes.list.len(), count, "the error is reported once");
+    }
 
     fn running_settings() -> (aizome_kit::testing::Harness<Shell>, std::sync::mpsc::Receiver<(Request, Option<u64>)>) {
         let mut h = aizome_kit::testing::Harness::new(Shell::new(Options::default()));

@@ -301,9 +301,10 @@ part differs.
 ### When the logic panics
 
 Every call into the logic runs under `catch_unwind`. A panic marks the
-logic failed; at the end of that loop iteration the core has it save its
-state (or, if even that fails, takes the state saved at the last reload)
-and rolls back to the logic that ran before it, or, without one, starts
+logic failed; the core does not quiesce or save the failed instance,
+because either hook could inspect a partly mutated model. At the end of
+that loop iteration it uses the last healthy handoff snapshot and rolls
+back to the logic that ran before it, or, without one, starts
 the same build again from that state (from nothing, if the state won't
 load); after three panics in a minute it sets the logic
 aside and the recovery path runs the desktop (windows stay where they
@@ -311,6 +312,10 @@ were and can be focused, moved and closed; the overlays and Desks wait).
 Pointer grabs end, the user gets a notification with the panic's message,
 and `aizomectl stats` and the `logic-failed` event say what happened. A
 reload brings a logic back.
+Recent layout changes may be lost. Without a healthy snapshot, the new
+logic reconstructs its model from the core's surviving client windows.
+This is recovery, not a transaction: catching an unwind does not undo
+changes the failed hook already made to core state.
 
 ### The shell
 
@@ -339,7 +344,15 @@ and the recovery overlay's Restart Shell kills a hung one first.
 ## Rules for logic code
 
 The logic is unloaded only in the sense that it stops being called: its
-code stays mapped, and a new build's code runs beside the old. So:
+code stays mapped, and a new build's code runs beside the old.
+
+The core refuses another load after 64 retained library mappings in one
+session (including libraries whose entry point failed). Log out and in
+to release them. Keeping mappings alive protects outstanding callbacks
+and types; the cap bounds their count rather than allowing unlimited
+growth during development.
+
+Logic code must follow these rules:
 
 - **State lives in `Logic`** (through `state.lg.m()`), and what must
   survive a reload goes in `Saved`, with `#[serde(default)]` on every
@@ -357,10 +370,10 @@ code stays mapped, and a new build's code runs beside the old. So:
 - **No threads** that run logic code after a hook returns.
 - **Don't hold** borrows of `Logic` across calls back into the core that
   might call the logic again: take what you need, let go, then call.
-- **Panics are caught**, but a panic leaves your state as it was midway,
-  and that's what the next logic starts from: keep `save` and `init`
-  robust to a half-done change (a window the model doesn't know is
-  adopted again; one it knows that's gone is dropped).
+- **Panics are caught**, but writes to core state are not rolled back.
+  Recovery uses a healthy, possibly older snapshot or starts without one.
+  Keep `init` robust to a changed set of clients (a window the model
+  doesn't know is adopted again; one it knows that's gone is dropped).
 - Changing the core (its types, the vtable, `View`, `SceneItem`) is a
   core change: the session must be restarted to use it.
 

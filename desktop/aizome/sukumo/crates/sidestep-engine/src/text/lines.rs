@@ -911,15 +911,7 @@ impl Frame {
         if texts.len() < 4 || bytes < 512 {
             return super::with_ctx(|ctx| texts.iter().map(|t| lay_out(ctx, t)).collect());
         }
-        super::pool::map(texts, lay_out)
-            .into_iter()
-            .map(|(t, frame)| {
-                frame.unwrap_or_else(|| {
-                    let empty = [Span { start: 0, end: 0, attrs: 0 }];
-                    Frame::new(Styled { text: "", attrs: &t.1, spans: &empty }, t.3)
-                })
-            })
-            .collect()
+        super::pool::map(texts, lay_out).into_iter().map(|(_, frame)| frame).collect()
     }
 
     /// The text's length in UTF-16 units.

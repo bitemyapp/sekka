@@ -23,6 +23,7 @@ serde_json.workspace = true
 log.workspace = true
 env_logger.workspace = true
 libc = "0.2"
+zeroize = "1.9"
 jiff = { version = "0.2", features = ["tzdb-bundle-always"] }
 zbus = { version = "5.19", default-features = false, features = ["async-io", "blocking-api"] }
 
