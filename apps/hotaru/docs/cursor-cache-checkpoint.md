@@ -15,7 +15,7 @@ Built on `ssh wx-workstation` from the frozen Sekka worktree:
 - ELF SHA-256: `e3828214ade4069f23ae439c266830ca5dfb96bae33d67b006fcde35d32258be`
 - Wrapper SHA-256: `b6d9c1a7b595d83e1aedb53bd54ed9e403015a695c6b960da57d12442164213c`
 
-[`nix-cursor-cache-checkpoint.json`](../upstream/nix-cursor-cache-checkpoint.json)
+[`hotaru-benchmark-data/nix-cursor-cache-checkpoint.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/nix-cursor-cache-checkpoint.json)
 records the derivation, build-log identity, release profile, installed files and
 test summaries. Nix passed 44 native tests, with two timing diagnostics and five
 environment-sensitive integrations explicitly ignored by that invocation.
@@ -26,7 +26,7 @@ the five intentional omissions are the standalone core lockfile and four
 Sidestep patches already applied by Nix. Installed resources, both fallback
 fonts and their OFL notices, six application notices, ELF runtime dependencies
 and wrapper configuration were verified. The
-[runtime report](../upstream/native-cursor-cache/package-runtime.json) preserves
+[runtime report](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/native-cursor-cache/package-runtime.json) preserves
 these comparisons. The output and original prepared source have workstation GC
 roots under `/home/callen/work/hotaru-cursor-cache-qualification-20261028/`.
 
@@ -44,7 +44,7 @@ package with ambient font/library overrides cleared:
 | Links | Literal OSC 8 URI as one opener argument, wide-cell tail activation, rejected/stale gestures and visible opener failure |
 | Cursor | Distinct steady block/underline/bar, both blink phases, configured default reset, inactive hollow block and refocus |
 
-Compact receipts are in [`upstream/native-cursor-cache/`](../upstream/native-cursor-cache/).
+Compact receipts are in [`hotaru-benchmark-data/native-cursor-cache`](https://github.com/bitemyapp/hotaru-benchmark-data/tree/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/native-cursor-cache).
 The block cursor, inactive hollow cursor and fractional-scale CJK/emoji captures
 were also visually inspected. Original-resolution images and complete logs are
 retained locally in `artifacts/hotaru-cursor-cache-qualification/` and remotely
@@ -59,7 +59,7 @@ fixes and passing afterward. The combined source also passed four font-cache
 correctness tests and strict all-target package Clippy with the test allocation
 probe enabled. The ignored timing benchmark was deliberately not run under
 unrelated compiler load. Exact counts, scope and log hashes are in
-[`validation.json`](../upstream/native-cursor-cache/validation.json).
+[`validation.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/native-cursor-cache/validation.json).
 
 The separate standalone core passed 136 tests in both debug and release,
 strict workspace Clippy, and 6,174 comparisons against the pinned Ghostty
@@ -70,7 +70,7 @@ Its source manifest is
 `b9fcaa0ced20a2212e21685002a6da7b1fda89d3443394fe9afe82507c66ec3b`, and release
 replay SHA-256 is
 `82d9762f258059c84b78b71b62f67977055b29f3e94c544361d3d56f50b2a933`.
-[The core report](../upstream/combined-core-cursor/summary.json) records all
+[The core report](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/combined-core-cursor/summary.json) records all
 declared comparison fields and exclusions. This replay is distinct from the
 packaged GUI executable.
 

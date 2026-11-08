@@ -3,7 +3,7 @@
 The 178-sprite package adds seven rounded/diagonal box characters and all 18
 geometric Powerline shapes from pinned Ghostty. It also includes the decorated
 block-cursor correction. Its source is base `d607319` plus the qualified
-[sprite candidate](../upstream/sprites/curves/summary.json); all 16 candidate
+[sprite candidate](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/sprites/curves/summary.json); all 16 candidate
 product hashes and all 233 runtime source-manifest entries match the worktree.
 
 The package output is `/nix/store/ski9m1d1a86gwyxdbi82rssgkc7knp7p-hotaru-0.1.0`.
@@ -13,7 +13,7 @@ The prepared source is `/nix/store/4km5ikqc67ij0ng015p92k203s1j60a5-hotaru-sourc
 227 source entries match, with only the standalone lockfile and five already
 applied Sidestep patches omitted intentionally. Both paths have workstation
 GC roots under `/home/callen/work/hotaru-curves-qualification-20261028/`.
-The [Nix record](../upstream/nix-curves-checkpoint.json) retains the derivation,
+The [Nix record](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/nix-curves-checkpoint.json) retains the derivation,
 source NAR, wrapper hash and installed-file inventory. Nix passed 57 tests;
 seven explicitly ignored integrations/diagnostics retain their prior scope.
 
@@ -41,8 +41,8 @@ pixel reuse; this efficiency cost remains open. Production GPU rendering,
 history memory, complete Ghostty compatibility, physical-desktop qualification
 and whole-application performance parity are still incomplete.
 
-Compact [runtime evidence](../upstream/native-curves-checkpoint/package-runtime.json)
-and [validation hashes](../upstream/native-curves-checkpoint/validation.json)
+Compact [runtime evidence](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/native-curves-checkpoint/package-runtime.json)
+and [validation hashes](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/native-curves-checkpoint/validation.json)
 are committed. Full evidence remains in local
 `artifacts/hotaru-curves-qualification-20261028/` and the workstation directory
 above. The earlier package and its reports remain unchanged.

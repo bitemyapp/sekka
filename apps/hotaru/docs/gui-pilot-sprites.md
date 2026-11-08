@@ -64,11 +64,11 @@ deficit remains unresolved. CPU costs and memory for every stream are preserved.
 
 ## Evidence and limits
 
-The [summary](../upstream/gui-pilot-sprites/summary.json) retains every startup
+The [summary](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/gui-pilot-sprites/summary.json) retains every startup
 sample and sustained control/stream. Compressed raw trial archives include all
 keyboard samples, captures, PTY writes, activity observations, logs and final
 images. Exact calibration and controller/observer sources accompany them in
-[`upstream/gui-pilot-sprites/`](../upstream/gui-pilot-sprites/). Full directories
+[`hotaru-benchmark-data/gui-pilot-sprites`](https://github.com/bitemyapp/hotaru-benchmark-data/tree/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/gui-pilot-sprites). Full directories
 remain in local `artifacts/hotaru-sprites-frame-20261028/` and workstation
 `/home/callen/work/hotaru-sprites-frame-20261028/`.
 

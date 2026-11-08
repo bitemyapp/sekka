@@ -41,9 +41,9 @@ limits and software-compositor checks do not establish whole-application
 latency, memory or performance parity. A new combined Nix package checkpoint is
 also still required.
 
-See the [integration receipt](../upstream/native-auto-links/integration.json),
-[source inventory](../upstream/native-auto-links/final-source-after.json), and
-[detailed qualification record](../upstream/native-auto-links/README.md).
-The [compressed evidence](../upstream/native-auto-links/evidence.tar.gz)
+See the [integration receipt](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/native-auto-links/integration.json),
+[source inventory](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/native-auto-links/final-source-after.json), and
+[detailed qualification record](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/native-auto-links/README.md).
+The [compressed evidence](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/native-auto-links/evidence.tar.gz)
 preserves the exact patch, reference adapters, raw results, failed attempts,
 logs and private-compositor captures.

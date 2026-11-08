@@ -81,10 +81,10 @@ dependency.
 
 Evidence is in [`upstream/stream-parser/`](../upstream/stream-parser/). The
 rules were first checked on `6c4f06ad…`
-([`upstream/candidate-stream-parser-build.json`](../upstream/candidate-stream-parser-build.json)).
+([`hotaru-benchmark-data/candidate-stream-parser-build.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/candidate-stream-parser-build.json)).
 The ED, EL and back-tab rules came later. The oracle, the suite inputs, the
 fuzzing and the sweep were rerun on their build, `66ac43ad…`
-([`upstream/candidate-erase-modes-build.json`](../upstream/candidate-erase-modes-build.json)).
+([`hotaru-benchmark-data/candidate-erase-modes-build.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/candidate-erase-modes-build.json)).
 The fresh generator seeds and the widths were checked on `6c4f06ad…` only.
 
 - **Ghostty's suite inputs:** all seven 64 MiB generated inputs from the
@@ -128,7 +128,7 @@ These are missing features, not parser disagreements:
 
 `tools/benchmark.py` on the reviewed corpus with the final build, at a load
 average of about 1.3; reports are in
-`upstream/benchmarks/stream-parser-*.json`:
+[`hotaru-benchmark-data/benchmarks/stream-parser-*.json`](https://github.com/bitemyapp/hotaru-benchmark-data/tree/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/benchmarks):
 
 | Pattern | Ghostty | Hotaru | Hotaru ÷ Ghostty | Hotaru at the clipboard checkpoint |
 | --- | ---: | ---: | ---: | ---: |

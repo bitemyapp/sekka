@@ -1,6 +1,6 @@
 # Core instruction-count diagnostic
 
-The [Callgrind evidence](../upstream/core-profile/) identifies work to investigate
+The [Callgrind evidence](https://github.com/bitemyapp/hotaru-benchmark-data/tree/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/core-profile) identifies work to investigate
 in the combined VT/SIMD checkpoint. It measures simulated instructions, not
 native elapsed time, CPU cycles or performance parity.
 

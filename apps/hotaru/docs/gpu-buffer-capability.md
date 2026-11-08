@@ -19,7 +19,7 @@ exit the diagnostic process, whose resources are reclaimed by the OS.
 ## Workstation NVIDIA result
 
 Both the host and explicitly selected Nix loader runs in
-[`check-5/result.json`](../upstream/gpu-buffer/check-5/result.json) report:
+[`check-5/result.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/gpu-buffer/check-5/result.json) report:
 
 - NVIDIA RTX PRO 6000 Blackwell Max-Q, OpenGL ES 3.2, driver 580.159.04.
 - All 1,024 producer pixels match: 4,096 RGBA bytes, no GL error.
@@ -113,7 +113,7 @@ check uses the historical Hotaru `e2b1ff7` package `26jmmbq…` and pinned Ghost
 `6ba144158577d033ccb6ed4b574e4013957c9161`, not the subsequently integrated
 ASCII/pixel-scroll product. The diagnostic selects the exact Ghostty-package
 GLVND loader `ww5pck…` and qualified Mesa `457mqa…`; file-backed mappings are
-recorded in the [local result](../upstream/gpu-buffer/local-intel/result.json).
+recorded in the [local result](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/gpu-buffer/local-intel/result.json).
 
 The producer verifies all 4,096 RGBA bytes of the 32×32 image. Export reports
 one-plane ABGR8888 (`AB24`), linear modifier `0`, stride `256`, and offset `0`.
@@ -121,14 +121,14 @@ After a bounded CPU EGL fence wait, an unshared consumer context imports the
 DMA-BUF and independently verifies all 4,096 bytes. The probe reports success
 only after fence/image/context destruction and EGL termination succeed.
 
-[Cleanup evidence](../upstream/gpu-buffer/local-intel/qualification.json) and
-[numbered syscall excerpts](../upstream/gpu-buffer/local-intel/cleanup-trace-excerpt.txt)
+[Cleanup evidence](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/gpu-buffer/local-intel/qualification.json) and
+[numbered syscall excerpts](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/gpu-buffer/local-intel/cleanup-trace-excerpt.txt)
 confirm exported descriptor 8 and driver backing descriptor 7 close successfully,
 render-node descriptors 3–6 close, and kernel synchronization objects are
 destroyed. The process exits zero. Full raw artifacts remain in
 `/home/callen/work/hotaru-local-gui-20261028/gpu-capability/`; compact reports,
 runner and namespace scripts are frozen under
-[`upstream/gpu-buffer/local-intel`](../upstream/gpu-buffer/local-intel/README.md).
+[`upstream/gpu-buffer/local-intel`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/gpu-buffer/local-intel/README.md).
 
 This offscreen result qualifies one device, one small image, one process and two
 unshared contexts. The separate transport experiment below exercises Wayland.
@@ -138,7 +138,7 @@ evidence.
 
 ## Private Intel Wayland transport
 
-The subsequent [transport diagnostic](../upstream/gpu-buffer/local-intel-wayland/README.md)
+The subsequent [transport diagnostic](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/gpu-buffer/local-intel-wayland/README.md)
 passes on a disposable headless Sway 1.12/wlroots 0.20.2 compositor using the Intel
 hardware GLES renderer. It uses the same task-owned store and render-node access,
 without connecting to the live desktop. The compositor exposes 287 format/modifier
@@ -167,7 +167,7 @@ inner-loop deadline, and checking only direct process leaders could miss an
 orphan. Both were fixed before the final passing run. The pump now checks the
 absolute deadline on each retry. Process-local subreaping and stable pidfd
 ownership checks confirm all owned descendants exited; no forced cleanup was
-needed. [Qualification](../upstream/gpu-buffer/local-intel-wayland/qualification.json)
+needed. [Qualification](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/gpu-buffer/local-intel-wayland/qualification.json)
 records source, executable, capture and full raw-log hashes.
 
 This remains test-only C code. The next isolated Rust boundary must put EGL calls,
@@ -179,7 +179,7 @@ A renderer or performance claim requires further implementation and qualificatio
 
 ## Rust worker and SCTK transport
 
-The [isolated Rust prototype](../upstream/gpu-buffer/rust-transport/README.md)
+The [isolated Rust prototype](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/gpu-buffer/rust-transport/README.md)
 passes the private Intel transport check. Its safe lifecycle module has 15 tests
 covering blocked drivers, lease accounting, cancellation, identity exhaustion,
 stale imports and panic containment. Two feedback tests reject unreferenced table

@@ -58,7 +58,7 @@ repeated history across clearing and terminal destruction.
 ## Review and performance
 
 Independent adversarial tests found decoded-C1 and old-destination-pen bugs;
-the original failing report is retained under `upstream/vt-controls-review/`.
+the original failing report is retained under [`hotaru-benchmark-data/vt-controls-review`](https://github.com/bitemyapp/hotaru-benchmark-data/tree/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/vt-controls-review).
 The initial corpus did not expose them. Both fixes and the Latin-1 correction
 are included in the combined candidate.
 
@@ -79,7 +79,7 @@ once per row span instead of tracking it per character. Independent review
 and all 3,462 real-library comparisons passed, including wrap and wide-tail
 cases. It did not materially improve mixed Unicode and made styled input
 about 4–6% slower, so it was rejected. The patch, exact build identity and paired
-measurements remain in [`upstream/rep-last-cell/`](../upstream/rep-last-cell/);
+measurements remain in [`hotaru-benchmark-data/rep-last-cell`](https://github.com/bitemyapp/hotaru-benchmark-data/tree/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/rep-last-cell);
 the product still tracks the original printed scalar directly.
 
 ```sh

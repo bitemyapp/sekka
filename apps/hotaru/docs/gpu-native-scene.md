@@ -6,7 +6,7 @@ terminal cells and ordinary Aizome chrome together. It is not connected to the
 production application's event loop, and it does not establish performance
 parity with Ghostty or the current CPU renderer.
 
-The [frozen evidence](../upstream/gpu-buffer/native-scene/README.md) includes
+The [frozen evidence](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/gpu-buffer/native-scene/README.md) includes
 exact source, shader, Cargo lock, native-scene recorder, loader identities,
 failure evidence, successful runs and an original-resolution capture. The
 prototype starts at Sekka `3d10197261512c92ccc5816dfdd60c88566c4150`, before the

@@ -10,7 +10,7 @@ The original `font.rs` SHA-256 is
 `677df2b032bab2e30766b600fbb6783d7a4247fe70799b1757f1325bbb758e99`.
 The candidate lives at `/home/callen/work/hotaru-shaped-row-isolated`, with its
 remote build at `wx-workstation:/home/callen/work/hotaru-shaped-row-20261028`.
-[The patch](../upstream/renderer-row-cache/prototype.patch) changes `font.rs`,
+[The patch](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/renderer-row-cache/prototype.patch) changes `font.rs`,
 span iteration in `terminal_view.rs`, a row-storage estimate accessor, and
 test-only benchmark support. It applies cleanly to the current shared source;
 the raw records describe that isolated prototype. The cache is now applied to
@@ -106,7 +106,7 @@ The largest estimated two-generation cache charge in these workloads was
 
 ## Reproduction and evidence
 
-The [source manifest](../upstream/renderer-row-cache/source-manifest.json)
+The [source manifest](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/renderer-row-cache/source-manifest.json)
 records 648 source/lock files, both test binaries, compiler details and font
 hashes. Its canonical source-map digest is
 `981815b5e7cf771c52be316449b9ffee03ec1ed6dcf268151e8214a4ddce6eb8`.
@@ -130,9 +130,9 @@ arguments and use a separate output filename. The custom allocator is compiled
 only into the test module and forwards all pointer/layout operations to `System`.
 It introduces no production unsafe code.
 
-Raw [timing](../upstream/renderer-row-cache/worker-timing.json),
-[allocation](../upstream/renderer-row-cache/worker-allocations.json), and
-[summary](../upstream/renderer-row-cache/summary.json) reports accompany the
+Raw [timing](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/renderer-row-cache/worker-timing.json),
+[allocation](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/renderer-row-cache/worker-allocations.json), and
+[summary](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/renderer-row-cache/summary.json) reports accompany the
 validation logs. The [combined package checkpoint](cursor-cache-checkpoint.md)
 passes all six native Wayland suites and the allocation-probe correctness checks.
 The next measurement step is matched application workloads using the controls in

@@ -19,7 +19,7 @@ The builds involved:
 
 - **Hotaru package:** `/nix/store/mgqvnfa0a52dl9hd563jl4ga1hr1k2wc-hotaru-0.1.0`.
 - **Native `hotaru-replay`:** `36f856f6…`. Rust 1.95.0, `-C target-cpu=native`,
-  thin LTO; `upstream/candidate-clipboard-build.json`.
+  thin LTO; [`hotaru-benchmark-data/candidate-clipboard-build.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/candidate-clipboard-build.json).
 - **Pinned library and reference adapter:** `70e1bdcf…`.
 - **`ghostty-bench`:** `bcdaba09…`, ReleaseFast. **`ghostty-gen`:** `8a482e3e…`.
 
@@ -31,7 +31,7 @@ The builds involved:
   timed feeds after warmups, alternating engine order.
 - History is zero and width is legacy.
 - The final terminal states matched for every pattern before timing.
-- Reports: `upstream/benchmarks/clipboard-checkpoint-*.json`.
+- Reports: [`hotaru-benchmark-data/benchmarks/clipboard-checkpoint-*.json`](https://github.com/bitemyapp/hotaru-benchmark-data/tree/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/benchmarks).
 
 | Pattern | Ghostty | Hotaru | Hotaru ÷ Ghostty | Hotaru at the rich-copy checkpoint |
 | --- | ---: | ---: | ---: | ---: |
@@ -63,7 +63,7 @@ This is the [first pilot](gui-pilot-sprites.md)'s method, unchanged:
   pilot had one).
 
 Summary, calibration and compressed raw trials:
-[`upstream/gui-pilot-clipboard/`](../upstream/gui-pilot-clipboard/).
+[`hotaru-benchmark-data/gui-pilot-clipboard`](https://github.com/bitemyapp/hotaru-benchmark-data/tree/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/gui-pilot-clipboard).
 
 | Measurement | Hotaru | Ghostty |
 | --- | ---: | ---: |
@@ -112,7 +112,7 @@ This follows Ghostty's `src/benchmark/AGENTS.md`:
   history to bracket that.
 
 Scripts, reports and `hyperfine` exports:
-[`upstream/ghostty-suite/`](../upstream/ghostty-suite/).
+[`hotaru-benchmark-data/ghostty-suite`](https://github.com/bitemyapp/hotaru-benchmark-data/tree/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/ghostty-suite).
 
 Whole commands, median of 20:
 

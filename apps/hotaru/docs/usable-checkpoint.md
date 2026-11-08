@@ -53,10 +53,10 @@ GNU C17. The dependency sources are unchanged; the failed attempt is preserved.
 - ELF SHA-256: `d54f359151e2b484953daaaeffda1de942ba079d169674d4878a2787ca10b2a4`
 - Evidence SHA-256: `37495700648850af0e99e3770f7e2deba3a227797008c809603b747746435f73`
 
-The [package receipt](../upstream/usable-checkpoint/package-checkpoint.json),
-[runtime receipt](../upstream/usable-checkpoint/package-runtime.json),
-[local launcher receipt](../upstream/usable-checkpoint/local-install.json) and
-[compressed evidence](../upstream/usable-checkpoint/evidence.tar.gz) preserve
+The [package receipt](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/usable-checkpoint/package-checkpoint.json),
+[runtime receipt](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/usable-checkpoint/package-runtime.json),
+[local launcher receipt](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/usable-checkpoint/local-install.json) and
+[compressed evidence](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/usable-checkpoint/evidence.tar.gz) preserve
 identities, logs, source checks, captures and reproduction scripts. This is
 application qualification in private Sway; an Aizome VM, installed ISO and
 physical desktop were not newly qualified.
