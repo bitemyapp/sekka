@@ -225,7 +225,11 @@ rustPlatform.buildRustPackage {
       }
     }
     export TZDIR=${tzdata}/share/zoneinfo
-    ${cargo}/bin/cargo test --offline --target ${target} --release -p aizome-comp --test session_environment
+    # Exercise the socket fixture with a TMPDIR longer than sockaddr_un:
+    # runtime sockets must use their own short directory.
+    sessionTestTmp="$TMPDIR/session-environment-long-temporary-directory/session-environment-long-temporary-directory/session-environment-long-temporary-directory"
+    mkdir -p "$sessionTestTmp"
+    TMPDIR="$sessionTestTmp" ${cargo}/bin/cargo test --offline --target ${target} --release -p aizome-comp --test session_environment
     # Test-only dependency features can change the dylib ABI. Restore the
     # production compositor and logic together before installing them.
     ${cargo}/bin/cargo build --offline --target ${target} --release -p aizome-comp -p aizome-comp-logic

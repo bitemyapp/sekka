@@ -23,6 +23,10 @@ import subprocess
 import sys
 import tempfile
 import time
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from aizome_session import private_bus_shell  # noqa: E402
 
 def descendants(pid):
     out, todo = [pid], [pid]
@@ -118,7 +122,8 @@ def ctl(bindir, env, *args):
 
 
 def one(bindir, output, settle, idle):
-    tmp = tempfile.mkdtemp(prefix="si.", dir=os.environ.get("TMPDIR") or "/tmp")
+    # The Wayland, IPC and D-Bus socket paths must fit in sockaddr_un.
+    tmp = tempfile.mkdtemp(prefix="si.", dir="/tmp")
     env = {k: v for k, v in os.environ.items() if k not in ("WAYLAND_DISPLAY", "DISPLAY", "WAYLAND_SOCKET",
                                                            "AIZOME_SOCKET", "AIZOME_SHELL_SOCKET", "DBUS_SESSION_BUS_ADDRESS")}
     env.update({
@@ -134,6 +139,7 @@ def one(bindir, output, settle, idle):
     bus = subprocess.Popen(["dbus-daemon", "--session", "--nofork", "--nopidfile", f"--address=unix:path={tmp}/bus",
                             "--print-address"], env=env, stdout=subprocess.PIPE, text=True)
     env["DBUS_SESSION_BUS_ADDRESS"] = bus.stdout.readline().strip()
+    env["AIZOME_SHELL_BIN"] = private_bus_shell(tmp, env["DBUS_SESSION_BUS_ADDRESS"], f"{bindir}/aizome-shell")
     comp = subprocess.Popen([f"{bindir}/aizome", "--backend", "headless", "--headless-output", output,
                              "--renderer", "gles", "--socket", "wayland-bench"],
                             env=env, stdout=subprocess.DEVNULL, stderr=open(f"{tmp}/aizome.log", "w"),

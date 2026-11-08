@@ -1481,10 +1481,22 @@ compositor using pixman, private directories, disconnected buses and recording
 stand-ins for the environment/target commands. It covers direct launches,
 `INVOCATION_ID`, `NOTIFY_SOCKET`, explicit `--no-session`, and the environment
 received by both the shell and the command after `--`. It requires no GPU or
-live login session. Run it directly with:
+live login session. The package runs it with a deliberately long `TMPDIR`;
+its runtime sockets use a short private directory under `/tmp`. Run it directly with:
 
 ```sh
 nix develop .#aizome -c cargo test --locked --manifest-path desktop/aizome/Cargo.toml -p aizome-comp --test session_environment
+```
+
+The performance harnesses in `tests/performance/{why-desktop,why-toolkits,design}`
+own private session buses. Their `aizome_session.py` shell wrapper publishes
+the compositor's child environment to that private bus before starting the
+pinned shell, including `DISPLAY` when Xwayland is enabled. It checks the bus
+address and never imports into the systemd user manager. Test the wrapper's
+real D-Bus activation, without a GPU or desktop, with:
+
+```sh
+nix shell --inputs-from . nixpkgs#python3 nixpkgs#dbus -c python3 -m unittest discover -s tests/performance -p test_aizome_session.py -v
 ```
 
 Aizome's session launcher owns desktop cleanup even when logind terminates

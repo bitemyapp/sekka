@@ -22,7 +22,9 @@ struct Fixture {
 impl Fixture {
     fn new() -> Self {
         let n = COUNTER.fetch_add(1, Ordering::Relaxed);
-        let dir = std::env::temp_dir().join(format!("aizome-session-test-{}-{n}", std::process::id()));
+        // Runtime sockets must fit in sockaddr_un even when the caller's
+        // TMPDIR is a deeply nested sandbox or agent directory.
+        let dir = PathBuf::from("/tmp").join(format!("aizome-session-test-{}-{n}", std::process::id()));
         fs::create_dir(&dir).unwrap();
         fs::set_permissions(&dir, fs::Permissions::from_mode(0o700)).unwrap();
         for subdir in ["bin", "home", "config", "state", "data", "cache"] {
