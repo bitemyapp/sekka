@@ -225,7 +225,7 @@ fn shortcut_label(s: &proto::Shortcut) -> String {
 fn result(r: &Row, index: usize, on: bool) -> Element<PaletteMsg> {
     let item = r.item.clone();
     let ranges = r.ranges.clone();
-    let key = (item.title.clone(), item.trail.clone(), on, ranges.clone());
+    let key = (item.title.clone(), item.trail.clone(), on, ranges.clone(), item.mark);
     let label = item.title.clone();
     drawn(0.0, ROW, key, move |cx| {
         let t = cx.theme();
@@ -273,6 +273,13 @@ fn result(r: &Row, index: usize, on: bool) -> Element<PaletteMsg> {
         cx.canvas.clip_rect(Rect::new(x, 0.0, x + tw, ROW));
         cx.canvas.draw_text(&title_l, Point::new(x, y));
         cx.canvas.restore();
+        // Aizome's mark after one of its own apps.
+        let tw = if item.mark {
+            look::mark(cx.canvas, t, Point::new((x + tw + 6.0).round(), ((ROW - 12.0) / 2.0).round()), 12.0);
+            tw + 6.0 + 12.0
+        } else {
+            tw
+        };
         if !item.trail.is_empty() {
             let ts = if item.scope == Scope::File {
                 look::mono(11.5, typeface::WEIGHT_REGULAR, dim)

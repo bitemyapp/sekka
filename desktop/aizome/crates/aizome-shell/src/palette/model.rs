@@ -33,6 +33,8 @@ pub struct Item {
     pub mono: bool,
     /// Added to its match score (frecency, being recent).
     pub boost: i64,
+    /// Aizome's mark after the title: one of Aizome's own apps.
+    pub mark: bool,
 }
 
 impl Item {
@@ -49,6 +51,7 @@ impl Item {
             action,
             mono: false,
             boost: 0,
+            mark: false,
         }
     }
 

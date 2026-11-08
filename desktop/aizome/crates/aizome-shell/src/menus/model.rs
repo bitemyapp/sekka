@@ -39,6 +39,8 @@ pub struct Entry {
     pub label: String,
     /// Text after the label in `text3` (an app's generic name).
     pub detail: Option<String>,
+    /// Aizome's mark after the label: one of Aizome's own apps.
+    pub mark: bool,
     pub shortcut: Option<proto::Shortcut>,
     pub enabled: bool,
     pub checked: bool,
@@ -99,6 +101,11 @@ impl Entry {
 
     pub fn detail(mut self, d: impl Into<String>) -> Entry {
         self.detail = Some(d.into());
+        self
+    }
+
+    pub fn mark(mut self, on: bool) -> Entry {
+        self.mark = on;
         self
     }
 
@@ -270,6 +277,7 @@ fn entries(items: &[proto::Item], pid: u32) -> Vec<Entry> {
                 kind,
                 label: i.label.clone(),
                 detail: None,
+                mark: false,
                 shortcut: i.shortcut.clone(),
                 enabled: i.enabled,
                 checked: i.checked,

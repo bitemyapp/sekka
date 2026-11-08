@@ -1508,6 +1508,8 @@ impl Core {
                 id: Some(crate::shell::WINDOW_LIST + win),
                 icon: None,
                 swatch: None,
+                detail: None,
+                mark: false,
             }));
         }
         spec.items.splice(at..at + 1, items);

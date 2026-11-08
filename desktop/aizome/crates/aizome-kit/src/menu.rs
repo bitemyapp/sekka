@@ -297,6 +297,12 @@ pub struct ActionSpec {
     pub icon: Option<Icon>,
     /// An 8pt colour square beside the label in local popup menus.
     pub swatch: Option<Color>,
+    /// After the label, as "Hako  —  Files": an app's generic name.
+    /// Filtering matches it too.
+    pub detail: Option<String>,
+    /// Aizome's mark after the label, before its detail: one of Aizome's
+    /// own apps.
+    pub mark: bool,
 }
 
 impl MenuSpec {
@@ -429,6 +435,8 @@ impl<Msg> MenuItem<Msg> {
                 id: None,
                 icon: None,
                 swatch: None,
+                detail: None,
+                mark: false,
             }),
             _m: PhantomData,
         }
@@ -492,6 +500,23 @@ impl<Msg> MenuItem<Msg> {
     pub fn key(mut self, key: impl Hash) -> Self {
         if let Some(a) = self.action() {
             a.key = Some(crate::hash::hash_of(&key));
+        }
+        self
+    }
+
+    /// Text after the label, as an app's generic name: see
+    /// [`ActionSpec::detail`].
+    pub fn detail(mut self, detail: impl Into<String>) -> Self {
+        if let Some(a) = self.action() {
+            a.detail = Some(detail.into());
+        }
+        self
+    }
+
+    /// Aizome's mark after the label: one of Aizome's own apps.
+    pub fn mark(mut self, on: bool) -> Self {
+        if let Some(a) = self.action() {
+            a.mark = on;
         }
         self
     }
