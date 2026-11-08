@@ -125,14 +125,23 @@ fn stitch(state: &mut State, area: Option<Rect>) -> Result<Image, String> {
 }
 
 /// Along one axis, for an output `len` points long from `at` points into
-/// the image: each image pixel it covers (of `size`, at `scale`), with the
-/// output's pixel (of `pixels`, at its own scale `own`) under its centre.
+/// the image: each image pixel it covers (of `size`, at `scale`), with an
+/// output pixel (of `pixels`, at its own scale `own`). At the same scale,
+/// translate by the rounded pixel offset; otherwise sample under its centre.
 fn place(at: i32, len: i32, size: u32, scale: f64, pixels: u32, own: f64) -> impl Iterator<Item = (usize, usize)> {
     let edge = |p: i32| (p as f64 * scale).round().clamp(0.0, size as f64) as usize;
+    let origin = (at as f64 * scale).round() as i64;
     let last = pixels as usize - 1;
     (edge(at)..edge(at + len)).map(move |d| {
-        let point = (d as f64 + 0.5) / scale - at as f64;
-        (d, ((point * own) as usize).min(last))
+        let source = if own == scale {
+            // Stay in pixels: a divide/multiply round trip at fractional
+            // scales can land just below an integer and repeat a row.
+            (d as i64 - origin) as usize
+        } else {
+            let point = (d as f64 + 0.5) / scale - at as f64;
+            (point * own) as usize
+        };
+        (d, source.min(last))
     })
 }
 
@@ -219,6 +228,19 @@ mod tests {
         let p: Vec<_> = place(-30, 100, 120, 2.0, 200, 2.0).collect();
         assert_eq!(p.len(), 120);
         assert!(p.iter().enumerate().all(|(i, &(d, s))| d == i && s == i + 60), "{p:?}");
+    }
+
+    #[test]
+    fn fractional_scale_crops_keep_every_native_pixel_in_order() {
+        // At 150%, a crop one point down starts at source row 2. A
+        // floating-point round trip made row 5 copy row 6 again, not 7.
+        // Also cover 175% and outputs placed at positive half-pixel
+        // offsets: rounding the origin must not drop their first pixel.
+        for (scale, at, first, source) in [(1.5, -1, 0, 2), (1.75, -2, 0, 4), (1.25, 2, 3, 0), (1.5, 1, 2, 0)] {
+            let placed: Vec<_> = place(at, 720, 150, scale, (720.0 * scale) as u32, scale).collect();
+            let expected: Vec<_> = (first..150).zip(source..).collect();
+            assert_eq!(placed, expected, "scale {scale}, offset {at}");
+        }
     }
 
     #[test]
