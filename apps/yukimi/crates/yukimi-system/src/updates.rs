@@ -267,8 +267,10 @@ pub fn sekka_targets(flake: &str, inputs: &[Input], newest: &mut BTreeMap<String
     let Some(original) = inputs.iter().find(|i| i.name == "sekka").and_then(|i| i.original.as_ref()) else {
         return;
     };
-    // Fetched as a GitHub tarball, or with Git since Sekka's flake moved to it.
-    if original.github_repo() != Some(("bitemyapp", "sekka"))
+    // Only the old tarball addresses can move to another branch during
+    // prepare. Existing Git sources keep their URL and check_flake's answer.
+    if original.kind != "github"
+        || original.github_repo() != Some(("bitemyapp", "sekka"))
         || original.rev.is_some()
         || !matches!(original.reference.as_deref(), None | Some("main" | "nightly"))
     {
@@ -458,6 +460,38 @@ mod tests {
         assert_eq!(newest["sekka"], Ok(fork));
     }
 
+    #[test]
+    fn existing_git_sources_keep_their_update_target() {
+        let lock = FlakeLock::parse(
+            r#"{ "root": "root", "version": 7, "nodes": {
+              "root": { "inputs": { "sekka": "sekka" } },
+              "sekka": { "locked": { "type": "git", "url": "https://github.com/bitemyapp/sekka", "ref": "main", "rev": "1" },
+                         "original": { "type": "git", "url": "https://github.com/bitemyapp/sekka", "ref": "main" } } } }"#,
+        )
+        .unwrap();
+        let mut inputs = lock.inputs();
+        let target = Release { rev: Some("2".repeat(40)), last_modified: Some(2), ..Release::default() };
+        // prepare leaves these Git URLs unchanged. Checking must retain
+        // the answer for that source, including the repository's HEAD.
+        for (query, reference) in [
+            ("?ref=main", Some("main")),
+            ("?shallow=1&ref=main", Some("main")),
+            ("?ref=refs/heads/main&shallow=1", Some("refs/heads/main")),
+            ("?ref=nightly&shallow=1", Some("nightly")),
+            ("?shallow=1", None),
+            ("", None),
+        ] {
+            let flake = format!(
+                "{{ inputs.sekka.url = \"git+https://github.com/bitemyapp/sekka{query}\"; outputs = _: {{ }}; }}"
+            );
+            assert_eq!(yukimi_config::sekka::prepare(&flake).unwrap(), flake);
+            inputs[0].original.as_mut().unwrap().reference = reference.map(str::to_owned);
+            let mut newest = BTreeMap::from([("sekka".to_owned(), Ok(target.clone()))]);
+            sekka_targets(&flake, &inputs, &mut newest);
+            assert_eq!(newest["sekka"], Ok(target.clone()), "{query}");
+        }
+    }
+
     /// Asks GitHub; run with `cargo test -- --ignored` when online.
     #[test]
     #[ignore = "asks GitHub over the network"]
@@ -486,7 +520,7 @@ mod tests {
                          "original": { "type": "git", "url": "https://github.com/bitemyapp/sekka", "ref": "nightly", "shallow": true } } } }"#,
         )
         .unwrap();
-        let mut newest = BTreeMap::new();
+        let mut newest = BTreeMap::from([("sekka".to_owned(), ask(&git.input("sekka").unwrap()).unwrap())]);
         sekka_targets(
             &format!("{{ inputs.sekka.url = \"{}\"; }}", yukimi_config::sekka::NIGHTLY),
             &git.inputs(),
