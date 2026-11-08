@@ -25,33 +25,43 @@ pub fn supported(text: &str) -> bool {
 /// What Sekka systems follow: the branch the nightly workflow moves only
 /// after its checks have passed and Sekka's packages are in its binary cache.
 /// `main` moves first, so a system following it could compile them itself.
-pub const NIGHTLY: &str = "github:bitemyapp/sekka/nightly";
+///
+/// Fetched with Git, one commit deep: Nix keeps the clone, so each update
+/// downloads only what changed since the last one. A `github:` address
+/// downloads a tarball of the whole tree every time, and GitHub generates
+/// those slowly.
+pub const NIGHTLY: &str = "git+https://github.com/bitemyapp/sekka?ref=nightly&shallow=1";
 
 /// Early updates: Sekka's `main`, chosen on purpose (Yukimi's Updates page,
 /// `sekka-update --early`): every change as soon as it's merged, before the
 /// nightly checks, and what isn't in the binary cache yet builds here.
-/// Written with `?ref=` so it reads as a choice, unlike `/main`, which
+pub const EARLY: &str = "git+https://github.com/bitemyapp/sekka?ref=main&shallow=1";
+
+/// Early updates as they were written before Sekka was fetched with Git:
+/// with `?ref=`, so they read as a choice, unlike `/main`, which
 /// installations once followed by default and [`prepare`] moves to nightly.
-pub const EARLY: &str = "github:bitemyapp/sekka?ref=main";
+const TARBALL_EARLY: &str = "github:bitemyapp/sekka?ref=main";
 
 /// Whether a Sekka address is the early-updates choice.
 pub fn early(url: &str) -> bool {
-    url == EARLY
+    url == EARLY || url == TARBALL_EARLY
 }
 
 /// Return the flake to update. A system following `main` (or the default
 /// branch) by default follows `nightly` instead; early updates ([`EARLY`]),
-/// other Sekka branches and pins stay as chosen. Inputs at the addresses Sekka's installations have always used
-/// then follow Sekka's own ([`follow_sekka`]).
+/// other Sekka branches and pins stay as chosen, with branches fetched with
+/// Git ([`fetched_with_git`]). Inputs at the addresses Sekka's
+/// installations have always used then follow Sekka's own ([`follow_sekka`]).
 pub fn prepare(text: &str) -> Result<String, String> {
     let text = if let Some(url) = edit::string_value(text, &["inputs", "sekka", "url"]).map_err(|e| e.to_string())? {
         if !official(&url, "sekka") {
             return Err(UNSUPPORTED.into());
         }
-        if url == "github:bitemyapp/sekka" || url == "github:bitemyapp/sekka/main" {
-            edit::set_string_value(text, &["inputs", "sekka", "url"], NIGHTLY).map_err(|e| e.to_string())?
-        } else {
-            text.to_owned()
+        match fetched_with_git(&url) {
+            Some(address) => {
+                edit::set_string_value(text, &["inputs", "sekka", "url"], &address).map_err(|e| e.to_string())?
+            }
+            None => text.to_owned(),
         }
     } else {
         migrate(text).ok_or_else(|| UNSUPPORTED.to_owned())?
@@ -147,7 +157,40 @@ pub fn following(text: &str) -> Vec<&'static str> {
 
 fn official(url: &str, repo: &str) -> bool {
     let base = format!("github:bitemyapp/{repo}");
-    url == base || url.strip_prefix(&base).is_some_and(|s| s.starts_with('/') || s.starts_with('?'))
+    let git = format!("git+https://github.com/bitemyapp/{repo}");
+    url == base
+        || url.strip_prefix(&base).is_some_and(|s| s.starts_with('/') || s.starts_with('?'))
+        || url == git
+        || url.strip_prefix(&git).is_some_and(|s| s.starts_with('?'))
+}
+
+/// The address a `github:` Sekka address is fetched with Git at, when it
+/// follows a branch: `main` (or the default branch) as followed by default
+/// becomes [`NIGHTLY`], early updates [`EARLY`], and any other branch the
+/// same branch. `None` for addresses that stay as they are: pins to one
+/// commit, which never download again, addresses with settings of their
+/// own, and those already fetched with Git.
+pub fn fetched_with_git(url: &str) -> Option<String> {
+    let rest = url.strip_prefix("github:bitemyapp/sekka")?;
+    if url == TARBALL_EARLY {
+        return Some(EARLY.to_owned());
+    }
+    let branch = match rest.split_once('?') {
+        // Only `?ref=`, which names a branch.
+        Some((path, query)) => {
+            (path.is_empty() && !query.contains('&')).then(|| query.strip_prefix("ref=")).flatten()?.to_owned()
+        }
+        None if rest.is_empty() => "main".to_owned(),
+        None => rest.strip_prefix('/')?.to_owned(),
+    };
+    let commit = branch.len() == 40 && branch.bytes().all(|b| b.is_ascii_hexdigit());
+    if commit || !crate::branch::valid(&branch) {
+        return None;
+    }
+    Some(match branch.as_str() {
+        "main" => NIGHTLY.to_owned(),
+        _ => format!("git+https://github.com/bitemyapp/sekka?ref={branch}&shallow=1"),
+    })
 }
 
 fn migrate(text: &str) -> Option<String> {
@@ -299,7 +342,7 @@ mod tests {
   inputs.applications.follows = "sekka/applications";
   inputs.ai-apps.follows = "sekka/ai-apps";
   inputs.omp.follows = "sekka/omp";
-  inputs.sekka.url = "github:bitemyapp/sekka/nightly";
+  inputs.sekka.url = "git+https://github.com/bitemyapp/sekka?ref=nightly&shallow=1";
 
   outputs = { nixpkgs, determinate, fh, applications, ai-apps, omp, sekka, ... }: { };
 }
@@ -321,16 +364,41 @@ mod tests {
 
     #[test]
     fn leaves_existing_sekka_branch_alone() {
-        let new = prepare(OLD).unwrap().replace("sekka/nightly", "sekka/topic");
-        assert!(new.contains("github:bitemyapp/sekka/topic"));
-        assert_eq!(prepare(&new).unwrap(), new);
+        let nightly = prepare(OLD).unwrap();
+        let topic = nightly.replace(NIGHTLY, "git+https://github.com/bitemyapp/sekka?ref=topic&shallow=1");
+        assert_eq!(prepare(&topic).unwrap(), topic);
+        // A branch followed as a tarball is followed with Git.
+        for tarball in ["github:bitemyapp/sekka/topic", "github:bitemyapp/sekka?ref=topic"] {
+            assert_eq!(prepare(&nightly.replace(NIGHTLY, tarball)).unwrap(), topic, "{tarball}");
+        }
+        let slashed = nightly.replace(NIGHTLY, "github:bitemyapp/sekka?ref=feature/x");
+        assert!(
+            prepare(&slashed).unwrap().contains("\"git+https://github.com/bitemyapp/sekka?ref=feature/x&shallow=1\"")
+        );
+        // Without shallow=1, as someone wrote it themselves.
+        let deep = nightly.replace(NIGHTLY, "git+https://github.com/bitemyapp/sekka?ref=nightly");
+        assert_eq!(prepare(&deep).unwrap(), deep);
+    }
+
+    #[test]
+    fn pins_stay_tarballs() {
+        let nightly = prepare(OLD).unwrap();
+        for pin in [
+            "github:bitemyapp/sekka/2111c84ac0b4555518b9482ec436f813d26905ef",
+            "github:bitemyapp/sekka?rev=2111c84ac0b4555518b9482ec436f813d26905ef",
+            "github:bitemyapp/sekka/nightly?dir=sub",
+        ] {
+            let pinned = nightly.replace(NIGHTLY, pin);
+            assert_eq!(prepare(&pinned).unwrap(), pinned, "{pin}");
+            assert_eq!(fetched_with_git(pin), None, "{pin}");
+        }
     }
 
     #[test]
     fn follows_nightly_instead_of_main() {
         let nightly = prepare(OLD).unwrap();
         assert_eq!(edit::string_value(&nightly, &["inputs", "sekka", "url"]).unwrap().as_deref(), Some(NIGHTLY));
-        for main in ["github:bitemyapp/sekka/main", "github:bitemyapp/sekka"] {
+        for main in ["github:bitemyapp/sekka/main", "github:bitemyapp/sekka", "github:bitemyapp/sekka/nightly"] {
             let text = nightly.replace(NIGHTLY, main);
             assert_eq!(prepare(&text).unwrap(), nightly, "{main}");
         }
@@ -341,8 +409,13 @@ mod tests {
         let nightly = prepare(OLD).unwrap();
         let early = nightly.replace(NIGHTLY, EARLY);
         assert_eq!(prepare(&early).unwrap(), early);
-        assert!(super::early(EARLY) && !super::early(NIGHTLY) && !super::early("github:bitemyapp/sekka/main"));
+        assert_eq!(prepare(&nightly.replace(NIGHTLY, TARBALL_EARLY)).unwrap(), early);
+        assert!(super::early(EARLY) && super::early(TARBALL_EARLY));
+        assert!(!super::early(NIGHTLY) && !super::early("github:bitemyapp/sekka/main"));
         assert_eq!(crate::branch::of(EARLY).as_deref(), Some("main"));
+        // Turning early updates off and on again, as the helper does.
+        assert_eq!(crate::branch::with(EARLY, "nightly").as_deref(), Some(NIGHTLY));
+        assert_eq!(crate::branch::with(NIGHTLY, "main").as_deref(), Some(EARLY));
     }
 
     #[test]
@@ -353,6 +426,9 @@ mod tests {
             OLD.replace("inputs.tatami.url", "inputs.other.url"),
             OLD.replace("outputs =", "inputs.calamares.inputs.extra.follows = \"x\"; outputs ="),
             "{ inputs.sekka.url = \"github:bitemyapp/sekka-evil\"; }".into(),
+            "{ inputs.sekka.url = \"git+https://github.com/bitemyapp/sekka-evil?ref=nightly\"; }".into(),
+            "{ inputs.sekka.url = \"git+https://github.com/bitemyapp/sekka.evil?ref=nightly\"; }".into(),
+            "{ inputs.sekka.url = \"git+https://github.com.evil/bitemyapp/sekka?ref=nightly\"; }".into(),
             "{ broken".into(),
         ] {
             assert!(prepare(&old).is_err(), "{old}");
