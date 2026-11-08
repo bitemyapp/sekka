@@ -6,6 +6,19 @@ const os = require("node:os");
 const vm = require("node:vm");
 const { createRequire } = require("node:module");
 
+// A function's source is the shortest text from its definition through a
+// closing brace that compiles as an expression, whatever surrounds it.
+function functionSource(code, start) {
+  for (let end = code.indexOf("}", start); end !== -1; end = code.indexOf("}", end + 1)) {
+    const candidate = code.slice(start, end + 1);
+    try {
+      new vm.Script(`(${candidate})`);
+      return candidate;
+    } catch {}
+  }
+  throw new Error("the executor copy function never ends");
+}
+
 async function main() {
   const resources = path.resolve(process.argv[2]);
   const archive = await fs.readFile(path.join(resources, "app.asar"));
@@ -20,8 +33,9 @@ async function main() {
     const bytes = archive.subarray(start, start + entry.size);
     if (!bytes.includes(Buffer.from("executorPluginRoot:"))) continue;
     const code = bytes.toString();
-    for (const match of code.matchAll(/async function [\w$]+\(\{executorPluginRoot:[\w$]+,resourcesPath:[\w$]+\}\).*?(?=async function )/gs)) {
-      definitions.push({ name, code, copy: match[0] });
+    // Releases either declare the function by name or inline it anonymously.
+    for (const match of code.matchAll(/async function(?: [\w$]+)?\(\{executorPluginRoot:[\w$]+,resourcesPath:[\w$]+\}\)/g)) {
+      definitions.push({ name, code, copy: functionSource(code, match.index) });
     }
   }
   assert.equal(definitions.length, 1, "exactly one executor copy function must be present");
