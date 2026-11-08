@@ -4,6 +4,8 @@
 //! (`people` in [`Choice`](crate::setup::Choice)) may name any of them,
 //! including people added after the system was built.
 
+use std::path::Path;
+
 /// Where the accounts are.
 pub const PASSWD: &str = "/etc/passwd";
 
@@ -18,7 +20,12 @@ pub struct Person {
 
 /// The computer's people, in the order `/etc/passwd` has them.
 pub fn read() -> Vec<Person> {
-    std::fs::read_to_string(PASSWD).map(|text| parse(&text)).unwrap_or_default()
+    read_from(Path::new(PASSWD))
+}
+
+/// The people of the `passwd` file at `path`, such as another system's.
+pub fn read_from(path: &Path) -> Vec<Person> {
+    std::fs::read_to_string(path).map(|text| parse(&text)).unwrap_or_default()
 }
 
 /// Whether `name` is one of the computer's people now.
@@ -28,7 +35,8 @@ pub fn is_person(name: &str) -> bool {
 
 /// The people of a `passwd` file: accounts from uid 1000 to 59999 (people,
 /// not the system's own users, Nix's builders or nobody) that have a shell
-/// to log in with, and a name a person's account can have.
+/// to log in with (none given is `/bin/sh`), and a name a person's account
+/// can have.
 pub fn parse(passwd: &str) -> Vec<Person> {
     passwd
         .lines()
@@ -36,7 +44,7 @@ pub fn parse(passwd: &str) -> Vec<Person> {
             let fields: Vec<&str> = line.split(':').collect();
             let [name, _, uid, _, gecos, _, shell] = fields[..] else { return None };
             let uid: u32 = uid.parse().ok()?;
-            let shell = shell.rsplit('/').next().unwrap_or("");
+            let shell = if shell.is_empty() { "sh" } else { shell.rsplit('/').next().unwrap_or("") };
             let logs_in = !shell.is_empty() && !matches!(shell, "nologin" | "false");
             ((1000..60000).contains(&uid) && logs_in && valid_name(name)).then(|| Person {
                 name: name.to_owned(),
@@ -70,12 +78,14 @@ nixbld1:x:30001:30000:Nix build user 1:/var/empty:/run/current-system/sw/bin/nol
 locked:x:1002:100::/home/locked:/run/current-system/sw/bin/nologin
 nope:x:1003:100::/home/nope:/bin/false
 Odd.Name:x:1004:100::/home/odd:/bin/sh
+sam:x:1005:100::/home/sam:
 nobody:x:65534:65534:Unprivileged account:/var/empty:/run/current-system/sw/bin/nologin
 broken line
 ";
         let people = parse(passwd);
         let names: Vec<&str> = people.iter().map(|p| p.name.as_str()).collect();
-        assert_eq!(names, ["adama", "kara"]);
+        // sam has no shell given, which is /bin/sh.
+        assert_eq!(names, ["adama", "kara", "sam"]);
         assert_eq!(people[0].full_name.as_deref(), Some("William Adama"));
         assert_eq!(people[1].full_name, None);
     }

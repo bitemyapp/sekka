@@ -1153,10 +1153,17 @@ for the next start.
 `services.displayManager.autoLogin` configuration. Its choice reports the
 effective display-manager setting. Selecting a person or no one explicitly
 overrides ordinary definitions of that setting (priority 90), including
-disabling an existing automatic login; `mkForce` policy still wins. On
-standalone Aizome, Settei queries the active greetd service through systemd
-and reads the configuration named by its `ExecStart` arguments, including
-NixOS's store path. It shows that setting as controlled by the configuration.
+disabling an existing automatic login; `mkForce` policy still wins.
+Settei offers only the accounts the helper takes (local, uid 1000 to 59999,
+a `useradd`-style name, a login shell; an empty shell field is `/bin/sh`),
+re-reads `system.json` every two seconds while a proposal waits in Yukimi,
+and proposes no one when the person it names is removed. On standalone
+Aizome, Settei queries the active greetd service through systemd and reads
+the configuration named by its `ExecStart` arguments, including NixOS's
+store path. Under greetd, and on NixOS under any login screen (NixOS writes
+GDM's `custom.conf` read-only, and SDDM and Plasma Login never read
+AccountsService), it shows the setting as controlled by the configuration;
+only other systems use AccountsService's flag.
 `sekka-update --boot` explicitly
 stages the update; `--switch` requests live activation but refuses an unsafe
 transition before committing configuration edits. A target-side NixOS

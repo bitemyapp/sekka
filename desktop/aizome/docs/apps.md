@@ -129,9 +129,12 @@ palette. Search filters the sidebar and highlights options.
   login. On Sekka automatic login is the system's `calamares.autoLogin`,
   which every login screen it offers reads: Settei proposes it in Yukimi
   (`aizome-yukimi --choose calamares.autoLogin=NAME`, or empty for no one),
-  and it applies from the next start. Elsewhere it is AccountsService's
-  flag (GDM's); under greetd it reads `[initial_session]` from the active
-  service's configuration, including NixOS's store path.
+  and it applies from the next start; removing that person proposes no
+  one. Elsewhere on NixOS, and under greetd anywhere, only the
+  configuration sets it, so the row shows it without changing it (greetd's
+  `[initial_session]` from the active service's configuration, including
+  NixOS's store path). Only other systems use AccountsService's flag
+  (GDM's).
 - **Keyboard**: layouts (searchable list from `aizome-sys`'s xkb data, with
   variants), switching shortcut, key repeat delay and rate, modifier keys
   (swap Alt/Super, Control/Super or Control/Alt on both sides or just one),

@@ -291,3 +291,39 @@ fn removing_a_user_names_their_home_and_fixed_accounts_keep_their_type() {
     let (kind, _) = row_of(&h, "Standard").expect("Guest's account type");
     assert!(kind.disabled, "the account type can be changed though the configuration fixes it");
 }
+
+#[test]
+fn on_sekka_yukimi_changes_who_logs_in_by_themselves() {
+    use aizome_kit::testing::Harness;
+    use settei::panes::users::{AutoLogin, Msg};
+    use settei::system::choices::Now;
+    let (mut h, _) = common::open("users-auto-login", "users");
+    let w = h.window();
+    let send = |h: &mut Harness<settei::Settei>, msg: Msg| {
+        let msg: settei::pane::PaneMsg = std::sync::Arc::new(msg);
+        h.send(settei::AppMsg::Pane("users", msg));
+    };
+    let choice = |now: &str, next: &str| AutoLogin::Choice(Now { now: now.into(), next: next.into() });
+    let launched = |h: &Harness<settei::Settei>| h.program().shared.launched.last().cloned().unwrap_or_default();
+    let says =
+        |h: &Harness<settei::Settei>, w: aizome_kit::WindowKey, what: &str| h.texts(w).iter().any(|t| t.contains(what));
+    // Sekka's choice: Yukimi is handed the person, and AccountsService's
+    // flag (GDM's) stays as it is.
+    send(&mut h, Msg::AutoLoginRead(choice("", "")));
+    send(&mut h, Msg::AutoLoginConfirmed(Some("ren".into())));
+    assert_eq!(launched(&h), ["aizome-yukimi", "--choose", "calamares.autoLogin=ren"]);
+    assert!(h.program().shared.sys.accounts.snapshot().users.iter().all(|u| !u.automatic_login));
+    assert!(says(&h, w, "Proposed in Yukimi: Ren Ishida."), "{:?}", h.texts(w));
+    // Applied for the next start: the row says so, and the proposal is done.
+    send(&mut h, Msg::AutoLoginRead(choice("", "ren")));
+    assert!(says(&h, w, "From the next start: Ren Ishida."), "{:?}", h.texts(w));
+    assert!(!says(&h, w, "Proposed in Yukimi"), "{:?}", h.texts(w));
+    // Removing them proposes no one, so nobody starts into an account
+    // that's gone, or into a later one with their name.
+    send(&mut h, Msg::Remove("ren".into()));
+    let s = h.program().sheet_window().expect("the sheet");
+    assert!(says(&h, s, "The computer starts straight into their account."), "{:?}", h.texts(s));
+    assert!(h.click_text(s, "Remove User"));
+    assert!(h.settle(std::time::Duration::from_secs(5), |p| p.shared.launched.len() == 2));
+    assert_eq!(launched(&h), ["aizome-yukimi", "--choose", "calamares.autoLogin="]);
+}

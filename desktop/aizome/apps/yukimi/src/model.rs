@@ -299,8 +299,7 @@ impl Model {
     pub fn quick(paths: &Paths) -> Model {
         let mut setup = Setup::detect_in(&paths.etc_nixos(), paths.facts(), &yukimi_system::info::hostname());
         // Who logs in by themselves may be anyone with an account now.
-        let people = yukimi_system::people::read();
-        setup.facts.choices = setup.facts.choices.iter().map(|c| c.with_people(&people)).collect();
+        setup.facts.offer_people(&paths.people());
         let mut model = Model {
             info: SystemInfo::read(),
             completion: yukimi_system::completion::read(),

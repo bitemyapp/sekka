@@ -409,6 +409,11 @@ fn valid_host(name: &str) -> bool {
     !name.is_empty() && name.bytes().all(|b| b.is_ascii_alphanumeric() || b"-_.".contains(&b))
 }
 
+/// A name an existing account may have, safe to pass on: who is signed in,
+/// and `users.users.NAME` in the configuration, which needn't follow
+/// `useradd`'s rules. Whom the computer logs in as by itself does
+/// ([`people::valid_name`], as Settei makes accounts), so `--choose` checks
+/// that instead.
 fn valid_user(name: &str) -> bool {
     !name.is_empty() && name.len() <= 32 && name.bytes().all(|b| b.is_ascii_alphanumeric() || b"-_.".contains(&b))
 }

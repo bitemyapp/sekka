@@ -1362,13 +1362,6 @@ impl Yukimi {
         if let Some(page) = launch.page {
             self.show(page, cx);
         }
-        // Settei may propose someone added since Yukimi read the accounts.
-        if !launch.choose.is_empty() {
-            let people = yukimi_system::people::read();
-            let mut model = (*self.model).clone();
-            model.setup.facts.choices = model.setup.facts.choices.iter().map(|c| c.with_people(&people)).collect();
-            self.model = Arc::new(model);
-        }
         let mut proposed = false;
         for (setting, values) in launch.choose {
             match self.choices().iter().find(|c| c.setting == setting) {
@@ -1825,8 +1818,18 @@ impl Program for Yukimi {
             Msg::NoteGone(id) => self.notes.retain(|(n, _)| *n != id),
             Msg::Launched(args) => {
                 match launch_from_args(&args) {
+                    // Proposed once read, with the people read with it.
                     Ok(launch) if self.loading => self.launch = Some(launch),
-                    Ok(launch) => self.propose(launch, cx),
+                    Ok(launch) => {
+                        // Settei may propose someone added (or removed)
+                        // since Yukimi read the accounts.
+                        let choices = self.choices();
+                        if launch.choose.iter().any(|(s, _)| choices.iter().any(|c| c.people && &c.setting == s)) {
+                            let people = self.model.paths.people();
+                            Arc::make_mut(&mut self.model).setup.facts.offer_people(&people);
+                        }
+                        self.propose(launch, cx)
+                    }
                     Err(e) => self.note(e, cx),
                 }
                 cx.activate(self.window);

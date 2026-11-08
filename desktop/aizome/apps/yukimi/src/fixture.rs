@@ -397,6 +397,7 @@ pub fn choices() -> Vec<Choice> {
         title: title.into(),
         detail: detail.map(Into::into),
         needs: needs.map(Into::into),
+        person: false,
     };
     let desktops: Vec<ChoiceOption> =
         [("aizome", "Aizome"), ("tatami", "Tatami"), ("plasma", "Plasma"), ("gnome", "GNOME"), ("xfce", "Xfce")]

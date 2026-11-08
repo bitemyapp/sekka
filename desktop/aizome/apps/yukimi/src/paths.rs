@@ -7,6 +7,7 @@
 //! looks, and changes nothing, since the helper acts on the real `/etc`.
 use std::path::{Path, PathBuf};
 
+use yukimi_system::people::Person;
 use yukimi_system::setup::Facts;
 
 /// Where the system's configuration and facts are read from.
@@ -51,6 +52,11 @@ impl Paths {
             .and_then(|path| std::fs::canonicalize(path).ok())
             .map(|path| path.to_string_lossy().into_owned());
         facts
+    }
+
+    /// The system's people, from its `passwd`.
+    pub fn people(&self) -> Vec<Person> {
+        yukimi_system::people::read_from(&self.etc.join("passwd"))
     }
 }
 

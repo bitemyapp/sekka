@@ -18,7 +18,9 @@ pub struct Now<T> {
     pub next: T,
 }
 
-/// `setting`'s value in a `yukimi/system.json`, if the system offers it.
+/// `setting`'s value in a `yukimi/system.json`, if the system offers it as
+/// one value (a boolean, which Sekka gives as a string, as `"true"` or
+/// `"false"`).
 pub fn value(text: &str, setting: &str) -> Option<String> {
     #[derive(Deserialize)]
     struct Facts {
@@ -32,7 +34,11 @@ pub fn value(text: &str, setting: &str) -> Option<String> {
     }
     let facts: Facts = serde_json::from_str(text).ok()?;
     let choice = facts.choices.into_iter().find(|c| c.setting == setting)?;
-    choice.value.as_str().map(str::to_owned)
+    match choice.value {
+        serde_json::Value::String(v) => Some(v),
+        serde_json::Value::Bool(b) => Some(b.to_string()),
+        _ => None,
+    }
 }
 
 /// `setting` now and from the next start, if the running system offers it
@@ -62,7 +68,10 @@ mod tests {
             {"setting":"calamares.desktops","title":"Desktops","many":true,"value":["aizome"],"options":[]}]}"#;
         assert_eq!(value(facts, "calamares.loginScreen").as_deref(), Some("auto"));
         assert_eq!(value(facts, "calamares.autoLogin").as_deref(), Some(""));
-        // A list isn't one value; and older systems offer fewer.
+        // A boolean given as one; a list isn't one value; and older
+        // systems offer fewer.
+        let boolean = r#"{"choices":[{"setting":"calamares.bootSplash.enable","title":"Boot splash","value":true}]}"#;
+        assert_eq!(value(boolean, "calamares.bootSplash.enable").as_deref(), Some("true"));
         assert_eq!(value(facts, "calamares.desktops"), None);
         assert_eq!(value(facts, "calamares.bootSplash.enable"), None);
         assert_eq!(value("{}", "calamares.autoLogin"), None);

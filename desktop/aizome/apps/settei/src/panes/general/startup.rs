@@ -117,6 +117,8 @@ mod tests {
         let offered = |text: &str| choices::value(text, SPLASH).map(|v| v == "true");
         assert_eq!(offered(&facts("true")), Some(true));
         assert_eq!(offered(&facts("false")), Some(false));
+        // Given as a JSON boolean, it's still offered.
+        assert_eq!(offered(&facts("true").replace("\"value\":\"true\"", "\"value\":true")), Some(true));
         // Older Sekka, other systems, or no Yukimi.
         assert_eq!(offered(r#"{"choices":[]}"#), None);
         assert_eq!(offered("{}"), None);

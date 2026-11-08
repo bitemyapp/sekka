@@ -94,6 +94,10 @@ pub struct ChoiceOption {
     /// desktops. Yukimi offers it only then.
     #[serde(default)]
     pub needs: Option<String>,
+    /// One of the computer's people, which [`Choice::with_people`] added
+    /// rather than the system declared.
+    #[serde(skip)]
+    pub person: bool,
 }
 
 impl ChoiceOption {
@@ -143,27 +147,28 @@ impl Choice {
     }
 
     /// A `people` choice as Yukimi offers it: no one, its own options, then
-    /// each of `people` (by full name, when they have one). Others as they
-    /// are.
+    /// each of `people` (by full name, when they have one), in place of
+    /// any people offered before. Others as they are.
     pub fn with_people(&self, people: &[crate::people::Person]) -> Choice {
         if !self.people {
             return self.clone();
         }
-        let option = |id: &str, title: &str, detail: Option<String>| ChoiceOption {
+        let option = |id: &str, title: &str, detail: Option<String>, person: bool| ChoiceOption {
             id: id.to_owned(),
             title: title.to_owned(),
             detail,
             needs: None,
+            person,
         };
-        let mut options = vec![option("", "No one", Some("Everyone signs in at the login screen.".into()))];
-        options.extend(self.options.iter().filter(|o| !o.id.is_empty()).cloned());
+        let mut options = vec![option("", "No one", Some("Everyone signs in at the login screen.".into()), false)];
+        options.extend(self.options.iter().filter(|o| !o.id.is_empty() && !o.person).cloned());
         for p in people {
             if options.iter().any(|o| o.id == p.name) {
                 continue;
             }
             options.push(match &p.full_name {
-                Some(full) => option(&p.name, full, Some(p.name.clone())),
-                None => option(&p.name, &p.name, None),
+                Some(full) => option(&p.name, full, Some(p.name.clone()), true),
+                None => option(&p.name, &p.name, None, true),
             });
         }
         Choice { options, ..self.clone() }
@@ -195,6 +200,13 @@ impl Facts {
             .and_then(|path| std::fs::canonicalize(path).ok())
             .map(|path| path.to_string_lossy().into_owned());
         facts
+    }
+
+    /// Offer `people` in its `people` choices, as [`Choice::with_people`].
+    pub fn offer_people(&mut self, people: &[crate::people::Person]) {
+        for choice in &mut self.choices {
+            *choice = choice.with_people(people);
+        }
     }
 }
 
@@ -476,5 +488,10 @@ mod tests {
         assert!(offered.allows(&v(&["kara"])).is_ok());
         assert!(offered.allows(&v(&["starbuck"])).is_err());
         assert_eq!(login.value.values(), [""]);
+        // Offered again once kara's account is gone: only who has one now.
+        let again = offered.with_people(&people[..1]);
+        let ids: Vec<&str> = again.options.iter().map(|o| o.id.as_str()).collect();
+        assert_eq!(ids, ["", "adama"]);
+        assert!(again.allows(&v(&["kara"])).is_err());
     }
 }

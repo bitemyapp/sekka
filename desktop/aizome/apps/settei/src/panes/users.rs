@@ -7,13 +7,14 @@
 //! Who logs in by themselves is the system's own choice on Sekka
 //! (`calamares.autoLogin`), as every login screen it offers reads it from
 //! the configuration: Yukimi makes the change, from the next start.
-//! Elsewhere AccountsService's flag is GDM's; greetd's can only be set in
-//! the configuration.
+//! Elsewhere on NixOS, and under greetd anywhere, only the configuration
+//! sets it; AccountsService's flag, which GDM reads, is for other systems.
 
 use std::path::PathBuf;
+use std::time::Duration;
 
 use aizome_kit::prelude::*;
-use aizome_kit::{column, row};
+use aizome_kit::{TimerHandle, column, row};
 use aizome_sys::users::{AccountType, PasswordMode, User};
 
 use crate::form;
@@ -30,11 +31,13 @@ pub enum AutoLogin {
     /// Sekka's choice, which Yukimi changes: the account now and from the
     /// next start (empty for no one).
     Choice(choices::Now<String>),
-    /// AccountsService's flag, which GDM reads.
+    /// AccountsService's flag, which GDM reads (on systems other than
+    /// NixOS).
     #[default]
     Accounts,
-    /// greetd, which only the system's configuration sets
-    /// (`services.displayManager.autoLogin`): whom its initial session is.
+    /// Only the system's configuration sets it
+    /// (`services.displayManager.autoLogin`): whom greetd's initial session
+    /// is, when greetd says. Otherwise AccountsService reports GDM's.
     Configuration(Option<String>),
 }
 
@@ -43,10 +46,16 @@ pub fn auto_login() -> AutoLogin {
     if let Some(now) = choices::read(AUTO_LOGIN) {
         return AutoLogin::Choice(now);
     }
-    let config = aizome_sys::Bus::system().and_then(|bus| aizome_sys::users::greetd_config(&bus)).ok().flatten();
-    config.map_or(AutoLogin::Accounts, |path| {
-        AutoLogin::Configuration(std::fs::read_to_string(path).ok().and_then(|t| greetd_initial_user(&t)))
-    })
+    let greetd = aizome_sys::Bus::system().and_then(|bus| aizome_sys::users::greetd_config(&bus)).ok().flatten();
+    match greetd {
+        Some(path) => {
+            AutoLogin::Configuration(std::fs::read_to_string(path).ok().and_then(|t| greetd_initial_user(&t)))
+        }
+        // NixOS writes GDM's custom.conf itself, read-only, and SDDM and
+        // Plasma Login never read AccountsService.
+        None if aizome_sys::sysinfo::os_release().id == "nixos" => AutoLogin::Configuration(None),
+        None => AutoLogin::Accounts,
+    }
 }
 
 /// The user of greetd's initial session (`[initial_session]`, `user = "…"`).
@@ -56,11 +65,15 @@ pub fn greetd_initial_user(config: &str) -> Option<String> {
 }
 
 /// Who may be chosen to log in by themselves, by account and as shown:
-/// everyone AccountsService lists, and whoever Sekka's choice names besides
-/// (Yukimi takes anyone with an account).
+/// everyone AccountsService lists (under Sekka's choice, those Yukimi
+/// takes), and whoever the choice or the configuration names besides.
 fn auto_login_people(how: &AutoLogin, users: &[User]) -> Vec<(String, String)> {
-    let mut people: Vec<(String, String)> =
-        users.iter().map(|u| (u.name.clone(), u.display_name().to_owned())).collect();
+    let choice = matches!(how, AutoLogin::Choice(_));
+    let mut people: Vec<(String, String)> = users
+        .iter()
+        .filter(|u| !choice || yukimi_takes(u))
+        .map(|u| (u.name.clone(), u.display_name().to_owned()))
+        .collect();
     let named: Vec<&String> = match how {
         AutoLogin::Choice(c) => vec![&c.now, &c.next],
         AutoLogin::Configuration(Some(who)) => vec![who],
@@ -74,16 +87,40 @@ fn auto_login_people(how: &AutoLogin, users: &[User]) -> Vec<(String, String)> {
     people
 }
 
-/// What the login row says under Sekka's choice: what it does, and who it
-/// is from the next start while a change waits for one.
-fn choice_help(c: &choices::Now<String>, people: &[(String, String)]) -> String {
+/// Whether Yukimi takes `u` to log in by themselves, by the rules of its
+/// `people` module (`yukimi_system::people`, from `/etc/passwd`): a local
+/// account from uid 1000 to 59999 with a `useradd`-style name and a shell to
+/// log in with (none given is `/bin/sh`).
+fn yukimi_takes(u: &User) -> bool {
+    let shell = if u.shell.is_empty() { "sh" } else { u.shell.rsplit('/').next().unwrap_or("") };
+    u.local_account
+        && (1000..60000).contains(&u.uid)
+        && aizome_sys::users::valid_user_name(&u.name)
+        && !shell.is_empty()
+        && !matches!(shell, "nologin" | "false")
+}
+
+/// What the login row says under Sekka's choice: whom Settei proposed in
+/// Yukimi while that waits to be applied, who it is from the next start
+/// while a change waits for one, and what it does.
+fn choice_help(c: &choices::Now<String>, proposed: Option<&str>, people: &[(String, String)]) -> String {
     let what = "The computer starts straight into this account, without asking for a password. Yukimi makes the \
                 change, which asks for an administrator password, and it applies from the next start.";
-    if c.now == c.next {
-        return what.to_owned();
+    let shown = |name: &str| -> String {
+        if name.is_empty() {
+            return "no one".to_owned();
+        }
+        people.iter().find(|(n, _)| n == name).map_or(name, |(_, shown)| shown.as_str()).to_owned()
+    };
+    let mut lines = Vec::new();
+    if let Some(p) = proposed.filter(|p| *p != c.next) {
+        lines.push(format!("Proposed in Yukimi: {}. Apply there to make the change.", shown(p)));
     }
-    let who = people.iter().find(|(n, _)| *n == c.next).map_or("no one", |(_, shown)| shown.as_str());
-    format!("From the next start: {who}. {what}")
+    if c.now != c.next {
+        lines.push(format!("From the next start: {}.", shown(&c.next)));
+    }
+    lines.push(what.to_owned());
+    lines.join(" ")
 }
 
 /// What the sheet asks.
@@ -119,8 +156,14 @@ pub struct Users {
     pictures: crate::widgets::Pictures,
     /// A password to set once a new account appears.
     pending_password: Option<(String, String)>,
-    /// How the computer logs in by itself (AccountsService's until read).
-    auto_login: AutoLogin,
+    /// How the computer logs in by itself; `None` until read, when it
+    /// can't be changed.
+    auto_login: Option<AutoLogin>,
+    /// Whom Settei proposed in Yukimi ("" for no one), until the next
+    /// start's choice shows it or the pane is left.
+    proposed: Option<String>,
+    /// Reads the choice again meanwhile.
+    checking: Option<TimerHandle>,
 }
 
 #[derive(Clone, Debug)]
@@ -147,9 +190,11 @@ pub enum Msg {
     AutoLogin(usize),
     AutoLoginConfirmed(Option<String>),
     AutoLoginRead(AutoLogin),
+    AutoLoginCheck,
     Remove(String),
     DeleteFiles(bool),
     RemoveConfirmed,
+    Removed(String, Result<(), String>),
     Done(&'static str, Result<(), String>),
 }
 
@@ -226,6 +271,25 @@ impl Users {
         cx.sys().accounts.snapshot().user(name).cloned()
     }
 
+    /// Propose `who` ("" for no one) in Yukimi, which shows the change and
+    /// builds it once applied; read the choice again until the next
+    /// start's shows it.
+    fn propose_auto_login(&mut self, who: &str, cx: &mut PaneCx<Msg>) {
+        let argv = choices::propose(AUTO_LOGIN, who);
+        cx.launch(&argv.each_ref().map(String::as_str));
+        self.proposed = Some(who.to_owned());
+        if self.checking.is_none() && !cx.sample() {
+            self.checking = Some(cx.every(Duration::from_secs(2), Msg::AutoLoginCheck));
+        }
+    }
+
+    fn stop_checking(&mut self, cx: &mut PaneCx<Msg>) {
+        self.proposed = None;
+        if let Some(t) = self.checking.take() {
+            cx.cancel(t);
+        }
+    }
+
     fn sheet_view(&self, sheet: &Sheet) -> Element<Msg> {
         let buttons = |label: &'static str, ok: bool, msg: Msg, destructive: bool| -> Element<Msg> {
             let b = button(label).default().enabled(ok).on_press(msg);
@@ -275,15 +339,32 @@ impl Users {
             .spacing(10.0)
             .width(420.0)
             .into(),
-            Sheet::Remove { user, home, delete_files } => column![
-                text(format!("Remove {user}?")).size(15.0).weight(650.0),
-                form::note("They won't be able to log in any more."),
-                checkbox(remove_files_words(home), *delete_files).on_toggle(Msg::DeleteFiles),
-                buttons("Remove User", true, Msg::RemoveConfirmed, true),
-            ]
-            .spacing(12.0)
-            .width(420.0)
-            .into(),
+            Sheet::Remove { user, home, delete_files } => {
+                let starts_into = match &self.auto_login {
+                    Some(AutoLogin::Choice(c)) if c.next == *user => Some(
+                        "The computer starts straight into their account. Once they're removed, Yukimi offers to \
+                         log no one in by themselves, which asks for an administrator password.",
+                    ),
+                    Some(AutoLogin::Configuration(Some(who))) if who == user => Some(
+                        "The system's configuration starts the computer straight into their account \
+                         (services.displayManager.autoLogin): change it there too.",
+                    ),
+                    _ => None,
+                };
+                let mut sheet = column![
+                    text(format!("Remove {user}?")).size(15.0).weight(650.0),
+                    form::note("They won't be able to log in any more."),
+                ]
+                .spacing(12.0)
+                .width(420.0);
+                if let Some(why) = starts_into {
+                    sheet = sheet.push(form::note(why));
+                }
+                sheet
+                    .push(checkbox(remove_files_words(home), *delete_files).on_toggle(Msg::DeleteFiles))
+                    .push(buttons("Remove User", true, Msg::RemoveConfirmed, true))
+                    .into()
+            }
         }
     }
 }
@@ -336,11 +417,18 @@ impl Pane for Users {
     }
 
     fn shown(&mut self, cx: &mut PaneCx<Msg>) {
-        // Read each time: a change Yukimi applied since moves it. (The
-        // sample keeps AccountsService's.)
-        if !cx.sample() {
+        // Read each time: a change Yukimi applied since moves it. Until the
+        // first read the row can't change. (The sample keeps
+        // AccountsService's.)
+        if cx.sample() {
+            self.auto_login.get_or_insert(AutoLogin::Accounts);
+        } else {
             cx.spawn(|| Msg::AutoLoginRead(auto_login()));
         }
+    }
+
+    fn hidden(&mut self, cx: &mut PaneCx<Msg>) {
+        self.stop_checking(cx);
     }
 
     fn update(&mut self, msg: Msg, cx: &mut PaneCx<Msg>) {
@@ -506,7 +594,8 @@ impl Pane for Users {
                 cx.wait(task, |r| Msg::Done("Changed the account type", r.map_err(|e| e.to_string())));
             }
             Msg::AutoLogin(i) => {
-                let people = auto_login_people(&self.auto_login, &cx.sys().accounts.snapshot().users);
+                let Some(how) = &self.auto_login else { return };
+                let people = auto_login_people(how, &cx.sys().accounts.snapshot().users);
                 let who = if i == 0 { None } else { people.get(i - 1).map(|(name, _)| name.clone()) };
                 match &who {
                     Some(name) => cx.confirm(Confirm::new(
@@ -518,13 +607,22 @@ impl Pane for Users {
                     None => cx.send(Msg::AutoLoginConfirmed(None)),
                 }
             }
-            Msg::AutoLoginConfirmed(who) if matches!(self.auto_login, AutoLogin::Choice(_)) => {
-                // Yukimi shows the change and builds it once applied.
-                let argv = choices::propose(AUTO_LOGIN, who.as_deref().unwrap_or(""));
-                cx.launch(&argv.each_ref().map(String::as_str));
+            Msg::AutoLoginConfirmed(who) if matches!(self.auto_login, Some(AutoLogin::Choice(_))) => {
+                self.propose_auto_login(who.as_deref().unwrap_or(""), cx);
             }
-            Msg::AutoLoginRead(how) => self.auto_login = how,
-            Msg::AutoLoginConfirmed(who) => {
+            Msg::AutoLoginCheck => cx.spawn(|| Msg::AutoLoginRead(auto_login())),
+            Msg::AutoLoginRead(how) => {
+                // What was proposed has come, or the choice has gone.
+                let waiting = match &how {
+                    AutoLogin::Choice(c) => self.proposed.as_deref().is_some_and(|p| p != c.next),
+                    _ => false,
+                };
+                if !waiting {
+                    self.stop_checking(cx);
+                }
+                self.auto_login = Some(how);
+            }
+            Msg::AutoLoginConfirmed(who) if matches!(self.auto_login, Some(AutoLogin::Accounts)) => {
                 let snap = cx.sys().accounts.snapshot();
                 let target = match &who {
                     Some(n) => snap.user(n).cloned(),
@@ -534,6 +632,8 @@ impl Pane for Users {
                 let task = cx.sys().accounts.set_automatic_login(&u, who.is_some());
                 cx.wait(task, |r| Msg::Done("Automatic login", r.map_err(|e| e.to_string())));
             }
+            // Not read yet, or only the configuration sets it.
+            Msg::AutoLoginConfirmed(_) => {}
             Msg::Remove(user) => {
                 let Some(home) = Self::user(cx, &user).map(|u| u.home.clone()) else { return };
                 self.sheet = Some(Sheet::Remove { user, home, delete_files: false });
@@ -549,8 +649,19 @@ impl Pane for Users {
                 cx.close_sheet();
                 let Some(u) = Self::user(cx, &user) else { return };
                 let task = cx.sys().accounts.delete_user(&u, delete_files);
-                cx.wait(task, |r| Msg::Done("Removed the user", r.map_err(|e| e.to_string())));
+                cx.wait(task, move |r| Msg::Removed(user, r.map_err(|e| e.to_string())));
             }
+            Msg::Removed(user, Ok(())) => {
+                cx.say("Removed the user");
+                // Nobody should start into an account that's gone, nor into
+                // one made later with its name.
+                if let Some(AutoLogin::Choice(c)) = &self.auto_login
+                    && c.next == user
+                {
+                    self.propose_auto_login("", cx);
+                }
+            }
+            Msg::Removed(_, Err(e)) => cx.failed("Removed the user", e),
             Msg::Done(what, Ok(())) => cx.say(what),
             Msg::Done(what, Err(e)) => cx.failed(what, e),
         }
@@ -694,20 +805,21 @@ impl Pane for Users {
         ));
         sections.push(vcx.section("Other Users", rows));
 
-        let people = auto_login_people(&self.auto_login, &snap.users);
+        let people = auto_login_people(self.auto_login.as_ref().unwrap_or(&AutoLogin::Accounts), &snap.users);
         let mut names = vec!["Off".to_owned()];
         names.extend(people.iter().map(|(_, shown)| shown.clone()));
+        let at = |name: Option<&str>| name.and_then(|w| people.iter().position(|(n, _)| n == w)).map_or(0, |i| i + 1);
+        // AccountsService's flag: GDM's custom.conf, as it reads it.
+        let flagged = || snap.users.iter().find(|u| u.automatic_login).map(|u| u.name.as_str());
+        let plain = "The computer starts straight into this account, without asking for a password.";
         let (auto, enabled, help) = match &self.auto_login {
-            AutoLogin::Choice(c) => {
-                (people.iter().position(|(n, _)| *n == c.next).map_or(0, |i| i + 1), true, choice_help(c, &people))
+            None => (at(flagged()), false, plain.to_owned()),
+            Some(AutoLogin::Choice(c)) => {
+                (at(Some(c.next.as_str())), true, choice_help(c, self.proposed.as_deref(), &people))
             }
-            AutoLogin::Accounts => (
-                snap.users.iter().position(|u| u.automatic_login).map_or(0, |i| i + 1),
-                !fixed,
-                "The computer starts straight into this account, without asking for a password.".to_owned(),
-            ),
-            AutoLogin::Configuration(who) => (
-                who.as_ref().and_then(|w| people.iter().position(|(n, _)| n == w)).map_or(0, |i| i + 1),
+            Some(AutoLogin::Accounts) => (at(flagged()), !fixed, plain.to_owned()),
+            Some(AutoLogin::Configuration(who)) => (
+                at(who.as_deref().or_else(flagged)),
                 false,
                 "This login screen logs in by itself only as the system's configuration says \
                  (services.displayManager.autoLogin)."
@@ -755,9 +867,20 @@ mod tests {
         assert_eq!(greetd_initial_user("[initial_session]\nuser = 1000\n"), None);
     }
 
+    fn person(uid: u64, name: &str, real_name: &str, shell: &str) -> User {
+        User {
+            uid,
+            name: name.into(),
+            real_name: real_name.into(),
+            shell: shell.into(),
+            local_account: true,
+            ..User::default()
+        }
+    }
+
     #[test]
     fn whoever_the_choice_names_can_be_shown() {
-        let users = [User { name: "adama".into(), real_name: "William Adama".into(), ..User::default() }];
+        let users = [person(1000, "adama", "William Adama", "/run/current-system/sw/bin/fish")];
         // Someone AccountsService doesn't list (Yukimi takes any account).
         let people = auto_login_people(&now("", "kara"), &users);
         assert_eq!(people, [("adama".into(), "William Adama".into()), ("kara".into(), "kara".into())]);
@@ -766,13 +889,34 @@ mod tests {
     }
 
     #[test]
+    fn the_choice_offers_only_people_yukimi_takes() {
+        let users = [
+            person(1000, "adama", "William Adama", "/run/current-system/sw/bin/fish"),
+            // No shell given is /bin/sh.
+            person(1001, "kara", "Kara Thrace", ""),
+            person(1002, "locked", "Locked", "/run/current-system/sw/bin/nologin"),
+            person(60001, "high", "High", "/bin/sh"),
+            person(1003, "Odd.Name", "Odd", "/bin/sh"),
+            User { local_account: false, ..person(1004, "ldap", "Directory", "/bin/sh") },
+        ];
+        let names = |how: &AutoLogin| auto_login_people(how, &users).into_iter().map(|(n, _)| n).collect::<Vec<_>>();
+        assert_eq!(names(&now("", "")), ["adama", "kara"]);
+        // AccountsService's flag takes anyone it lists.
+        assert_eq!(names(&AutoLogin::Accounts).len(), users.len());
+    }
+
+    #[test]
     fn a_change_waiting_for_the_next_start_says_so() {
         let people = [("adama".to_owned(), "William Adama".to_owned())];
         let AutoLogin::Choice(same) = now("adama", "adama") else { unreachable!() };
-        assert!(choice_help(&same, &people).starts_with("The computer starts straight"));
+        assert!(choice_help(&same, None, &people).starts_with("The computer starts straight"));
         let AutoLogin::Choice(on) = now("", "adama") else { unreachable!() };
-        assert!(choice_help(&on, &people).starts_with("From the next start: William Adama."));
+        assert!(choice_help(&on, None, &people).starts_with("From the next start: William Adama."));
         let AutoLogin::Choice(off) = now("adama", "") else { unreachable!() };
-        assert!(choice_help(&off, &people).starts_with("From the next start: no one."));
+        assert!(choice_help(&off, None, &people).starts_with("From the next start: no one."));
+        // Proposed in Yukimi, not yet applied; and once it is.
+        let AutoLogin::Choice(none) = now("", "") else { unreachable!() };
+        assert!(choice_help(&none, Some("adama"), &people).starts_with("Proposed in Yukimi: William Adama. Apply"));
+        assert_eq!(choice_help(&on, Some("adama"), &people), choice_help(&on, None, &people));
     }
 }

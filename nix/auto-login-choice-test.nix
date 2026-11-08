@@ -96,14 +96,11 @@ assert lib.hasInfix "aizome-greeter --session"
 # GDM gets it from the same option.
 assert
   gnome.services.displayManager.gdm.enable && gnome.services.displayManager.autoLogin.user == "kara";
+# Whole systems with the choice made, under greetd and GDM. The others only
+# change option values, checked above, so they aren't evaluated whole.
 assert builtins.all (c: c.system.build.toplevel.drvPath != "" && c.system.build.etc.drvPath != "") [
-  nobody
   kara
   gnome
-  inherited
-  turnedOff
-  changed
-  forced
 ];
 pkgs.writeText "auto-login-choice.json" (
   builtins.toJSON {
