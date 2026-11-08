@@ -1099,7 +1099,7 @@ impl Yukimi {
         let Some(locked) = &found.locked else { return };
         let source = found.original.as_ref().unwrap_or(locked).describe();
         let current = yukimi_config::branch::of(&source);
-        let repo = (locked.kind == "github").then(|| locked.owner.clone().zip(locked.repo.clone())).flatten();
+        let repo = locked.github_repo().map(|(owner, repo)| (owner.to_owned(), repo.to_owned()));
         if let Some((owner, name)) = repo.clone()
             && !matches!(self.source, Source::Sample(_))
         {

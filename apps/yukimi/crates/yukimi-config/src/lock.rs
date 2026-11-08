@@ -54,10 +54,11 @@ pub struct Locked {
 
 impl Locked {
     /// A short description of where the source comes from:
-    /// `github:NixOS/nixpkgs/nixos-unstable`, `flakehub:NixOS/nixpkgs/0.1`.
+    /// `github:NixOS/nixpkgs/nixos-unstable`, `flakehub:NixOS/nixpkgs/0.1`,
+    /// `git+https://github.com/bitemyapp/sekka?ref=nightly`.
     pub fn describe(&self) -> String {
-        match (self.kind.as_str(), &self.owner, &self.repo) {
-            ("github" | "gitlab" | "sourcehut", Some(owner), Some(repo)) => {
+        match (self.kind.as_str(), &self.owner, &self.repo, &self.url) {
+            ("github" | "gitlab" | "sourcehut", Some(owner), Some(repo), _) => {
                 let mut text = format!("{}:{owner}/{repo}", self.kind);
                 if let Some(reference) = &self.reference {
                     text.push('/');
@@ -65,6 +66,10 @@ impl Locked {
                 }
                 text
             }
+            ("git", _, _, Some(url)) => match &self.reference {
+                Some(reference) => format!("git+{url}?ref={reference}"),
+                None => format!("git+{url}"),
+            },
             _ => match &self.url {
                 Some(url) => flakehub(url).unwrap_or_else(|| url.clone()),
                 None => self.kind.clone(),
@@ -77,14 +82,39 @@ impl Locked {
         self.rev.as_deref().map(|rev| &rev[..rev.len().min(7)])
     }
 
+    /// The repository on github.com this source comes from, as `(owner,
+    /// repo)`: a `github:` source, or a Git one cloned from
+    /// `https://github.com/owner/repo`, as Sekka is so that each update
+    /// downloads only what changed.
+    pub fn github_repo(&self) -> Option<(&str, &str)> {
+        match self.kind.as_str() {
+            "github" if self.host.as_deref().unwrap_or("github.com") == "github.com" => {
+                Some((self.owner.as_deref()?, self.repo.as_deref()?))
+            }
+            "git" => {
+                let path = self.url.as_deref()?.strip_prefix("https://github.com/")?;
+                let path = path.strip_suffix(".git").unwrap_or(path);
+                let (owner, repo) = path.split_once('/')?;
+                let name =
+                    |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_alphanumeric() || b"._-".contains(&b));
+                (name(owner) && name(repo)).then_some((owner, repo))
+            }
+            _ => None,
+        }
+    }
+
     /// A web page showing this revision, for GitHub sources.
     pub fn web_url(&self) -> Option<String> {
-        match (self.kind.as_str(), &self.owner, &self.repo, &self.rev) {
-            ("github", Some(owner), Some(repo), Some(rev)) => {
+        let rev = self.rev.as_deref()?;
+        match (self.kind.as_str(), &self.owner, &self.repo) {
+            ("github", Some(owner), Some(repo)) => {
                 let host = self.host.as_deref().unwrap_or("github.com");
                 Some(format!("https://{host}/{owner}/{repo}/commit/{rev}"))
             }
-            _ => None,
+            _ => {
+                let (owner, repo) = self.github_repo()?;
+                Some(format!("https://github.com/{owner}/{repo}/commit/{rev}"))
+            }
         }
     }
 
@@ -477,6 +507,45 @@ mod tests {
             Some("flakehub:NixOS/nixpkgs/0.1.912345+rev-f45c6f04")
         );
         assert_eq!(unescape("100%"), "100%");
+    }
+
+    #[test]
+    fn git_sources_on_github() {
+        let rev = "2111c84ac0b4555518b9482ec436f813d26905ef";
+        let sekka = Locked {
+            kind: "git".into(),
+            url: Some("https://github.com/bitemyapp/sekka".into()),
+            reference: Some("nightly".into()),
+            rev: Some(rev.into()),
+            ..Default::default()
+        };
+        assert_eq!(sekka.describe(), "git+https://github.com/bitemyapp/sekka?ref=nightly");
+        assert_eq!(sekka.github_repo(), Some(("bitemyapp", "sekka")));
+        assert_eq!(sekka.web_url().unwrap(), format!("https://github.com/bitemyapp/sekka/commit/{rev}"));
+        let tarball = Locked {
+            kind: "github".into(),
+            owner: Some("bitemyapp".into()),
+            repo: Some("sekka".into()),
+            rev: Some("5d1d471".into()),
+            ..Default::default()
+        };
+        // Moving from the tarball to Git still compares within one repository.
+        assert_eq!(tarball.github_repo(), sekka.github_repo());
+        assert_eq!(
+            tarball.compare_url(rev).unwrap(),
+            format!("https://github.com/bitemyapp/sekka/compare/5d1d471..{rev}")
+        );
+        let dotted = Locked { url: Some("https://github.com/o/r.git".into()), ..sekka.clone() };
+        assert_eq!(dotted.github_repo(), Some(("o", "r")));
+        for elsewhere in
+            ["https://example.org/o/r", "https://github.com/o", "https://github.com/o/r/tree/x", "file:///x"]
+        {
+            let other = Locked { url: Some(elsewhere.into()), ..sekka.clone() };
+            assert_eq!(other.github_repo(), None, "{elsewhere}");
+            assert_eq!(other.web_url(), None, "{elsewhere}");
+        }
+        let enterprise = Locked { host: Some("git.example.org".into()), ..tarball };
+        assert_eq!(enterprise.github_repo(), None);
     }
 
     #[test]

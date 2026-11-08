@@ -2,8 +2,19 @@
 # Dirty development images retain their exact store source; release images pin
 # the GitHub commit. Both then follow the nightly branch, and the inputs the
 # installed flake names (templates/flake.nix.in) follow the Sekka they are at.
+#
+# Sekka comes through Git, one commit deep, as Nix locks
+# `git+https://github.com/bitemyapp/sekka?ref=nightly&shallow=1`: Nix keeps
+# the clone, so each update downloads only what changed. The content hash is
+# the same as for GitHub's tarball of that commit.
 { self }:
 let
+  repository = {
+    type = "git";
+    url = "https://github.com/bitemyapp/sekka";
+    ref = "nightly";
+    shallow = true;
+  };
   base = builtins.fromJSON (builtins.readFile ../flake.lock);
   external = base.nodes.${base.root}.inputs;
   # Only inputs named by templates/flake.nix.in belong at the installed root.
@@ -25,10 +36,8 @@ let
   );
   locked =
     if self ? rev then
-      {
-        type = "github";
-        owner = "bitemyapp";
-        repo = "sekka";
+      repository
+      // {
         rev = self.rev;
         inherit (self) narHash lastModified;
       }
@@ -69,12 +78,7 @@ base
     };
     sekka = {
       inherit locked;
-      original = {
-        type = "github";
-        owner = "bitemyapp";
-        repo = "sekka";
-        ref = "nightly";
-      };
+      original = repository;
       inputs = external;
     };
   };

@@ -221,7 +221,10 @@ sekka-update
 ```
 
 Enter your administrator password when asked. Sekka downloads the update,
-builds your system, and applies changes safely. When a restart or sign-out is
+builds your system, and applies changes safely. Your computer keeps a copy of
+Sekka's source, so an update downloads only what changed in it since the last
+one; the first update downloads all of it, a few hundred megabytes. Yukimi
+shows what it is downloading and how much has arrived. When a restart or sign-out is
 needed, Yukimi shows one completion message with a button to finish when you
 are ready. A restart also finishes desktop changes; you will not be asked to
 restart again for that same prepared update. Once preparation finishes,

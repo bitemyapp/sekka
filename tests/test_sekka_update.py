@@ -242,11 +242,25 @@ class Update(unittest.TestCase):
         self.assertEqual(sum(command[0] == 'nix' and 'build' in command for command in commands), 1)
         self.assertEqual(sum(command[0] == 'systemd-run' for command in commands), 1)
 
+    def test_installations_fetching_a_tarball_move_to_git(self):
+        self.compatible_live_system()
+        self.run_cmd('/bin/sekka-update')
+        nightly = (self.config / 'flake.nix').read_text()
+        # As Genkan wrote the installed flake before Sekka came through Git.
+        tarball = nightly.replace('"git+https://github.com/bitemyapp/sekka?ref=nightly&shallow=1"',
+                                  '"github:bitemyapp/sekka/nightly"')
+        self.assertNotEqual(tarball, nightly)
+        (self.config / 'flake.nix').write_text(tarball)
+        self.run_cmd('/bin/sekka-update')
+        self.assertEqual((self.config / 'flake.nix').read_text(), nightly)
+        commands = [json.loads(line) for line in (self.root / 'state/commands').read_text().splitlines()]
+        self.assertEqual(next(c for c in reversed(commands) if c[0] == 'nix' and 'update' in c)[-1], 'sekka')
+
     def test_sekka_brings_what_it_pins_and_the_new_systems_caches(self):
         self.compatible_live_system()
         self.run_cmd('/bin/yukimi-helper', 'change', '--sekka', '--update', 'sekka,nixpkgs,applications,ai-apps', '--mode', 'auto')
         flake = (self.config / 'flake.nix').read_text()
-        self.assertIn('"github:bitemyapp/sekka/nightly"', flake)
+        self.assertIn('"git+https://github.com/bitemyapp/sekka?ref=nightly&shallow=1"', flake)
         for name in ['nixpkgs', 'determinate', 'fh', 'applications', 'ai-apps', 'omp']:
             self.assertIn(f'inputs.{name}.follows = "sekka/{name}";', flake)
         commands = [json.loads(line) for line in (self.root / 'state/commands').read_text().splitlines()]
@@ -335,7 +349,7 @@ class Update(unittest.TestCase):
         self.compatible_live_system()
         self.run_cmd('/bin/sekka-update', '--early', '--choose', 'calamares.loginScreen=aizome',
                      '--choose', 'calamares.desktops=aizome,tatami')
-        self.assertIn('inputs.sekka.url = "github:bitemyapp/sekka?ref=main";', (self.config / 'flake.nix').read_text())
+        self.assertIn('inputs.sekka.url = "git+https://github.com/bitemyapp/sekka?ref=main&shallow=1";', (self.config / 'flake.nix').read_text())
         configuration = (self.config / 'configuration.nix').read_text()
         self.assertIn('calamares.loginScreen = "aizome";', configuration)
         self.assertIn('"aizome"', configuration.split('calamares.desktops', 1)[1].split(';', 1)[0])
@@ -344,9 +358,9 @@ class Update(unittest.TestCase):
         self.assertEqual(sum(command[0] == 'nix' and 'build' in command for command in commands), 1)
         # Early updates stay chosen, and --nightly goes back.
         self.run_cmd('/bin/sekka-update')
-        self.assertIn('"github:bitemyapp/sekka?ref=main"', (self.config / 'flake.nix').read_text())
+        self.assertIn('"git+https://github.com/bitemyapp/sekka?ref=main&shallow=1"', (self.config / 'flake.nix').read_text())
         self.run_cmd('/bin/sekka-update', '--nightly')
-        self.assertIn('"github:bitemyapp/sekka/nightly"', (self.config / 'flake.nix').read_text())
+        self.assertIn('"git+https://github.com/bitemyapp/sekka?ref=nightly&shallow=1"', (self.config / 'flake.nix').read_text())
 
     def test_only_declared_choices_and_values_are_written(self):
         self.declare_choices()
