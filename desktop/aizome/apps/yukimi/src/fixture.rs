@@ -486,6 +486,7 @@ pub fn model() -> Model {
             facts: Facts {
                 nixpkgs: Some(nixpkgs.clone()),
                 allow_unfree: Some(true),
+                own_catalog: None,
                 configuration: None,
                 catalogs: Vec::new(),
                 choices: choices(),

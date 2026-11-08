@@ -451,6 +451,7 @@
             test -s ${uta.source}/sekka/nix/patches/uta-mpris-readiness.patch
             echo "$version" > $out
           '';
+        application-platforms = import ./nix/yukimi-catalog-test.nix { inherit pkgs inputs; };
         application-cache = applicationCatalog.cache;
         live-profiles =
           let

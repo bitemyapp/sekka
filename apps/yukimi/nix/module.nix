@@ -11,6 +11,17 @@ self:
 }:
 let
   cfg = config.programs.yukimi;
+  ownCatalog = import ./catalog.nix {
+    inherit lib;
+    inherit (pkgs) config;
+    inherit (pkgs.stdenv) hostPlatform;
+    instantiate = cfg.instantiateCatalogs;
+    packagesFor =
+      app:
+      map (name: lib.attrByPath (lib.splitString "." name) null pkgs) (
+        (app.packages or [ ]) ++ lib.optional (app ? program) app.program
+      );
+  } (builtins.fromJSON (builtins.readFile ../crates/yukimi-system/data/applications.json));
   catalog = lib.types.submodule {
     options = {
       file = lib.mkOption {
@@ -139,6 +150,17 @@ in
         settings, and only to the values listed, then rebuilds.
       '';
     };
+    instantiateCatalogs = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      internal = true;
+      description = ''
+        Also instantiate every catalog application's packages when deciding
+        which are available, to find dependencies their metadata doesn't
+        mention. Slow, and subject to this system's Nixpkgs policy: for
+        checks of the catalogs, not for systems.
+      '';
+    };
   };
   config = lib.mkIf cfg.enable {
     systemd.tmpfiles.rules = [ "d /var/lib/yukimi/operations 0700 root root 30d" ];
@@ -191,6 +213,7 @@ in
         in
         if source != null then toString source else toString pkgs.path;
       allowUnfree = pkgs.config.allowUnfree or false;
+      ownCatalog = builtins.toFile "yukimi-applications.json" (builtins.toJSON ownCatalog);
       inherit (cfg) configuration;
       catalogs = map (catalog: {
         file = "${catalog.file}";

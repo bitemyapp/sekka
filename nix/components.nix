@@ -37,19 +37,29 @@ rec {
   };
   kakehashi = {
     outPath = ../apps/kakehashi;
-    packages.${system}.kakehashi = (import ./kakehashi.nix { inherit pkgs; }).package;
+    packages.${system} = { inherit (catalog.packages.${system}) kakehashi; };
   };
   # The catalog's applications from this flake (source "sekka"): its own, and
   # those other repositories package, built with the applications' Nixpkgs.
-  catalog.packages.${system} = kakehashi.packages.${system} // {
-    superluminal = superluminal.packages.${system}.default;
-    tracy = tracy.packages.${system}.tracy;
-    # With the session's fonts, which it draws with too.
-    uta = import ./uta.nix {
-      pkgs = applications.legacyPackages.${system};
-      inherit uta;
-      inherit (aizome.packages.${system}) fonts;
+  # checks.application-platforms resolves the same definition for ARM.
+  catalog = {
+    packagesFor = target: {
+      kakehashi =
+        (import ./kakehashi.nix {
+          pkgs = nixpkgs.legacyPackages.${target};
+        }).package;
+      # Some upstream flakes have no output for a target (Superluminal on ARM).
+      # Let checks report that absence without evaluating a missing attribute.
+      superluminal = superluminal.packages.${target}.default or null;
+      tracy = tracy.packages.${target}.tracy or null;
+      # With the session's fonts, which it draws with too.
+      uta = import ./uta.nix {
+        pkgs = applications.legacyPackages.${target};
+        inherit uta;
+        inherit (aizome.packages.${target}) fonts;
+      };
     };
+    packages.${system} = catalog.packagesFor system;
   };
   calamares = {
     outPath = ../installer/genkan;
