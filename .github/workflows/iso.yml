@@ -14,8 +14,8 @@ jobs:
   iso:
     # Started by hand only, from main, on the sandboxed builder (nix/runner.nix
     # and DEVELOPERS.md). It builds the installer image and runs the ISO's own
-    # checks (legacyPackages.x86_64-linux.iso-checks), which pull requests,
-    # main and the nightly leave out. It publishes nothing: an ISO is
+    # checks (legacyPackages.x86_64-linux.iso-checks), which pull requests
+    # and main leave out; the nightly runs them too. It publishes nothing: an ISO is
     # published only from a workstation, after testing that exact image. The
     # image stays rooted on the builder with the main generations
     # (scripts/ci-retain.py).

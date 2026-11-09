@@ -2912,9 +2912,11 @@ The job runs on the builder. It first brings every input in `flake.lock` up
 to date (`nix flake update`) and commits that, if anything moved, on top of
 `main`. Every run builds the candidate's checks with nix-fast-build (see
 [The builder](#the-builder)), then evaluates every other output with
-`nix flake check --no-build`, which pull requests and main skip; it builds
-neither `.#iso` nor the ISO's checks, which only the ISO workflow and
-qualification need. Every check runs even after one fails, and the failed ones
+`nix flake check --no-build`, which pull requests and main skip, then builds
+`.#iso` and the ISO's checks (`legacyPackages.x86_64-linux.iso-checks`), which
+pull requests and main leave out: the installer image is still checked every
+night, on that night's inputs, in one `--keep-going` build without a retry.
+Every other check runs even after one fails, and the failed ones
 run once more, so a VM test losing a timing race once doesn't hold back
 upstream security fixes; a check that fails twice, or fails to evaluate, stops
 the update. The first attempt's passing checks stay rooted, and the second

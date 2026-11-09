@@ -131,6 +131,23 @@ jobs:
           # Pull requests and main build the checks alone; this also catches a
           # package, module or shell that no longer evaluates (DEVELOPERS.md).
           nix flake check --no-build --no-update-lock-file
+      - name: Build the ISO and run its checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The ISO's checks left the pull request and main runs (DEVELOPERS.md,
+          # "The builder"), so the nightly runs them, on the night's inputs: a
+          # failure holds the update back like any other check's. The image
+          # stays rooted with the main generations, as the ISO workflow's does.
+          checks=$(nix eval --raw --no-update-lock-file .#legacyPackages.x86_64-linux.iso-checks \
+            --apply 'cs: builtins.concatStringsSep " " (builtins.attrNames cs)')
+          installables=(.#iso)
+          for check in $checks; do
+            installables+=(".#iso-checks.$check")
+          done
+          python3 scripts/ci-retain.py main iso build --keep-going --no-update-lock-file \
+            --print-build-logs "${installables[@]}"
+          git diff --exit-code
       - name: Publish Sekka's packages to its binary cache
         shell: bash
         env:
