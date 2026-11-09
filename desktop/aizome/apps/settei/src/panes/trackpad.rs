@@ -6,7 +6,7 @@
 use aizome_config::{AccelProfile, ClickMethod};
 use aizome_kit::prelude::*;
 
-use super::mouse::{SCROLL_FACTOR, extra_f64, speed_slider, speed_words};
+use super::mouse::{SCROLL_FACTOR, extra_f64, speed_slider_enabled, speed_words};
 use crate::form::{self, row};
 use crate::pane::{Group, Pane, PaneCx, SettingEntry, Tile, ViewCx};
 
@@ -39,6 +39,7 @@ pub fn touchpad_in(devices: &str) -> bool {
 
 #[derive(Clone, Debug)]
 pub enum Msg {
+    Enabled(bool),
     Speed(f64),
     Acceleration(bool),
     Tap(bool),
@@ -77,6 +78,7 @@ impl Pane for Trackpad {
 
     fn entries(&self) -> Vec<SettingEntry> {
         vec![
+            SettingEntry::new("enabled", "Use the trackpad").keywords(&["disable", "turn off", "enable"]),
             SettingEntry::new("tap", "Tap to click").keywords(&["touch", "tapping"]),
             SettingEntry::new("right-click", "Secondary click").keywords(&[
                 "right click",
@@ -107,6 +109,9 @@ impl Pane for Trackpad {
 
     fn update(&mut self, msg: Msg, cx: &mut PaneCx<Msg>) {
         match msg {
+            Msg::Enabled(on) => cx.change(|s| {
+                s.input.touchpad.extra.insert("enabled".into(), toml::Value::Boolean(on));
+            }),
             Msg::Speed(v) => cx.change(|s| s.input.touchpad.speed = (v * 20.0).round() / 20.0),
             Msg::Acceleration(on) => cx.change(|s| {
                 s.input.touchpad.accel_profile = if on { AccelProfile::Adaptive } else { AccelProfile::Flat }
@@ -128,18 +133,31 @@ impl Pane for Trackpad {
             ClickMethod::Clickfinger => 0,
             ClickMethod::ButtonAreas => 1,
         };
+        // Off, the rest is greyed and kept for when it's on again.
+        let on = t.enabled();
         let mut sections = vec![
+            vcx.section(
+                "Trackpad",
+                vec![
+                    row("Use the trackpad", toggle(on).on_toggle(Msg::Enabled)).entry("enabled").help(if on {
+                        "When off, the trackpad doesn't move the pointer, click or scroll."
+                    } else {
+                        "The trackpad is off. The settings below apply when it's on again."
+                    }),
+                ],
+            ),
             vcx.section(
                 "Clicking",
                 vec![
-                    row("Tap to click", toggle(t.tap).on_toggle(Msg::Tap))
+                    row("Tap to click", toggle(t.tap).enabled(on).on_toggle(Msg::Tap))
                         .entry("tap")
                         .help("A light tap clicks; two fingers tap for a secondary click."),
                     row(
                         "Secondary click",
                         form::choice(&["Click with two fingers", "Click in the bottom right corner"], method, |i| {
                             Msg::RightClick(if i == 0 { ClickMethod::Clickfinger } else { ClickMethod::ButtonAreas })
-                        }),
+                        })
+                        .enabled(on),
                     )
                     .entry("right-click")
                     .help(if method == 0 {
@@ -152,20 +170,23 @@ impl Pane for Trackpad {
             vcx.section(
                 "Pointer",
                 vec![
-                    row("Tracking speed", speed_slider(t.speed, ValueRange::new(-1.0, 1.0).unwrap(), "Slow", "Fast", Msg::Speed))
+                    row("Tracking speed", speed_slider_enabled(t.speed, ValueRange::new(-1.0, 1.0).unwrap(), "Slow", "Fast", on, Msg::Speed))
                         .entry("speed")
                         .detail(speed_words(t.speed)),
-                    row("Pointer acceleration", toggle(t.accel_profile == AccelProfile::Adaptive).on_toggle(Msg::Acceleration))
-                        .entry("acceleration"),
+                    row(
+                        "Pointer acceleration",
+                        toggle(t.accel_profile == AccelProfile::Adaptive).enabled(on).on_toggle(Msg::Acceleration),
+                    )
+                    .entry("acceleration"),
                 ],
             ),
             vcx.section(
                 "Scrolling",
                 vec![
-                    row("Natural scrolling", toggle(t.natural_scroll).on_toggle(Msg::Natural))
+                    row("Natural scrolling", toggle(t.natural_scroll).enabled(on).on_toggle(Msg::Natural))
                         .entry("natural-scroll")
                         .help("Content moves with your fingers."),
-                    row("Scrolling speed", speed_slider(scroll, ValueRange::new(0.2, 3.0).unwrap(), "Slow", "Fast", Msg::ScrollSpeed))
+                    row("Scrolling speed", speed_slider_enabled(scroll, ValueRange::new(0.2, 3.0).unwrap(), "Slow", "Fast", on, Msg::ScrollSpeed))
                         .entry("scroll-speed")
                         .detail(format!("{scroll:.1}×")),
                 ],
@@ -173,7 +194,7 @@ impl Pane for Trackpad {
             vcx.section(
                 "Typing",
                 vec![
-                    row("Ignore the trackpad while typing", toggle(t.disable_while_typing).on_toggle(Msg::WhileTyping))
+                    row("Ignore the trackpad while typing", toggle(t.disable_while_typing).enabled(on).on_toggle(Msg::WhileTyping))
                         .entry("disable-while-typing")
                         .help("A palm brushing the pad while you type doesn't move the pointer or click."),
                 ],
