@@ -111,9 +111,14 @@ keyboard, or presses the TV's PIN on its buttons. It has been tested in a
 virtual machine with a virtual controller and with real emulator cores,
 and used on a television with a physical controller; Netflix-style
 services haven't been checked. The Dreamcast and PlayStation 2 draw on
-the GPU and haven't been played on a television yet; the PlayStation 2's
-best core needs the console's own BIOS, kept in a `bios` folder by the
-games. The Nintendo 64, GameCube and later consoles aren't supported. See
+the GPU; Dreamcast games from a household's drive have been played in
+the tests, but neither console's games on a television yet. The
+PlayStation 2's best core needs the console's own BIOS, copied from your
+console into a `bios` folder by the games; without it, fewer games play.
+If a game's emulator crashes, Chanoma starts again by itself and says
+what happened, and a game that fails to start says why rather than
+closing Chanoma. The Nintendo 64, GameCube and later consoles aren't
+supported. See
 [docs/chanoma.md](desktop/aizome/docs/chanoma.md).
 
 **Super + Return** opens Hotaru 蛍, Aizome's own terminal, and programs that

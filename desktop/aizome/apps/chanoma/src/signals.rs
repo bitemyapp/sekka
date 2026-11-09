@@ -7,7 +7,8 @@ use aizome_kit::MsgSender;
 
 const SIGNALS: [libc::c_int; 3] = [libc::SIGTERM, libc::SIGINT, libc::SIGHUP];
 
-fn set() -> libc::sigset_t {
+/// The signals to stop: what's blocked and waited for (`watch` too).
+pub(crate) fn set() -> libc::sigset_t {
     // SAFETY: a zeroed sigset_t emptied and filled by libc.
     unsafe {
         let mut set: libc::sigset_t = std::mem::zeroed();

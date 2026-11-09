@@ -35,6 +35,7 @@ pub mod services;
 pub mod signals;
 pub mod store;
 pub mod ui;
+pub mod watch;
 pub mod zip;
 
 pub use app::{Chanoma, Config, Msg};

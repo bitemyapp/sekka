@@ -21,6 +21,7 @@ use aizome_kit::sidestep_ui::video::VideoSink;
 
 use super::audio::{self, Resampler, Speaker};
 use super::ffi::{self, Api};
+use super::guard;
 use super::host::Host;
 use super::video::{self, Screen};
 use crate::pad::Shared;
@@ -78,6 +79,9 @@ pub enum Event {
     Aspect(f64),
     /// It ended: whether where it was left was kept.
     Ended { kept: bool },
+    /// It stopped by itself, its core having thrown (`guard`): what it
+    /// said. Where it was isn't kept.
+    Stopped(String),
 }
 
 enum Ctl {
@@ -226,7 +230,13 @@ fn state(api: &Api) -> Option<Vec<u8>> {
             return None;
         }
         let mut buf = vec![0u8; size];
-        (api.serialize)(buf.as_mut_ptr().cast(), size).then_some(buf)
+        match guard::state(api.serialize, buf.as_mut_ptr().cast(), size) {
+            Ok(saved) => saved.then_some(buf),
+            Err(why) => {
+                log::warn!("chanoma: the core couldn't keep where the game was: {why}");
+                None
+            }
+        }
     }
 }
 
@@ -299,18 +309,25 @@ fn run(
     unsafe { Host::register(host_ptr) };
     let fail = |msg: String| {
         Host::unregister();
+        crate::watch::stopped();
         events(Event::Failed(msg));
     };
 
     // SAFETY: the core's entry points in libretro's order.
     let mut info: ffi::retro_system_info = unsafe { std::mem::zeroed() };
+    unsafe { Host::connect_environment(&api) };
+    // SAFETY: as above.
+    if let Err(why) = unsafe { guard::call(api.init) } {
+        return fail(format!("The game's player couldn't start: {why}"));
+    }
     unsafe {
-        Host::connect_environment(&api);
-        (api.init)();
         Host::connect(&api);
         (api.get_system_info)(&mut info);
     }
     let core_name = info_string(info.library_name).unwrap_or_else(|| "a game core".into());
+    // Should the core crash, Chanoma says what it was playing as it starts
+    // again (`watch`).
+    crate::watch::playing(&core_name, &crate::library::title_of(&launch.game));
     let game_path = cstring(&launch.game);
     // Cores that read the game themselves get its path; the rest its
     // bytes too, kept until it's unloaded.
@@ -333,9 +350,16 @@ fn run(
         meta: std::ptr::null(),
     };
     // SAFETY: as above; `game` and its bytes outlive the loaded game.
-    if !unsafe { (api.load_game)(&game) } {
-        unsafe { (api.deinit)() };
-        return fail(format!("{core_name} couldn't start this game"));
+    match unsafe { guard::load(api.load_game, &game) } {
+        Ok(true) => {}
+        Ok(false) => {
+            let _ = unsafe { guard::call(api.deinit) };
+            return fail(format!("{core_name} couldn't start this game"));
+        }
+        Err(why) => {
+            let _ = unsafe { guard::call(api.deinit) };
+            return fail(format!("{core_name} couldn't start this game: {why}"));
+        }
     }
     let mut av = ffi::retro_system_av_info::default();
     // SAFETY: as above.
@@ -358,17 +382,29 @@ fn run(
     }
     // A core drawing with OpenGL sets its things up in the framebuffer
     // just made, as libretro has it: after the game's loaded.
+    // A core that throws (`guard`) is done with: its game ends, saying
+    // what it said, with nothing more kept.
+    let mut threw: Option<String> = None;
     // SAFETY: not inside a core call; then the core's own function.
-    if let Some(reset) = unsafe { &*host_ptr }.hw.as_ref().and_then(|hw| hw.reset) {
-        unsafe { reset() };
+    if let Some(reset) = unsafe { &*host_ptr }.hw.as_ref().and_then(|hw| hw.reset)
+        && let Err(why) = unsafe { guard::call(reset) }
+    {
+        threw = Some(why);
     }
     load_save_ram(&api, &launch.save_ram);
     let mut resumed = false;
-    if launch.resume
+    if threw.is_none()
+        && launch.resume
         && let Ok(bytes) = std::fs::read(&launch.state)
     {
-        // SAFETY: the state's bytes, read whole.
-        resumed = unsafe { (api.unserialize)(bytes.as_ptr().cast(), bytes.len()) };
+        // SAFETY: the state's bytes, read whole; unserialize's pointer is
+        // a const one, called alike.
+        let unserialize: unsafe extern "C" fn(*mut std::ffi::c_void, usize) -> bool =
+            unsafe { std::mem::transmute(api.unserialize) };
+        match unsafe { guard::state(unserialize, bytes.as_ptr().cast_mut().cast(), bytes.len()) } {
+            Ok(r) => resumed = r,
+            Err(why) => threw = Some(why),
+        }
         if !resumed {
             log::warn!("chanoma: {} couldn't carry on from {}", core_name, launch.state.display());
         }
@@ -392,7 +428,7 @@ fn run(
     let mut save_check = Instant::now() + Duration::from_secs(30);
     let mut out = Vec::with_capacity(4096);
     let mut keep = true;
-    loop {
+    while threw.is_none() {
         // What the program asks.
         let ctl = if paused { rx.recv_timeout(Duration::from_millis(250)).ok() } else { rx.try_recv().ok() };
         if let Some(ctl) = ctl {
@@ -404,7 +440,7 @@ fn run(
                     next = Instant::now();
                 }
                 // SAFETY: as above.
-                Ctl::Reset => unsafe { (api.reset)() },
+                Ctl::Reset => threw = unsafe { guard::call(api.reset) }.err(),
                 Ctl::Volume(v) => speaker.set_volume(v),
                 Ctl::Stop { keep: k } => {
                     keep = k;
@@ -417,7 +453,10 @@ fn run(
             continue;
         }
         // SAFETY: as above; `host` isn't borrowed across the call.
-        unsafe { (api.run)() };
+        if let Err(why) = unsafe { guard::call(api.run) } {
+            threw = Some(why);
+            break;
+        }
         // SAFETY: not inside a core call.
         let h = unsafe { &mut *host_ptr };
         if h.av_changed {
@@ -462,13 +501,19 @@ fn run(
     }
 
     speaker.set_active(false);
-    if let Some(bytes) = save_ram(&api)
+    // A core that threw may have left its memory half done: the saves
+    // kept before stay.
+    if threw.is_none()
+        && let Some(bytes) = save_ram(&api)
         && Some(&bytes) != last_save.as_ref()
     {
         let _ = crate::store::write_bytes(&launch.save_ram, &bytes);
     }
     let mut kept = false;
-    if keep && let Some(bytes) = state(&api) {
+    if keep
+        && threw.is_none()
+        && let Some(bytes) = state(&api)
+    {
         kept = crate::store::write_bytes(&launch.state, &bytes).is_ok();
         // SAFETY: not inside a core call.
         let h = unsafe { &*host_ptr };
@@ -484,16 +529,23 @@ fn run(
             h.screen.clear();
             h.hw.as_ref().and_then(|hw| hw.destroy)
         };
-        if let Some(destroy) = destroy {
-            destroy();
+        for f in destroy.into_iter().chain([api.unload_game, api.deinit]) {
+            if let Err(why) = guard::call(f) {
+                log::warn!("chanoma: {core_name} threw as it was put away: {why}");
+            }
         }
-        (api.unload_game)();
-        (api.deinit)();
         (*host_ptr).hw = None;
     }
     Host::unregister();
     drop(host);
-    events(Event::Ended { kept });
+    crate::watch::stopped();
+    match threw {
+        Some(why) => {
+            log::warn!("chanoma: {core_name} threw, and its game ended: {why}");
+            events(Event::Stopped(format!("{core_name} stopped: {why}")));
+        }
+        None => events(Event::Ended { kept }),
+    }
 }
 
 fn info_string(p: *const std::ffi::c_char) -> Option<String> {

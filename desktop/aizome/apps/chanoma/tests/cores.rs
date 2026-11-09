@@ -151,11 +151,6 @@ fn every_core_given_a_file_that_isnt_a_game_goes_on() {
     // logged as it loaded, through a log it hadn't been given, and took
     // Chanoma down).
     let Some(dir) = cores() else { return };
-    // Play! brings its own C++ runtime (libstdc++'s call_once machinery
-    // among what it exports): given a disc it can't read, an exception of
-    // its comes through Chanoma, and loaded before Mesa it breaks Mesa's
-    // LLVM starting up. Its own to mend, not Chanoma's.
-    const NOT_HERE: &[&str] = &["play"];
     let _ = env_logger::builder().is_test(true).filter_level(log::LevelFilter::Debug).try_init();
     let tmp = std::env::temp_dir().join(format!("chanoma-not-a-game-{}", std::process::id()));
     let mut tried = 0;
@@ -163,7 +158,7 @@ fn every_core_given_a_file_that_isnt_a_game_goes_on() {
         let Some(ext) = sys.extensions.first() else { continue };
         for stem in sys.cores {
             let core = dir.join(format!("{stem}_libretro.so"));
-            if !core.is_file() || NOT_HERE.contains(stem) {
+            if !core.is_file() {
                 continue;
             }
             let here = tmp.join(stem);
@@ -201,7 +196,11 @@ fn every_core_given_a_file_that_isnt_a_game_goes_on() {
                 let _ = tx.send(e);
             });
             match rx.recv_timeout(Duration::from_secs(30)) {
-                Ok(Event::Started { .. }) => println!("{:12} {stem}: started on it", sys.id),
+                // A core that throws once it runs ends its game (`guard`).
+                Ok(Event::Started { .. }) => match rx.recv_timeout(Duration::from_secs(5)) {
+                    Ok(Event::Stopped(why)) => println!("{:12} {stem}: started on it, then {why}", sys.id),
+                    _ => println!("{:12} {stem}: started on it", sys.id),
+                },
                 Ok(Event::Failed(why)) => println!("{:12} {stem}: {why}", sys.id),
                 other => panic!("{stem}: {other:?}"),
             }
@@ -242,30 +241,24 @@ fn game_boy_cores_play_hear_the_controller_and_carry_on() {
     assert!(played > 0, "no Game Boy cores in {}", dir.display());
 }
 
-/// Games played through PCSX-ReARMed with a system folder (OpenBIOS,
-/// another BIOS, or none for its own stand-in), a picture kept every
-/// eight seconds and its brightness said, Start and the confirm button
-/// pressed from the third on. For looking at, not judged here: a game
-/// that doesn't start fails.
-///
-/// `CHANOMA_TEST_PSX_GAMES` (a file of games, one path a line),
-/// `CHANOMA_TEST_PSX_SYSTEM` (the system folder), `CHANOMA_TEST_PSX_OUT`
-/// (where the pictures go), and `CHANOMA_TEST_PSX_STAGES` (how many
-/// pictures, six if not said).
-#[test]
-#[ignore = "needs CHANOMA_TEST_CORES and CHANOMA_TEST_PSX_*"]
-fn playstation_games_start_with_a_bios() {
-    let (Some(dir), Some(list), Some(system), Some(out)) = (
-        cores(),
-        std::env::var_os("CHANOMA_TEST_PSX_GAMES"),
-        std::env::var_os("CHANOMA_TEST_PSX_SYSTEM").map(PathBuf::from),
-        std::env::var_os("CHANOMA_TEST_PSX_OUT").map(PathBuf::from),
-    ) else {
-        return;
-    };
-    let _ = env_logger::builder().is_test(true).filter_level(log::LevelFilter::Info).try_init();
-    let core = dir.join("pcsx_rearmed_libretro.so");
-    let stages: u32 = std::env::var("CHANOMA_TEST_PSX_STAGES").ok().and_then(|s| s.parse().ok()).unwrap_or(6);
+/// A list of a household's own games, each played through `core` as
+/// Chanoma plays a game of `system`'s (its players, its settings, the
+/// BIOS images by the games under `folders`, offered as Chanoma offers
+/// them), in stages eight seconds long, each carrying on from the last's
+/// state as Chanoma carries a game on: untouched for two (its logos, its
+/// film, its title), then Start and the confirm button pressed through the
+/// rest. Each stage's picture is kept in `out` and its brightness printed.
+/// The games that didn't start come back.
+fn play_listed(
+    core: &Path,
+    system: &str,
+    list: &Path,
+    system_dir: &Path,
+    folders: &[PathBuf],
+    out: &Path,
+    stages: u32,
+) -> Vec<String> {
+    let system = aizome_chanoma::library::system(system).unwrap();
     let games = std::fs::read_to_string(list).unwrap();
     let mut failed = Vec::new();
     for game in games.lines().map(str::trim).filter(|l| !l.is_empty()) {
@@ -273,27 +266,24 @@ fn playstation_games_start_with_a_bios() {
         let name = game.file_stem().unwrap().to_string_lossy().into_owned();
         let here = out.join(&name);
         std::fs::create_dir_all(&here).unwrap();
-        // Moments eight seconds apart: untouched for two (its logos,
-        // its film, its title), then Start and the confirm button pressed
-        // through the rest. Each carries on from the last, as Chanoma
-        // carries a game on.
+        let found_bios = aizome_chanoma::retro::bios::wanted(&aizome_chanoma::retro::bios::near(game, folders));
         let mut started = true;
         let mut seen = Vec::new();
         for stage in 1..=stages {
             let pads = Arc::new(Shared::default());
             let launch = Launch {
-                core: CoreSource::Library(core.clone()),
+                core: CoreSource::Library(core.to_owned()),
                 game: game.to_owned(),
                 save_ram: here.join("game.srm"),
                 state: here.join("game.state"),
                 picture: here.join("game.png"),
                 resume: stage > 1,
-                system_dir: system.clone(),
+                system_dir: system_dir.to_owned(),
                 bios: Vec::new(),
-                found_bios: Vec::new(),
+                found_bios: found_bios.clone(),
                 save_dir: here.join("saves"),
-                players: 2,
-                prefer: Vec::new(),
+                players: system.players,
+                prefer: system.prefer.iter().map(|(k, v)| ((*k).to_owned(), (*v).to_owned())).collect(),
                 screen_lines: 1080,
                 silent: true,
                 unpack_dir: here.join("unzipped"),
@@ -304,7 +294,11 @@ fn playstation_games_start_with_a_bios() {
                 let _ = tx.send(e);
             });
             match rx.recv_timeout(Duration::from_secs(30)) {
-                Ok(Event::Started { .. }) => {}
+                Ok(Event::Started { resumed, .. }) => {
+                    if stage > 1 && !resumed {
+                        println!("{name}: stage {stage} didn't carry on from the last");
+                    }
+                }
                 other => {
                     println!("{name}: didn't start: {other:?}");
                     failed.push(name.clone());
@@ -332,5 +326,65 @@ fn playstation_games_start_with_a_bios() {
             println!("{name}: played; brightness {}", seen.join(" "));
         }
     }
+    failed
+}
+
+fn stages(var: &str) -> u32 {
+    std::env::var(var).ok().and_then(|s| s.parse().ok()).unwrap_or(6)
+}
+
+/// Games played through PCSX-ReARMed with a system folder (OpenBIOS,
+/// another BIOS, or none for its own stand-in), a picture kept every
+/// eight seconds and its brightness said, Start and the confirm button
+/// pressed from the third on. For looking at, not judged here: a game
+/// that doesn't start fails.
+///
+/// `CHANOMA_TEST_PSX_GAMES` (a file of games, one path a line),
+/// `CHANOMA_TEST_PSX_SYSTEM` (the system folder), `CHANOMA_TEST_PSX_OUT`
+/// (where the pictures go), and `CHANOMA_TEST_PSX_STAGES` (how many
+/// pictures, six if not said).
+#[test]
+#[ignore = "needs CHANOMA_TEST_CORES and CHANOMA_TEST_PSX_*"]
+fn playstation_games_start_with_a_bios() {
+    let (Some(dir), Some(list), Some(system), Some(out)) = (
+        cores(),
+        std::env::var_os("CHANOMA_TEST_PSX_GAMES").map(PathBuf::from),
+        std::env::var_os("CHANOMA_TEST_PSX_SYSTEM").map(PathBuf::from),
+        std::env::var_os("CHANOMA_TEST_PSX_OUT").map(PathBuf::from),
+    ) else {
+        return;
+    };
+    let _ = env_logger::builder().is_test(true).filter_level(log::LevelFilter::Info).try_init();
+    let core = dir.join("pcsx_rearmed_libretro.so");
+    let failed = play_listed(&core, "psx", &list, &system, &[], &out, stages("CHANOMA_TEST_PSX_STAGES"));
+    assert!(failed.is_empty(), "these didn't start: {failed:?}");
+}
+
+/// Dreamcast games through Flycast, drawing with OpenGL (its frames read
+/// back, with no compositor), with the BIOS a `bios` folder by the games
+/// holds, offered as Chanoma offers it (`dc/dc_boot.bin`), as the
+/// PlayStation's are played above. For looking at, not judged here: a
+/// game that doesn't start fails, and one that crashes takes the test
+/// down.
+///
+/// `CHANOMA_TEST_DC_GAMES` (a file of games, one path a line),
+/// `CHANOMA_TEST_DC_ROOT` (the games folder, its `bios` beside it),
+/// `CHANOMA_TEST_DC_OUT` (where the pictures go) and
+/// `CHANOMA_TEST_DC_STAGES` (how many, six if not said).
+#[test]
+#[ignore = "needs CHANOMA_TEST_CORES and CHANOMA_TEST_DC_*"]
+fn dreamcast_games_play_and_carry_on() {
+    let (Some(dir), Some(list), Some(root), Some(out)) = (
+        cores(),
+        std::env::var_os("CHANOMA_TEST_DC_GAMES").map(PathBuf::from),
+        std::env::var_os("CHANOMA_TEST_DC_ROOT").map(PathBuf::from),
+        std::env::var_os("CHANOMA_TEST_DC_OUT").map(PathBuf::from),
+    ) else {
+        return;
+    };
+    let _ = env_logger::builder().is_test(true).filter_level(log::LevelFilter::Info).try_init();
+    let core = dir.join("flycast_libretro.so");
+    let system = out.join("system");
+    let failed = play_listed(&core, "dreamcast", &list, &system, &[root], &out, stages("CHANOMA_TEST_DC_STAGES"));
     assert!(failed.is_empty(), "these didn't start: {failed:?}");
 }

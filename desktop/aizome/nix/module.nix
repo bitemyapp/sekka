@@ -239,6 +239,15 @@ let
       esac
     done
   '';
+  # Play!, linked with the system's C++ runtime. Its libretro build links
+  # its own (-static-libstdc++, -static-libgcc), and two in one process
+  # (another core's, Mesa's LLVM) broke Mesa starting up after it, and
+  # its own catching of what it throws.
+  chanomaPlay = pkgs.libretro.play.overrideAttrs (o: {
+    postPatch = (o.postPatch or "") + ''
+      sed -i '/"-static-lib\(gcc\|stdc++\)"/d' Source/ui_libretro/CMakeLists.txt
+    '';
+  });
   chanomaBios = pkgs.symlinkJoin {
     name = "chanoma-bios";
     paths = cfg.chanoma.bios;
@@ -308,9 +317,9 @@ in
             beetle-saturn
             yabause
             # Through OpenGL: the Dreamcast's, and the PlayStation 2's
-            # without its BIOS.
+            # without its BIOS (with the system's C++ runtime).
             flycast
-            play
+            chanomaPlay
           ]
           # The PlayStation 2's with its BIOS, on x86-64 alone.
           ++ lib.optionals pkgs.stdenv.hostPlatform.isx86_64 [ pcsx2 ]
@@ -320,7 +329,7 @@ in
             snes9x
             genesis-plus-gx
           ];
-        defaultText = lib.literalExpression "with pkgs.libretro; [ mesen bsnes gambatte mgba smsplus-gx beetle-pce-fast pcsx-rearmed stella handy beetle-ngp beetle-wswan beetle-saturn yabause flycast play ] ++ (pcsx2 on x86-64) ++ (snes9x and genesis-plus-gx where unfree packages are allowed)";
+        defaultText = lib.literalExpression "with pkgs.libretro; [ mesen bsnes gambatte mgba smsplus-gx beetle-pce-fast pcsx-rearmed stella handy beetle-ngp beetle-wswan beetle-saturn yabause flycast ] ++ [ play, with the system C++ runtime ] ++ (pcsx2 on x86-64) ++ (snes9x and genesis-plus-gx where unfree packages are allowed)";
         description = ''
           The libretro cores Chanoma plays games with. Cores that draw
           with OpenGL (the Dreamcast's, the PlayStation 2's) run on the

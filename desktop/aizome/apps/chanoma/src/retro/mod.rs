@@ -7,12 +7,14 @@
 //! (the Dreamcast's, the PlayStation 2's) get a context of Chanoma's, and
 //! their frames go to the compositor from the GPU ([`gl`]). Vulkan isn't
 //! offered. [`bios`]: the consoles' BIOS images a grown-up keeps by
-//! their games.
+//! their games. [`guard`]: a core's C++ exceptions caught, so one let out
+//! ends its game rather than Chanoma.
 
 pub mod audio;
 pub mod bios;
 pub mod ffi;
 pub mod gl;
+pub mod guard;
 pub mod host;
 pub mod session;
 pub mod video;
