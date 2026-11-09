@@ -75,6 +75,8 @@
       avahiPkgs = pkgs.extend avahiOverlay;
       pipewireOverlay = import ./nix/overlays/pipewire.nix;
       pipewirePkgs = pkgs.extend pipewireOverlay;
+      cargoGeigerOverlay = import ./nix/overlays/cargo-geiger.nix;
+      cargoGeigerPkgs = pkgs.extend cargoGeigerOverlay;
       tools = import ./nix/tools.nix { inherit pkgs; };
       pushCache = import ./nix/push-cache.nix { inherit pkgs; };
       publishNightly = import ./nix/publish-nightly.nix { inherit pkgs; };
@@ -137,6 +139,7 @@
         xappOverlay
         avahiOverlay
         pipewireOverlay
+        cargoGeigerOverlay
       ];
       nixosModules = {
         default = inputs.calamares.nixosModules.default;
@@ -212,6 +215,7 @@
         # (desktop/aizome/docs/kit.md).
         aizome-fonts = inputs.aizome.packages.${system}.fonts;
         inherit (hyprlandPkgs) aquamarine hyprland;
+        inherit (cargoGeigerPkgs) cargo-geiger;
         genkan = calamares;
         vm-fixture = fixture;
         # The catalog installs these same packages (nix/components.nix).
@@ -307,6 +311,7 @@
         };
       };
       checks.${system} = {
+        cargo-geiger = self.packages.${system}.cargo-geiger;
         pipewire-packages = import ./nix/pipewire-packages-test.nix {
           inherit
             pkgs

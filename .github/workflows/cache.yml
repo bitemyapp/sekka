@@ -104,4 +104,4 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          nix run --inputs-from . nixpkgs#python3 -- scripts/check_cache_coverage.py .#uta .#installed-systems
+          nix run --inputs-from . nixpkgs#python3 -- scripts/check_cache_coverage.py .#uta .#cargo-geiger .#installed-systems
