@@ -31,6 +31,32 @@ pub struct Bus {
     conn: zbus::Connection,
 }
 
+/// From whom a service starting now may take its well-known name. Names are
+/// held allowing replacement, so the next shell can take them over.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Takeover {
+    /// From whoever has it (the login session's shell).
+    Any,
+    /// Only from this process (the shell this one replaces). A headless or
+    /// nested shell shares the person's real session bus: it must not take
+    /// the names their desktop's shell holds.
+    From(u32),
+    /// Only a name nobody has.
+    Free,
+}
+
+impl Takeover {
+    /// Whether to ask for a name, held now by the process `owner`,
+    /// replacing whoever has it.
+    pub fn replaces(self, owner: Option<u32>) -> bool {
+        match self {
+            Takeover::Any => true,
+            Takeover::From(pid) => owner == Some(pid),
+            Takeover::Free => false,
+        }
+    }
+}
+
 static SYSTEM: Mutex<Option<zbus::Connection>> = Mutex::new(None);
 static SESSION: Mutex<Option<zbus::Connection>> = Mutex::new(None);
 
@@ -77,6 +103,12 @@ impl Bus {
     /// This connection's unique name on the bus.
     pub fn unique_name(&self) -> Option<String> {
         self.conn.unique_name().map(|name| name.to_string())
+    }
+
+    /// The process holding the well-known `name`, if anyone has it.
+    pub fn owner_pid(&self, name: &str) -> Option<u32> {
+        let (dest, path) = ("org.freedesktop.DBus", "/org/freedesktop/DBus");
+        self.call(dest, path, dest, "GetConnectionUnixProcessID", &(name,)).ok()
     }
 
     /// Call `method` with the query options: 2 seconds, no polkit prompt.

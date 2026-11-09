@@ -1,9 +1,9 @@
 //! Session startup and the processes the compositor keeps alive.
 //!
-//! Once the Wayland socket and IPC are up, the compositor exports its
-//! environment to the systemd user manager and D-Bus activation, tells
-//! systemd it is ready (when started as `aizome.service`), and starts
-//! `aizome-session.target`. It runs `aizome-shell` and
+//! Once the Wayland socket and IPC are up, the login compositor exports
+//! its environment to the systemd user manager and D-Bus activation and
+//! starts `aizome-session.target`. Service readiness is independent of
+//! login-session ownership. It runs `aizome-shell` and
 //! `xwayland-satellite` (when installed) and restarts them, backing off,
 //! if they die.
 
@@ -155,12 +155,14 @@ fn free_x_display() -> Option<u32> {
     })
 }
 
-/// Whether this is someone's login session, on a seat and known to
-/// systemd: only then does the shell serve polkit, hold logind's sleep and
-/// lock for logind (`AIZOME_SESSION=1`). A headless or nested run (tests,
-/// screenshots, trying Aizome inside another desktop) runs as the same user
-/// inside that user's real login session, and must leave all of that alone.
-fn real_session(opts: &crate::cli::Options) -> bool {
+/// Whether this compositor owns the login session: only then may it
+/// publish the shared activation environment, start desktop services and
+/// send notifications, and its shell serve polkit, hold logind's sleep,
+/// lock for logind and take the desktop's bus names (`AIZOME_SESSION=1`).
+/// A headless or nested run (tests, screenshots, trying Aizome inside
+/// another desktop) runs as the same user inside that user's real login
+/// session, and must leave all of that alone.
+pub(crate) fn real_session(opts: &crate::cli::Options) -> bool {
     opts.backend == crate::cli::BackendKind::Udev && !opts.no_session
 }
 
@@ -214,23 +216,25 @@ pub fn start(state: &mut State) {
         TimeoutAction::ToDuration(Duration::from_millis(next))
     });
 
-    if !opts.no_session {
-        let env = session_env(&state.az);
-        let names: Vec<String> = env.iter().map(|(k, _)| k.clone()).collect();
-        let under_systemd = std::env::var_os("NOTIFY_SOCKET").is_some() || std::env::var_os("INVOCATION_ID").is_some();
-        if under_systemd {
-            run_quietly(
+    let under_systemd = std::env::var_os("NOTIFY_SOCKET").is_some() || std::env::var_os("INVOCATION_ID").is_some();
+    let env = session_env(&state.az);
+    let names: Vec<String> = env.iter().map(|(k, _)| k.clone()).collect();
+    for step in announcements(&opts, under_systemd) {
+        match step {
+            Announce::ImportToManager => run_quietly(
                 Command::new("systemctl").arg("--user").arg("import-environment").args(&names).envs(env.clone()),
-            );
-        }
-        let mut dbus = Command::new("dbus-update-activation-environment");
-        if under_systemd {
-            dbus.arg("--systemd");
-        }
-        run_quietly(dbus.args(&names).envs(env.clone()));
-        notify_ready();
-        if under_systemd {
-            run_quietly(Command::new("systemctl").args(["--user", "--no-block", "start", "aizome-session.target"]));
+            ),
+            Announce::ImportToDbus { systemd } => {
+                let mut dbus = Command::new("dbus-update-activation-environment");
+                if systemd {
+                    dbus.arg("--systemd");
+                }
+                run_quietly(dbus.args(&names).envs(env.clone()));
+            }
+            Announce::Ready => notify_ready(),
+            Announce::StartTarget => {
+                run_quietly(Command::new("systemctl").args(["--user", "--no-block", "start", "aizome-session.target"]))
+            }
         }
     }
 
@@ -240,6 +244,45 @@ pub fn start(state: &mut State) {
             warn!("{e}");
         }
     }
+}
+
+/// What startup tells the user manager, D-Bus and systemd, in order.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Announce {
+    /// `systemctl --user import-environment`.
+    ImportToManager,
+    /// `dbus-update-activation-environment` (with `--systemd` under it).
+    ImportToDbus { systemd: bool },
+    /// `READY=1` on `$NOTIFY_SOCKET`.
+    Ready,
+    /// `systemctl --user start aizome-session.target`.
+    StartTarget,
+}
+
+/// The login compositor's environment reaches the user manager and D-Bus
+/// before it says it's ready (aizome.service's dependents start then) and
+/// before the desktop's services start. A systemd invocation can also be a
+/// headless test or nested compositor: its display belongs to its children,
+/// never the shared manager or activation environment (which portals
+/// inherit on restart).
+fn announcements(opts: &crate::cli::Options, under_systemd: bool) -> Vec<Announce> {
+    let real = real_session(opts);
+    let mut steps = Vec::new();
+    if real {
+        if under_systemd {
+            steps.push(Announce::ImportToManager);
+        }
+        steps.push(Announce::ImportToDbus { systemd: under_systemd });
+    }
+    // Type=notify is useful for headless services too. Reporting this
+    // process ready does not grant it ownership of the desktop session.
+    if !opts.no_session {
+        steps.push(Announce::Ready);
+    }
+    if real && under_systemd {
+        steps.push(Announce::StartTarget);
+    }
+    steps
 }
 
 fn run_quietly(cmd: &mut Command) {
@@ -545,11 +588,36 @@ mod tests {
     use super::*;
 
     #[test]
-    fn only_a_seat_known_to_systemd_is_a_real_session() {
+    fn only_udev_without_no_session_owns_the_login_session() {
         let real = |args: &[&str]| real_session(&crate::cli::parse(args.iter().map(|s| s.to_string())).unwrap());
         assert!(real(&["--backend", "udev"]));
         assert!(!real(&["--backend", "udev", "--no-session"]));
         assert!(!real(&["--backend", "headless"]));
         assert!(!real(&["--backend", "winit"]));
+    }
+
+    #[test]
+    fn the_login_session_exports_before_it_is_ready_and_starts_its_services_last() {
+        use Announce::*;
+        let steps = |args: &[&str], systemd| {
+            announcements(&crate::cli::parse(args.iter().map(|s| s.to_string())).unwrap(), systemd)
+        };
+        // aizome.service: its dependents start at READY=1, the desktop's
+        // services with the target, both after the environment is in.
+        assert_eq!(
+            steps(&["--backend", "udev"], true),
+            [ImportToManager, ImportToDbus { systemd: true }, Ready, StartTarget]
+        );
+        // From a TTY, outside the user manager.
+        assert_eq!(steps(&["--backend", "udev"], false), [ImportToDbus { systemd: false }, Ready]);
+        // Headless and nested runs, under systemd or not, only say they're
+        // ready.
+        for backend in ["headless", "winit"] {
+            assert_eq!(steps(&["--backend", backend], true), [Ready], "{backend}");
+            assert_eq!(steps(&["--backend", backend], false), [Ready], "{backend}");
+        }
+        for backend in ["udev", "headless", "winit"] {
+            assert!(steps(&["--backend", backend, "--no-session"], true).is_empty(), "{backend}");
+        }
     }
 }

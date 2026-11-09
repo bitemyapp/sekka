@@ -1469,6 +1469,49 @@ is visible in Details, then opens a real Koe window without enabling
 dictation. Its screenshots and JSON identify component evidence, not an ISO
 or physical-hardware qualification.
 
+Only the udev compositor without `--no-session` may publish the shared
+systemd/D-Bus activation environment, start `aizome-session.target` or send
+notifications (unless `AIZOME_NOTIFY=1`). Headless and nested compositors
+keep their display and IPC addresses local to their children, including
+when launched by systemd, and their shells take the notifications and
+status-item watcher names only when free or from the shell they replace.
+Service readiness remains independent: headless `Type=notify` services can
+report ready, and `--no-session` suppresses readiness on every backend.
+
+The package check phase runs `aizome-comp-process-tests`'s
+`session_environment` against the headless compositor the package installs,
+as built, using pixman, private directories, disconnected buses and recording
+stand-ins for the environment/target commands. That crate depends only on
+`aizome-ipc`, so the check never rebuilds the core with `aizome-comp`'s test
+dependencies (which would change its symbols). It covers direct launches,
+`INVOCATION_ID`, `NOTIFY_SOCKET`, explicit `--no-session`, and the environment
+received by both the shell and the command after `--`. It requires no GPU or
+live login session. The package runs it with a deliberately long `TMPDIR`;
+its runtime sockets use a short private directory under `/tmp`. The tests are
+ignored unless asked for, since they need `AIZOME_TEST_COMPOSITOR` to name a
+built binary. Build the compositor and run them with:
+
+```sh
+nix develop .#aizome -c sh -c 'cd desktop/aizome && cargo build --locked -p aizome-comp -p aizome-comp-logic && AIZOME_TEST_COMPOSITOR=$PWD/target/debug/aizome cargo test --locked -p aizome-comp-process-tests -- --include-ignored'
+```
+
+The line between the login session and the rest is unit-tested too:
+`aizome-comp-core`'s `session` tests cover the order the login compositor
+exports, reports `READY=1` and starts `aizome-session.target`, and
+`aizome-sys`'s `statusnotifier` and `aizome-shell`'s `shell` tests cover which
+bus names a headless or nested shell may take.
+
+The performance harnesses in `tests/performance/{why-desktop,why-toolkits,design}`
+own private session buses. Their `aizome_session.py` shell wrapper publishes
+the compositor's child environment to that private bus before starting the
+pinned shell, including `DISPLAY` when Xwayland is enabled. It checks the bus
+address and never imports into the systemd user manager. Test the wrapper's
+real D-Bus activation, without a GPU or desktop, with:
+
+```sh
+nix shell --inputs-from . nixpkgs#python3 nixpkgs#dbus -c python3 -m unittest discover -s tests/performance -p test_aizome_session.py -v
+```
+
 Aizome's session launcher owns desktop cleanup even when logind terminates
 only the login scope, as Yukimi's Sign Out does. The compositor runs in the
 user manager, outside that scope; HUP, INT and TERM must therefore stop the

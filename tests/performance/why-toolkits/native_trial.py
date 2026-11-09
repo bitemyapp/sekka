@@ -32,9 +32,13 @@ import socket
 import subprocess
 import sys
 import time
+from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import tk  # noqa: E402
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from aizome_session import private_bus_shell  # noqa: E402
 
 KEY_A, KEY_BACKSPACE = 30, 14
 R = tk.ROOTS
@@ -117,6 +121,8 @@ def session(desk, root):
                     "XDG_CURRENT_DESKTOP": "Aizome", "XDG_SESSION_DESKTOP": "aizome",
                     "AIZOME_WALLPAPER_DAY": "", "AIZOME_WALLPAPER_NIGHT": "",
                     "AIZOME_RENDER_NODE": tk.RENDER_NODE, "AIZOME_FONT_DIR": os.path.realpath(tk.FONTS)})
+        env["AIZOME_SHELL_BIN"] = private_bus_shell(
+            root, env["DBUS_SESSION_BUS_ADDRESS"], f"{tk.AIZOME}/aizome-shell")
         cmd = [f"{tk.AIZOME}/aizome", "--backend", "headless", "--headless-output", "1920x1080@1",
                "--socket", SOCK, "--no-xwayland"]
     return env, cmd

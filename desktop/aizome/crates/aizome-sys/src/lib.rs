@@ -73,6 +73,6 @@ pub mod statusnotifier;
 pub mod sysinfo;
 pub mod users;
 
-pub use bus::Bus;
+pub use bus::{Bus, Takeover};
 pub use error::{Error, Result};
 pub use service::{Task, Wake};

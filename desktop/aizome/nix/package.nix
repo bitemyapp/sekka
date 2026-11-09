@@ -204,7 +204,8 @@ rustPlatform.buildRustPackage {
 
   # Yukimi's headless interactions and rendering run without a desktop.
   # Hako's show-in-folder service answers on a private bus of its own.
-  # Session, GPU and other D-Bus coverage remain in the component VMs.
+  # Headless session isolation uses pixman and command stand-ins; login,
+  # GPU and other D-Bus coverage remain in the component VMs.
   doCheck = true;
   nativeCheckInputs = [ dbus ];
   checkPhase = ''
@@ -224,6 +225,15 @@ rustPlatform.buildRustPackage {
       }
     }
     export TZDIR=${tzdata}/share/zoneinfo
+    # The compositor this package installs, as built above: its process
+    # tests need only the IPC client, so nothing rebuilds the core with
+    # aizome-comp's test dependencies. Exercise the socket fixture with a
+    # TMPDIR longer than sockaddr_un: runtime sockets must use their own
+    # short directory.
+    sessionTestTmp="$TMPDIR/session-environment-long-temporary-directory/session-environment-long-temporary-directory/session-environment-long-temporary-directory"
+    mkdir -p "$sessionTestTmp"
+    TMPDIR="$sessionTestTmp" AIZOME_TEST_COMPOSITOR="$PWD/target/${target}/release/aizome" \
+      ${cargo}/bin/cargo test --offline --target ${target} --release -p aizome-comp-process-tests -- --include-ignored
     cargo test --offline --target ${target} --profile release-lto -p aizome-yukimi -p aizome-kit --lib --test headless --test look --test golden
     # A successful spawn is not a successful application launch. Gate the
     # shipped shell on process outcomes and its failure/details interface.

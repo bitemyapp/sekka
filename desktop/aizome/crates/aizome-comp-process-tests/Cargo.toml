@@ -1,0 +1,11 @@
+[package]
+name = "aizome-comp-process-tests"
+description = "Tests that run a built `aizome` binary as a process, needing only the IPC client: the package checks the compositor it ships with them"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dev-dependencies]
+aizome-ipc.workspace = true

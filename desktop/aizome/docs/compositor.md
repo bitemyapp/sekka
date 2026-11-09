@@ -100,12 +100,27 @@ environment.
 
 `AIZOME_SESSION` is `1` only on udev without `--no-session`, the
 machine's login session, and `0` under headless, winit or `--no-session`.
+Only that login compositor exports the shared systemd/D-Bus activation
+environment, starts `aizome-session.target` and sends notifications
+(`notify-send`; `AIZOME_NOTIFY=1` makes any compositor send them).
+Headless and nested runs never do any of that, even without `--no-session`
+and even when started by systemd. Their display and IPC addresses belong
+only to their children; otherwise a portal restarted during a test could
+inherit the test display and lose its file chooser when the test exits.
+
+Service supervision is separate: a headless service can still report
+`READY=1` to its own `NOTIFY_SOCKET`. `--no-session` suppresses that readiness
+notification on every backend and opts udev out of login-session ownership.
+
 Those children still see `XDG_CURRENT_DESKTOP=Aizome`, but they run as the
 same user inside the user's real session, so the shell reads
 `AIZOME_SESSION` and there doesn't register as the polkit agent, take
 logind's sleep delay or lock for logind (`docs/shell.md`, "Real and
-headless sessions"): `scripts/headless-session` and the tests leave the
-developer's session alone.
+headless sessions"). Nor does it take `org.freedesktop.Notifications` or
+`org.kde.StatusNotifierWatcher` from their desktop's shell: it takes those
+names only while nobody has them, or from the shell it replaces in a
+restart (`AIZOME_SHELL_PREVIOUS_PID`). `scripts/headless-session` and the
+tests leave the developer's session alone.
 
 Under `aizome.service` it feeds systemd's watchdog (`WatchdogSec=10s`)
 from its main loop; a loop stalled that long is stopped (SIGABRT, with a

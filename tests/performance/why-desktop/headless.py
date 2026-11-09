@@ -43,6 +43,10 @@ import signal
 import subprocess
 import sys
 import time
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from aizome_session import private_bus_shell  # noqa: E402
 
 CPUS = os.environ.get("WHY_CPUS", "2,3")
 BWRAP = shutil.which("bwrap") or "bwrap"
@@ -356,7 +360,8 @@ def session_env(desk, root, pins, wallpaper):
         # The pinned package's shell and helpers, not the system path's
         # (the compositor finds the shell on PATH, session.rs shell_binary).
         env["PATH"] = f"{pins}/aizome/bin:" + env["PATH"]
-        env["AIZOME_SHELL_BIN"] = f"{pins}/aizome/bin/aizome-shell"
+        env["AIZOME_SHELL_BIN"] = private_bus_shell(
+            root, env["DBUS_SESSION_BUS_ADDRESS"], f"{pins}/aizome/bin/aizome-shell")
         env.update({"XDG_CURRENT_DESKTOP": "Aizome", "XDG_SESSION_DESKTOP": "aizome",
                     "AIZOME_WALLPAPER_DAY": w if wallpaper else "",
                     "AIZOME_WALLPAPER_NIGHT": w if wallpaper else "",

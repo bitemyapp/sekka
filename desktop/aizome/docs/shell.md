@@ -589,6 +589,16 @@ them, so it never competes with the real session's agent, holds up the
 real machine's sleep, or locks when the real session does. ⌃❖Q and the
 idle lock still lock it.
 
+The shell's session-bus names, `org.freedesktop.Notifications` and
+`org.kde.StatusNotifierWatcher`, follow the same line (`takeover()` in
+`shell.rs`). The real session's shell takes them from whoever allows it,
+so a restarted shell replaces the old one without a gap. A headless or
+nested shell shares the person's real session bus, so it takes them only
+while nobody has them, or from the shell it replaces in a restart
+(`AIZOME_SHELL_PREVIOUS_PID`); otherwise their desktop would lose its
+notifications and status icons to the test, and not get them back when
+the test ended.
+
 ## Behaviour
 
 - Everything follows `aizome-config` live: theme (Night, Day, High

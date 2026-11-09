@@ -525,10 +525,13 @@ impl State {
     }
 
     /// Tells the user something about the session, as a notification (the
-    /// shell shows it) and in the log.
+    /// shell shows it) and in the log. Only the login compositor notifies
+    /// (or any with `AIZOME_NOTIFY` set): a headless or nested one shares
+    /// the person's session bus, where its news would read as their
+    /// desktop's.
     pub fn notify(&mut self, summary: &str, body: &str) {
         info!("{summary}: {body}");
-        if self.az.options.no_session && std::env::var_os("AIZOME_NOTIFY").is_none() {
+        if !crate::session::real_session(&self.az.options) && std::env::var_os("AIZOME_NOTIFY").is_none() {
             return;
         }
         let argv = vec!["notify-send".to_string(), "--app-name=Aizome".into(), summary.into(), body.into()];
