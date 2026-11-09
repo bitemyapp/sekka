@@ -66,7 +66,12 @@ let
     };
     cargoHash = "sha256-FGZXALvFydgPSxdApiO9WexjlHUSXmc/erH/F/q8/Z0=";
     nativeBuildInputs = [ pkgs.pkg-config ];
-    buildInputs = [ pkgs.openssl ];
+    # nixpkgs' cargoSetupHook makes zstd-sys link the system library rather
+    # than build its own copy.
+    buildInputs = [
+      pkgs.openssl
+      pkgs.zstd
+    ];
     doCheck = false;
   };
   worker = pkgs.stdenv.mkDerivation {

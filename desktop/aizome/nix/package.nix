@@ -184,6 +184,10 @@ rustPlatform.buildRustPackage {
 
   buildPhase = ''
     runHook preBuild
+    # Yukimi keeps SQLite built in (yukimi-store's bundled feature), as the
+    # dev shell builds it. nixpkgs' cargoSetupHook would make
+    # libsqlite3-sys skip that build and link a system SQLite instead.
+    unset LIBSQLITE3_SYS_USE_PKG_CONFIG
     # -C prefer-dynamic for the compositor's core alone (scripts/rustc-wrapper).
     export RUSTC_WRAPPER=$PWD/scripts/rustc-wrapper
     flags=(-j "$NIX_BUILD_CORES" --target ${target} --offline)
