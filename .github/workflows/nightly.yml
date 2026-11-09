@@ -133,9 +133,9 @@ jobs:
         run: |
           set -euo pipefail
           # A fresh installed system, with any desktop and any free catalog
-          # application, must find everything it needs in a cache: nothing
-          # upstream publishes may make users compile.
-          nix run --inputs-from . nixpkgs#python3 -- scripts/check_cache_coverage.py .#uta .#installed-systems
+          # application, and the packages Sekka repairs outside that catalog,
+          # must find everything it needs in a cache.
+          nix run --inputs-from . nixpkgs#python3 -- scripts/check_cache_coverage.py .#uta .#cargo-geiger .#installed-systems
       - name: Move main and nightly to this revision
         shell: bash
         env:
