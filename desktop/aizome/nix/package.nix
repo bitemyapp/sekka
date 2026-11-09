@@ -182,10 +182,16 @@ let
       ++ runtimePackages
     )
   );
+  # A separate archive per application repeatedly restores the same large
+  # external-dependency cache. Small groups amortize that I/O while letting
+  # checked applications start well before every toolkit variant is ready.
+  kitGroups = lib.genList (index: lib.sublist (index * 4) 4 kitConsumers) (
+    builtins.div (builtins.length kitConsumers + 3) 4
+  );
   toolkitCacheChain =
     lib.foldl'
       (
-        state: name:
+        state: names:
         let
           artifacts = craneLib.mkCargoDerivation (
             common
@@ -193,22 +199,23 @@ let
               pname = "aizome-toolkit-artifacts";
               src = sources.forPackages [ "aizome-kit" ];
               cargoArtifacts = state.previous;
-              buildPhaseCargoCommand = "cargo build --locked --offline --target ${target} --profile release-lto ${packageFlags [ name ]}";
+              buildPhaseCargoCommand = lib.concatMapStringsSep "\n" (
+                name:
+                "cargo build --locked --offline --target ${target} --profile release-lto ${packageFlags [ name ]}"
+              ) names;
             }
           );
         in
         {
           previous = artifacts;
-          byPackage = state.byPackage // {
-            ${name} = artifacts;
-          };
+          byPackage = state.byPackage // lib.genAttrs names (_: artifacts);
         }
       )
       {
         previous = appDependencies;
         byPackage = { };
       }
-      kitConsumers;
+      kitGroups;
   kitArtifacts = toolkitCacheChain.previous;
   libraryArtifacts =
     names:
