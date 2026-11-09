@@ -38,6 +38,7 @@ let
 in
 {
   imports = [
+    ./cargo-geiger-fix.nix
     ./portal-fixes.nix
     ./avahi-fixes.nix
     ./pipewire-fixes.nix

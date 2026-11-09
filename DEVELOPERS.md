@@ -1225,6 +1225,16 @@ Standalone users can import `sekka.nixosModules.tatami` with `programs.tatami.en
 
 ## Binary cache
 
+Sekka overrides `cargo-geiger` 0.13 because its locked `libgit2-sys` needs
+libgit2 1.8, while Nixpkgs supplies 1.9 and its Cargo setup hook disables
+vendoring. The override permits the bundled libgit2 after that hook and
+supplies system zlib, libssh2 and SQLite alongside OpenSSL. It applies to installed
+systems and live media, including packages added through Yukimi. The
+`cargo-geiger` package/check builds it with its upstream tests, and the cache
+publisher includes it so an installed copy cannot force users to compile it
+during an update. Remove the override when the pinned upstream package builds
+without it.
+
 `https://cache.sekka.computer` serves Sekka's own packages and its patched
 Hyprland stack, so installations and updates download them instead of
 compiling them. It is the Cloudflare R2 bucket `sekka-cache` behind a custom

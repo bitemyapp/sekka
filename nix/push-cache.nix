@@ -39,7 +39,7 @@ pkgs.writeShellApplication {
     # the ISO. Its build is GPL-3.0-only, so uta.source, the exact sources it
     # was built from (nix/uta.nix), goes beside it. Keep a failed build from
     # being hidden by process substitution.
-    packages=(genkan tatami displays wallpapers yukimi kakehashi uta uta.source aquamarine hyprland tools installed-systems)
+    packages=(genkan tatami displays wallpapers yukimi kakehashi uta uta.source aquamarine hyprland cargo-geiger tools installed-systems)
     if [[ -n ''${SEKKA_CI_ROOTS:-} ]]; then
       build_outputs=$(python3 ${../scripts/ci-retain.py} main packages build --no-update-lock-file --print-out-paths "''${packages[@]/#/$flake#}")
     else

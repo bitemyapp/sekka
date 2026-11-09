@@ -9,6 +9,7 @@
 {
   environment.systemPackages = [ pkgs.file ];
   imports = [
+    ../../../../modules/cargo-geiger-fix.nix
     ./binary-cache.nix
     ./boot-splash
     ./desktops.nix
