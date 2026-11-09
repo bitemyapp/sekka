@@ -25,6 +25,8 @@ const FAILS: &str = r#"echo 'building the new system' >&2
 echo '@nix {"action":"msg","level":0,"msg":"error: builder for gimp2 failed with exit code 1"}' >&2
 exit 1"#;
 
+const CHECKED: &str = r#"echo '{"source":"/nix/store/checked-source","lock":"/nix/store/checked.lock","builds":[]}'"#;
+
 /// A step that runs `script` in place of Nix or the helper.
 fn script(text: &'static str) -> Step {
     Box::new(move || {
@@ -37,12 +39,19 @@ fn script(text: &'static str) -> Step {
 /// The sample, with every operation it runs written down and run as
 /// `script`.
 fn sample(script_text: &'static str) -> (Harness<Yukimi>, WindowKey, Arc<Mutex<Vec<Operation>>>) {
+    sample_with_check(script_text, CHECKED)
+}
+
+fn sample_with_check(
+    script_text: &'static str,
+    check: &'static str,
+) -> (Harness<Yukimi>, WindowKey, Arc<Mutex<Vec<Operation>>>) {
     let ran = Arc::new(Mutex::new(Vec::new()));
     let seen = ran.clone();
     let model = Arc::new(aizome_yukimi::fixture::model());
     let runner = Runner::Mock(Arc::new(move |op: &Operation| {
         seen.lock().unwrap().push(op.clone());
-        vec![script(script_text)]
+        vec![script(if matches!(op, Operation::CheckUpdate { .. }) { check } else { script_text })]
     }));
     let mut app = Yukimi::with(Source::Sample(model.clone()), runner, Clock::Fixed(aizome_yukimi::fixture::NOW, 21));
     app.check = Some(Arc::new(aizome_yukimi::fixture::check(&model)));
@@ -400,9 +409,82 @@ fn updating_takes_what_moves_forward() {
     // On a Sekka system one update takes Sekka and every newer source.
     assert!(h.click_text(w, "Update"));
     let op = ran.lock().unwrap().first().cloned().unwrap();
-    assert_eq!(op, Operation::UpdateSekka { inputs: vec!["nixpkgs".into(), "sekka".into()] });
-    assert_eq!(op.helper_args(None), ["change", "--sekka", "--mode", "auto", "--update", "nixpkgs,sekka"]);
+    assert_eq!(
+        op,
+        Operation::CheckUpdate {
+            operation: Box::new(Operation::UpdateSekka { inputs: vec!["nixpkgs".into(), "sekka".into()] })
+        }
+    );
+    assert_eq!(op.helper_args(None), ["preflight", "--sekka", "--mode", "auto", "--update", "nixpkgs,sekka"]);
     settle(&mut h, |a| a.job.as_ref().is_some_and(|j| j.outcome.is_some()));
+    let operations = ran.lock().unwrap();
+    assert_eq!(operations.len(), 2);
+    let args = operations[1].helper_args(None);
+    assert!(args.windows(2).any(|a| a == ["--lock", "/nix/store/checked.lock"]));
+    assert!(args.windows(2).any(|a| a == ["--checked-source", "/nix/store/checked-source"]));
+}
+
+const NEEDS_BUILD: &str = r#"echo '{"source":"/nix/store/checked-source","lock":"/nix/store/checked.lock","builds":["cargo-geiger-0.13.0"]}'"#;
+
+#[test]
+fn an_uncached_package_is_named_and_can_be_cancelled_before_the_update() {
+    let (mut h, w, ran) = sample_with_check(WORKS, NEEDS_BUILD);
+    h.send(Msg::Show(Page::Updates));
+    assert!(h.click_text(w, "Update"));
+    settle(&mut h, |a| a.job.is_none());
+    assert!(has(&h, w, "Some packages need to be built"));
+    assert!(h.texts(w).iter().any(|s| s.contains("cargo-geiger-0.13.0")));
+    assert_eq!(ran.lock().unwrap().len(), 1);
+    if let Some(dir) = std::env::var_os("YUKIMI_PREFLIGHT_PICTURES") {
+        h.save_png(w, std::path::PathBuf::from(dir).join("uncached-package.png"), 1.0);
+    }
+    assert!(click_last(&mut h, w, "Cancel"));
+    h.advance(Duration::from_secs(1));
+    assert_eq!(ran.lock().unwrap().len(), 1);
+    assert!(h.program().job.is_none());
+}
+
+#[test]
+fn agreeing_to_build_applies_the_exact_checked_update() {
+    let (mut h, w, ran) = sample_with_check(WORKS, NEEDS_BUILD);
+    h.send(Msg::Run(Operation::UpdateFlake { inputs: vec!["nixpkgs".into()] }));
+    settle(&mut h, |a| a.job.is_none());
+    assert_eq!(ran.lock().unwrap().len(), 1);
+    assert!(click_last(&mut h, w, "Build and Update"));
+    settle(&mut h, |a| a.job.as_ref().is_some_and(|j| j.outcome.is_some()));
+    let operations = ran.lock().unwrap();
+    assert_eq!(operations.len(), 2);
+    let Operation::CheckedUpdate { operation, report } = &operations[1] else { panic!("unchecked update") };
+    assert_eq!(**operation, Operation::UpdateFlake { inputs: vec!["nixpkgs".into()] });
+    assert_eq!(report.lock.to_str(), Some("/nix/store/checked.lock"));
+    assert_eq!(report.source, "/nix/store/checked-source");
+}
+
+#[test]
+fn failed_or_unreadable_checks_never_start_an_update() {
+    for check in [FAILS, "echo unreadable"] {
+        let (mut h, _, ran) = sample_with_check(WORKS, check);
+        h.send(Msg::Run(Operation::UpdateSekka { inputs: vec![] }));
+        settle(&mut h, |a| a.job.as_ref().is_some_and(|j| j.outcome.is_some()));
+        assert!(matches!(h.program().job.as_ref().unwrap().outcome, Some(Outcome::Failed(_))));
+        assert_eq!(ran.lock().unwrap().len(), 1);
+    }
+}
+
+#[test]
+fn cancellation_wins_over_a_check_result_already_in_flight() {
+    let (mut h, _, ran) = sample_with_check(WORKS, "sleep 10");
+    h.send(Msg::Run(Operation::UpdateSekka { inputs: vec![] }));
+    let id = h.program().job.as_ref().unwrap().id;
+    h.send(Msg::StopJob);
+    h.send(Msg::Job(
+        id,
+        aizome_yukimi::job::JobEvent::Done(Ok(
+            r#"{"source":"/nix/store/checked-source","lock":"/nix/store/checked.lock","builds":[]}"#.into(),
+        )),
+    ));
+    assert_eq!(ran.lock().unwrap().len(), 1);
+    assert!(matches!(h.program().job.as_ref().unwrap().outcome, Some(Outcome::Failed(_))));
 }
 
 #[test]
@@ -779,13 +861,16 @@ fn early_updates_ask_then_follow_sekkas_main() {
     assert!(has(&h, w, "Turn on early updates?"), "{:?}", h.texts(w));
     assert!(ran.lock().unwrap().is_empty());
     assert!(click_last(&mut h, w, "Turn On"));
-    assert_eq!(ran.lock().unwrap().as_slice(), [Operation::Early { on: true }]);
+    assert_eq!(
+        ran.lock().unwrap().as_slice(),
+        [Operation::CheckUpdate { operation: Box::new(Operation::Early { on: true }) }]
+    );
     settle(&mut h, |a| a.job.as_ref().is_some_and(|j| j.outcome.is_some()));
     // Already following the nightly: nothing to ask.
     h.advance(Duration::from_secs(1));
     h.send(Msg::Early(false));
     assert!(h.program().notes.iter().any(|(_, n)| n == "Sekka updates from the nightly already"));
-    assert_eq!(ran.lock().unwrap().len(), 1);
+    assert_eq!(ran.lock().unwrap().len(), 2);
 }
 
 #[test]

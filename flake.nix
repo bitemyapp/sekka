@@ -892,6 +892,29 @@
             '';
         yukimi = self.packages.${system}.yukimi;
         yukimi-tatami = self.packages.${system}.yukimi-discover;
+        yukimi-preflight =
+          pkgs.runCommand "yukimi-preflight-tests"
+            {
+              nativeBuildInputs = [
+                pkgs.python3
+                pkgs.bubblewrap
+                pkgs.nix
+                pkgs.bash
+              ];
+              YUKIMI_TEST_RUNTIME = "${
+                pkgs.closureInfo {
+                  rootPaths = [
+                    self.packages.${system}.yukimi.helper
+                    pkgs.nix
+                    pkgs.bash
+                  ];
+                }
+              }/store-paths";
+            }
+            ''
+              python3 ${./tests/test_yukimi_preflight.py} ${self.packages.${system}.yukimi.helper}/bin -v
+              touch $out
+            '';
         yukimi-x11 = import ./nix/yukimi-x11-test.nix {
           inherit pkgs;
           desktopsModule = inputs.calamares.nixosModules.desktops;

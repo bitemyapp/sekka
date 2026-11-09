@@ -29,6 +29,7 @@ pub mod info;
 pub mod log;
 pub mod nix;
 pub mod people;
+pub mod preflight;
 pub mod profile;
 pub mod reclaim;
 pub mod setup;
