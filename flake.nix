@@ -100,6 +100,7 @@
           "${builtins.substring 0 4 d}-${builtins.substring 4 2 d}-${builtins.substring 6 2 d}";
       };
       fixture = import ./nix/fixture.nix { inherit pkgs; };
+      localModels = import ./nix/local-models.nix { inherit nixpkgs system; };
       calamares = import ./nix/calamares.nix {
         inherit pkgs;
         source = inputs.calamares;
@@ -182,7 +183,18 @@
       # Aizome's own VM checks (desktop/aizome/nix), under the names its
       # flake gave them: `nix build .#aizome-checks.session`. Not among
       # `checks`, which CI runs, as they weren't in Aizome's repository.
-      legacyPackages.${system}.aizome-checks = inputs.aizome.checks.${system};
+      legacyPackages.${system} = {
+        aizome-checks = inputs.aizome.checks.${system};
+        # Open-model runtimes for a local NVIDIA GPU (nix/local-models.nix),
+        # and the agent evaluations that use them (tests/agent-evals). Like
+        # aizome-checks, not among `checks`: they need the GPU and a model.
+        local-models = localModels;
+        agent-evals = import ./tests/agent-evals {
+          inherit pkgs localModels;
+          desktopsModule = inputs.calamares.nixosModules.desktops;
+          ompPackage = inputs.omp.packages.${system}.omp;
+        };
+      };
       apps.${system} = {
         update = {
           type = "app";
