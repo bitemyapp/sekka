@@ -40,7 +40,8 @@ def identities(root, different_fonts=False):
         }};
       in builtins.mapAttrs (_: package: package.drvPath)
         ((builtins.removeAttrs components [ "sources" ]) // {{
-          appDependencies = components.soroban.cargoArtifacts.cargoArtifacts;
+          appDependencies = components.aggregate.compilerArtifacts.appDependencies;
+          toolkitLibraries = components.aggregate.compilerArtifacts.kitArtifacts;
           calculatorLibraries = components.soroban.cargoArtifacts;
           compositorDependencies = components.compositor.cargoArtifacts;
         }})

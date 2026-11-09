@@ -163,6 +163,27 @@ let
   appDependencies = dependencies "release-lto" appFlags;
   # The compositor's Rust dylibs must keep their own non-LTO feature graph.
   compositorDependencies = dependencies "release" [ "-p aizome-comp -p aizome-comp-logic" ];
+  # Most applications compile the same toolkit. Build its real sources once
+  # in every consumer's actual feature/LTO context before the smaller caches
+  # add their application-specific libraries. Cargo reuses identical units
+  # between selections; distinct feature sets remain distinct artifacts.
+  # Only toolkit sources enter this layer, so unrelated application/library
+  # edits do not invalidate other consumers' caches.
+  kitConsumers = builtins.filter (
+    name: builtins.elem "aizome-kit" (libraryNames [ name ])
+  ) runtimePackages;
+  kitArtifacts = craneLib.mkCargoDerivation (
+    common
+    // {
+      pname = "aizome-toolkit-artifacts";
+      src = sources.forPackages [ "aizome-kit" ];
+      cargoArtifacts = appDependencies;
+      buildPhaseCargoCommand = lib.concatMapStringsSep "\n" (
+        name:
+        "cargo build --locked --offline --target ${target} --profile release-lto ${packageFlags [ name ]}"
+      ) kitConsumers;
+    }
+  );
   libraryArtifacts =
     names:
     let
@@ -176,7 +197,7 @@ let
         // {
           pname = "aizome-libraries";
           src = sources.forPackages libraries;
-          cargoArtifacts = appDependencies;
+          cargoArtifacts = if builtins.elem "aizome-kit" libraries then kitArtifacts else appDependencies;
           # Keep the app itself inert, but compile its real local dependencies
           # in the same LTO/feature context as the final app. Selecting the
           # libraries themselves as Cargo roots changes that context.
@@ -204,6 +225,7 @@ let
       tests ? "",
       checkPackages ? [ ],
       checkSetup ? "",
+      checkEnv ? checkEnvironment,
       postPatch ? "",
       extraInputs ? [ ],
       artifacts ? libraryArtifacts packages,
@@ -228,7 +250,7 @@ let
           rustPlatform.rust.rustc
         ];
         doCheck = tests != "";
-        preCheck = lib.optionalString (tests != "") (checkEnvironment + checkSetup);
+        preCheck = lib.optionalString (tests != "") (checkEnv + checkSetup);
         nativeCheckInputs = [ pkgs.dbus ];
         buildInputs = common.buildInputs ++ extraInputs;
         buildPhaseCargoCommand = "cargo build --locked --offline --target ${target} --profile ${profile} ${select packages} ${flags}";
@@ -374,6 +396,8 @@ let
     name = "compositor";
     checkPackages = [ "aizome-comp-process-tests" ];
     tests = "-p aizome-comp-process-tests -- --include-ignored";
+    # These headless process tests do not render font assets.
+    checkEnv = "export LD_LIBRARY_PATH=${lib.makeLibraryPath runtimeLibs}\n";
     checkSetup = ''
       # Test the shipped compositor without rebuilding it with test features.
       # Long TMPDIR also exercises the runtime socket's short-directory guard.
@@ -504,6 +528,7 @@ let
       yukimi = apps.yukimi;
       components = apps // commands // { inherit compositor session; };
       tests.libraries = libraryChecks;
+      compilerArtifacts = { inherit appDependencies compositorDependencies kitArtifacts; };
     };
     meta = meta // {
       description = "Aizome, Sekka's desktop environment, on Sukumo, its native Rust toolkit";
