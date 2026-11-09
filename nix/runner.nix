@@ -108,11 +108,12 @@ let
     "NIX_SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
     # Builds go to the host's daemon, as an untrusted user. The daemon takes
     # max-jobs and cores from its client, and Nix's default of one job at a
-    # time made a nightly build its thousands of derivations in sequence:
-    # Two slots allow up to 16 builds each, 16 cores per build, on the
-    # 128-thread builder. This keeps the former aggregate of 32 builds. Eight
-    # evaluator threads measured fastest (DEVELOPERS.md). Workflows set no
-    # NIX_CONFIG of their own, which would replace this whole value.
+    # time made a nightly build its thousands of derivations in sequence.
+    # Each of the two slots allows up to 16 builds, 16 cores per build, on
+    # the 128-thread builder: the former single runner's 32 when both are
+    # busy. Eight evaluator threads measured fastest (DEVELOPERS.md).
+    # Workflows set no NIX_CONFIG of their own, which would replace this
+    # whole value.
     "NIX_REMOTE=daemon"
     "NIX_CONFIG=experimental-features = nix-command flakes\nmax-jobs = 16\ncores = 16\neval-cores = 8"
     "ACTIONS_RUNNER_HOOK_JOB_STARTED=${admit}"

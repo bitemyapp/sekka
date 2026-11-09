@@ -2958,8 +2958,12 @@ Jobs run on wx-workstation (Ubuntu, Docker, Determinate Nix) through
 
 Know its limits. Builds happen in the host's daemon, so the job container's
 memory and CPU limits do not cap them. The daemon takes `max-jobs` and `cores`
-from its client: each slot permits 16 builds with 16 cores per build,
-keeping the previous aggregate allowance of 32 derivations across two slots.
+from its client. Nix's default, one at a time, made the first nightly build
+its 3,400 derivations in sequence, an hour and a half where most of them could
+run together. Each slot permits 16 builds with 16 cores per build, keeping the
+single runner's former allowance of 32 derivations when both slots are busy; a
+job running alone gets 16. Compare a lone nightly's check time with earlier
+nightlies (9 to 15 minutes in early November) before raising it.
 These are per-client limits, not a global host CPU or memory reservation.
 Each evaluator container retains its 32-CPU/64-GiB limits; build processes
 and VMs still need separate headroom on the host. Keep the initial deployment

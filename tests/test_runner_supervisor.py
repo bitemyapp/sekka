@@ -97,7 +97,6 @@ test ! -e "$FIXTURE/$SEKKA_RUNNER_SLOT-cache-fails"
             cache = str(self.root / "cache" / slot)
             self.assertEqual((self.root / (slot + "-cache")).read_text(), cache)
             self.assertIn(f"type=bind,src={cache},dst=/var/cache/sekka-ci-git,readonly", args)
-            self.assertIn(f"SEKKA_RUNNER_SLOT={slot}", args)
             self.assertIn("/nix/store:/nix/store:ro", args)
             self.assertIn("/nix/var/nix/daemon-socket:/nix/var/nix/daemon-socket:ro", args)
             self.assertIn("type=bind,src=/nix/var/nix/gcroots/sekka-ci,dst=/nix/var/nix/gcroots/sekka-ci", args)

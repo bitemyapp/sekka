@@ -58,7 +58,6 @@ while true; do
   echo "$name is waiting for a job."
   docker run --rm --name "$job" \
     --env-file "$secrets/job.env" \
-    --env "SEKKA_RUNNER_SLOT=$slot" \
     --user "$uid:$uid" \
     --cap-drop ALL \
     --security-opt no-new-privileges \
