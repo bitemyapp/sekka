@@ -64,6 +64,8 @@ let
   '';
 in
 pkgs.testers.runNixOSTest {
+  # Let the session module apply its shared system-package fixes.
+  node.pkgsReadOnly = false;
   name = "aizome-network-auth";
   nodes.machine = { ... }: {
     imports = [ self.nixosModules.default ];

@@ -8,6 +8,8 @@ let
   python = pkgs.python3.withPackages (ps: [ ps.pygobject3 ]);
 in
 pkgs.testers.runNixOSTest {
+  # Let the session module apply its shared system-package fixes.
+  node.pkgsReadOnly = false;
   name = "aizome-terminal-shortcuts";
   globalTimeout = 360;
   nodes.machine = { lib, ... }: {

@@ -43,6 +43,8 @@ let
     pkgs.runCommand "btvirt" { } "install -Dm755 ${bluez}/bin/btvirt $out/bin/btvirt";
 in
 pkgs.testers.runNixOSTest {
+  # Let the session module apply its shared system-package fixes.
+  node.pkgsReadOnly = false;
   name = "aizome-settings";
 
   nodes.machine =

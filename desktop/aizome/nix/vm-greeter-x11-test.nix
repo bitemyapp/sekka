@@ -2,6 +2,8 @@
 # before the next Wayland login, even while the user manager stays alive.
 { pkgs, self }:
 pkgs.testers.runNixOSTest {
+  # Let the session module apply its shared system-package fixes.
+  node.pkgsReadOnly = false;
   name = "aizome-greeter-x11";
   globalTimeout = 900;
   nodes.machine = { config, lib, ... }: {

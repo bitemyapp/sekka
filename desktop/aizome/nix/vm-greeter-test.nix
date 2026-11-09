@@ -10,6 +10,8 @@
 #     nix build .#aizome-checks.greeter -L
 { pkgs, self }:
 pkgs.testers.runNixOSTest {
+  # Let the session module apply its shared system-package fixes.
+  node.pkgsReadOnly = false;
   name = "aizome-greeter";
 
   nodes.machine =

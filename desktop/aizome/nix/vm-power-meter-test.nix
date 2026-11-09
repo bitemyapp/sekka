@@ -46,6 +46,8 @@ let
   '';
 in
 pkgs.testers.runNixOSTest {
+  # Let the session module apply its shared system-package fixes.
+  node.pkgsReadOnly = false;
   name = "aizome-power-meter";
   globalTimeout = 300;
   nodes.machine =

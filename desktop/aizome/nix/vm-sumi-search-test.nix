@@ -5,6 +5,8 @@
   package ? null,
 }:
 pkgs.testers.runNixOSTest {
+  # Let the session module apply its shared system-package fixes.
+  node.pkgsReadOnly = false;
   name = "aizome-sumi-search";
   globalTimeout = 400;
   extraPythonPackages = p: [ p.pillow ];

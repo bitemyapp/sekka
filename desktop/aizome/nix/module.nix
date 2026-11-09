@@ -196,7 +196,10 @@ let
 in
 {
   # The login screen, aizome-greeter on greetd (programs.aizome.greeter).
-  imports = [ ./greeter.nix ];
+  imports = [
+    ./greeter.nix
+    ../../../modules/gnome-keyring-fixes.nix
+  ];
 
   options.programs.aizome = {
     enable = lib.mkEnableOption "the Aizome desktop session";

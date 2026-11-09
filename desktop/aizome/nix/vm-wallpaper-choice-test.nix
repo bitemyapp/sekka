@@ -23,6 +23,8 @@ let
       '';
 in
 pkgs.testers.runNixOSTest {
+  # Let the session module apply its shared system-package fixes.
+  node.pkgsReadOnly = false;
   name = "aizome-wallpaper-choice";
   globalTimeout = 300;
   extraPythonPackages = ps: [ ps.pillow ];

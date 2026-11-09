@@ -5,6 +5,8 @@
   package ? null,
 }:
 pkgs.testers.runNixOSTest {
+  # Let the session module apply its shared system-package fixes.
+  node.pkgsReadOnly = false;
   name = "aizome-myaku-grouping";
   globalTimeout = 400;
   nodes.machine = { lib, ... }: {
