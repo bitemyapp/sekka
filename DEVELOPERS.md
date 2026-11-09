@@ -3192,7 +3192,8 @@ doesn't apply) as separate processes; `scripts/ci-retain.py` starts twelve, each
 with a 2 GiB initial heap rather than the job's 32 GiB and restarted past 4 GiB.
 Together they peaked at 25.6 GiB with eight workers and 48.6 GiB with sixteen.
 Builds go through the job's Determinate client, sixteen `nix build` processes
-of two builds each: the 32 at a time the image allows. On a runner image
+of one build each: the 16 at a time the image allows each of the builder's two
+slots (`max-jobs = 16`, above). On a runner image
 without nix-fast-build the wrapper runs `nix flake check` instead. The nightly
 still evaluates every output, with `nix flake check --no-build`.
 

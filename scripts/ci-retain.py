@@ -35,10 +35,10 @@ KEEP = {"main": (2, 1), "pr": (4, 2)}
 # How nix-fast-build evaluates and builds in a job, whose container has 64 GiB
 # (nix/runner.nix). Evaluation workers are separate processes, each restarted
 # past 4 GiB: all the checks peaked at 25.6 GiB together with 8 workers and
-# 48.6 GiB with 16 (DEVELOPERS.md). Each of the 16 build processes takes two
-# of the 32 concurrent builds the image's NIX_CONFIG allows one client. A
-# workflow's own options come later and win.
-FAST_BUILD = ["--eval-workers", "12", "--eval-max-memory-size", "4096", "-j", "16", "--option", "max-jobs", "2"]
+# 48.6 GiB with 16 (DEVELOPERS.md). The 16 build processes build one derivation
+# each: the 16 concurrent builds the image's NIX_CONFIG allows a slot, two of
+# which share the builder. A workflow's own options come later and win.
+FAST_BUILD = ["--eval-workers", "12", "--eval-max-memory-size", "4096", "-j", "16", "--option", "max-jobs", "1"]
 # Below this much free store space, keep only each group's newest successful
 # main generation, so the daemon's own collection (scripts/runner-host-setup.sh:
 # from 100 GiB free until 200 GiB are) can reclaim the rest.
