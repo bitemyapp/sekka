@@ -10,8 +10,16 @@ RECORD = "/run/user/1000/calamares-session-env"
 CUSTOM = "before=graphical"
 os.environ["OMP_THREAD_LIMIT"] = "1"
 
+# Fixed 1280x800 fixture: regions read alone, enlarged four times, as one
+# line of text, where sparse OCR of the whole frame fails. GDM 51's password
+# entry, border included, is too faint for it (its placeholder goes unread);
+# Tatami's 26-pixel top bar is too small (its clock's colon read as a digit,
+# "05345" for 05:45).
+PASSWORD_ENTRY = ("password", "320x50+480+446", "-negate")
+TATAMI_BAR = ("tatami-bar", "1280x26+0+0")
 
-def wait_text(machine, expected, timeout=60, regex=False):
+
+def wait_text(machine, expected, timeout=60, regex=False, crop=None):
     # Preserve the full frame and bound OCR work. The driver's sparse OCR
     # preprocessing is excessively slow on GDM's mostly empty dark screen.
     deadline = time.monotonic() + timeout
@@ -21,13 +29,11 @@ def wait_text(machine, expected, timeout=60, regex=False):
         machine.screenshot(filename)
         image = Path(machine.out_dir) / filename
         mode = "11"
-        if expected == "Password":
-            # Fixed 1280x800 fixture: read the actual GDM input placeholder,
-            # whose low contrast makes full-screen sparse OCR omit it. The
-            # crop is GDM 51's password entry, border included.
-            prepared = Path(machine.out_dir) / (machine.name + "-password-ocr.png")
-            subprocess.run(["@magick@", str(image), "-crop", "320x50+480+446", "+repage",
-                            "-resize", "400%", "-colorspace", "Gray", "-negate", "-normalize",
+        if crop:
+            name, geometry, *filters = crop
+            prepared = Path(machine.out_dir) / (machine.name + "-" + name + "-ocr.png")
+            subprocess.run(["@magick@", str(image), "-crop", geometry, "+repage",
+                            "-resize", "400%", "-colorspace", "Gray", *filters, "-normalize",
                             str(prepared)], check=True, timeout=10)
             image, mode = prepared, "7"
         text = subprocess.check_output(["@tesseract@", str(image), "stdout", "--psm", mode],
@@ -121,7 +127,7 @@ def password_login(machine):
     machine.wait_until_succeeds("pgrep -G gdm gnome-shell", timeout=90)
     wait_text(machine, "Demo", timeout=90)
     machine.send_key("ret")
-    wait_text(machine, "Password", timeout=30)
+    wait_text(machine, "Password", timeout=30, crop=PASSWORD_ENTRY)
     machine.send_chars("demo")
     machine.send_key("ret")
 
@@ -141,9 +147,10 @@ def wait_tatami(machine):
     machine.wait_until_succeeds(command("systemctl --user is-active wayland-session@tatami.target"), timeout=120)
     machine.wait_until_succeeds(command("systemctl --user is-active tatami-waybar.service"), timeout=90)
     assert environment(machine)["XDG_MENU_PREFIX"] == "hyprland-"
-    # The panel clock. OCR can misread an hour's leading zero ("B4:44" for
-    # 04:44), so look for the last digit of the hour and the minutes alone.
-    wait_text(machine, r"\d:[0-5]\d\b", timeout=90, regex=True)
+    # The panel clock, read from the bar alone. OCR can misread an hour's
+    # leading zero ("B4:44" for 04:44), so look for the last digit of the
+    # hour and the minutes alone.
+    wait_text(machine, r"\d:[0-5]\d\b", timeout=90, regex=True, crop=TATAMI_BAR)
 
 
 def switch(machine, path, label):

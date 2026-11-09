@@ -88,6 +88,24 @@ def descendants(pid):
     return found
 
 
+def shells(pid):
+    """The shells under pid, as ps names them."""
+    return [c for c in descendants(pid) if c in ("fish", "bash")]
+
+
+def wait_shells(what, pid, *expected):
+    """Wait for exactly `expected` under pid, and return them. A shell runs
+    another while it starts (fish's first prompt sources the system
+    environment through bash, as NixOS arranges), so a reading with more
+    shells is a moment of that, not the terminal's choice."""
+    def settled():
+        found = sorted(shells(pid))
+        if found != sorted(expected):
+            raise AssertionError(f"runs {found}")
+        return found
+    return until(what, settled)
+
+
 class Genkan:
     """Genkan's preview, as the kit's inspection files describe its window."""
 
@@ -197,9 +215,7 @@ with subtest("Hotaru and foot open fish, which came with Aizome"):
     # the handoff in another terminal.
     for argv, app_id in [("aizome-hotaru", "org.aizome.Hotaru"), ("env HOTARU_SHELL_PARENT=1 foot", "foot")]:
         w = launch(argv, app_id)
-        shells = until(f"{app_id}'s shell", lambda: [c for c in descendants(w["pid"]) if c in ("fish", "bash")])
-        print(app_id, "runs", shells)
-        assert shells == ["fish"], f"{app_id} runs {shells}"
+        print(app_id, "runs", wait_shells(f"{app_id} to run fish alone", w["pid"], "fish"))
         close(w)
 
 with subtest("Hotaru's explicit shell overrides the system's fish default"):
@@ -207,7 +223,7 @@ with subtest("Hotaru's explicit shell overrides the system's fish default"):
     # SHLVL=0 makes Bash's handoff eligible: Hotaru's parent marker must
     # preserve the explicitly selected Bash even in a fresh desktop session.
     w = launch("env SHLVL=0 aizome-hotaru --config-file /tmp/hotaru-bash.toml", "org.aizome.Hotaru")
-    until("the explicitly selected Bash", lambda: [c for c in descendants(w["pid"]) if c in ("fish", "bash")] == ["bash"])
+    wait_shells("the explicitly selected Bash", w["pid"], "bash")
     aizome.send_chars("echo $BASH_VERSION:$SHLVL > /tmp/hotaru-bash-state\n")
     aizome.wait_for_file("/tmp/hotaru-bash-state")
     version, level = aizome.succeed("cat /tmp/hotaru-bash-state").strip().split(":")
@@ -216,17 +232,17 @@ with subtest("Hotaru's explicit shell overrides the system's fish default"):
 
 with subtest("An open Hotaru follows the system shell choice while fish stays installed"):
     w = launch("env SHLVL=0 aizome-hotaru", "org.aizome.Hotaru")
-    until("the first Fish pane", lambda: [c for c in descendants(w["pid"]) if c in ("fish", "bash")] == ["fish"])
+    wait_shells("the first Fish pane", w["pid"], "fish")
     # Model the /etc file update performed by a system switch. Fish remains
     # installed, and even the old Bash handoff is still in effect in this VM.
     shell_file = "/etc/xdg/aizome/hotaru-shell"
     original = aizome.succeed("cat " + shell_file).strip()
     aizome.succeed("rm " + shell_file + "; printf '%s\\n' /run/current-system/sw/bin/bash > " + shell_file)
     aizome.send_key("alt-t")
-    until("a new Bash pane in the same Hotaru", lambda: sorted(c for c in descendants(w["pid"]) if c in ("fish", "bash")) == ["bash", "fish"])
+    wait_shells("a new Bash pane in the same Hotaru", w["pid"], "bash", "fish")
     aizome.succeed("printf '%s\\n' " + shlex.quote(original) + " > " + shell_file)
     aizome.send_key("alt-t")
-    until("the next pane to follow Fish again", lambda: sorted(c for c in descendants(w["pid"]) if c in ("fish", "bash")) == ["bash", "fish", "fish"])
+    wait_shells("the next pane to follow Fish again", w["pid"], "bash", "fish", "fish")
     close(w)
 
 with subtest("❖A selects all in Genkan's fields: QEMU's Alt, beside the space bar, is ❖"):
