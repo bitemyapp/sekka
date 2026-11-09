@@ -56,7 +56,7 @@ found type-cycle state retention edges in keyed and unkeyed identity; the
 regressions were recorded failing before their corrections and passing afterward.
 
 The combined core qualification in
-[`upstream/combined-core-cursor/summary.json`](../upstream/combined-core-cursor/summary.json)
+[`hotaru-benchmark-data/combined-core-cursor/summary.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/combined-core-cursor/summary.json)
 passes 136 tests in both debug and release, strict Clippy, and all 6,174 comparisons
 across this cursor slice and the earlier terminal fixtures. Its exact source and
 binary hashes include the integrated grapheme-charge and row-construction changes.
@@ -83,7 +83,7 @@ The focused regression fails on the previous source and passes after correction.
 Ten paired narrow/wide underline-style cases compare ordinary and overhang paint
 paths, expected cursor/neighbor pixels, opaque sprite overlap and exact partial
 damage. All 57 native tests and strict all-target package Clippy pass. The
-[qualification and patch](../upstream/cursor-decoration/README.md) preserve logs
+[qualification and patch](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/cursor-decoration/README.md) preserve logs
 and source identities; all 221 available source-manifest entries match the
 tested candidate. Its applied vendor files match too; five uncompiled patch
 inputs are intentionally absent from that isolated mirror. The earlier

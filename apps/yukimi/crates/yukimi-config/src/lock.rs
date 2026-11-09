@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{Error, Result};
+use crate::{Error, Result, flake_url::FlakeUrl, url};
 
 #[derive(Debug, Deserialize)]
 struct Raw {
@@ -54,22 +54,20 @@ pub struct Locked {
 
 impl Locked {
     /// A short description of where the source comes from:
-    /// `github:NixOS/nixpkgs/nixos-unstable`, `flakehub:NixOS/nixpkgs/0.1`.
+    /// `github:NixOS/nixpkgs/nixos-unstable`, `flakehub:NixOS/nixpkgs/0.1`,
+    /// `git+https://github.com/bitemyapp/sekka?ref=nightly`.
     pub fn describe(&self) -> String {
-        match (self.kind.as_str(), &self.owner, &self.repo) {
-            ("github" | "gitlab" | "sourcehut", Some(owner), Some(repo)) => {
-                let mut text = format!("{}:{owner}/{repo}", self.kind);
-                if let Some(reference) = &self.reference {
-                    text.push('/');
-                    text.push_str(reference);
-                }
-                text
-            }
-            _ => match &self.url {
-                Some(url) => flakehub(url).unwrap_or_else(|| url.clone()),
-                None => self.kind.clone(),
-            },
-        }
+        FlakeUrl::source(self).and_then(|source| source.render()).unwrap_or_else(|| {
+            self.url
+                .as_ref()
+                .map(|url| flakehub(url).unwrap_or_else(|| url.clone()))
+                .unwrap_or_else(|| self.kind.clone())
+        })
+    }
+
+    /// Branch support comes from typed source metadata, never its display label.
+    pub fn branch_changeable(&self) -> bool {
+        FlakeUrl::source(self).is_some()
     }
 
     /// The first characters of the revision, as Git shows them.
@@ -77,63 +75,93 @@ impl Locked {
         self.rev.as_deref().map(|rev| &rev[..rev.len().min(7)])
     }
 
-    /// A web page showing this revision, for GitHub sources.
-    pub fn web_url(&self) -> Option<String> {
-        match (self.kind.as_str(), &self.owner, &self.repo, &self.rev) {
-            ("github", Some(owner), Some(repo), Some(rev)) => {
-                let host = self.host.as_deref().unwrap_or("github.com");
-                Some(format!("https://{host}/{owner}/{repo}/commit/{rev}"))
+    /// The repository on github.com this source comes from, as `(owner,
+    /// repo)`: a `github:` source, or a Git one cloned from
+    /// `https://github.com/owner/repo`, as Sekka is so that each update
+    /// downloads only what changed.
+    pub fn github_repo(&self) -> Option<(String, String)> {
+        match self.kind.as_str() {
+            "github" if self.host.as_deref().unwrap_or("github.com").eq_ignore_ascii_case("github.com") => {
+                Some((self.owner.clone()?, self.repo.clone()?))
             }
+            "git" => url::github_repository(self.url.as_deref()?),
             _ => None,
         }
     }
 
-    /// Compare this pinned revision with a target in the same repository.
+    fn web_repo(&self) -> Option<(String, String, String)> {
+        if self.kind == "github" {
+            Some((self.host.clone().unwrap_or_else(|| "github.com".into()), self.owner.clone()?, self.repo.clone()?))
+        } else {
+            let (owner, repo) = self.github_repo()?;
+            Some(("github.com".into(), owner, repo))
+        }
+    }
+
+    /// A web page showing this revision, for GitHub sources.
+    pub fn web_url(&self) -> Option<String> {
+        let (host, owner, repo) = self.web_repo()?;
+        url::https(&host, &[&owner, &repo, "commit", self.rev.as_deref()?], &[])
+    }
+
+    /// Compare endpoints in one repository, without interpreting refs as URL syntax.
     pub fn compare_url(&self, target: &str) -> Option<String> {
-        if self.rev.as_deref()? == target || target.is_empty() {
+        let revision = self.rev.as_deref()?;
+        if revision == target || target.is_empty() {
             return None;
         }
-        let commit = self.web_url()?;
-        let (repo, revision) = commit.rsplit_once("/commit/")?;
-        // Two dots compare the endpoints themselves, including branch switches.
-        Some(format!("{repo}/compare/{revision}..{target}"))
+        let (host, owner, repo) = self.web_repo()?;
+        url::https(&host, &[&owner, &repo, "compare", &format!("{revision}..{target}")], &[])
     }
 }
 
 /// `https://flakehub.com/f/NixOS/nixpkgs/0.1` and the API's tarball URLs,
 /// as `flakehub:NixOS/nixpkgs/0.1`.
-fn flakehub(url: &str) -> Option<String> {
-    let rest = url
-        .strip_prefix("https://flakehub.com/f/")
-        .or_else(|| url.strip_prefix("https://api.flakehub.com/f/pinned/"))?;
-    let parts: Vec<&str> = rest.split('/').collect();
-    match parts.as_slice() {
-        [owner, project, version, ..] => {
-            Some(format!("flakehub:{owner}/{project}/{}", unescape(version.trim_end_matches(".tar.gz"))))
+struct FlakeHub {
+    owner: String,
+    project: String,
+    version: String,
+    pinned: bool,
+}
+
+impl FlakeHub {
+    fn parse(value: &str) -> Option<Self> {
+        let (host, parts) = url::https_parts(value)?;
+        if fluent_uri::Uri::parse(value).ok()?.query().is_some() {
+            return None;
         }
-        _ => None,
+        let parts: Vec<_> = parts.iter().map(String::as_str).collect();
+        let (owner, project, version, pinned) = match parts.as_slice() {
+            ["f", owner, project, version] if host == "flakehub.com" || host == "api.flakehub.com" => {
+                (*owner, *project, version.strip_suffix(".tar.gz").unwrap_or(version), false)
+            }
+            ["f", "pinned", owner, project, version, _tail @ ..] if host == "api.flakehub.com" => {
+                (*owner, *project, *version, true)
+            }
+            _ => return None,
+        };
+        if [owner, project, version].iter().any(|s| s.is_empty() || s.contains('/')) {
+            return None;
+        }
+        Some(Self { owner: owner.into(), project: project.into(), version: version.into(), pinned })
+    }
+
+    fn api_url(&self, endpoint: &str) -> Option<String> {
+        if self.pinned {
+            return None;
+        }
+        url::https("api.flakehub.com", &[endpoint, &self.owner, &self.project, &self.version], &[])
     }
 }
 
-/// Undo URL escapes: FlakeHub's `*` (any version) is written `%2A`.
-fn unescape(text: &str) -> String {
-    let bytes = text.as_bytes();
-    let mut out = Vec::with_capacity(bytes.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        let hex = bytes.get(i + 1..i + 3).and_then(|h| u8::from_str_radix(std::str::from_utf8(h).ok()?, 16).ok());
-        match (bytes[i], hex) {
-            (b'%', Some(byte)) => {
-                out.push(byte);
-                i += 3;
-            }
-            (byte, _) => {
-                out.push(byte);
-                i += 1;
-            }
-        }
-    }
-    String::from_utf8(out).unwrap_or_else(|_| text.to_owned())
+fn flakehub(url: &str) -> Option<String> {
+    let source = FlakeHub::parse(url)?;
+    Some(format!("flakehub:{}/{}/{}", source.owner, source.project, source.version))
+}
+
+/// FlakeHub's JSON API endpoint for an unpinned release source.
+pub fn flakehub_version_url(url: &str) -> Option<String> {
+    FlakeHub::parse(url)?.api_url("version")
 }
 
 /// One of the root's inputs.
@@ -364,12 +392,7 @@ impl Locked {
     /// For a FlakeHub source, the address that redirects to its newest
     /// release matching the version asked for: `https://api.flakehub.com/f/NixOS/nixpkgs/0.1`.
     pub fn flakehub_latest_url(&self) -> Option<String> {
-        let url = self.url.as_deref()?;
-        let rest =
-            url.strip_prefix("https://flakehub.com/f/").or_else(|| url.strip_prefix("https://api.flakehub.com/f/"))?;
-        let rest = rest.strip_suffix(".tar.gz").unwrap_or(rest);
-        (rest.split('/').count() == 3 && !rest.starts_with("pinned/"))
-            .then(|| format!("https://api.flakehub.com/f/{rest}"))
+        FlakeHub::parse(self.url.as_deref()?)?.api_url("f")
     }
 
     /// For a FlakeHub release, its commit count and revision, from the
@@ -382,8 +405,11 @@ impl Locked {
 
 /// The commit count and revision a pinned FlakeHub address names.
 pub fn flakehub_release(url: &str) -> Option<(u64, String)> {
-    let version = url.strip_prefix("https://api.flakehub.com/f/pinned/")?.split('/').nth(2)?;
-    let version = unescape(version);
+    let source = FlakeHub::parse(url)?;
+    if !source.pinned {
+        return None;
+    }
+    let version = source.version;
     let (number, rev) = version.split_once("+rev-")?;
     let count = number.rsplit('.').next()?.parse().ok()?;
     Some((count, rev.to_owned()))
@@ -392,6 +418,51 @@ pub fn flakehub_release(url: &str) -> Option<(u64, String)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn lock_source_urls_encode_metadata_and_preserve_transport_queries() {
+        let source = Locked {
+            kind: "git".into(),
+            url: Some("https://github.com/o/r?token=a%2Bb%26c".into()),
+            reference: Some("feature/x&y#z".into()),
+            ..Default::default()
+        };
+        let description = source.describe();
+        let parsed = FlakeUrl::parse(&description).unwrap();
+        assert_eq!(parsed.reference, source.reference);
+        assert_eq!(parsed.options["token"], "a+b&c");
+        assert!(source.branch_changeable());
+        let encoded = Locked { url: Some("https://GITHUB.com:443/%6f/r.git".into()), ..source.clone() };
+        assert_eq!(encoded.github_repo(), Some(("o".into(), "r".into())));
+        for url in ["https://github.com@elsewhere/o/r", "https://github.com/o%2Fr/other", "https://github.com:8443/o/r"]
+        {
+            assert_eq!(Locked { url: Some(url.into()), ..source.clone() }.github_repo(), None);
+        }
+        let pinned = Locked { rev: Some("abc".into()), ..source };
+        assert_eq!(
+            pinned.compare_url("feature/x&y#z").unwrap(),
+            "https://github.com/o/r/compare/abc..feature%2Fx%26y%23z"
+        );
+    }
+
+    #[test]
+    fn flakehub_urls_are_parsed_and_rebuilt_by_component() {
+        let source =
+            Locked { url: Some("https://flakehub.com/f/Nix%4fS/nixpkgs/%2A.tar.gz".into()), ..Default::default() };
+        assert_eq!(source.flakehub_latest_url().as_deref(), Some("https://api.flakehub.com/f/NixOS/nixpkgs/%2A"));
+        assert_eq!(
+            flakehub_version_url(source.url.as_deref().unwrap()).as_deref(),
+            Some("https://api.flakehub.com/version/NixOS/nixpkgs/%2A")
+        );
+        for url in [
+            "https://flakehub.com/f/o/r/*?pin=1",
+            "https://flakehub.com.evil/f/o/r/*",
+            "https://flakehub.com/f/o%2Fr/other/*",
+            "https://api.flakehub.com/f/pinned/o/r/1+rev-abc/hash/source.tar.gz",
+        ] {
+            assert_eq!(flakehub_version_url(url), None, "{url}");
+        }
+    }
 
     const LOCK: &str = r#"{
       "nodes": {
@@ -476,7 +547,48 @@ mod tests {
                 .as_deref(),
             Some("flakehub:NixOS/nixpkgs/0.1.912345+rev-f45c6f04")
         );
-        assert_eq!(unescape("100%"), "100%");
+        assert!(flakehub("https://flakehub.com/f/o/r/100%").is_none());
+    }
+
+    #[test]
+    fn git_sources_on_github() {
+        let rev = "2111c84ac0b4555518b9482ec436f813d26905ef";
+        let sekka = Locked {
+            kind: "git".into(),
+            url: Some("https://github.com/bitemyapp/sekka".into()),
+            reference: Some("nightly".into()),
+            rev: Some(rev.into()),
+            ..Default::default()
+        };
+        assert_eq!(sekka.describe(), "git+https://github.com/bitemyapp/sekka?ref=nightly");
+        assert_eq!(sekka.github_repo(), Some(("bitemyapp".into(), "sekka".into())));
+        assert_eq!(sekka.web_url().unwrap(), format!("https://github.com/bitemyapp/sekka/commit/{rev}"));
+        let tarball = Locked {
+            kind: "github".into(),
+            owner: Some("bitemyapp".into()),
+            repo: Some("sekka".into()),
+            rev: Some("5d1d471".into()),
+            ..Default::default()
+        };
+        // Moving from the tarball to Git still compares within one repository.
+        assert_eq!(tarball.github_repo(), sekka.github_repo());
+        assert_eq!(
+            tarball.compare_url(rev).unwrap(),
+            format!("https://github.com/bitemyapp/sekka/compare/5d1d471..{rev}")
+        );
+        for spelled in ["https://github.com/o/r.git", "https://github.com/o/r/"] {
+            let dotted = Locked { url: Some(spelled.into()), ..sekka.clone() };
+            assert_eq!(dotted.github_repo(), Some(("o".into(), "r".into())), "{spelled}");
+        }
+        for elsewhere in
+            ["https://example.org/o/r", "https://github.com/o", "https://github.com/o/r/tree/x", "file:///x"]
+        {
+            let other = Locked { url: Some(elsewhere.into()), ..sekka.clone() };
+            assert_eq!(other.github_repo(), None, "{elsewhere}");
+            assert_eq!(other.web_url(), None, "{elsewhere}");
+        }
+        let enterprise = Locked { host: Some("git.example.org".into()), ..tarball };
+        assert_eq!(enterprise.github_repo(), None);
     }
 
     #[test]

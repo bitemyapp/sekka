@@ -146,6 +146,11 @@ impl History {
 }
 
 pub(crate) fn same_repo(a: &Locked, b: &Locked) -> bool {
+    // One GitHub repository, whether fetched as a tarball or with Git, as
+    // Sekka moved from the first to the second.
+    if let (Some(a), Some(b)) = (a.github_repo(), b.github_repo()) {
+        return a == b;
+    }
     a.kind == b.kind
         && a.host.as_deref().unwrap_or("github.com") == b.host.as_deref().unwrap_or("github.com")
         && a.owner == b.owner
@@ -277,6 +282,23 @@ mod tests {
         history.active = Some(26);
         history.current = Some(26);
         assert!(history.link(&input("bbb"), None).unwrap().url.ends_with("aaa..bbb"));
+    }
+
+    #[test]
+    fn moving_sekka_to_git_still_compares_its_commits() {
+        let history = history();
+        // Updating moved Sekka from its GitHub tarball to a Git clone of the
+        // same repository.
+        let mut git = input("ccc");
+        let locked = git.locked.as_mut().unwrap();
+        (locked.kind, locked.owner, locked.repo) = ("git".into(), None, None);
+        locked.url = Some("https://github.com/bitemyapp/sekka".into());
+        let link = history.link(&git, None).unwrap();
+        assert_eq!(link.label, "Configured changes");
+        assert_eq!(link.url, "https://github.com/bitemyapp/sekka/compare/bbb..ccc");
+        // A Git source elsewhere is another repository, with no web page.
+        git.locked.as_mut().unwrap().url = Some("https://example.org/bitemyapp/sekka".into());
+        assert!(history.link(&git, None).is_none());
     }
 
     #[test]

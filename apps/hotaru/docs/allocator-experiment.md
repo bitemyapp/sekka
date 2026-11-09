@@ -19,7 +19,7 @@ modify host settings, call `malloc_trim` or force allocator collection.
 
 The final comparison uses `target-cpu=native`, thin LTO, one codegen unit, CPU 8,
 and seven fresh processes per history corpus. Input, retained row count and
-checksums agree with Ghostty. `upstream/allocator-experiment.json` records all
+checksums agree with Ghostty. [`hotaru-benchmark-data/allocator-experiment.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/allocator-experiment.json) records all
 samples, exact build and runtime policies, source/binary/corpus/library hashes,
 and the intermediate default-policy experiments.
 This measured checkpoint precedes the retained-width recycling fix; its hashes

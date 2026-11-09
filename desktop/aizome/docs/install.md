@@ -54,7 +54,7 @@ Add Sekka's flake and its Aizome module to the system's flake:
 
 ```nix
 {
-  inputs.sekka.url = "github:bitemyapp/sekka";
+  inputs.sekka.url = "git+https://github.com/bitemyapp/sekka?shallow=1";
   inputs.sekka.inputs.nixpkgs.follows = "nixpkgs";
   # …
   outputs = { nixpkgs, sekka, ... }: {

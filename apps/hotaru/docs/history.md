@@ -158,7 +158,7 @@ registration. Replacing locked atomic read-modify-write instructions with relaxe
 loads/stores on that owner preserves Atomic storage and snapshot thread safety.
 The isolated corrected checkpoint passed 98 core tests and strict Clippy.
 
-`upstream/budget-atomics/audit.json` identifies the exact candidate sources,
+[`hotaru-benchmark-data/budget-atomics/audit.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/budget-atomics/audit.json) identifies the exact candidate sources,
 patches, validation and raw same-host timing reports. In the controlled earlier
 source, removing the clean-path locked dirty-flag operation improved the
 Rust/Zig ratios from 1.645 to 1.207 for ASCII and 1.716 to 0.820 for styled text.
@@ -172,7 +172,7 @@ also retains configured Unicode-mode results and all source/binary hashes.
 
 ## Content capture measurements
 
-`upstream/content-capture.json` records the exact source and binary hashes for
+[`hotaru-benchmark-data/content-capture.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/content-capture.json) records the exact source and binary hashes for
 the owned capture and the eager `snapshot_all` implementation from checkpoint
 `13423440ef68b3633b41d267aea196d87b1007da`. Both use 80 columns and 24 visible
 rows; 120 columns would hit the then-existing 8-million-history-cell cap before
@@ -207,8 +207,8 @@ every row. It includes application access overhead and is not a codec-only
 microbenchmark. Process RSS comes from `/proc/self/status`; no allocator trim
 or forced collection is performed.
 
-`upstream/history-baseline.json` records the earlier uncompressed baseline.
-`upstream/history-compressed.json` compares compression enabled and disabled in
+[`hotaru-benchmark-data/history-baseline.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/history-baseline.json) records the earlier uncompressed baseline.
+[`hotaru-benchmark-data/history-compressed.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/history-compressed.json) compares compression enabled and disabled in
 the same Rust binary, plus the pinned Ghostty library. It includes source,
 binary, library and corpus hashes. The populated Rust implementation in the
 second report includes compact grapheme storage and strong-only row ownership.

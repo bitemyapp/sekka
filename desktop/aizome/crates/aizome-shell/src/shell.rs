@@ -1862,6 +1862,7 @@ impl Shell {
         }
         self.carried = Some(mark);
         crate::carry::save(&crate::carry::Carried {
+            version: crate::carry::VERSION,
             pid: std::process::id(),
             last,
             notes: self.notes.list.clone(),

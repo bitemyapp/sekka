@@ -80,6 +80,20 @@ host load and competing processes too; the lock cannot exclude unrelated jobs.
 Keep generated corpora and build outputs out of Git. The filesystem had roughly
 43 GiB available when setup began; check space before large builds.
 
+## Benchmark data
+
+Benchmark results, Ghostty comparisons, raw traces, experiment patches and
+audit receipts live in
+[bitemyapp/hotaru-benchmark-data](https://github.com/bitemyapp/hotaru-benchmark-data),
+not in Sekka: Sekka systems download Sekka's source to update, and no build
+reads them. Commit new evidence there first, then link it from these documents at
+that commit. Hotaru's tools take the paths they read and write as arguments;
+point them at a clone of that repository.
+
+`upstream/` keeps only what Hotaru's tests and tools read: the fixtures, the
+pins `ghostty.json` and `baseline-build.json`, the source inventory
+`modules.json`, and the license notices.
+
 ## Acceptance and remaining scope
 
 The machine-readable source inventory is `upstream/modules.json`. Most source
@@ -123,8 +137,8 @@ now retains observed OSC 133 cell/row markers through edits, history and reflow,
 and implements DECALN. Semantic shell hook emission, command navigation, complete semantic
 extensions, remote shell installation and broader terminfo remain open. The packaged
 checkpoint and four independent Wayland suites are recorded in
-[`upstream/nix-shell-checkpoint.json`](upstream/nix-shell-checkpoint.json) and
-[`upstream/native-shell/`](upstream/native-shell/).
+[`hotaru-benchmark-data/nix-shell-checkpoint.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/nix-shell-checkpoint.json) and
+[`hotaru-benchmark-data/native-shell`](https://github.com/bitemyapp/hotaru-benchmark-data/tree/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/native-shell).
 
 The [history memory audit](docs/history-budget-memory.md) compares equal
 retained content and documents Ghostty's per-page hyperlink-capacity loss.
@@ -194,7 +208,7 @@ The [cursor/cache package checkpoint](docs/cursor-cache-checkpoint.md) adds
 [direct recycled-row construction](docs/history-row-construction.md).
 The combined core passes 136 tests in both debug and release, strict Clippy,
 and 6,174 pinned-library comparisons; exact identities and scope are in
-[`upstream/combined-core-cursor/summary.json`](upstream/combined-core-cursor/summary.json).
+[`hotaru-benchmark-data/combined-core-cursor/summary.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/combined-core-cursor/summary.json).
 The package passes 44 native tests and six independent Wayland suites.
 The [frame harness](docs/frame-benchmark.md) measures actual private-compositor
 captures and records observer overhead separately. Its tool qualification and

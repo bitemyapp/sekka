@@ -54,7 +54,7 @@ also hold:
 - the DRM devices each application held open.
 
 On wx, Ghostty runs on the host's NVIDIA driver through
-[`wx-ghostty-env.json`](../upstream/gui-gpu-2026-10-30/wx/wx-ghostty-env.json):
+[`wx-ghostty-env.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/gui-gpu-2026-10-30/wx/wx-ghostty-env.json):
 
 - NVIDIA's EGL libraries;
 - `libwayland-server` and `libdrm` from Ghostty's own closure, which NVIDIA's
@@ -163,7 +163,7 @@ cursor/erase run, and 195–198 in Ghostty's 3.1 s one.
 
 ## Records
 
-[`upstream/gui-gpu-2026-10-30/`](../upstream/gui-gpu-2026-10-30/) has one
+[`hotaru-benchmark-data/gui-gpu-2026-10-30`](https://github.com/bitemyapp/hotaru-benchmark-data/tree/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/gui-gpu-2026-10-30) has one
 folder per machine. Each holds:
 
 - `summary.json`, from `tools/frame-summary.py`;

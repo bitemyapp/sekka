@@ -287,6 +287,17 @@ pub fn command_label(command: &str) -> String {
     }
 }
 
+/// The commands on keys, read as the compositor runs them
+/// (`SpawnCommand`), so that every one it would start is listed.
+pub fn commands(map: &BTreeMap<Chord, String>) -> Vec<(Chord, String)> {
+    map.iter()
+        .filter_map(|(c, a)| {
+            let command = aizome_config::bindings::SpawnCommand::parse(a)?;
+            Some((c.clone(), command.into_argv().join(" ")))
+        })
+        .collect()
+}
+
 /// What each chord does now: the defaults with `overrides` on top
 /// (`"none"` unbinds).
 pub fn effective(overrides: &BTreeMap<String, String>) -> BTreeMap<Chord, String> {
@@ -445,6 +456,19 @@ mod tests {
         let map = effective(&o);
         assert_eq!(map.get(&Chord::parse("Super+Return").unwrap()).map(String::as_str), Some("spawn kitty"));
         assert!(chords_for(&map, "minimise").iter().all(|c| c.to_config() != "Super+M"));
+    }
+
+    #[test]
+    fn commands_are_read_as_the_compositor_runs_them() {
+        let mut o = BTreeMap::new();
+        o.insert("Super+T".to_owned(), "spawn\tfoot  -e htop".to_owned());
+        o.insert("Super+Y".to_owned(), " spawn kitty".to_owned());
+        o.insert("Super+U".to_owned(), "spawned".to_owned());
+        let commands = commands(&effective(&o));
+        let find = |chord: &str| commands.iter().find(|(c, _)| c.to_config() == chord).map(|(_, a)| a.as_str());
+        assert_eq!(find("Super+T"), Some("foot -e htop"));
+        assert_eq!(find("Super+Y"), Some("kitty"));
+        assert_eq!(find("Super+U"), None);
     }
 
     #[test]

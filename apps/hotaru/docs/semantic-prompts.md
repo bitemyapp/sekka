@@ -53,7 +53,7 @@ protection, row markers and cursor state after feed/resize/compression steps.
   ASCII-store tests passed strict-provenance Miri on the same semantic-store
   implementation before the later DECALN/guard changes.
 
-See [`upstream/semantic-prompts/`](../upstream/semantic-prompts/) for exact
+See [`hotaru-benchmark-data/semantic-prompts`](https://github.com/bitemyapp/hotaru-benchmark-data/tree/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/semantic-prompts) for exact
 source/adapter hashes, runners, failures and raw results. The final semantic
 adapter is `ed0b72771b35ba894d2a97954085c1bc71104d13a7b6092c4df962c5eb59c816`.
 The actual Ghostty C adapter is
@@ -93,7 +93,7 @@ The first attempt used a whole-host compiler gate and aborted after 15 cases;
 its unguarded ED2 showed an indicative roughly twofold cursor cost. That failed
 attempt is retained and is not acceptance evidence.
 
-The [performance archive](../upstream/semantic-prompts/performance/summary.json)
+The [performance archive](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/semantic-prompts/performance/summary.json)
 includes losslessly compressed raw timings, all observations and exact source,
 toolchain, input and executable identities. No GUI, retained-memory or whole-app
 parity claim follows from these zero-history replay measurements. Mixed Unicode,

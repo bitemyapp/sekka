@@ -5,7 +5,7 @@ earlier checkpoint. The current default is 50,000,000 conservative logical
 bytes including active content, with independent row limits, decode-free byte
 pruning, compressed charge/layout sidecars and capture-retention estimates.
 See [the current policy and limits](history.md#live-history-budget) and
-`upstream/history-budget-validation.json` for the implementation's validation
+[`hotaru-benchmark-data/history-budget-validation.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/history-budget-validation.json) for the implementation's validation
 manifest. Physical RSS reclamation remains a separate, unclaimed property.
 
 This is a read-only follow-up for the next memory phase. It does not change

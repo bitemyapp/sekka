@@ -54,7 +54,7 @@ the [region package](region-checkpoint.md), before the later triangle expansion.
 Ghostty's ELF remains
 `ea356b4e5f33e0d0d55af99bb978afe419eed2a933edd31e457554db8970f61f`.
 
-The [summary](../upstream/region-frames/summary.json) and compressed raw evidence
+The [summary](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/region-frames/summary.json) and compressed raw evidence
 retain all keyboard events, stream/control counters, activity, captures, logs,
 calibrations and setup failures. The one-second static controls and 64-key
 samples are too short for strong idle-CPU or tail-latency conclusions. Earlier

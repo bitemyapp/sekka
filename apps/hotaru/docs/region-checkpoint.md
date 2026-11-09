@@ -17,7 +17,7 @@ Nix passed 62 native tests, with seven existing explicit ignores. All 236
 runtime source-manifest entries match the integrated worktree; 230 match the
 prepared source, with only the standalone lockfile and five applied Sidestep
 patches intentionally omitted. Installed resources, fonts and eight application
-license notices match. The [package record](../upstream/nix-region-checkpoint.json)
+license notices match. The [package record](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/nix-region-checkpoint.json)
 retains the derivation, source NAR and installed inventory.
 
 Clipboard/input, fonts, Find, shell integration, links, cursor, pixel scrolling
@@ -26,12 +26,12 @@ font/library overrides cleared. Clipboard checks retain exact transfers over
 1 MiB, stalled/cancelled readers and closed-pane races. All 42 copy-versus-redraw
 full-window RGBA captures match. All 1,736 sprite instances at scales 1, 1.25,
 2 and back to 1 match the pinned Ghostty ReleaseFast raster oracle, comparing
-5,593,392 RGB bytes. The [Braille audit](../upstream/sprites/braille/README.md)
+5,593,392 RGB bytes. The [Braille audit](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/sprites/braille/README.md)
 documents why its unchanged ReleaseSafe oracle encounters an overstrict
 upstream assertion and preserves that failure separately.
 
-The [runtime reports](../upstream/native-region-checkpoint/package-runtime.json)
-and [validation record](../upstream/native-region-checkpoint/validation.json)
+The [runtime reports](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/native-region-checkpoint/package-runtime.json)
+and [validation record](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/native-region-checkpoint/validation.json)
 retain exact identities and hashes. Full logs/captures remain in local
 `artifacts/hotaru-region-package-20261028/` and the workstation directory above.
 The initial command-line typo was corrected before the build; its log remains

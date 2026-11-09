@@ -3,7 +3,7 @@
 The combined product at `7c4e28a` passed its release Nix build and all eight
 native Wayland suites on `wx-workstation`. It includes 442 exact-raster sprites,
 decorated cursors and bounded partial-region pixel reuse. This checkpoint adds
-the eight [corner triangles](../upstream/sprites/geometric/README.md) to the
+the eight [corner triangles](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/sprites/geometric/README.md) to the
 previously qualified package.
 
 The output is `/nix/store/8nf099h9921x5jpgw625xvp7k72b3hns-hotaru-0.1.0`.
@@ -20,7 +20,7 @@ source-manifest entries match the integrated worktree; 235 match the prepared
 source, with only the standalone lockfile and five applied Sidestep patches
 intentionally omitted. Installed resources, fonts and all nine application
 notices match, including the exact Zig MIT notice for the safe numerical helper.
-The [package record](../upstream/nix-geometric-checkpoint.json) preserves the
+The [package record](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/nix-geometric-checkpoint.json) preserves the
 derivation, source NAR and installed inventory.
 
 Clipboard/input, fonts, Find, shell integration, links, cursor, pixel scrolling
@@ -32,8 +32,8 @@ and back to 1 match the pinned Ghostty ReleaseFast oracle: 5,696,496 RGB bytes
 exact. The separate pure triangle and shared-vector gates use ReleaseSafe;
 the earlier Braille assertion limitation remains documented with its raw failure.
 
-The [runtime report](../upstream/native-geometric-checkpoint/package-runtime.json)
-and [validation record](../upstream/native-geometric-checkpoint/validation.json)
+The [runtime report](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/native-geometric-checkpoint/package-runtime.json)
+and [validation record](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/native-geometric-checkpoint/validation.json)
 retain exact identities and hashes. Full logs and captures remain in local
 `artifacts/hotaru-geometric-package-20261028/` and the workstation directory
 above. Earlier package identities and measurements are unchanged.

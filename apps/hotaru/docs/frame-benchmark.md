@@ -127,7 +127,7 @@ builds the observer with `-Wall -Wextra -Werror`, runs synthetic tests against
 the **actual C decoder**, exercises the fixture through a real PTY, then runs
 an empty disposable software compositor. It launches neither terminal app.
 
-The current [qualification report](../upstream/frame-harness/check-3/result.json)
+The current [qualification report](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/frame-harness/check-3/result.json)
 passes 656 decoder cases across XRGB/ARGB/XBGR/ABGR, Y inversion, CRC/nonce
 mismatch, torn cells, row mismatch and bounds; 30 PTY writes including real
 key reads and startup resize repaint; eight controller cases requiring the
@@ -135,7 +135,7 @@ requested column count and agreement between fixture/decoded row counts; and
 seven persistent captures across stop/restart plus virtual-keyboard transport.
 Raw event logs and protocol, compiler, source and executable hashes accompany it.
 
-The [application calibration report](../upstream/frame-harness/calibration/summary.json)
+The [application calibration report](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/frame-harness/calibration/summary.json)
 then passed the full controller, one actual virtual-keyboard trial and all nine
 stream/control variants for both applications. It records exact configurations,
 matching font-file hashes, executable identities and original 1920×1440 captures:
@@ -252,7 +252,7 @@ independent sessions cannot escape cleanup. Requiring this fallback rejects
 the trial. It neither adopts nor signals unrelated host jobs. The
 `--self-test` exercises activity arithmetic, missing/irregular interval
 coverage and cleanup of a real orphan child in its own session. The
-[qualification receipt](../upstream/frame-harness/matrix-check/result.json)
+[qualification receipt](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/frame-harness/matrix-check/result.json)
 identifies the independently reviewed source.
 
 Local Intel measurements use the separate

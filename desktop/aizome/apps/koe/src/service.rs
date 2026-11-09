@@ -150,14 +150,22 @@ pub fn set_enabled(path: &Path, on: bool) -> Result<Config> {
 /// The compositor's action for starting or stopping dictation.
 pub const TOGGLE: &str = "spawn aizome-koe record toggle";
 pub const CANCEL: &str = "spawn aizome-koe record cancel";
-/// Koe before it was one of Aizome's apps ran as `koe`.
-const LEGACY: &str = "spawn koe record ";
 /// The shortcuts dictation is given when it has none: ❖⌥D and ❖⌥⎋.
 pub const DEFAULTS: [(&str, &str); 2] = [("Super+Alt+D", TOGGLE), ("Super+Alt+Escape", CANCEL)];
 
 /// The chords bound to `action`, as settings.toml writes them.
 pub fn chords(bindings: &BTreeMap<String, String>, action: &str) -> Vec<String> {
-    bindings.iter().filter(|(_, a)| a.as_str() == action).map(|(c, _)| c.clone()).collect()
+    let command = aizome_config::bindings::SpawnCommand::parse(action);
+    bindings
+        .iter()
+        .filter(|(_, a)| {
+            a.as_str() == action
+                || command
+                    .as_ref()
+                    .is_some_and(|command| aizome_config::bindings::SpawnCommand::parse(a).as_ref() == Some(command))
+        })
+        .map(|(c, _)| c.clone())
+        .collect()
 }
 
 /// A chord's modifiers and key, however it's written.
@@ -207,9 +215,15 @@ pub fn keycaps(chord: &str) -> Vec<String> {
 pub fn add_shortcuts(bindings: &mut BTreeMap<String, String>) -> bool {
     let mut changed = false;
     for action in bindings.values_mut() {
-        if let Some(rest) = action.strip_prefix(LEGACY) {
-            *action = format!("spawn aizome-koe record {rest}");
-            changed = true;
+        if let Some(mut command) = aizome_config::bindings::SpawnCommand::parse(action)
+            && command.program == "koe"
+            && command.args.first().is_some_and(|arg| arg == "record")
+        {
+            command.program = "aizome-koe".into();
+            if let Some(rendered) = command.render() {
+                *action = rendered;
+                changed = true;
+            }
         }
     }
     for (chord, action) in DEFAULTS {
@@ -240,6 +254,25 @@ pub fn ensure_shortcuts(path: &Path, tell: bool) -> Result<Vec<String>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shortcut_migration_uses_the_executors_command_grammar() {
+        let mut bindings = BTreeMap::from([
+            ("Ctrl+D".into(), "  spawn koe\t record  toggle  ".into()),
+            ("Ctrl+Escape".into(), "spawn\taizome-koe record\tcancel".into()),
+            ("Ctrl+X".into(), "spawn koe-helper record toggle".into()),
+            ("Ctrl+Y".into(), "spawn koe status".into()),
+            ("Ctrl+Z".into(), "spawn echo koe record toggle".into()),
+        ]);
+        let unchanged = bindings.clone();
+        assert!(add_shortcuts(&mut bindings));
+        assert_eq!(bindings["Ctrl+D"], TOGGLE);
+        assert_eq!(bindings.len(), unchanged.len(), "existing equivalent shortcuts need no defaults");
+        for key in ["Ctrl+Escape", "Ctrl+X", "Ctrl+Y", "Ctrl+Z"] {
+            assert_eq!(bindings[key], unchanged[key]);
+        }
+        assert!(!add_shortcuts(&mut bindings));
+    }
 
     #[test]
     fn a_failed_start_says_the_daemons_own_last_error() {

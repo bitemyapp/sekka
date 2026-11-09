@@ -9,7 +9,7 @@ This implements the previously reviewed
 [owner proposal](history-cell-owner-proposal.md) in
 `/home/callen/work/hotaru-page-owner-isolated`, locally and on `wx-workstation`.
 The proposal is retained as the historical, pre-implementation design.
-The [reviewable patch](../upstream/page-owner/owner-hoisted.patch) applies to the
+The [reviewable patch](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/page-owner/owner-hoisted.patch) applies to the
 same frozen baseline as the [safe prototype](history-page-prototype.md), before
 later saved-mode and REP changes. Reconstructing that baseline plus the patch
 matches every source hash in the final build manifest.
@@ -45,7 +45,7 @@ default and Tree Borrows models with strict provenance. Miri substitutes an
 immutable boxed cell slice for the OS mapping; the large OS-mapping boundary
 test is deliberately ignored there and passes natively. Miri does not validate
 the Linux mapping syscalls. Exact commands and logs are in
-[validation.json](../upstream/page-owner/validation.json).
+[validation.json](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/page-owner/validation.json).
 
 ## Paired measurements
 
@@ -55,7 +55,7 @@ changes neither metadata ordering nor logical capacity. Source SHA-256 is
 `2f8ad97e7e82766b99655fdc591658ad45a8ba40c59fb879bf9934a75a30f774`;
 binary SHA-256 is
 `7a08e8c182ed46704edace87d25a241b734eaa15bed9175982338ffff4eaa254`.
-The [final report](../upstream/page-owner/hoisted-report.json) contains source
+The [final report](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/page-owner/hoisted-report.json) contains source
 manifests, build flags, commands, load snapshots and all raw samples.
 
 Five fresh-process samples alternate candidate/baseline order on CPU 8 under
@@ -81,9 +81,9 @@ separately with their exact source files and build manifest.
 ## Sealing and restoration attribution
 
 Separate feature-gated clocks measure phases; they are diagnostic measurements,
-not acceptance timings. The [diagnostic report](../upstream/page-owner/profile-report.json),
-[instrumentation patch](../upstream/page-owner/diagnostic-hooks.patch) and
-[driver](../upstream/page-owner/profile-pages.py) preserve exact source and binary
+not acceptance timings. The [diagnostic report](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/page-owner/profile-report.json),
+[instrumentation patch](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/page-owner/diagnostic-hooks.patch) and
+[driver](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/page-owner/profile-pages.py) preserve exact source and binary
 hashes. Decode counters exclude the later validation digest.
 
 For the ASCII case, 124 blocks map 7,618,560 cell bytes. Median total sealing is

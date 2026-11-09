@@ -64,8 +64,14 @@ use yukimi_system::completion::{self, Receipt};
 use yukimi_system::setup::{Choice, Kind, Setup};
 
 const PROFILE: &str = "/nix/var/nix/profiles/system";
-/// pkexec starts programs with an almost empty environment.
-const PATH: &str = "/run/current-system/sw/bin:/run/wrappers/bin";
+/// pkexec starts programs with an almost empty environment. The package adds
+/// a Git of its own (`YUKIMI_HELPER_PATH`): Nix runs Git to fetch Sekka, and
+/// only installations with a developer application have one. Without it,
+/// Nix falls back to libgit2, which reports no progress.
+const PATH: &str = match option_env!("YUKIMI_HELPER_PATH") {
+    Some(path) => path,
+    None => "/run/current-system/sw/bin:/run/wrappers/bin",
+};
 /// Where each generation's configuration is kept, as `generation-<n>`.
 const SAVED: &str = yukimi_system::SAVED_CONFIGURATIONS;
 /// Files bigger than this aren't configuration, and aren't kept with it.

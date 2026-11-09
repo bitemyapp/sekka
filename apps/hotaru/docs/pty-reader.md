@@ -121,7 +121,7 @@ hashes, but `hotaru.nix` didn't. Both packages now import
 
 ## Records
 
-[`upstream/pty-reader/`](../upstream/pty-reader/) holds the records, from the
+[`hotaru-benchmark-data/pty-reader`](https://github.com/bitemyapp/hotaru-benchmark-data/tree/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/pty-reader) holds the records, from the
 GPU-mode [frame benchmark](frame-benchmark.md):
 
 - `wx/`:

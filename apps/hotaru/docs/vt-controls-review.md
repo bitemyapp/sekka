@@ -18,6 +18,6 @@ Final reviewed candidate source SHA-256:
 `0a11196551c74ef433ab789ebaa3dbbeff5d6dde1fb1f9df257a2c8c9195a7ab`.
 Replay SHA-256:
 `f7d18cd71666661c59775d6fbb2a75a7c58ced84971a7f9afcee078a75290684`.
-The replay hash was independently checked against the report and build manifest. Raw initial, intermediate and final reports plus the original generator are retained under `upstream/vt-controls-review/`. The intermediate report identifies its own binary; its source build manifest was superseded during the fixes and is not relabeled as the final source.
+The replay hash was independently checked against the report and build manifest. Raw initial, intermediate and final reports plus the original generator are retained under [`hotaru-benchmark-data/vt-controls-review`](https://github.com/bitemyapp/hotaru-benchmark-data/tree/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/vt-controls-review). The intermediate report identifies its own binary; its source build manifest was superseded during the fixes and is not relabeled as the final source.
 
 The audited SIMD dependency inventory contains 29 files, 137,200 logical bytes and 15 Rust files (232 KiB allocated on the local filesystem). It contains no macOS-specific code. AArch64 NEON supports Linux. Its two WASM implementation files are excluded by Rust configuration on Linux and retained unchanged with the audited upstream source; they are not macOS components.

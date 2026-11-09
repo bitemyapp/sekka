@@ -18,9 +18,15 @@ use serde::{Deserialize, Serialize};
 
 use crate::notifications::store::Notification;
 
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub const VERSION: u32 = 1;
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Carried {
+    /// Missing in the original format, the only one that can hold the
+    /// retired keyboard offers.
+    #[serde(default)]
+    pub version: u32,
     /// The shell that wrote it.
     pub pid: u32,
     /// Written as that shell let go (it lost the bus name to a new shell,
@@ -34,23 +40,42 @@ pub struct Carried {
     pub notes_open: Vec<String>,
 }
 
+impl Default for Carried {
+    fn default() -> Self {
+        Self {
+            version: VERSION,
+            pid: 0,
+            last: false,
+            notes: Vec::new(),
+            next_id: 0,
+            folded: Vec::new(),
+            notes_open: Vec::new(),
+        }
+    }
+}
+
 impl Carried {
     /// Retire the old automatic keyboard offers, including a previous
     /// shell's final handoff. They aren't actionable history: setup is
     /// optional, and their shell-local actions weren't carried with them.
+    /// Nothing posts them any more, so only state from before versions can
+    /// hold them, and a versioned notification is never judged by its text.
     pub fn for_restore(mut self) -> Self {
-        self.notes.retain(|n| {
-            !(n.app_name == "Settei"
-                && n.summary.starts_with("Set up ")
-                && n.summary.ends_with('?')
-                && n.body == "Press the key beside its space bar, and Settei suggests where ❖ goes on it."
-                && n.actions
-                    == [
-                        ("default".into(), "Set Up…".into()),
-                        ("set-up".into(), "Set Up…".into()),
-                        ("same".into(), "Same as Others".into()),
-                    ])
-        });
+        if self.version == 0 {
+            self.notes.retain(|n| {
+                !(n.app_name == "Settei"
+                    && n.summary.starts_with("Set up ")
+                    && n.summary.ends_with('?')
+                    && n.body == "Press the key beside its space bar, and Settei suggests where ❖ goes on it."
+                    && n.actions
+                        == [
+                            ("default".into(), "Set Up…".into()),
+                            ("set-up".into(), "Set Up…".into()),
+                            ("same".into(), "Same as Others".into()),
+                        ])
+            });
+            self.version = VERSION;
+        }
         self
     }
 }
@@ -67,7 +92,11 @@ pub fn path() -> PathBuf {
 pub fn load() -> Option<Carried> {
     let text = std::fs::read_to_string(path()).ok()?;
     match serde_json::from_str::<Carried>(&text) {
-        Ok(c) => Some(fitted(c)),
+        Ok(c) if c.version <= VERSION => Some(fitted(c)),
+        Ok(c) => {
+            log::warn!("{}: unsupported shell state version {}", path().display(), c.version);
+            None
+        }
         Err(e) => {
             log::warn!("{}: {e}", path().display());
             None
@@ -140,6 +169,27 @@ mod tests {
     use super::*;
 
     #[test]
+    fn versioned_state_is_never_judged_by_its_text() {
+        let c = Carried {
+            notes: vec![Notification {
+                app_name: "Settei".into(),
+                summary: "Set up keyboard?".into(),
+                body: "Press the key beside its space bar, and Settei suggests where ❖ goes on it.".into(),
+                actions: vec![
+                    ("default".into(), "Set Up…".into()),
+                    ("set-up".into(), "Set Up…".into()),
+                    ("same".into(), "Same as Others".into()),
+                ],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let restored = serde_json::from_str::<Carried>(&serde_json::to_string(&c).unwrap()).unwrap().for_restore();
+        assert_eq!(restored.notes, c.notes, "an application's notification stays, whatever it says");
+        assert_eq!(restored.version, VERSION);
+    }
+
+    #[test]
     fn restoring_retires_only_the_old_keyboard_offers() {
         let offer = Notification {
             app_name: "Settei".into(),
@@ -160,8 +210,11 @@ mod tests {
         for (i, n) in notes.iter_mut().enumerate() {
             n.id = i as u32 + 1;
         }
-        let c = Carried { notes, next_id: 10, ..Default::default() };
-        let restored = serde_json::from_str::<Carried>(&serde_json::to_string(&c).unwrap()).unwrap().for_restore();
+        let c = Carried { version: 0, notes, next_id: 10, ..Default::default() };
+        let mut legacy = serde_json::to_value(&c).unwrap();
+        legacy.as_object_mut().unwrap().remove("version");
+        let restored = serde_json::from_value::<Carried>(legacy).unwrap().for_restore();
+        assert_eq!(restored.version, VERSION);
         assert_eq!(restored.notes, c.notes[2..], "unrelated notifications keep their content and IDs");
         assert_eq!(restored.next_id, 10, "retired IDs must not be reused");
         assert_eq!(restored.clone().for_restore(), restored, "migration is idempotent");
@@ -208,6 +261,7 @@ mod tests {
             7,
         );
         let c = Carried {
+            version: VERSION,
             pid: 42,
             last: true,
             notes: store.list.clone(),

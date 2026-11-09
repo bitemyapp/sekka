@@ -23,7 +23,7 @@ pub(crate) fn head(tab: &str, body: &str, class: &str) -> String {
 }
 
 const NIXOS_FLAKE: &str = r#"{
-  inputs.sekka.url = "github:bitemyapp/sekka";
+  inputs.sekka.url = "git+https://github.com/bitemyapp/sekka?shallow=1";
   outputs = { nixpkgs, sekka, ... }: {
     nixosConfigurations.example = nixpkgs.lib.nixosSystem {
       modules = [

@@ -67,6 +67,11 @@ fn attr_name(attr: &ast::Attr) -> Option<String> {
     }
 }
 
+/// Literal attribute names, decoded by the Nix AST (never split on dots).
+pub(crate) fn attr_path(path: &ast::Attrpath) -> Option<Vec<String>> {
+    path.attrs().map(|attr| attr_name(&attr)).collect()
+}
+
 /// A string literal without interpolation, unescaped.
 fn plain_string(string: &ast::Str) -> Option<String> {
     let mut out = String::new();
@@ -83,7 +88,7 @@ fn plain_string(string: &ast::Str) -> Option<String> {
 fn find_in(entries: &impl HasEntry, path: &[&str]) -> Option<ast::Expr> {
     for entry in entries.attrpath_values() {
         let Some(attrpath) = entry.attrpath() else { continue };
-        let names: Option<Vec<String>> = attrpath.attrs().map(|a| attr_name(&a)).collect();
+        let names = attr_path(&attrpath);
         let Some(names) = names else { continue };
         if names.len() > path.len() || names.iter().zip(path).any(|(a, b)| a != b) {
             continue;
