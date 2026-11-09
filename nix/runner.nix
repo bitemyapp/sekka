@@ -22,12 +22,6 @@
 }:
 let
   repository = "bitemyapp/sekka";
-  labels = [
-    "self-hosted"
-    "linux"
-    "x64"
-    "sekka-builder"
-  ];
   # Jobs' user and group: nobody else's on the builder, apart from its Nix
   # build users' ids (from 30000), and reserved there by
   # scripts/runner-host-setup.sh.
@@ -114,12 +108,14 @@ let
     "NIX_SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
     # Builds go to the host's daemon, as an untrusted user. The daemon takes
     # max-jobs and cores from its client, and Nix's default of one job at a
-    # time made a nightly build its thousands of derivations in sequence:
-    # up to 32 at once here, 16 cores each, on the 128-core builder. Eight
-    # evaluator threads measured fastest (DEVELOPERS.md). Workflows set no
-    # NIX_CONFIG of their own, which would replace this whole value.
+    # time made a nightly build its thousands of derivations in sequence.
+    # Each of the two slots allows up to 16 builds, 16 cores per build, on
+    # the 128-thread builder: the former single runner's 32 when both are
+    # busy. Eight evaluator threads measured fastest (DEVELOPERS.md).
+    # Workflows set no NIX_CONFIG of their own, which would replace this
+    # whole value.
     "NIX_REMOTE=daemon"
-    "NIX_CONFIG=experimental-features = nix-command flakes\nmax-jobs = 32\ncores = 16\neval-cores = 8"
+    "NIX_CONFIG=experimental-features = nix-command flakes\nmax-jobs = 16\ncores = 16\neval-cores = 8"
     "ACTIONS_RUNNER_HOOK_JOB_STARTED=${admit}"
   ];
 
@@ -139,74 +135,24 @@ let
     };
   };
 
-  # The supervisor: one job's runner at a time, for as long as Docker keeps
-  # it running.
+  # Two interchangeable instances of this image. Each serializes only
+  # its own jobs and Git cache; both reuse the host's Nix store and GC roots.
   supervisor = pkgs.writeShellApplication {
     name = "sekka-runner-supervisor";
     runtimeInputs = with pkgs; [
+      bash
       coreutils
       curl
       jq
       git
+      util-linux
       docker-client
     ];
-    text = ''
-      token=/run/secrets/token
-      secrets=$(mktemp -d)
-      trap 'rm -rf "$secrets"' EXIT
-      while true; do
-        # A job that outlived an earlier supervisor finishes first.
-        docker wait sekka-runner-job >/dev/null 2>&1 || true
-        # The job sees these Git objects read-only. Refresh only between jobs,
-        # so pruning/repacking cannot invalidate an active clone's alternates.
-        if ! timeout 180 ${pkgs.bash}/bin/bash ${../scripts/runner-git-cache.sh} refresh; then
-          echo "Git object cache refresh failed; checkout will fetch missing objects."
-        fi
-        if [ ! -r "$token" ]; then
-          echo "No token at $token yet; checking again in a minute."
-          sleep 60
-          continue
-        fi
-        # The token stays in files: never on a command line, where other
-        # users of the host could read it.
-        printf 'Authorization: Bearer %s\n' "$(cat "$token")" > "$secrets/headers"
-        name="wx-workstation-$(date -u +%Y%m%dT%H%M%S)"
-        request=$(jq -cn --arg name "$name" --argjson labels '${builtins.toJSON labels}' \
-          '{name: $name, runner_group_id: 1, labels: $labels, work_folder: "_work"}')
-        if ! curl -fsS -X POST \
-          -H @"$secrets/headers" \
-          -H "Accept: application/vnd.github+json" \
-          -H "X-GitHub-Api-Version: 2022-11-28" \
-          --data "$request" \
-          https://api.github.com/repos/${repository}/actions/runners/generate-jitconfig \
-          | jq -er '"RUNNER_JITCONFIG=" + .encoded_jit_config' > "$secrets/job.env"; then
-          echo "GitHub did not register a runner; trying again in a minute."
-          sleep 60
-          continue
-        fi
-        echo "$name is waiting for a job."
-        docker run --rm --name sekka-runner-job \
-          --env-file "$secrets/job.env" \
-          --user ${toString uid}:${toString uid} \
-          --cap-drop ALL \
-          --security-opt no-new-privileges \
-          --read-only \
-          --tmpfs /tmp:rw,exec,nosuid,nodev,size=8g \
-          --mount type=volume,dst=/home/runner \
-          --volume /nix/store:/nix/store:ro \
-          --volume /nix/var/nix/daemon-socket:/nix/var/nix/daemon-socket:ro \
-          --mount type=bind,src=/nix/var/nix/gcroots/sekka-ci,dst=/nix/var/nix/gcroots/sekka-ci \
-          --env SEKKA_CI_ROOTS=/nix/var/nix/gcroots/sekka-ci \
-          --mount type=bind,src=/var/cache/sekka-ci-git,dst=/var/cache/sekka-ci-git,readonly \
-          --pids-limit 16384 \
-          --memory 64g \
-          --cpus 32 \
-          sekka-runner:latest \
-          || echo "$name ended with status $?."
-        rm -f "$secrets/job.env"
-        sleep 5
-      done
-    '';
+    runtimeEnv = {
+      SEKKA_RUNNER_UID = toString uid;
+      SEKKA_RUNNER_GIT_CACHE_SCRIPT = "${../scripts/runner-git-cache.sh}";
+    };
+    text = builtins.readFile ../scripts/runner-supervisor.sh;
   };
 
   supervisorImage = pkgs.dockerTools.buildLayeredImage {

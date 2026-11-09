@@ -165,6 +165,15 @@ class RunnerAdmission(unittest.TestCase):
         self.assertFalse(self.admitted("pull_request_target", ref="refs/pull/233/merge"))
         self.assertFalse(self.admitted("pull_request_target", repository="other/sekka"))
 
+    def test_every_main_workflow_is_admitted(self):
+        # Both runner slots share this policy: it has no slot input.
+        for event in ["push", "schedule", "workflow_dispatch"]:
+            for workflow in ["pr", "cache", "nightly", "sites", "release", "yuki"]:
+                with self.subTest(event=event, workflow=workflow):
+                    self.assertTrue(self.admitted(event, workflow=
+                        f"bitemyapp/sekka/.github/workflows/{workflow}.yml@refs/heads/main"))
+            self.assertFalse(self.admitted(event, repository="other/sekka"))
+
 
 if __name__ == "__main__":
     unittest.main()
