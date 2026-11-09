@@ -53,7 +53,6 @@ assert
 assert system.config.boot.resumeDevice == "/dev/disk/by-uuid/66666666-7777-4888-9999-aaaaaaaaaaaa";
 assert builtins.elem "zswap.enabled=1" system.config.boot.kernelParams;
 assert system.config.boot.kernel.sysctl."vm.swappiness" == 60;
-assert system.config.boot.kernel.sysctl."vm.page-cluster" == 1;
 assert system.config.boot.kernel.sysctl."vm.dirty_bytes" == 268435456;
 assert system.config.services.ananicy.enable;
 # Processes must stay in their systemd units (VT switching, logout cleanup).

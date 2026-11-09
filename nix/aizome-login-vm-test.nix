@@ -41,15 +41,6 @@ pkgs.testers.runNixOSTest {
         password = "demo@#";
         linger = true;
       };
-      # Another account whose user manager runs without anyone signed in,
-      # as a build or agent account's would: it must get no reserve. Its
-      # nologin shell keeps it off the login screen, which stays one person.
-      users.users.other = {
-        isNormalUser = true;
-        uid = 1001;
-        linger = true;
-        shell = "/run/current-system/sw/bin/nologin";
-      };
       virtualisation = {
         memorySize = 4096;
         cores = 4;
@@ -64,10 +55,10 @@ pkgs.testers.runNixOSTest {
       environment.systemPackages = [
         (import ./libsecret-dh-padding.nix { inherit (pkgs) lib libsecret; })
       ];
-      # Each service's MemoryLow in MiB as the module applies it, for the
-      # test to compare with systemd's and the kernel's.
+      # Each service's budget in MiB, for the test to compare with
+      # systemd's and the kernel's.
       environment.etc."aizome-memory-reserve.json".text =
-        builtins.toJSON config.programs.aizome.effectiveMemoryReserve;
+        builtins.toJSON config.programs.aizome.memoryReserve;
     };
   testScript = ''
     import json
@@ -136,8 +127,7 @@ pkgs.testers.runNixOSTest {
     with subtest("the services the desktop waits on keep their reclaim budgets"):
         # A service's MemoryLow counts only as far as every ancestor grants
         # it, so the user slices, the user manager and system.slice carry
-        # the sums; the login session rule grants demo's user manager and
-        # slice theirs. Read the kernel's view of them after a real login.
+        # the sums. Read the kernel's view of them after a real login.
         mib = 1024 * 1024
         reserve = json.loads(machine.succeed("cat /etc/aizome-memory-reserve.json"))
         session, system = reserve["session"], reserve["system"]
@@ -148,16 +138,6 @@ pkgs.testers.runNixOSTest {
             assert low(path) == sum(session.values()) * mib, (path, low(path))
         assert low("system.slice") == sum(system.values()) * mib, low("system.slice")
         assert low(manager + "/app.slice") == 0
-        # The runtime property leaves the user manager its delegation.
-        assert "memory" in machine.succeed(f"cat /sys/fs/cgroup/{manager}/cgroup.subtree_control").split()
-        # A unit bound to the session takes it back when the session ends.
-        display = machine.succeed("loginctl show-user demo -p Display --value").strip()
-        machine.succeed(f"systemctl is-active aizome-memory-reserve-{display}.service")
-        # A lingering account nobody is signed in to claims none of it.
-        other = "user.slice/user-1001.slice"
-        machine.wait_until_succeeds(f"test -d /sys/fs/cgroup/{other}/user@1001.service", timeout=60)
-        assert low(other) == 0, low(other)
-        assert low(other + "/user@1001.service") == 0
         assert low(manager + "/session.slice/aizome.service") == session["aizome.service"] * mib
         assert low("system.slice/systemd-logind.service") == system["systemd-logind.service"] * mib
         for unit, size in session.items():
@@ -244,57 +224,5 @@ pkgs.testers.runNixOSTest {
         for name in (*keys, "AIZOME_ENVIRONMENT_KEYS"):
             assert not any(line.startswith(name + "=") for line in manager), manager
         machine.screenshot("keyboard-environment-cleared-at-logout")
-
-    with subtest("the reserve leaves demo's lingering manager at logout, and the greeter gets none"):
-        machine.wait_until_succeeds("test $(cat /sys/fs/cgroup/user.slice/user-1000.slice/memory.low) = 0", timeout=30)
-        assert low("user.slice/user-1000.slice/user@1000.service") == 0
-        greeter = machine.succeed("id -u greeter").strip()
-        assert low(f"user.slice/user-{greeter}.slice") == 0
-        assert low("system.slice") == sum(system.values()) * mib
-
-    with subtest("normal logout releases the last local session's reserve despite surviving jobs"):
-        # Real login PAM sessions in ptys. Each leaves a nohup job in its
-        # scope: NixOS's default KillUserProcesses=false keeps that scope
-        # active after logout, so BindsTo alone cannot release the reserve.
-        login = machine.succeed("command -v login").strip()
-        def console_login(name):
-            commands = (
-                f"echo $XDG_SESSION_ID >/tmp/{name}-session\n"
-                f"nohup sleep 600 >/tmp/{name}-background.log 2>&1 &\n"
-                f"echo $! >/tmp/{name}-background-pid\n"
-                f"while [ ! -e /tmp/{name}-logout ]; do sleep 0.1; done\n"
-                "exit\n"
-            )
-            machine.succeed("printf %s " + shlex.quote(commands) + f" >/tmp/{name}-commands")
-            command = f"script -qec '{login} -f demo' /tmp/{name}.log </tmp/{name}-commands"
-            machine.succeed(f"systemd-run --unit={name} --no-block /bin/sh -c " + shlex.quote(command))
-            machine.wait_until_succeeds(f"test -s /tmp/{name}-background-pid", timeout=30)
-            return machine.succeed(f"cat /tmp/{name}-session").strip()
-
-        def console_logout(name, session):
-            machine.succeed(f"touch /tmp/{name}-logout")
-            machine.wait_until_fails(f"systemctl is-active --quiet {name}.service", timeout=30)
-            assert machine.succeed(f"loginctl show-session {session} -p State --value").strip() == "closing"
-            machine.succeed(f"systemctl is-active session-{session}.scope")
-            machine.succeed(f"kill -0 $(cat /tmp/{name}-background-pid)")
-
-        first = console_login("reserve-first")
-        second = console_login("reserve-second")
-        session_sum = sum(reserve["session"].values()) * mib
-        for path in ("user.slice/user-1000.slice", "user.slice/user-1000.slice/user@1000.service"):
-            assert low(path) == session_sum, path
-        console_logout("reserve-first", first)
-        # The other local login still needs its reserve.
-        for path in ("user.slice/user-1000.slice", "user.slice/user-1000.slice/user@1000.service"):
-            assert low(path) == session_sum, path
-        console_logout("reserve-second", second)
-        for path in ("user.slice/user-1000.slice", "user.slice/user-1000.slice/user@1000.service"):
-            assert low(path) == 0, path
-        # Stop the surviving jobs in the disposable VM; the bound units'
-        # later cleanup must remain harmless after PAM already released it.
-        machine.succeed(f"systemctl stop session-{first}.scope session-{second}.scope")
-        for session in (first, second):
-            machine.wait_until_fails(f"systemctl is-active --quiet aizome-memory-reserve-{session}.service", timeout=30)
-        assert low("user.slice/user-1000.slice/user@1000.service") == 0
   '';
 }

@@ -13,27 +13,12 @@ bounds. Exceptions to the budget are written up with their reasons.
 ## Responsiveness under memory pressure
 
 CPU frame cost is not input latency: a swapped-out compositor can miss seconds
-of input despite high CPU weight. The NixOS module keeps the session's existing
-CPU/I/O weights and gives each service the desktop waits on a best-effort
-`MemoryLow` reserve sized to what it keeps resident
-(`programs.aizome.memoryReserve`): 1 GiB for the compositor, shell and
-Xwayland, smaller ones for audio, the input method, the portals and the
-session bus, and, among system services, logind, udev, the system bus,
-RealtimeKit, BlueZ and systemd-oomd. Their slices, and the user manager of
-each person signed in at the machine, get the sums, since a reserve counts only
-as far as every ancestor grants it. Reclaim
-takes applications' pages first, while unused RAM stays available to
-workloads. It does not pin memory or guarantee that a session survives
-exhaustion.
-
-This protection does not introduce earlier OOM killing or hard workload caps.
-Unprotected workloads may reclaim more and run more slowly; Sekka's existing
-last-resort oomd policy remains unchanged. The policy, override points and
-validation limits are documented in
+of input despite high CPU weight. The NixOS module gives the compositor, shell,
+audio, portals and the system services they wait on best-effort `MemoryLow`
+reserves (`programs.aizome.memoryReserve`), described in
 [Sekka's tuning guide](../../../docs/tuning.md#keeping-the-desktop-resident).
-Inspect PSI, swap traffic and the compositor's stall warnings alongside frame
-statistics; neither the frame-budget measurements below nor CPU weights alone
-certify wall-clock responsiveness under memory or GPU contention.
+The frame-budget measurements below don't cover memory or GPU contention: for
+those, read PSI, swap traffic and the compositor's stall warnings.
 
 ## At a glance
 
