@@ -25,12 +25,15 @@ COPY_UPSTREAM_WRITABLE = re.compile(
     rb"await [\w$]+\(`chmod`,\[`-R`,`u\+w`,(?P=dest)\]\),"
 )
 # The newer webpack bundle exposes fs through an accessor and uses quoted
-# strings. Keep the destination backreference and the complete permission
-# repair sequence so unrelated copies cannot match.
+# strings. Upstream's repair first made the destination's directories writable
+# with a helper call; since ChatGPT 26.1103 it only runs chmod after the copy.
+# Take that leading call only when it names the copy's destination, and keep
+# the complete chmod so unrelated copies cannot match.
 COPY_UPSTREAM_ACCESSOR = re.compile(
-    rb"await [\w$]+\((?P<dest>[\w$]+)\),"
+    rb"(?:await [\w$]+\((?P<repaired>[\w$]+)\),"
+    rb"(?=await [\w$]+\(\)\.cp\([\w$]+\.cwd,(?P=repaired),))?"
     rb"await [\w$]+\(\)\.cp\((?P<config>[\w$]+)\.cwd,"
-    rb"(?P=dest),\{recursive:!0\}\),"
+    rb"(?P<dest>[\w$]+),\{recursive:!0\}\),"
     rb'await [\w$]+\("chmod",\["-R","\+w",(?P=dest)\]\),'
 )
 
