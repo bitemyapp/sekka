@@ -43,7 +43,7 @@ explicitly (and Chanoma also looks in NixOS's profiles).
 | Module | |
 |---|---|
 | `pad/` | Controllers from `/dev/input`: hot-plug through inotify, the exclusive grab, player slots, mappings, menu navigation with repeat, batteries, rumble |
-| `retro/` | The libretro frontend: the C interface, the host (callbacks, environment, core options), the cores' log (`log.c`, in C for printf's arguments), video, OpenGL for the cores that draw with it, sound, the consoles' BIOS images, and a session thread per game |
+| `retro/` | The libretro frontend: the C interface, the host (callbacks, environment, core options), the cores' log (`log.c`, in C for printf's arguments), the calls into cores with their C++ exceptions caught (`guard.cpp`), video, OpenGL for the cores that draw with it, sound, the consoles' BIOS images, and a session thread per game |
 | `browser.rs` | Services in Chrome: profiles, kiosk flags, the window followed through the compositor's IPC, input through it |
 | `devtools.rs` | Services kept to their sites, and Chanoma's keyboard asking and typing on their pages, over the browser's DevTools pipe |
 | `services.rs` | The services, the sites each one's pages may go to, and which need Chanoma's keyboard |
@@ -52,6 +52,7 @@ explicitly (and Chanoma also looks in NixOS's profiles).
 | `disc.rs` | Which system's a disc is, from what's on it (cue sheets, ISOs, CHDs, CSOs) |
 | `folders.rs` | Adding a folder: the places to start from, the folders that look like a collection, a folder's folders and what's directly in each, what the files index knows of one |
 | `art.rs` | Games' pictures beyond those beside them: what `gamelist.xml` names, and box art fetched from libretro-thumbnails and kept |
+| `watch.rs` | Chanoma starting again after a crash, saying what happened |
 | `app/` | The program: screens, input, home shelves, playing, settings, time, search, a forgotten PIN |
 | `ui/` | What's drawn: a 1920 × 1080 stage scaled to the screen |
 
@@ -76,6 +77,39 @@ Chanoma's info stays out of it, what's typed over a page among it. On a laptop d
 compositor knows the lid as it starts ([compositor.md](compositor.md),
 "The lid"), so Chanoma opens on the television rather than the panel
 behind the lid.
+
+### After a crash
+
+Nobody should need Ctrl+Alt+Delete to get the television back
+(`watch.rs`). `aizome-chanoma` watches itself: the process started runs
+Chanoma as its child and waits. When the child dies of a crash (SIGSEGV,
+SIGBUS, SIGILL, SIGFPE, SIGABRT, SIGSYS or SIGTRAP: a game's core
+faulting, say), or of a panic on its own thread, the watcher starts it
+again, and it opens on a page saying so ("Chanoma started again: It
+closed suddenly while Flycast was playing Crazy Taxi: the game's player
+crashed. Play since the game last saved may be lost."), whose button goes
+Home. Leaving, logging out, a signal to stop (passed on to the child) and
+a force quit (SIGKILL) end the watcher with it; three crashes in two
+minutes end it rather than loop. The journal says each crash, its signal
+and what was being played (`chanoma: crashed (SIGSEGV) [Flycast, Crazy
+Taxi]; starting it again`).
+
+What was being played is in a note the watcher gives the child
+(`$XDG_RUNTIME_DIR/aizome-chanoma-PID.note`): a game's session writes its
+core and title there as the core loads and empties it once the game's
+put away. A crash's handler adds the signal, and leaves no core dump
+(`PR_SET_DUMPABLE`), so the window goes at once: a dump of a gigabyte had
+held a frozen picture on the screen for twenty seconds.
+`CHANOMA_CORE_DUMPS=1` keeps them, for looking into one. Cores that
+handle faults of their own (Flycast's and PCSX2's fast memory) put their
+handlers before Chanoma's and hand it what isn't theirs.
+
+A core that throws a C++ exception out of a call (Play! does when it
+can't boot a disc) doesn't crash Chanoma: the calls into a core go
+through a few lines of C++ (`retro/guard.cpp`) that catch it, with no
+Rust between the core and the catch, as Rust can't unwind a foreign
+exception. The game ends, nothing of it kept since it last saved, on a
+page saying what the exception said ("This game stopped").
 
 ### The look
 
@@ -1113,12 +1147,32 @@ cargo run --release -p aizome-chanoma --example library -- FOLDER… \
   249–252 untouched, 3 with Right held). On 2026-11-08 the Saturn's,
   Dreamcast's and PlayStation 2's (Beetle Saturn, Yabause, Flycast,
   PCSX2, Play!) loaded and took every extension Chanoma sends them, but
-  for Play! and a playlist (`.m3u`), which goes to PCSX2. No Saturn,
-  Dreamcast or PlayStation 2 game has been played in the tests: there's
-  none free to. Each core is also given a file that isn't a game, as a
-  game of its system's, through a whole session: it must say it can't,
-  or start on it, and not take Chanoma down, as Flycast did on ganymede
-  on 2026-11-08 by logging through a log it hadn't been given.
+  for Play! and a playlist (`.m3u`), which goes to PCSX2. Each core is
+  also given a file that isn't a game, as a game of its system's,
+  through a whole session (a cue sheet or GDI naming a track that isn't
+  there, else bytes that are no disc): it must say it can't, or start on
+  it, and not take Chanoma down, as Flycast did on ganymede on
+  2026-11-08 by logging through a log it hadn't been given. On
+  2026-11-09 all six said they couldn't, Play! (built with the system's
+  C++ runtime) once it had started: "Play! stopped: No 'SYSTEM.CNF' file
+  found on the cdrom0 device", caught by `retro/guard.cpp`. Before the
+  log, Flycast alone took the test down (SIGSEGV); before the guard,
+  Play! did (an exception through Rust's frames), and with its own C++
+  runtime, alone, it broke Mesa's LLVM starting up (`pthread_once`
+  calling 0). Yabause, given a cue sheet of random bytes, crashes in its
+  own `YabSetError`: hence sheets that read.
+- **Dreamcast games** (`tests/cores.rs`'s `dreamcast_games_play_and_carry_on`,
+  opt-in, with `CHANOMA_TEST_DC_GAMES`, `_ROOT`, `_OUT` and `_STAGES`):
+  as the PlayStation's below, through Flycast with Chanoma's settings
+  (1280 × 960), drawing with OpenGL on wx-workstation's GPU (read back),
+  with the BIOS a `bios` folder beside the games holds, offered as
+  Chanoma offers it. On 2026-11-09, seven US and Japanese games from a
+  household's own drive (CHDs, and a cue sheet's folder): Crazy Taxi (and
+  2), Ikaruga, Power Stone 2, Soulcalibur, Street Fighter III: 3rd
+  Strike and WWF Royal Rumble, six stages each, each carrying on from the
+  last: all started from the BIOS's logo and carried on every time, in
+  races, fights and menus by the last, drawn right, with nothing crashed
+  through 42 starts and stops in one process.
 - **PlayStation games with OpenBIOS** (`tests/cores.rs`'s
   `playstation_games_start_with_a_bios`, opt-in, with
   `CHANOMA_TEST_PSX_GAMES`, `_SYSTEM`, `_OUT` and `_STAGES`): each game
@@ -1287,14 +1341,17 @@ before calling any of it tested on hardware.
   Widevine.
 - No Vulkan cores; no disc swapping for multi-disc games; no touch
   screens (the DS). The Nintendo 64 and GameCube have no system here.
-- OpenGL cores' frames have gone through the tests' own core, read back;
-  sharing them with the compositor as dmabufs, and the Dreamcast's and
-  PlayStation 2's real cores with real games, haven't been tried in the
-  tests. Play! (the PlayStation 2 without its BIOS) plays fewer games than
-  PCSX2, and no playlists; it brings its own C++ runtime, and given a
-  disc it can't read it takes Chanoma down (an exception of its comes
-  through Chanoma's frames), as it does Mesa's LLVM when it's loaded
-  before Mesa is.
+- OpenGL cores' frames have been read back in the tests (the tests' own
+  core, and seven Dreamcast games through Flycast); sharing them with the
+  compositor as dmabufs hasn't been tried in them, nor a PlayStation 2
+  game (there's none free to). Play! (the PlayStation 2 without its BIOS)
+  plays fewer games than PCSX2, and no playlists; a disc it can't boot
+  ends its game with what it said. Chanoma doesn't help anyone come by a
+  console's BIOS: it's the console maker's, and a grown-up copies it from
+  their own console.
+- A core that crashes takes Chanoma with it (cores run in its process),
+  and Chanoma starts again saying so (After a crash): the game since it
+  last saved is lost. A core that hangs without crashing isn't noticed.
 - Discs are told apart only among Chanoma's four disc systems: a disc of
   another (a Mega-CD's, a PC Engine CD's) isn't shown, even in a folder
   not named for it.

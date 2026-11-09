@@ -138,6 +138,19 @@ struct Queued {
     launch: Launch,
 }
 
+/// What Play! (the PlayStation 2's core without the console's BIOS) said,
+/// with where PCSX2, which plays many more, comes from.
+fn with_ps2_hint(why: String) -> String {
+    if why.starts_with("Play!") {
+        format!(
+            "{why}. PCSX2 plays many more PlayStation 2 games: it needs the console's own BIOS, \
+             copied from a PlayStation 2, in a bios folder beside the games."
+        )
+    } else {
+        why
+    }
+}
+
 impl Chanoma {
     /// Whether kids may start something now; if not, the closed screen.
     fn may_start(&mut self, cx: &mut Cx<Msg>) -> bool {
@@ -309,7 +322,7 @@ impl Chanoma {
 
     pub fn game_event(&mut self, id: u64, e: GameEvent, cx: &mut Cx<Msg>) {
         if self.starts.given_up.as_ref().is_some_and(|(g, _)| *g == id) {
-            if matches!(e, GameEvent::Ended { .. } | GameEvent::Failed(_)) {
+            if matches!(e, GameEvent::Ended { .. } | GameEvent::Failed(_) | GameEvent::Stopped(_)) {
                 self.let_go(cx);
             }
             return;
@@ -345,7 +358,14 @@ impl Chanoma {
                     self.recent.forget(&Item::Game { key: g.key });
                     self.recent.save(&self.config.dirs);
                 }
-                self.go(Screen::Problem("This game didn't start".into(), why), cx);
+                self.go(Screen::Problem("This game didn't start".into(), with_ps2_hint(why)), cx);
+            }
+            GameEvent::Stopped(why) => {
+                // Its core threw: the game is over, and nothing of it kept
+                // since it last saved.
+                self.done_waiting(cx);
+                self.game = None;
+                self.go(Screen::Problem("This game stopped".into(), with_ps2_hint(why)), cx);
             }
             GameEvent::Ended { .. } => {
                 // A core that asked to end (or one stopped from here).

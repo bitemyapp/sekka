@@ -291,6 +291,7 @@ fn config(dirs: Dirs, cores: PathBuf, clock: ManualClock) -> Config {
         mpris: false,
         drives: false,
         tv: false,
+        after_crash: None,
     }
 }
 
@@ -2193,4 +2194,18 @@ fn a_drive_that_wont_open_is_said_once_and_its_folder_comes_back_when_it_opens()
     assert!(held.here);
     h.send(broken());
     assert_eq!(toast(&h), Some("Couldn't open the drive MOVIES"), "it opened since: said again");
+}
+
+#[test]
+fn started_again_after_a_crash_it_says_what_happened_then_goes_home() {
+    let (dirs, cores) = household("crashed", |_| {});
+    let mut config = config(dirs, cores, ManualClock::at(2026, 11, 9, 1, 0));
+    // What the watcher passes on after Flycast crashed playing a game.
+    let what = aizome_chanoma::watch::told("Flycast\nCrazy Taxi\nsignal 011\n");
+    config.after_crash = Some(what.clone());
+    let mut h = harness(config);
+    assert_eq!(h.program().screen, Screen::Problem("Chanoma started again".into(), what));
+    shot(&mut h, "39-started-again");
+    input(&mut h, Input::Ok);
+    assert_eq!(h.program().screen, Screen::Home);
 }

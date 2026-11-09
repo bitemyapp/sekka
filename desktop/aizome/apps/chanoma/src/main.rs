@@ -51,6 +51,12 @@ fn main() {
         let _ = std::fs::remove_file(config.dirs.state.join("lockout.json"));
         return;
     }
+    // Watched by itself: a crash starts it again, saying what happened.
+    if !aizome_chanoma::watch::watched() {
+        std::process::exit(aizome_chanoma::watch::run());
+    }
+    aizome_chanoma::watch::guard();
+    config.after_crash = std::env::var(aizome_chanoma::watch::AFTER_CRASH).ok().filter(|s| !s.is_empty());
     config.fullscreen = !args.iter().any(|a| a == "--windowed");
     config.grab = !args.iter().any(|a| a == "--no-grab");
     config.silent = args.iter().any(|a| a == "--silent");

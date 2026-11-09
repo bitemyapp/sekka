@@ -15,8 +15,10 @@ box chosen on it brings Chanoma's keyboard, which the controller types
 with. The PIN is pressed on the controller, the pad the same whichever
 button went. Two USB sticks plugged in from the start: the one that can be
 is opened as Chanoma starts, and the one that can't (exFAT, its module not
-loaded) is said once, not again at the next start. This fixture renders in
-software (shared-memory frames, no VA-API).
+loaded) is said once, not again at the next start. Chanoma crashing
+(SIGSEGV) starts again on a page saying so, which goes Home, and leaves no
+core dump. This fixture renders in software (shared-memory frames, no
+VA-API).
 """
 
 import hashlib
@@ -434,3 +436,23 @@ with subtest("the PIN is the controller's buttons, and nobody sees which"):
     for b in ("down", "right", "rb", "x"):
         pad(f"tap {b}")
     until("grown-up mode", lambda: logged("chanoma: grown-up mode"))
+
+with subtest("a crash starts Chanoma again, saying so, with no core dump"):
+    homes = count("chanoma: Home")
+    # The newest is the child the watcher started (the watcher is older).
+    child = machine.succeed("pgrep -n -u alice -f '[.]aizome-chanoma-wrapped'").strip()
+    machine.succeed(f"kill -SEGV {child}")
+    until("the watcher starts it again", lambda: logged("chanoma: crashed (SIGSEGV)"))
+    until(
+        "a new Chanoma",
+        lambda: machine.execute("pgrep -n -u alice -f '[.]aizome-chanoma-wrapped'")[1].strip() not in ("", child),
+    )
+    until("back full screen", lambda: (w := window()) and w["fullscreen"])
+    until("with the controller", lambda: logged("is player 1", 4))
+    time.sleep(1)
+    machine.screenshot("started-again")
+    # The page saying so, whose button goes Home.
+    pad("tap south")
+    until("Home from the page", lambda: count("chanoma: Home") > homes)
+    dumps = machine.succeed("journalctl --no-pager -o cat | grep -c 'dumped core' || true").strip()
+    assert dumps == "0", f"{dumps} core dumps"

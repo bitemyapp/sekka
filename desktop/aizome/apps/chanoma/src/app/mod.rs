@@ -319,6 +319,8 @@ pub struct Config {
     /// Chanoma alone, so leaving logs out, kids may too, and a forgotten PIN
     /// is forgotten from a grown-up's own account.
     pub tv: bool,
+    /// Started again after a crash (`watch`): what happened, shown first.
+    pub after_crash: Option<String>,
 }
 
 impl Config {
@@ -359,6 +361,7 @@ impl Config {
             mpris: true,
             drives: true,
             tv: false,
+            after_crash: None,
         }
     }
 }
@@ -481,7 +484,11 @@ impl Chanoma {
         usage.roll(&local);
         let recent = Recent::load(&config.dirs);
         let layouts = state::load_layouts(&config.dirs);
-        let screen = if settings.setup_done && settings.pin.is_some() { Screen::Home } else { Screen::Welcome };
+        let screen = match &config.after_crash {
+            _ if !settings.setup_done || settings.pin.is_none() => Screen::Welcome,
+            Some(what) => Screen::Problem("Chanoma started again".into(), what.clone()),
+            None => Screen::Home,
+        };
         Chanoma {
             settings,
             usage,
