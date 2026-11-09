@@ -3127,7 +3127,15 @@ LibreOffice on every input update, where they now come from cache.nixos.org.
 Nixpkgs' 0.21.8.2, in staging since 2026-10-21, fixes them, and from 0.21.8 on
 the backport returns Nixpkgs' own package. `checks.x86_64-linux.libsecret-dh`
 forces short shared secrets at the GnuTLS boundary and verifies their padding,
-with the original backend as a negative control.
+with the original backend as a negative control. The test's other intermittent
+failure left the keyring locked: XDG autostart asked the PAM-started
+gnome-keyring daemon for its Secret Service alongside the session's own
+services, and when one of them (Aizome's network agent, the portal) asked
+first, D-Bus started a second daemon and the unlocked one later aborted
+("assertion 'client' failed"). Each such failure had that extra activation,
+and passing runs never did. `desktops.nix` now asks for the Secret Service in
+a oneshot before `graphical-session-pre.target`, which returns once it owns
+its bus name.
 
 The NixOS test driver fails at once when QEMU exits before connecting, but
 waits for the whole test timeout when QEMU neither connects nor exits. On
