@@ -143,9 +143,10 @@ class TrustGate(unittest.TestCase):
 
 class RunnerAdmission(unittest.TestCase):
     def admitted(self, event, ref="refs/heads/main", repository=gate.REPOSITORY,
-                 workflow="bitemyapp/sekka/.github/workflows/pr.yml@refs/heads/main"):
+                 workflow="bitemyapp/sekka/.github/workflows/pr.yml@refs/heads/main", slot="shared"):
         env = {**os.environ, "GITHUB_REPOSITORY": repository, "GITHUB_REF": ref,
-               "GITHUB_EVENT_NAME": event, "GITHUB_WORKFLOW_REF": workflow}
+               "GITHUB_EVENT_NAME": event, "GITHUB_WORKFLOW_REF": workflow,
+               "SEKKA_RUNNER_SLOT": slot}
         return subprocess.run(["bash", "-c", 'source "$1"; sekka_runner_admitted',
                                "admission-test", str(ROOT / "scripts/runner-admission.sh")],
                               env=env, check=False).returncode == 0
@@ -164,6 +165,18 @@ class RunnerAdmission(unittest.TestCase):
             self.assertFalse(self.admitted("pull_request_target", workflow=workflow))
         self.assertFalse(self.admitted("pull_request_target", ref="refs/pull/233/merge"))
         self.assertFalse(self.admitted("pull_request_target", repository="other/sekka"))
+
+    def test_reserved_slot_accepts_only_automatic_or_manual_trusted_pr_checks(self):
+        for event in ["pull_request_target", "workflow_dispatch"]:
+            self.assertTrue(self.admitted(event, slot="pr"))
+            self.assertFalse(self.admitted(event, slot="pr", ref="refs/heads/topic"))
+            self.assertFalse(self.admitted(event, slot="pr", repository="other/sekka"))
+            for workflow in ["cache", "nightly", "sites", "release", "yuki"]:
+                self.assertFalse(self.admitted(event, slot="pr", workflow=
+                    f"bitemyapp/sekka/.github/workflows/{workflow}.yml@refs/heads/main"))
+        for event in ["push", "schedule", "pull_request", "workflow_run", ""]:
+            self.assertFalse(self.admitted(event, slot="pr"))
+        self.assertFalse(self.admitted("workflow_dispatch", slot="unknown"))
 
 
 if __name__ == "__main__":

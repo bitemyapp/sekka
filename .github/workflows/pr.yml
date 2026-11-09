@@ -61,7 +61,8 @@ jobs:
   build:
     needs: trust
     if: needs.trust.outputs.allowed == 'true'
-    runs-on: [self-hosted, linux, x64, sekka-builder]
+    # Both slots accept PRs; publication jobs cannot occupy the PR-only slot.
+    runs-on: [self-hosted, linux, x64, sekka-pr]
     timeout-minutes: 720
     # No environment, publishing secrets, write token or persisted checkout
     # credentials. The disposable runner executes only an admitted merge SHA.

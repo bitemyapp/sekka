@@ -2890,7 +2890,10 @@ PR code. Both permission gates initially check out only
 `scripts/check-pr-trust.py`, from the immutable workflow SHA; the builder's
 checkout also takes `scripts/ci-retain.py` from there and keeps it outside the
 workspace. They verify the head and base parents of GitHub's merge commit.
-After queueing, the isolated builder rechecks trust, then expands the full
+PR build jobs select `sekka-pr`: the general slot and the reserved PR slot
+both advertise it, while only the general slot advertises `sekka-builder`
+for main, nightly, site and manual jobs. After queueing, the isolated builder
+rechecks trust, then expands the full
 checkout at exactly that merge SHA with credentials persistence disabled. PR
 code then runs only in Nix's evaluator and the daemon's build sandbox: the
 retention wrapper beside the GC roots main's jobs share is main's. Build jobs
@@ -2921,12 +2924,17 @@ manually disabled.
 Jobs run on wx-workstation (Ubuntu, Docker, Determinate Nix) through
 `nix/runner.nix`, the `runner` package:
 
-- A supervisor container, which Docker restarts, asks GitHub for each job's
-  just-in-time registration: a runner labelled `self-hosted`, `linux`, `x64`,
-  `sekka-builder` that takes one job and is then removed. Only the supervisor
-  reads the token that allows this; jobs never see it. Through Docker's socket
-  the supervisor is as powerful as root on the builder, so it runs nothing but
-  its own script.
+- Two supervisor containers each register one disposable runner at a time.
+  `sekka-runner-supervisor` owns the `shared` slot, labelled `sekka-builder`
+  and `sekka-pr`. `sekka-runner-pr-supervisor` owns the `pr` slot, labelled
+  only `sekka-pr`. Both also have `self-hosted`, `linux` and `x64`. Thus two
+  PRs can run together, or a PR can run alongside main/nightly/publication
+  work. Publication cannot consume the reserved slot. GitHub chooses among
+  eligible runners; there is no promise of PR-first ordering on the shared
+  slot, or of publication starting while both slots are building PRs.
+  Only the supervisors read the registration token; jobs never see it.
+  Through Docker's socket each supervisor is as powerful as root on the
+  builder, so it runs only its immutable script.
 - Each job gets a fresh container, as uid 30500, with every capability
   dropped, `no-new-privileges`, a read-only root, and a tmpfs `/tmp` and
   throwaway volume for its home and workspace, both gone with the job. It sees
@@ -2942,7 +2950,9 @@ Jobs run on wx-workstation (Ubuntu, Docker, Determinate Nix) through
   `pr.yml` workflow from main on `pull_request_target`, after that workflow's
   trusted-developer gate. For anything else, such as a pull request's own
   workflow, it kills every process of the job but the runner,
-  so even `if: always()` steps never run, and the job fails.
+  so even `if: always()` steps never run, and the job fails. The reserved
+  slot additionally accepts only `pr.yml` from main on `pull_request_target`
+  or `workflow_dispatch`, including the manual PR-check entry point.
 - The repository requires approval before any workflow from an outside
   contributor's pull request runs (Settings, Actions, General: "Require
   approval for all external contributors"). The workflow token defaults to
@@ -2950,12 +2960,23 @@ Jobs run on wx-workstation (Ubuntu, Docker, Determinate Nix) through
 
 Know its limits. Builds happen in the host's daemon, so the job container's
 memory and CPU limits do not cap them. The daemon takes `max-jobs` and `cores`
-from its client: the job image sets 32 builds at a time with 16 cores each.
-Nix's default, one at a time, made the first nightly build its 3,400
-derivations in sequence, an hour and a half where most of them could run
-together.
+from its client: each slot permits 16 builds with 16 cores per build,
+keeping the previous aggregate allowance of 32 derivations across two slots.
+These are per-client limits, not a global host CPU or memory reservation.
+Each evaluator container retains its 32-CPU/64-GiB limits; build processes
+and VMs still need separate headroom on the host. Keep the initial deployment
+at two slots and measure CPU, available memory, pressure and queue time
+before adding any more.
 
-The nightly and main-cache jobs set `GC_INITIAL_HEAP_SIZE=34359738368`
+On 2026-11-08, during a PR's evaluation and compilation on the 64-core,
+128-thread, 250-GiB workstation, CPU idle was 86–99%, available RAM was
+146–169 GiB, and memory pressure and swap traffic were essentially zero.
+The evaluator used about 41 GiB. In the latest 100 Actions runs, 32 successful
+PR builds had a median 17.3-minute execution time and queue waits up to
+56 minutes. This motivates overlapping two jobs; it is not a worst-case
+capacity measurement for concurrent cold builds.
+
+The PR, nightly and main-cache jobs set `GC_INITIAL_HEAP_SIZE=34359738368`
 (32 GiB) for the Nix client's Boehm garbage collector. Nix's default initial
 heap is 4 GiB. A 16 GiB heap improved individual checks, but the complete
 flake's live configurations outgrew it and resumed frequent collections,
@@ -3012,12 +3033,23 @@ Without it, as on a runner deployed before this mount existed or a
 maintainer's machine, the wrapper runs plain `nix build --no-link` or
 `nix flake check` with the same status, and roots nothing.
 
-The supervisor maintains `/var/cache/sekka-ci-git/repository.git`, fetching only
-main between jobs. Jobs mount it read-only and seed a fresh, private Git
-repository using object alternates. `actions/checkout` still fetches the exact
-workflow/admitted merge SHA and cleans the workspace; refs, configuration,
-credentials and working files never persist between jobs. A failed cache refresh
-falls back to checkout fetching missing objects. No job may write the object cache.
+Each supervisor maintains its own repository under
+`/var/cache/sekka-ci-git/{shared,pr}/repository.git`, fetching only main between
+its jobs. Each job mounts only its slot's directory read-only at
+`/var/cache/sekka-ci-git` and seeds a private Git repository using object
+alternates. A refresh/repack on one slot cannot remove objects used by the
+other slot. A lifetime `flock` in each slot directory rejects a duplicate
+supervisor, and a restarted supervisor waits for its surviving job before
+refreshing that slot's cache. The two caches duplicate Git objects; Nix's
+store and bounded GC roots remain shared, with their existing per-generation
+locks protecting both active builds from pruning.
+
+`actions/checkout` still fetches the exact workflow/admitted merge SHA and
+cleans the workspace; refs, configuration, credentials and working files
+never persist between jobs. A failed cache refresh falls back to checkout
+fetching missing objects. No job may write the object cache. The old flat
+`repository.git` is unused after migration and may be removed once the old
+runner has finished.
 
 `checks.x86_64-linux.ci-cache` uses the actual runner client and an untrusted
 user in a disposable VM. It collects garbage and verifies that results and
@@ -3088,22 +3120,33 @@ groups, so membership of `kvm` does not help. A udev rule instead gives the
 `nixbld` group read and write on the device with an ACL. The workflow's first
 Nix step fails with a pointer here if a build cannot use KVM.
 
-Then, as the maintainer, build the runner, load its images and start the
-supervisor:
+Then, as the maintainer, build the runner and load both images. These
+commands use the system Docker daemon that owns the runner, even when the
+maintainer's default Docker context is rootless:
 
 ```sh
 nix build .#runner --out-link ~/sekka-runner/current
-docker load -i ~/sekka-runner/current/job-image.tar.gz
-docker load -i ~/sekka-runner/current/supervisor-image.tar.gz
-docker run -d --name sekka-runner-supervisor --restart unless-stopped \
-  --user "$(id -u):$(id -g)" --group-add "$(getent group docker | cut -d: -f3)" \
-  --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  -v /nix/store:/nix/store:ro \
-  -v /var/cache/sekka-ci-git:/var/cache/sekka-ci-git \
-  -v "$HOME/.config/sekka-runner:/run/secrets:ro" \
-  sekka-runner-supervisor:latest
+docker --host unix:///var/run/docker.sock load -i ~/sekka-runner/current/job-image.tar.gz
+docker --host unix:///var/run/docker.sock load -i ~/sekka-runner/current/supervisor-image.tar.gz
+for slot in shared pr; do
+  name=sekka-runner-supervisor
+  if [ "$slot" = pr ]; then name=sekka-runner-pr-supervisor; fi
+  docker --host unix:///var/run/docker.sock run -d --name "$name" --restart unless-stopped \
+    --env "SEKKA_RUNNER_SLOT=$slot" \
+    --user "$(id -u):$(id -g)" --group-add "$(getent group docker | cut -d: -f3)" \
+    --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges \
+    -v /var/run/docker.sock:/var/run/docker.sock \
+    -v /nix/store:/nix/store:ro \
+    -v /var/cache/sekka-ci-git:/var/cache/sekka-ci-git \
+    -v "$HOME/.config/sekka-runner:/run/secrets:ro" \
+    sekka-runner-supervisor:latest
+done
 ```
+
+The cache parent must be writable by the maintainer (the existing host setup
+script establishes that ownership). Each supervisor creates its own slot
+directory; no daemon restart or change to the Nix trust configuration is
+needed when upgrading a host that already has persistent CI caches.
 
 The images refer to store paths without holding them; the out-link is the GC
 root that keeps them. The supervisor waits for its token: a fine-grained
@@ -3112,35 +3155,50 @@ and write (which registering runners needs) and no other permission, saved as
 `~/.config/sekka-runner/token` with mode 600. Replace the file when the token
 expires; the supervisor reads it before each registration.
 
-For the first deployment of persistent CI caches, in this order and while no
-job is running:
+For a new host, run `sudo bash scripts/runner-host-setup.sh` first to create
+the GC roots and cache parent and configure KVM, then use the commands above.
 
-1. Rerun the host setup script as the maintainer through `sudo`. It creates
-   the GC-root directory owned by uid 30500 and the Git cache owned by the
-   invoking maintainer. The new supervisor mounts both into jobs, and Docker
-   refuses to start a job whose bind-mount source is missing.
-2. Build and load the images as above.
-3. Remove the old supervisor and waiting runner (`docker rm -f
-   sekka-runner-supervisor sekka-runner-job`) and start the supervisor with
-   the command above, which adds the Git-cache mount: restarting a container
-   cannot add a mount.
+For the two-slot upgrade, deploy the runner images **before merging the
+workflow's `sekka-pr` label change**:
 
-Until then, the workflows run their complete checks through the wrapper's
-plain-Nix fallback, and nothing is retained between jobs. A Git cache refresh
-that fails says so in `docker logs sekka-runner-supervisor`; checkout then
-fetches everything itself, as before.
+1. Build the candidate `.#runner` and keep its out-link rooted. Keep the old
+   runner package rooted separately for rollback; loading an image does not
+   root the store paths referenced by it.
+2. Load the new images, then stop and remove only the old supervisor
+   (`docker --host unix:///var/run/docker.sock stop sekka-runner-supervisor`,
+   followed by `docker --host unix:///var/run/docker.sock rm
+   sekka-runner-supervisor`). Its separately running job is left to finish.
+3. Start both supervisors with the loop above. The shared supervisor waits
+   for `sekka-runner-job` before refreshing its own cache or registering its
+   successor. If that runner was idle when its supervisor stopped, stop only
+   that idle runner so it can be replaced. Do not stop an active build.
+4. Confirm both runners are online in repository Settings → Actions →
+   Runners: shared advertises both labels; pr advertises `sekka-pr` alone.
+   Existing workflows continue on the shared slot until the PR label change
+   merges. The reserved slot is idle until that change.
+5. Merge the workflow change. Observe two admitted PR builds overlap, and
+   a PR alongside a main-cache build. Check host CPU, available memory and
+   pressure, and compare queue time with the baseline above. Full check
+   coverage and release-publication inhibition remain unchanged.
+
+For rollback, first restore the PR workflow's `sekka-builder` selector while
+the new shared runner still advertises it. Stop both supervisors to prevent
+new registrations, let active jobs finish, and stop any idle waiting runners.
+Load the separately rooted old images and recreate the single old supervisor
+with its former command. The old flat Git cache and shared GC roots remain
+usable. Do not remove an active job's Git cache or the runner package's root.
+
+For later image updates, load the new images, restart both supervisors, and
+stop only idle waiting runners to make them pick up the new image. A
+supervisor always waits for its slot's surviving active job. Logs are in
+`docker --host unix:///var/run/docker.sock logs sekka-runner-supervisor` and
+`docker --host unix:///var/run/docker.sock logs sekka-runner-pr-supervisor`.
+Git-cache refresh failures are logged and checkout fetches missing objects.
 
 Inside the restricted job image as uid 30500, a primed, read-only Git cache
 took 0.018 seconds to seed, 0.388 seconds to fetch and prepare the sparse main
 gate, and 1.788 seconds to expand the full main tree (2026-11-02). New PR
 objects still have to be fetched.
-
-To update an already configured runner, build and load again, then, while no job is running,
-`docker stop sekka-runner-job` (the waiting runner, which would take the next
-job in the old image) and `docker restart sekka-runner-supervisor`. A restarted
-supervisor lets a running job finish first. To stop taking jobs,
-`docker stop sekka-runner-supervisor sekka-runner-job`. The supervisor logs to
-`docker logs sekka-runner-supervisor`.
 
 ## Kakehashi
 

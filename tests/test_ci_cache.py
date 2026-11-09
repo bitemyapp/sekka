@@ -74,6 +74,22 @@ class Retention(unittest.TestCase):
         retain.prune(self.root, self.now, PLENTY)
         self.assertFalse(running.exists())
 
+    def test_both_slots_keep_active_generations_when_space_is_low(self):
+        # Two PR jobs may share the pr-checks group. A different job's prune
+        # must preserve both, even when it drops every completed PR result.
+        active = [self.generation("pr-checks", age, False) for age in (1, 2)]
+        completed = self.generation("pr-checks", 3)
+        locks = [retain.open_lock(p / ".building") for p in active]
+        try:
+            for fd in locks:
+                fcntl.flock(fd, fcntl.LOCK_EX)
+            retain.prune(self.root, self.now, 0)
+            self.assertTrue(all(p.exists() for p in active))
+            self.assertFalse(completed.exists())
+        finally:
+            for fd in locks:
+                os.close(fd)
+
     def test_pruning_does_not_follow_symlink_directories(self):
         root = self.root / "roots"
         outside = self.root / "outside"
@@ -179,6 +195,42 @@ echo {self.store_path}
 
 
 class GitCache(unittest.TestCase):
+    def test_refreshing_one_slot_does_not_change_another_slots_alternates(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            env = dict(os.environ, HOME=str(root), GIT_CONFIG_NOSYSTEM="1")
+            def run(*args, cwd=root, **extra):
+                return subprocess.check_output(args, cwd=cwd, env=dict(env, **extra), text=True).strip()
+            upstream = root / "upstream"
+            run("git", "init", "--initial-branch=main", str(upstream))
+            run("git", "config", "--global", "user.email", "ci@example.invalid")
+            run("git", "config", "--global", "user.name", "CI test")
+            run("git", "config", "--global", f"url.{upstream}.insteadOf", "https://github.com/bitemyapp/sekka")
+            (upstream / "scripts").mkdir()
+            payload = upstream / "scripts/check-pr-trust.py"
+            payload.write_text("first revision\n")
+            run("git", "add", ".", cwd=upstream)
+            run("git", "commit", "-m", "first", cwd=upstream)
+            for slot in ("shared", "pr"):
+                run("bash", str(SCRIPTS / "runner-git-cache.sh"), "refresh",
+                    SEKKA_CI_GIT_CACHE=str(root / slot))
+            workspace = root / "active-pr"
+            run("bash", str(SCRIPTS / "runner-git-cache.sh"), "seed",
+                SEKKA_CI_GIT_CACHE=str(root / "pr"), GITHUB_WORKSPACE=str(workspace))
+            # Replace main and force collection in shared while the PR checkout
+            # still uses its own cache's old objects, without copying them.
+            payload.write_text("replacement revision\n")
+            run("git", "commit", "-am", "replacement", "--amend", cwd=upstream)
+            run("bash", str(SCRIPTS / "runner-git-cache.sh"), "refresh",
+                SEKKA_CI_GIT_CACHE=str(root / "shared"))
+            run("git", "--git-dir", str(root / "shared/repository.git"),
+                "reflog", "expire", "--expire=now", "--all")
+            run("git", "--git-dir", str(root / "shared/repository.git"), "gc", "--prune=now")
+            self.assertEqual(run("git", "show", "HEAD:scripts/check-pr-trust.py", cwd=workspace),
+                             "first revision")
+            self.assertEqual(run("git", "--git-dir", str(root / "shared/repository.git"),
+                                 "show", "main:scripts/check-pr-trust.py"), "replacement revision")
+
     def test_clean_candidates_reuse_objects_without_sharing_writable_state(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
