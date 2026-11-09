@@ -182,7 +182,12 @@
       # Aizome's own VM checks (desktop/aizome/nix), under the names its
       # flake gave them: `nix build .#aizome-checks.session`. Not among
       # `checks`, which CI runs, as they weren't in Aizome's repository.
-      legacyPackages.${system}.aizome-checks = inputs.aizome.checks.${system};
+      legacyPackages.${system} = {
+        aizome-checks = inputs.aizome.checks.${system};
+        # Experiment: Aizome's compositor with one derivation per crate
+        # (desktop/aizome/nix/per-crate). Nothing depends on it.
+        aizome-per-crate = import ./desktop/aizome/nix/per-crate { inherit pkgs; };
+      };
       apps.${system} = {
         update = {
           type = "app";

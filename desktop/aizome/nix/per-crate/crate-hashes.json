@@ -1,0 +1,13 @@
+{
+  "git+https://github.com/bitemyapp/hayro?rev=a2e9e62bdeb6872745ee6f0c811760ba31d441e9#0.8.0": "1jsqnxk9rab5cchnp9y96yq9axd8dxx38rrksyg3sq1jfa3xxyim",
+  "git+https://github.com/bitemyapp/hayro?rev=a2e9e62bdeb6872745ee6f0c811760ba31d441e9#hayro-ccitt@0.4.0": "1jsqnxk9rab5cchnp9y96yq9axd8dxx38rrksyg3sq1jfa3xxyim",
+  "git+https://github.com/bitemyapp/hayro?rev=a2e9e62bdeb6872745ee6f0c811760ba31d441e9#hayro-cmap@0.1.0": "1jsqnxk9rab5cchnp9y96yq9axd8dxx38rrksyg3sq1jfa3xxyim",
+  "git+https://github.com/bitemyapp/hayro?rev=a2e9e62bdeb6872745ee6f0c811760ba31d441e9#hayro-interpret@0.8.0": "1jsqnxk9rab5cchnp9y96yq9axd8dxx38rrksyg3sq1jfa3xxyim",
+  "git+https://github.com/bitemyapp/hayro?rev=a2e9e62bdeb6872745ee6f0c811760ba31d441e9#hayro-jbig2@0.3.1": "1jsqnxk9rab5cchnp9y96yq9axd8dxx38rrksyg3sq1jfa3xxyim",
+  "git+https://github.com/bitemyapp/hayro?rev=a2e9e62bdeb6872745ee6f0c811760ba31d441e9#hayro-jpeg2000@0.4.1": "1jsqnxk9rab5cchnp9y96yq9axd8dxx38rrksyg3sq1jfa3xxyim",
+  "git+https://github.com/bitemyapp/hayro?rev=a2e9e62bdeb6872745ee6f0c811760ba31d441e9#hayro-postscript@0.1.0": "1jsqnxk9rab5cchnp9y96yq9axd8dxx38rrksyg3sq1jfa3xxyim",
+  "git+https://github.com/bitemyapp/hayro?rev=a2e9e62bdeb6872745ee6f0c811760ba31d441e9#hayro-syntax@0.8.0": "1jsqnxk9rab5cchnp9y96yq9axd8dxx38rrksyg3sq1jfa3xxyim",
+  "git+https://github.com/bitemyapp/moxcms?rev=b63298023362c19b0ea5499c2c8d35802fc1adac#0.8.1": "1p1fdb720qrajrna82w2cvqm5a74vhjpsfrmcdqv1skxn6bnk9lr",
+  "git+https://github.com/bitemyapp/zune-image?branch=scaled-idct#zune-core@0.5.3": "05247fmk6979p6znaav6mb9480j3pl7kyr56sssnbsgn0641kxn9",
+  "git+https://github.com/bitemyapp/zune-image?branch=scaled-idct#zune-jpeg@0.5.16-rc3": "05247fmk6979p6znaav6mb9480j3pl7kyr56sssnbsgn0641kxn9"
+}
