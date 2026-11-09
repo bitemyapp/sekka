@@ -211,24 +211,24 @@ class GitCache(unittest.TestCase):
             payload.write_text("first revision\n")
             run("git", "add", ".", cwd=upstream)
             run("git", "commit", "-m", "first", cwd=upstream)
-            for slot in ("shared", "pr"):
+            for slot in ("1", "2"):
                 run("bash", str(SCRIPTS / "runner-git-cache.sh"), "refresh",
                     SEKKA_CI_GIT_CACHE=str(root / slot))
             workspace = root / "active-pr"
             run("bash", str(SCRIPTS / "runner-git-cache.sh"), "seed",
-                SEKKA_CI_GIT_CACHE=str(root / "pr"), GITHUB_WORKSPACE=str(workspace))
-            # Replace main and force collection in shared while the PR checkout
+                SEKKA_CI_GIT_CACHE=str(root / "2"), GITHUB_WORKSPACE=str(workspace))
+            # Replace main and force collection in slot 1 while the other checkout
             # still uses its own cache's old objects, without copying them.
             payload.write_text("replacement revision\n")
             run("git", "commit", "-am", "replacement", "--amend", cwd=upstream)
             run("bash", str(SCRIPTS / "runner-git-cache.sh"), "refresh",
-                SEKKA_CI_GIT_CACHE=str(root / "shared"))
-            run("git", "--git-dir", str(root / "shared/repository.git"),
+                SEKKA_CI_GIT_CACHE=str(root / "1"))
+            run("git", "--git-dir", str(root / "1/repository.git"),
                 "reflog", "expire", "--expire=now", "--all")
-            run("git", "--git-dir", str(root / "shared/repository.git"), "gc", "--prune=now")
+            run("git", "--git-dir", str(root / "1/repository.git"), "gc", "--prune=now")
             self.assertEqual(run("git", "show", "HEAD:scripts/check-pr-trust.py", cwd=workspace),
                              "first revision")
-            self.assertEqual(run("git", "--git-dir", str(root / "shared/repository.git"),
+            self.assertEqual(run("git", "--git-dir", str(root / "1/repository.git"),
                                  "show", "main:scripts/check-pr-trust.py"), "replacement revision")
 
     def test_clean_candidates_reuse_objects_without_sharing_writable_state(self):

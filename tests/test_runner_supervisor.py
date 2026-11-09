@@ -85,56 +85,56 @@ test ! -e "$FIXTURE/$SEKKA_RUNNER_SLOT-cache-fails"
         self.assertTrue(path.exists(), filename)
         return path
 
-    def test_two_slots_run_at_once_with_separate_caches_and_routing(self):
-        shared, _ = self.start("shared")
-        pr, _ = self.start("pr")
-        for slot, name in [("shared", "sekka-runner-job"), ("pr", "sekka-runner-pr-job")]:
+    def test_two_slots_share_build_artifacts_and_accept_identical_workloads(self):
+        first, _ = self.start("1")
+        second, _ = self.start("2")
+        for slot, name in [("1", "sekka-runner-job"), ("2", "sekka-runner-2-job")]:
             args = json.loads(self.wait_for(slot + "-run").read_text())
             registration = json.loads((self.root / (slot + "-registration")).read_text())
             self.assertEqual(args[args.index("--name") + 1], name)
             self.assertEqual((self.root / (slot + "-wait")).read_text(), name)
-            self.assertIn("sekka-pr", registration["labels"])
-            self.assertEqual("sekka-builder" in registration["labels"], slot == "shared")
+            self.assertEqual(registration["labels"], ["self-hosted", "linux", "x64", "sekka-builder"])
             cache = str(self.root / "cache" / slot)
             self.assertEqual((self.root / (slot + "-cache")).read_text(), cache)
             self.assertIn(f"type=bind,src={cache},dst=/var/cache/sekka-ci-git,readonly", args)
             self.assertIn(f"SEKKA_RUNNER_SLOT={slot}", args)
             self.assertIn("/nix/store:/nix/store:ro", args)
             self.assertIn("/nix/var/nix/daemon-socket:/nix/var/nix/daemon-socket:ro", args)
+            self.assertIn("type=bind,src=/nix/var/nix/gcroots/sekka-ci,dst=/nix/var/nix/gcroots/sekka-ci", args)
             self.assertIn("type=volume,dst=/home/runner", args)
             self.assertIn("no-new-privileges", args)
             self.assertIn("--read-only", args)
             self.assertEqual(args[args.index("--user") + 1], "30500:30500")
-        self.assertIsNone(shared.poll())
-        self.assertIsNone(pr.poll())
+        self.assertIsNone(first.poll())
+        self.assertIsNone(second.poll())
 
     def test_duplicate_slot_cannot_refresh_or_register_during_an_active_job(self):
-        self.start("pr")
-        self.wait_for("pr-run")
-        cache = self.root / "pr-cache"
+        self.start("2")
+        self.wait_for("2-run")
+        cache = self.root / "2-cache"
         before = cache.stat().st_mtime_ns
-        duplicate, log = self.start("pr")
+        duplicate, log = self.start("2")
         self.assertEqual(duplicate.wait(timeout=5), 1)
         log.seek(0)
         self.assertIn("already has a supervisor", log.read())
         self.assertEqual(cache.stat().st_mtime_ns, before)
 
     def test_restart_waits_for_its_surviving_job_without_blocking_other_slot(self):
-        surviving = self.root / "shared-surviving-job"
+        surviving = self.root / "1-surviving-job"
         surviving.touch()
-        self.start("shared")
-        self.wait_for("shared-wait")
-        self.start("pr")
-        self.wait_for("pr-run")
-        self.assertFalse((self.root / "shared-cache").exists())
-        self.assertFalse((self.root / "shared-registration").exists())
+        self.start("1")
+        self.wait_for("1-wait")
+        self.start("2")
+        self.wait_for("2-run")
+        self.assertFalse((self.root / "1-cache").exists())
+        self.assertFalse((self.root / "1-registration").exists())
         surviving.unlink()
-        self.wait_for("shared-run")
+        self.wait_for("1-run")
 
     def test_cache_refresh_failure_still_allows_checkout_fallback(self):
-        (self.root / "pr-cache-fails").touch()
-        self.start("pr")
-        self.wait_for("pr-run")
+        (self.root / "2-cache-fails").touch()
+        self.start("2")
+        self.wait_for("2-run")
 
     def test_unknown_slot_fails_before_registration(self):
         process, _ = self.start("typo")

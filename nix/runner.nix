@@ -134,7 +134,7 @@ let
     };
   };
 
-  # Two instances of this image: shared and PR-only. Each serializes only
+  # Two interchangeable instances of this image. Each serializes only
   # its own jobs and Git cache; both reuse the host's Nix store and GC roots.
   supervisor = pkgs.writeShellApplication {
     name = "sekka-runner-supervisor";

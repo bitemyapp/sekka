@@ -143,7 +143,7 @@ class TrustGate(unittest.TestCase):
 
 class RunnerAdmission(unittest.TestCase):
     def admitted(self, event, ref="refs/heads/main", repository=gate.REPOSITORY,
-                 workflow="bitemyapp/sekka/.github/workflows/pr.yml@refs/heads/main", slot="shared"):
+                 workflow="bitemyapp/sekka/.github/workflows/pr.yml@refs/heads/main", slot="1"):
         env = {**os.environ, "GITHUB_REPOSITORY": repository, "GITHUB_REF": ref,
                "GITHUB_EVENT_NAME": event, "GITHUB_WORKFLOW_REF": workflow,
                "SEKKA_RUNNER_SLOT": slot}
@@ -166,17 +166,19 @@ class RunnerAdmission(unittest.TestCase):
         self.assertFalse(self.admitted("pull_request_target", ref="refs/pull/233/merge"))
         self.assertFalse(self.admitted("pull_request_target", repository="other/sekka"))
 
-    def test_reserved_slot_accepts_only_automatic_or_manual_trusted_pr_checks(self):
-        for event in ["pull_request_target", "workflow_dispatch"]:
-            self.assertTrue(self.admitted(event, slot="pr"))
-            self.assertFalse(self.admitted(event, slot="pr", ref="refs/heads/topic"))
-            self.assertFalse(self.admitted(event, slot="pr", repository="other/sekka"))
-            for workflow in ["cache", "nightly", "sites", "release", "yuki"]:
-                self.assertFalse(self.admitted(event, slot="pr", workflow=
-                    f"bitemyapp/sekka/.github/workflows/{workflow}.yml@refs/heads/main"))
-        for event in ["push", "schedule", "pull_request", "workflow_run", ""]:
-            self.assertFalse(self.admitted(event, slot="pr"))
-        self.assertFalse(self.admitted("workflow_dispatch", slot="unknown"))
+    def test_both_slots_accept_all_trusted_workloads(self):
+        for slot in ["1", "2"]:
+            self.assertTrue(self.admitted("pull_request_target", slot=slot))
+            for event in ["push", "schedule", "workflow_dispatch"]:
+                for workflow in ["pr", "cache", "nightly", "sites", "release", "yuki"]:
+                    with self.subTest(slot=slot, event=event, workflow=workflow):
+                        self.assertTrue(self.admitted(event, slot=slot, workflow=
+                            f"bitemyapp/sekka/.github/workflows/{workflow}.yml@refs/heads/main"))
+            self.assertFalse(self.admitted("workflow_dispatch", slot=slot, ref="refs/heads/topic"))
+            self.assertFalse(self.admitted("push", slot=slot, repository="other/sekka"))
+            self.assertFalse(self.admitted("pull_request", slot=slot))
+            self.assertFalse(self.admitted("pull_request_target", slot=slot, workflow=
+                "bitemyapp/sekka/.github/workflows/evil.yml@refs/heads/main"))
 
 
 if __name__ == "__main__":

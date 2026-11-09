@@ -1,20 +1,19 @@
 #!/usr/bin/env bash
-# One disposable runner at a time per slot. Run this supervisor once for
-# shared work and once for PR-only work; each owns its Git object cache.
+# One disposable runner at a time per slot. Both slots accept the same
+# workloads and share Nix build artifacts; each owns its Git object cache.
 set -euo pipefail
 
-slot=${SEKKA_RUNNER_SLOT:-shared}
+slot=${SEKKA_RUNNER_SLOT:-1}
 case $slot in
-  shared)
+  1)
     job=sekka-runner-job
-    labels='["self-hosted","linux","x64","sekka-builder","sekka-pr"]'
     ;;
-  pr)
-    job=sekka-runner-pr-job
-    labels='["self-hosted","linux","x64","sekka-pr"]'
+  2)
+    job=sekka-runner-2-job
     ;;
-  *) echo "Unknown runner slot: $slot (expected shared or pr)" >&2; exit 2 ;;
+  *) echo "Unknown runner slot: $slot (expected 1 or 2)" >&2; exit 2 ;;
 esac
+labels='["self-hosted","linux","x64","sekka-builder"]'
 
 cache=${SEKKA_CI_GIT_CACHE_BASE:-/var/cache/sekka-ci-git}/$slot
 mkdir -p "$cache"
