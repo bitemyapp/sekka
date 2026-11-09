@@ -169,21 +169,47 @@ let
   # between selections; distinct feature sets remain distinct artifacts.
   # Only toolkit sources enter this layer, so unrelated application/library
   # edits do not invalidate other consumers' caches.
-  kitConsumers = builtins.filter (
-    name: builtins.elem "aizome-kit" (libraryNames [ name ])
-  ) runtimePackages;
-  kitArtifacts = craneLib.mkCargoDerivation (
-    common
-    // {
-      pname = "aizome-toolkit-artifacts";
-      src = sources.forPackages [ "aizome-kit" ];
-      cargoArtifacts = appDependencies;
-      buildPhaseCargoCommand = lib.concatMapStringsSep "\n" (
-        name:
-        "cargo build --locked --offline --target ${target} --profile release-lto ${packageFlags [ name ]}"
-      ) kitConsumers;
-    }
+  kitConsumers = builtins.filter (name: builtins.elem "aizome-kit" (libraryNames [ name ])) (
+    # Let the applications with substantial mandatory test suites start while
+    # later toolkit variants are still building.
+    lib.unique (
+      [
+        "aizome-yukimi"
+        "aizome-hotaru"
+        "aizome-hako"
+        "aizome-shell"
+      ]
+      ++ runtimePackages
+    )
   );
+  toolkitCacheChain =
+    lib.foldl'
+      (
+        state: name:
+        let
+          artifacts = craneLib.mkCargoDerivation (
+            common
+            // {
+              pname = "aizome-toolkit-artifacts";
+              src = sources.forPackages [ "aizome-kit" ];
+              cargoArtifacts = state.previous;
+              buildPhaseCargoCommand = "cargo build --locked --offline --target ${target} --profile release-lto ${packageFlags [ name ]}";
+            }
+          );
+        in
+        {
+          previous = artifacts;
+          byPackage = state.byPackage // {
+            ${name} = artifacts;
+          };
+        }
+      )
+      {
+        previous = appDependencies;
+        byPackage = { };
+      }
+      kitConsumers;
+  kitArtifacts = toolkitCacheChain.previous;
   libraryArtifacts =
     names:
     let
@@ -197,7 +223,13 @@ let
         // {
           pname = "aizome-libraries";
           src = sources.forPackages libraries;
-          cargoArtifacts = if builtins.elem "aizome-kit" libraries then kitArtifacts else appDependencies;
+          # Consume the earliest shared archive that warms this selection,
+          # rather than waiting for every toolkit variant before starting.
+          cargoArtifacts =
+            if builtins.elem "aizome-kit" libraries then
+              toolkitCacheChain.byPackage.${builtins.head names} or kitArtifacts
+            else
+              appDependencies;
           # Keep the app itself inert, but compile its real local dependencies
           # in the same LTO/feature context as the final app. Selecting the
           # libraries themselves as Cargo roots changes that context.
