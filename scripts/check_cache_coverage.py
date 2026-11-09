@@ -37,6 +37,8 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import unquote, urljoin, urlsplit
 from urllib.request import Request, urlopen
 
+# Not cache.nixos-cuda.org: only systems with NVIDIA's driver ask it
+# (binary-cache.nix), and the reference systems checked here have none.
 CACHES = [
     'https://cache.nixos.org',
     'https://cache.sekka.computer',
