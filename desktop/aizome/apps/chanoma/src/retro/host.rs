@@ -414,6 +414,9 @@ impl Host {
                 RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE => {
                     put(data, retro_rumble_interface { set_rumble_state: rumble })
                 }
+                // Some cores log without asking whether they may
+                // (Flycast, as it loads a game).
+                RETRO_ENVIRONMENT_GET_LOG_INTERFACE => put(data, retro_log_callback { log: chanoma_core_log }),
                 RETRO_ENVIRONMENT_GET_INPUT_DEVICE_CAPABILITIES => {
                     put(data, (1u64 << RETRO_DEVICE_JOYPAD) | (1u64 << RETRO_DEVICE_ANALOG))
                 }
@@ -476,8 +479,7 @@ impl Host {
                 // Nothing of Chanoma's draws in the core's context between
                 // its frames: only the copy, which puts back what it changes.
                 RETRO_ENVIRONMENT_SET_HW_SHARED_CONTEXT => true,
-                // Vulkan's, logging (a C varargs function), and the rest:
-                // not offered.
+                // Vulkan's and the rest: not offered.
                 _ => false,
             }
         }
@@ -553,6 +555,25 @@ unsafe extern "C" fn input_poll() {}
 
 unsafe extern "C" fn input_state(port: c_uint, device: c_uint, index: c_uint, id: c_uint) -> i16 {
     with_host(|h| h.input(port, device, index, id)).unwrap_or(0)
+}
+
+unsafe extern "C" {
+    /// `log.c`: formats a core's line and hands it to [`chanoma_core_said`].
+    fn chanoma_core_log(level: c_uint, fmt: *const c_char, ...);
+}
+
+/// A core's line, formatted. Its errors are Chanoma's warnings (the
+/// journal's), the rest quieter: cores warn of much that's no matter.
+#[unsafe(no_mangle)]
+unsafe extern "C" fn chanoma_core_said(level: c_uint, line: *const c_char) {
+    let Some(line) = string(line) else { return };
+    let level = match level {
+        3 => log::Level::Warn,
+        2 => log::Level::Info,
+        1 => log::Level::Debug,
+        _ => log::Level::Trace,
+    };
+    log::log!(level, "chanoma: core logs {}", line.trim_end());
 }
 
 unsafe extern "C" fn rumble(port: c_uint, effect: c_uint, strength: u16) -> bool {

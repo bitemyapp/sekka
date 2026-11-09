@@ -243,6 +243,15 @@ pub struct retro_rumble_interface {
     pub set_rumble_state: unsafe extern "C" fn(port: c_uint, effect: c_uint, strength: u16) -> bool,
 }
 
+/// printf's arguments, after the line's level (`RETRO_LOG_DEBUG` 0 to
+/// `RETRO_LOG_ERROR` 3).
+pub type retro_log_printf_t = unsafe extern "C" fn(level: c_uint, fmt: *const c_char, ...);
+
+#[repr(C)]
+pub struct retro_log_callback {
+    pub log: retro_log_printf_t,
+}
+
 #[repr(C)]
 pub struct retro_message {
     pub msg: *const c_char,

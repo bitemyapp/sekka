@@ -399,6 +399,22 @@ in
           (`--password-store=basic`).
         '';
       };
+      shareTvDrives = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = ''
+          Let every other account read the drives the TV account opens,
+          without changing them. UDisks mounts an account's drives in
+          `/run/media/USER`, which it makes for that account alone unless
+          it's there already; the TV account's (`/run/media/tv`, the name
+          Settings gives it) is made at boot for every account to look
+          in. On a FAT, exFAT or NTFS drive every file is then the TV
+          account's, which others may read but not write; a Linux
+          filesystem's own owners and permissions apply as anywhere. A
+          drive still open from the TV account's last login can be read
+          from a grown-up's account without unplugging it.
+        '';
+      };
       autostart = lib.mkOption {
         type = lib.types.bool;
         default = false;
@@ -513,6 +529,13 @@ in
       JustWorksRepairing = lib.mkDefault "always";
     };
     systemd.user.generators = lib.mkIf cfg.chanoma.enable { aizome-tv-units = tvUnits; };
+    # The TV account's drives, for every account to read
+    # (chanoma.shareTvDrives): UDisks keeps to a /run/media/USER that's
+    # there already, and makes one only its account may look in otherwise.
+    systemd.tmpfiles.rules = lib.mkIf (cfg.chanoma.enable && cfg.chanoma.shareTvDrives) [
+      "d /run/media 0755 root root -"
+      "d /run/media/tv 0755 root root -"
+    ];
     # A television: Chanoma with every session, and again after a crash.
     # Leaving it with the PIN ends it for the session.
     systemd.user.services.aizome-chanoma = lib.mkIf (cfg.chanoma.enable && cfg.chanoma.autostart) {
