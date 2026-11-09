@@ -3,6 +3,7 @@
 //! happens when windows come and go, and the logic taking in the windows
 //! the core has when it starts (after a reload, say).
 
+use aizome_comp_core::aizome_config::StackNewWindows;
 use aizome_comp_core::aizome_ipc::{DeskInfo, Event, Rect as IpcRect, WindowInfo};
 use aizome_comp_core::logic::{MapInfo, ToplevelRequest};
 use smithay::backend::renderer::utils::with_renderer_surface_state;
@@ -209,6 +210,14 @@ impl Actions for State {
 
     /// Fill (the zoom box) on, off or toggled.
     fn set_fill(&mut self, id: WinId, on: Option<bool>) {
+        let filled = self.lg.r().wm.get(id).is_some_and(|w| w.fill());
+        if !on.unwrap_or(!filled) && crate::tiling::holds(self, id) {
+            // Tiling keeps it filled; a client that asked hears so.
+            for m in self.lg.r().wm.group_members(id) {
+                self.configure(m);
+            }
+            return;
+        }
         let (usable, insets) = self.usable_for(id);
         let l = self.lg.m();
         let old = l.wm.get(id).map(|w| w.rect);
@@ -277,14 +286,23 @@ impl Actions for State {
     }
 
     fn set_float(&mut self, id: WinId, on: Option<bool>) {
+        let floats = self.lg.r().wm.get(id).is_some_and(|w| w.float);
+        let on = on.unwrap_or(!floats);
+        // Floated out of its tile, to its free place; down, back in.
+        if on && !floats {
+            crate::tiling::release(self, id);
+        }
         let l = self.lg.m();
         for m in l.wm.group_members(id) {
             if let Some(w) = l.wm.get_mut(m) {
-                w.float = on.unwrap_or(!w.float);
+                w.float = on;
             }
             l.window_changed(m);
         }
         self.redraw_window(id);
+        if !on {
+            crate::tiling::retile(self);
+        }
     }
 
     fn set_sticky(&mut self, id: WinId, on: Option<bool>) {
@@ -613,7 +631,7 @@ fn after_visibility_change(st: &mut State, id: WinId) {
     st.redraw_window(id);
 }
 
-fn after_placement(st: &mut State, id: WinId, old: Option<Rect>, mut rect: Rect) {
+pub(crate) fn after_placement(st: &mut State, id: WinId, old: Option<Rect>, mut rect: Rect) {
     if st.lg.r().wm.get(id).is_some_and(|w| w.placement == Placement::Free) {
         // A saved free rectangle can outlive an output or Deskbar change.
         let (area, insets) = st.usable_for(id);
@@ -919,11 +937,13 @@ fn set_fullscreen_on(st: &mut State, id: WinId, on: Option<bool>, output: Option
         if st.lg.r().wm.get(id).is_some_and(|w| w.fullscreen()) {
             st.focus_window(Some(id));
         }
+        // Out of full screen, back to its tile.
+        crate::tiling::retile(st);
     }
 }
 
 /// A toplevel's first configure: the usable area as bounds, and the size
-/// its app last had.
+/// its app last had, or with tiling, the area filled.
 pub fn first_configure(st: &mut State, toplevel: &ToplevelSurface) {
     // The core already agreed on the full output size for a request made
     // before mapping. Remembered normal-window bounds must not replace it.
@@ -941,17 +961,56 @@ pub fn first_configure(st: &mut State, toplevel: &ToplevelSurface) {
     let remembered = (parent.is_none() && st.az.settings.windows.remember_geometry)
         .then(|| st.lg.r().remembered.get(&app_id))
         .flatten();
+    let (_, max) = crate::grabs::surface_size_limits(toplevel.wl_surface());
+    let tiles = parent.is_none() && crate::tiling::on(st);
     toplevel.with_pending_state(|s| {
         let i = crate::decor::insets(s.decoration_mode != Some(DecorationMode::ClientSide));
         if let Some(u) = usable {
             let bounds = u.inset(i);
             s.bounds = Some((bounds.w, bounds.h).into());
+            // It opens at the size it will tile at, not one it's about to
+            // leave. Only the size: a window that says it's of a fixed size
+            // after this (as the kit's do) keeps its own, where telling it
+            // it's maximized would have it take this one.
+            if tiles && crate::tiling::grows_to(max, bounds) {
+                s.size = Some((bounds.w, bounds.h).into());
+                return;
+            }
         }
         if let Some(r) = remembered {
             let r = usable.map(|u| crate::wm::fit_into(r, u, i)).unwrap_or(r);
             s.size = Some((r.w, r.h).into());
         }
     });
+}
+
+/// The focused window whose group a new one joins, as `[windows]
+/// stack_new_windows` says; dialogs never do. Another app's window joins
+/// only a window it can share a frame with: not a dialog, full screen,
+/// floating, on every Desk or of a fixed size. Nor does it join opening
+/// full screen, or when it can't grow to the frame, which the whole group
+/// would follow. A window that needs more room grows the frame, within
+/// what the focused window allows.
+fn stack_target(st: &State, id: WinId, info: &MapInfo) -> Option<WinId> {
+    let how = st.az.settings.windows.stack_new_windows;
+    if how == StackNewWindows::None || info.parent.is_some() {
+        return None;
+    }
+    let l = st.lg.r();
+    let f = l.wm.focused().filter(|f| *f != id)?;
+    let w = l.wm.get(f)?;
+    if w.app_id == info.app_id {
+        return Some(f);
+    }
+    if how != StackNewWindows::AnyApp || info.fullscreen || w.parent.is_some() || w.fullscreen() || w.float || w.sticky
+    {
+        return None;
+    }
+    let (min, max) = crate::grabs::size_limits(st, id);
+    let (f_min, f_max) = crate::grabs::size_limits(st, f);
+    let grows = crate::tiling::grows_to(max, w.rect);
+    let room = min.0 <= f_max.0 && min.1 <= f_max.1;
+    (grows && room && f_min != f_max).then_some(f)
 }
 
 /// A toplevel drew its first frame: it joins the desktop.
@@ -964,19 +1023,13 @@ pub fn window_mapped(st: &mut State, id: WinId, info: &MapInfo) {
     l.wins.insert(id, Default::default());
     place_new_window(st, id, info.size, info.parent);
 
-    // A new window of the focused app joins its group, when asked for.
-    let l = st.lg.r();
-    let focused = l.wm.focused();
-    let same_app = focused.filter(|f| l.wm.get(*f).is_some_and(|w| w.app_id == info.app_id && w.id != id));
-    if st.az.settings.windows.stack_new_windows_of_same_app
-        && info.parent.is_none()
-        && let Some(f) = same_app
-    {
+    if let Some(f) = stack_target(st, id, info) {
         st.stack(f, id);
     }
     if info.fullscreen {
         set_fullscreen_on(st, id, Some(true), info.fullscreen_output.clone());
     }
+    crate::tiling::new_window(st, id);
     st.az.window_outputs_dirty = true;
     st.focus_window(Some(id));
     st.configure(id);
@@ -1244,6 +1297,8 @@ pub fn adopt_windows(st: &mut State) {
             st.lg.m().wm.focus(Some(id));
         }
     }
+    // Windows mapped while no logic ran tile too.
+    crate::tiling::retile(st);
     st.az.window_outputs_dirty = true;
     st.az.queue_redraw_all();
 }

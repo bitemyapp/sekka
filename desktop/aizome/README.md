@@ -8,7 +8,9 @@ Rust on Sukumo 蒅, its native toolkit, from the compositor to the calculator.
   amber when focused. Tabs slide along the top edge, and dropping one tab
   among another window's stacks the windows into a group, from any apps,
   with the tab where it was dropped. A new window of the focused app opens
-  as another tab in its group.
+  as another tab in its group; Settei can stack every app's new windows
+  instead, or none. Settei can also tile windows: each fills the Desk
+  beside the Deskbar and stays there, with dialogs floating over it.
 - **NeXT's menus.** One menu bar for the focused app, and the whole of its
   menu at the pointer on ❖-right-click. Any menu tears off into a palette.
 - **IRIX's Toolchest and Desks**, and a Deskbar from Haiku: every app with

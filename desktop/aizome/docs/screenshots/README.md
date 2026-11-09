@@ -40,6 +40,44 @@ fails, so it never read the real display's planes.
 | `15-recording-palette.png` | ❖Space, "record": Record Screen, with Desktop Audio, with Microphone, and with both (Record Area's follow below) |
 | `16-recording-saved.png` | Stopped: the file announced in the bar's line and filed under Screen Recording in the Deskbar, with Show in Files and Open |
 
+The `stacking/` pictures show Desktop & Deskbar's Stack new windows
+choice, taken on 5 November 2026 with debug builds of the
+`aizome-stack-modes` branch (on main at `06eb2a17`). The compositor ran
+headless (`--headless-output 1920x1200@1 --no-shell --no-xwayland`, GLES
+on the AMD render node) with scratch XDG directories and a private D-Bus,
+its settings file starting with only the old switch, off. Settei ran with
+`--sample --pane desktop.stack-new` (the sample system's made-up
+account), writing the file the compositor watches; the terminals are foot
+from nixpkgs running `sleep`, titled with `-T`. The dropdown was opened
+and its third item chosen with `aizomectl input` (a click where
+`AIZOME_KIT_INSPECT` placed it, then Home, Down, Down and Return), and
+`aizomectl screenshot` took each picture at the output's full resolution.
+
+| File | What |
+|---|---|
+| `stacking/settei-menu.png` | The menu open, None checked (the old switch read as off), All windows of any app about to be chosen |
+| `stacking/any-app-group.png` | After choosing it: a terminal opened while Settei had the focus joined it as a second tab; Soroban, of a fixed size, opened on its own |
+
+The `tiling/` pictures show Tile windows, taken on 5 November 2026 with
+debug builds of the same branch, one commit on (`03b1fbe1` plus tiling).
+This session ran the real shell (menu bar, Deskbar, notifications) on the
+same headless output and GLES node, with a scratch `HOME` and XDG
+directories, a private session bus, and the system bus pointed at nothing
+(so the systray shows no network or battery). Settei ran with `--sample`,
+first at `--pane desktop.tile`, whose switch was clicked with `aizomectl
+input` where `AIZOME_KIT_INSPECT` placed it; a second Settei opened at
+`--pane appearance`. The terminal is foot from nixpkgs running `sleep`,
+titled with `-T`. `[windows] stack_new_windows` was edited to `any-app`
+and `[deskbar] collapsed` to `true` in the settings file between pictures.
+The notifications are the shell's own, for the screenshots before.
+
+| File | What |
+|---|---|
+| `tiling/settei-tiled.png` | Tile windows switched on: Settei fills the Desk beside the Deskbar |
+| `tiling/same-app.png` | A terminal opened tiles over Settei (with the default stacking, its tab covers most of Settei's); Soroban, of a fixed size, floats at its own size |
+| `tiling/any-app.png` | With All windows of any app: a second Settei opened while the terminal had the focus joins it as a tab; Soroban stays above |
+| `tiling/deskbar-folded.png` | The Deskbar folded: the tiles take its column |
+
 The `compositor-*.png` pictures are older ones from the compositor's own
 tests.
 

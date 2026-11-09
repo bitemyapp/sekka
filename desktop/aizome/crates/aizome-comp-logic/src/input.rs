@@ -416,6 +416,7 @@ impl InputExt for State {
             Action::Unstack => {
                 if let Some(id) = focused {
                     self.unstack(id, None);
+                    crate::tiling::retile(self);
                 }
             }
             Action::PrevTab | Action::NextTab => {
@@ -549,6 +550,8 @@ fn window_under(st: &mut State, id: WinId, pos: Point<f64, Logical>) -> Option<U
     if !fullscreen
         && let Some(layout) = st.lg.r().decor_layout(&mut st.az.labels, id)
         && let Some(hit) = crate::decor::hit(&layout, pos.x, pos.y)
+        // A tiled window's edges don't resize it.
+        && !(matches!(hit, Hit::Edge(..)) && crate::tiling::holds(st, id))
     {
         return Some(Under::Decor(id, hit));
     }
