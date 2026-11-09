@@ -1,0 +1,187 @@
+From 14e074eeb2253c01639b8f1c1fda8c47a064d699 Mon Sep 17 00:00:00 2001
+From: Chris Allen <cma@bitemyapp.com>
+Date: Thu, 29 Oct 2026 22:19:19 -0500
+Subject: [PATCH] drm/xe/display: Look up a DPT's pages with one cursor
+
+To fill a DPT for a normal or remapped view, xe calls xe_bo_addr() for
+each 4 KiB page. For a BO in system memory, __xe_bo_addr() starts a
+cursor at the head of the BO's sg table and walks it to that page, so
+filling the DPT is quadratic in the BO's DMA segments.
+
+Display version 14 and later map every DPT framebuffer through the
+remapped view, to pad its stride to a power of two. Every flip to a
+framebuffer the plane doesn't already show pins it and fills a new DPT,
+inside the atomic commit ioctl. Once physical memory is fragmented, a
+scanout buffer's pages come in hundreds of segments. On a Panther Lake
+laptop (2880x1800 at 120 Hz, IOMMU in passthrough) after three days of
+uptime, the walk took about 90% of the compositor's CPU time, close to
+3 ms for each flip of a 4-tiled CCS framebuffer.
+
+Look the pages up through a cursor that moves forward, and starts again
+from the head only when the offset goes back, as it can between planes.
+The rotated view, whose offsets go back at every step, keeps
+xe_bo_addr().
+
+The cost was found with perf record and perf ftrace on the running
+compositor. Claude Opus 5.5 (an AI coding assistant, in Claude Code)
+did that profiling and wrote this patch. It was built as a module for
+v7.3 with a distribution's configuration, loaded in QEMU, and run on
+the laptop above for a few minutes after boot. There, pinning made no
+xe_bo_addr() calls, and filling DPTs took about 0.14 ms per pin by perf
+record, against about 0.57 ms for the old lookups on an equally fresh
+boot. A run long enough for memory to fragment, where the old lookups
+took close to 3 ms, has not been done yet.
+
+Fixes: 44e694958b95 ("drm/xe/display: Implement display support")
+Fixes: 216d62bb241a ("drm/xe/display: Add writing of remapped dpt")
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/gpu/drm/xe/display/xe_fb_pin.c | 64 +++++++++++++++++++++++---
+ 1 file changed, 57 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/gpu/drm/xe/display/xe_fb_pin.c b/drivers/gpu/drm/xe/display/xe_fb_pin.c
+index e091162..cfb0949 100644
+--- a/drivers/gpu/drm/xe/display/xe_fb_pin.c
++++ b/drivers/gpu/drm/xe/display/xe_fb_pin.c
+@@ -17,6 +17,7 @@
+ #include "xe_ggtt.h"
+ #include "xe_pat.h"
+ #include "xe_pm.h"
++#include "xe_res_cursor.h"
+ #include "xe_vram_types.h"
+ 
+ static void
+@@ -51,6 +52,48 @@ write_dpt_rotated(struct xe_bo *bo, struct iosys_map *map, u32 *dpt_ofs, u32 bo_
+ 	*dpt_ofs = ALIGN(*dpt_ofs, 4096);
+ }
+ 
++/*
++ * Looks up a BO's pages for a DPT. xe_bo_addr() walks the BO's sg table
++ * from its head on every call, which makes filling a DPT page by page
++ * quadratic in the BO's DMA segments. The cursor moves forward instead,
++ * and only starts again from the head when the offset goes back.
++ */
++struct dpt_cursor {
++	struct xe_bo *bo;
++	struct xe_res_cursor res;
++	u64 offset;
++	bool sg;
++};
++
++static void dpt_cursor_init(struct dpt_cursor *cur, struct xe_bo *bo)
++{
++	cur->bo = bo;
++	cur->offset = U64_MAX;
++	cur->sg = !xe_bo_is_vram(bo) && !xe_bo_is_stolen(bo);
++}
++
++static u64 dpt_cursor_addr(struct dpt_cursor *cur, u64 offset)
++{
++	struct xe_bo *bo = cur->bo;
++
++	if (offset < cur->offset) {
++		u64 size = xe_bo_size(bo) - offset;
++
++		if (cur->sg)
++			xe_res_first_sg(xe_bo_sg(bo), offset, size, &cur->res);
++		else
++			xe_res_first(bo->ttm.resource, offset, size, &cur->res);
++	} else if (offset > cur->offset) {
++		xe_res_next(&cur->res, offset - cur->offset);
++	}
++	cur->offset = offset;
++
++	if (cur->sg)
++		return xe_res_dma(&cur->res);
++
++	return cur->res.start + vram_region_gpu_offset(bo->ttm.resource);
++}
++
+ static unsigned int
+ write_dpt_padding(struct iosys_map *map, unsigned int dest, unsigned int pad)
+ {
+@@ -59,10 +102,11 @@ write_dpt_padding(struct iosys_map *map, unsigned int dest, unsigned int pad)
+ }
+ 
+ static unsigned int
+-write_dpt_remapped_linear(struct xe_bo *bo, struct iosys_map *map,
++write_dpt_remapped_linear(struct dpt_cursor *cur, struct iosys_map *map,
+ 			  unsigned int dest,
+ 			  const struct intel_remapped_plane_info *plane)
+ {
++	struct xe_bo *bo = cur->bo;
+ 	struct xe_device *xe = xe_bo_device(bo);
+ 	struct xe_ggtt *ggtt = xe_device_get_root_tile(xe)->mem.ggtt;
+ 	const u64 pte = xe_ggtt_encode_pte_flags(ggtt, bo,
+@@ -71,7 +115,7 @@ write_dpt_remapped_linear(struct xe_bo *bo, struct iosys_map *map,
+ 	unsigned int size = plane->size;
+ 
+ 	while (size--) {
+-		u64 addr = xe_bo_addr(bo, offset, XE_PAGE_SIZE);
++		u64 addr = dpt_cursor_addr(cur, offset);
+ 
+ 		iosys_map_wr(map, dest, u64, addr | pte);
+ 		dest += sizeof(u64);
+@@ -82,10 +126,11 @@ write_dpt_remapped_linear(struct xe_bo *bo, struct iosys_map *map,
+ }
+ 
+ static unsigned int
+-write_dpt_remapped_tiled(struct xe_bo *bo, struct iosys_map *map,
++write_dpt_remapped_tiled(struct dpt_cursor *cur, struct iosys_map *map,
+ 			 unsigned int dest,
+ 			 const struct intel_remapped_plane_info *plane)
+ {
++	struct xe_bo *bo = cur->bo;
+ 	struct xe_device *xe = xe_bo_device(bo);
+ 	struct xe_ggtt *ggtt = xe_device_get_root_tile(xe)->mem.ggtt;
+ 	const u64 pte = xe_ggtt_encode_pte_flags(ggtt, bo,
+@@ -97,7 +142,7 @@ write_dpt_remapped_tiled(struct xe_bo *bo, struct iosys_map *map,
+ 			 XE_PAGE_SIZE;
+ 
+ 		for (column = 0; column < plane->width; column++) {
+-			u64 addr = xe_bo_addr(bo, offset, XE_PAGE_SIZE);
++			u64 addr = dpt_cursor_addr(cur, offset);
+ 
+ 			iosys_map_wr(map, dest, u64, addr | pte);
+ 			dest += sizeof(u64);
+@@ -116,8 +161,11 @@ write_dpt_remapped(struct xe_bo *bo,
+ 		   const struct intel_remapped_info *remap_info,
+ 		   struct iosys_map *map)
+ {
++	struct dpt_cursor cur;
+ 	unsigned int i, dest = 0;
+ 
++	dpt_cursor_init(&cur, bo);
++
+ 	for (i = 0; i < ARRAY_SIZE(remap_info->plane); i++) {
+ 		const struct intel_remapped_plane_info *plane =
+ 				&remap_info->plane[i];
+@@ -135,9 +183,9 @@ write_dpt_remapped(struct xe_bo *bo,
+ 		}
+ 
+ 		if (plane->linear)
+-			dest = write_dpt_remapped_linear(bo, map, dest, plane);
++			dest = write_dpt_remapped_linear(&cur, map, dest, plane);
+ 		else
+-			dest = write_dpt_remapped_tiled(bo, map, dest, plane);
++			dest = write_dpt_remapped_tiled(&cur, map, dest, plane);
+ 	}
+ }
+ 
+@@ -175,10 +223,12 @@ static int __xe_pin_fb_vma_dpt(struct drm_gem_object *obj,
+ 
+ 	if (intel_gtt_view_is_normal(view)) {
+ 		u64 pte = xe_ggtt_encode_pte_flags(ggtt, bo, xe_cache_pat_idx(xe, XE_CACHE_NONE));
++		struct dpt_cursor cur;
+ 		u32 x;
+ 
++		dpt_cursor_init(&cur, bo);
+ 		for (x = 0; x < size / XE_PAGE_SIZE; x++) {
+-			u64 addr = xe_bo_addr(bo, x * XE_PAGE_SIZE, XE_PAGE_SIZE);
++			u64 addr = dpt_cursor_addr(&cur, x * XE_PAGE_SIZE);
+ 
+ 			iosys_map_wr(&dpt->vmap, x * 8, u64, pte | addr);
+ 		}
+-- 
+2.56.0
+
