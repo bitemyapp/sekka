@@ -4,8 +4,8 @@
 
 mod common;
 
-use aizome_sys::Wake;
 use aizome_sys::statusnotifier::{ItemStatus, StatusNotifier, Toggle, WATCHER_NAME, WATCHER_PATH};
+use aizome_sys::{Takeover, Wake};
 use common::eventually;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -148,7 +148,7 @@ impl Menu {
 #[test]
 fn items_register_change_click_and_leave() {
     let bus = test_bus!();
-    let sn = StatusNotifier::start(&bus.bus(), Wake::none()).expect("serve the watcher");
+    let sn = StatusNotifier::start(&bus.bus(), Wake::none(), Takeover::Any).expect("serve the watcher");
     assert!(sn.available());
 
     // Steam, as libayatana registers: an object path on its connection.
@@ -270,10 +270,10 @@ fn items_register_change_click_and_leave() {
 #[test]
 fn a_second_watcher_takes_over_and_apps_find_it() {
     let bus = test_bus!();
-    let first = StatusNotifier::start(&bus.bus(), Wake::none()).expect("serve the watcher");
+    let first = StatusNotifier::start(&bus.bus(), Wake::none(), Takeover::Any).expect("serve the watcher");
     // A restarted shell (another connection) takes the name.
     let shell2 = aizome_sys::Bus::at(&bus.address).unwrap();
-    let second = StatusNotifier::start(&shell2, Wake::none()).expect("take over");
+    let second = StatusNotifier::start(&shell2, Wake::none(), Takeover::Any).expect("take over");
     assert!(second.available());
     let owner = zbus::blocking::fdo::DBusProxy::new(&bus.builder().build().unwrap())
         .unwrap()
@@ -281,5 +281,30 @@ fn a_second_watcher_takes_over_and_apps_find_it() {
         .unwrap();
     assert_eq!(Some(owner.to_string()), shell2.unique_name());
     drop(first);
+    drop(second);
+}
+
+#[test]
+fn a_headless_shell_takes_the_name_only_from_the_shell_it_replaces() {
+    let bus = test_bus!();
+    let owner = || {
+        let dbus = zbus::blocking::fdo::DBusProxy::new(&bus.builder().build().unwrap()).unwrap();
+        dbus.get_name_owner(WATCHER_NAME.try_into().unwrap()).unwrap().to_string()
+    };
+    let connect = || aizome_sys::Bus::at(&bus.address).unwrap();
+    let desktop = StatusNotifier::start(&bus.bus(), Wake::none(), Takeover::Any).expect("serve the watcher");
+    let held = owner();
+    // A test or nested shell on the person's bus leaves their desktop's
+    // watcher alone, whoever else it would replace.
+    for takeover in [Takeover::Free, Takeover::From(std::process::id().wrapping_add(1))] {
+        assert!(StatusNotifier::start(&connect(), Wake::none(), takeover).is_err(), "{takeover:?}");
+        assert_eq!(owner(), held, "{takeover:?}");
+    }
+    // A restart in that session takes it from the shell it replaces.
+    let next = connect();
+    let second = StatusNotifier::start(&next, Wake::none(), Takeover::From(std::process::id())).expect("take over");
+    assert!(second.available());
+    assert_eq!(Some(owner()), next.unique_name());
+    drop(desktop);
     drop(second);
 }

@@ -1,6 +1,7 @@
 //! A headless compositor must not publish its display to the login session.
-//! Run the real binary, with private directories, disconnected buses and
-//! recording stand-ins for the commands that would mutate shared state.
+//! Run a built binary (`AIZOME_TEST_COMPOSITOR`), with private directories,
+//! disconnected buses and recording stand-ins for the commands that would
+//! mutate shared state.
 
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
@@ -13,6 +14,21 @@ use std::time::{Duration, Instant};
 use aizome_ipc::{Client, Request, Response};
 
 static COUNTER: AtomicU32 = AtomicU32::new(0);
+
+/// The compositor to run, and where its core, logic and std are: beside it
+/// in a Cargo target directory, or in `lib/aizome` of an installed package.
+/// Those must come before cargo's own `LD_LIBRARY_PATH`, which names this
+/// test's target directory.
+fn compositor() -> (PathBuf, std::ffi::OsString) {
+    let exe = std::env::var_os("AIZOME_TEST_COMPOSITOR")
+        .map(PathBuf::from)
+        .expect("AIZOME_TEST_COMPOSITOR: the aizome binary to test, built with aizome-comp-logic");
+    let exe = exe.canonicalize().unwrap_or_else(|e| panic!("{}: {e}", exe.display()));
+    let dir = exe.parent().unwrap();
+    let mut paths = vec![dir.to_path_buf(), dir.join("deps"), dir.join("../lib/aizome")];
+    paths.extend(std::env::split_paths(&std::env::var_os("LD_LIBRARY_PATH").unwrap_or_default()));
+    (exe, std::env::join_paths(paths).unwrap())
+}
 
 struct Fixture {
     dir: PathBuf,
@@ -92,7 +108,8 @@ fn check_headless(invocation: bool, notify: bool, no_session: bool) {
     let notify_path = f.dir.join("notify");
     let notifications = UnixDatagram::bind(&notify_path).unwrap();
     notifications.set_read_timeout(Some(Duration::from_millis(200))).unwrap();
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_aizome"));
+    let (exe, libraries) = compositor();
+    let mut cmd = Command::new(exe);
     cmd.args([
         "--backend",
         "headless",
@@ -105,6 +122,7 @@ fn check_headless(invocation: bool, notify: bool, no_session: bool) {
         "--no-xwayland",
     ])
     .env("PATH", path)
+    .env("LD_LIBRARY_PATH", libraries)
     .env("COMMAND_LOG", &commands)
     .env("SHELL_ENV", &shell_env)
     .env("AIZOME_SHELL_BIN", f.dir.join("bin/aizome-shell"))
@@ -193,21 +211,25 @@ fn check_headless(invocation: bool, notify: bool, no_session: bool) {
 }
 
 #[test]
+#[ignore = "runs a built compositor: AIZOME_TEST_COMPOSITOR, then --include-ignored"]
 fn headless_without_no_session_does_not_publish_to_dbus() {
     check_headless(false, false, false);
 }
 
 #[test]
+#[ignore = "runs a built compositor: AIZOME_TEST_COMPOSITOR, then --include-ignored"]
 fn headless_systemd_invocation_does_not_publish_or_start_desktop_services() {
     check_headless(true, false, false);
 }
 
 #[test]
+#[ignore = "runs a built compositor: AIZOME_TEST_COMPOSITOR, then --include-ignored"]
 fn headless_notify_service_reports_readiness_without_taking_over_the_session() {
     check_headless(false, true, false);
 }
 
 #[test]
+#[ignore = "runs a built compositor: AIZOME_TEST_COMPOSITOR, then --include-ignored"]
 fn explicit_no_session_still_suppresses_publication_and_readiness() {
     check_headless(true, true, true);
 }

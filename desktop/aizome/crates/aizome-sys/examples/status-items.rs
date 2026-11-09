@@ -11,12 +11,12 @@
 
 use std::time::{Duration, Instant};
 
-use aizome_sys::Wake;
 use aizome_sys::statusnotifier::{MenuItem, StatusNotifier};
+use aizome_sys::{Takeover, Wake};
 
 fn main() {
     let seconds: u64 = std::env::args().nth(1).and_then(|s| s.parse().ok()).unwrap_or(5);
-    let sn = StatusNotifier::new(Wake::none());
+    let sn = StatusNotifier::new(Wake::none(), Takeover::Any);
     if !sn.available() {
         eprintln!("couldn't serve the watcher");
         std::process::exit(1);

@@ -125,6 +125,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "aizome-comp-process-tests"
+version = "0.1.0"
+dependencies = [
+ "aizome-ipc",
+]
+
+[[package]]
 name = "aizome-config"
 version = "0.1.0"
 dependencies = [

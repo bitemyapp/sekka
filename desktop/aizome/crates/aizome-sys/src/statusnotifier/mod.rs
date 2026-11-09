@@ -25,8 +25,8 @@
 //! back with [`menu_clicked`](StatusNotifier::menu_clicked).
 //!
 //! Without a session bus, or when another watcher has the name and won't
-//! give it up, [`StatusNotifier::available`] is false and there are no
-//! items.
+//! give it up (or isn't ours to replace, [`Takeover`]),
+//! [`StatusNotifier::available`] is false and there are no items.
 
 mod item;
 mod menu;
@@ -36,7 +36,7 @@ pub use item::{
 };
 pub use menu::{MENU_IFACE, MenuItem, Toggle, strip_mnemonic};
 
-use crate::bus::{self, Bus, Opts, Props};
+use crate::bus::{self, Bus, Opts, Props, Takeover};
 use crate::error::{Error, Result};
 use crate::service::{Model, Stop, Task, Wake, lock, service_handle};
 use futures_lite::StreamExt;
@@ -174,8 +174,8 @@ service_handle!(StatusNotifier, StatusNotifierState);
 impl StatusNotifier {
     /// Serve the watcher on the session bus; without one, or when the
     /// watcher's name can't be had, there are no items.
-    pub fn new(wake: Wake) -> StatusNotifier {
-        let started = Bus::session().and_then(|bus| StatusNotifier::start(&bus, wake.clone()));
+    pub fn new(wake: Wake, takeover: Takeover) -> StatusNotifier {
+        let started = Bus::session().and_then(|bus| StatusNotifier::start(&bus, wake.clone(), takeover));
         started.unwrap_or_else(|error| {
             log::info!("aizome-sys: no status items: {error}");
             StatusNotifier::none(wake)
@@ -194,10 +194,10 @@ impl StatusNotifier {
     }
 
     /// Serve `org.kde.StatusNotifierWatcher` on `bus` and take its name,
-    /// from a watcher that allows it (a previous shell's), allowing the
-    /// next to take it in turn. Fails with [`Error::Unavailable`] when
-    /// another watcher keeps it.
-    pub fn start(bus: &Bus, wake: Wake) -> Result<StatusNotifier> {
+    /// from a watcher that allows it (a previous shell's) as `takeover`
+    /// permits, allowing the next to take it in turn. Fails with
+    /// [`Error::Unavailable`] when another watcher keeps it.
+    pub fn start(bus: &Bus, wake: Wake, takeover: Takeover) -> Result<StatusNotifier> {
         let (inbox_tx, inbox) = mpsc::channel::<Input>();
         let mut sn = StatusNotifier::none(wake);
         sn.bus = Some(bus.clone());
@@ -212,8 +212,11 @@ impl StatusNotifier {
             return Err(Error::Unavailable("this connection already serves a status notifier watcher".into()));
         }
         bus::wait_until_serving(bus, WATCHER_PATH)?;
-        let flags =
-            RequestNameFlags::DoNotQueue | RequestNameFlags::AllowReplacement | RequestNameFlags::ReplaceExisting;
+        let mut flags = RequestNameFlags::DoNotQueue | RequestNameFlags::AllowReplacement;
+        let owner = if matches!(takeover, Takeover::From(_)) { bus.owner_pid(WATCHER_NAME) } else { None };
+        if takeover.replaces(owner) {
+            flags |= RequestNameFlags::ReplaceExisting;
+        }
         match zbus::block_on(conn.request_name_with_flags(WATCHER_NAME, flags)) {
             Ok(RequestNameReply::PrimaryOwner | RequestNameReply::AlreadyOwner) => {
                 sn.named = true;

@@ -173,9 +173,14 @@ enum Signal {
 impl NoteServer {
     /// Take the name on the session bus and serve, giving ids from `first`
     /// on; `sink` hears what apps ask (on the bus's thread). The name is
-    /// held allowing replacement and taken replacing whoever has it, so a
-    /// restarted shell takes it over from the old one without a gap.
-    pub fn start(first: u32, sink: impl Fn(NoteEvent) + Send + Sync + 'static) -> zbus::Result<NoteServer> {
+    /// held allowing replacement and taken replacing whoever `takeover`
+    /// allows, so a restarted shell takes it over from the old one without
+    /// a gap.
+    pub fn start(
+        first: u32,
+        takeover: aizome_sys::Takeover,
+        sink: impl Fn(NoteEvent) + Send + Sync + 'static,
+    ) -> zbus::Result<NoteServer> {
         let sink: Arc<dyn Fn(NoteEvent) + Send + Sync> = Arc::new(sink);
         let next = Arc::new(AtomicU32::new(first.max(1)));
         let iface = Notifications { next: next.clone(), sink: sink.clone() };
@@ -185,7 +190,7 @@ impl NoteServer {
             let (conn, sink) = (conn.clone(), sink.clone());
             std::thread::Builder::new()
                 .name("notifications-name".into())
-                .spawn(move || watch_name(conn, sink))
+                .spawn(move || watch_name(conn, takeover, sink))
                 .map_err(|e| zbus::Error::Failure(e.to_string()))?;
         }
         let (tx, rx) = std::sync::mpsc::channel::<Signal>();
@@ -226,13 +231,20 @@ impl NoteServer {
 }
 
 /// Asks for the name, then says when it's ours and when it's lost.
-fn watch_name(conn: zbus::Connection, sink: Arc<dyn Fn(NoteEvent) + Send + Sync>) {
+fn watch_name(conn: zbus::Connection, takeover: aizome_sys::Takeover, sink: Arc<dyn Fn(NoteEvent) + Send + Sync>) {
     use zbus::fdo::{RequestNameFlags, RequestNameReply};
     let conn = zbus::blocking::Connection::from(conn);
     let Ok(proxy) = zbus::blocking::fdo::DBusProxy::new(&conn) else { return };
     let (Ok(lost), Ok(acquired)) = (proxy.receive_name_lost(), proxy.receive_name_acquired()) else { return };
     let name = zbus::names::WellKnownName::from_static_str_unchecked(NAME);
-    let flags = RequestNameFlags::AllowReplacement | RequestNameFlags::ReplaceExisting | RequestNameFlags::DoNotQueue;
+    let mut flags = RequestNameFlags::AllowReplacement | RequestNameFlags::DoNotQueue;
+    let owner = match takeover {
+        aizome_sys::Takeover::From(_) => proxy.get_connection_unix_process_id(name.clone().into()).ok(),
+        _ => None,
+    };
+    if takeover.replaces(owner) {
+        flags |= RequestNameFlags::ReplaceExisting;
+    }
     match proxy.request_name(name.clone(), flags) {
         Ok(RequestNameReply::PrimaryOwner) | Ok(RequestNameReply::AlreadyOwner) => {}
         Ok(r) => log::warn!("{NAME}: another server keeps it ({r:?})"),

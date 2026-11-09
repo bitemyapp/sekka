@@ -50,7 +50,7 @@ impl Sys {
             logind: Some(Logind::new(w())),
             disks: Some(aizome_sys::disks::Disks::new(w())),
             mpris: Some(Mpris::new(w())),
-            status: Some(StatusNotifier::new(w())),
+            status: Some(StatusNotifier::new(w(), crate::shell::takeover())),
         }
     }
 

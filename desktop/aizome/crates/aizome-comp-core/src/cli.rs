@@ -40,8 +40,10 @@ pub struct Options {
     pub no_shell: bool,
     /// Start no X11 bridge (xwayland-satellite).
     pub no_xwayland: bool,
-    /// Opt out of login-session ownership and service readiness.
-    /// Headless and nested backends never own the login session.
+    /// Opt out of login-session ownership (the environment export,
+    /// `aizome-session.target` and notifications) and service readiness.
+    /// Headless and nested backends never own the login session;
+    /// `AIZOME_NOTIFY` makes any compositor send notifications.
     pub no_session: bool,
     /// Settings file to read instead of ~/.config/aizome/settings.toml.
     pub config: Option<PathBuf>,
@@ -68,8 +70,10 @@ usage: aizome [options] [-- command args...]
                                   ~/.config/aizome/settings.toml)
   --no-shell                      don't start aizome-shell
   --no-xwayland                   don't start xwayland-satellite
-  --no-session                    disable login-session integration (udev)
-                                  and service readiness (all backends)
+  --no-session                    disable login-session integration (udev:
+                                  environment export, session target and
+                                  notifications) and service readiness (all
+                                  backends); AIZOME_NOTIFY=1 still notifies
   --logic PATH                    the compositor logic library to load
                                   (default: $AIZOME_LOGIC, else the one
                                   installed beside the binary)

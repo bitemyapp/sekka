@@ -1129,7 +1129,7 @@ impl Shell {
             let tx = tx.clone();
             // Ids go on from the last one given.
             let first = self.notes.next_id() + 1;
-            match crate::notifications::server::NoteServer::start(first, move |e| {
+            match crate::notifications::server::NoteServer::start(first, takeover(), move |e| {
                 tx.send(Msg::Note(e));
             }) {
                 Ok(s) => self.note_server = Some(s),
@@ -2023,6 +2023,23 @@ pub fn real_session() -> bool {
     is_real_session(var("AIZOME_SESSION").as_deref(), var("XDG_CURRENT_DESKTOP").as_deref())
 }
 
+/// From whom this shell may take the session bus's names (notifications,
+/// the status items' watcher). A headless or nested shell shares the
+/// person's real session bus, so it takes them only from the shell it
+/// replaces, never from their desktop's.
+pub fn takeover() -> aizome_sys::Takeover {
+    takeover_for(real_session(), crate::carry::previous_shell())
+}
+
+fn takeover_for(real: bool, previous: Option<u32>) -> aizome_sys::Takeover {
+    use aizome_sys::Takeover;
+    match (real, previous) {
+        (true, _) => Takeover::Any,
+        (false, Some(pid)) => Takeover::From(pid),
+        (false, None) => Takeover::Free,
+    }
+}
+
 /// The decision, from `AIZOME_SESSION` and `XDG_CURRENT_DESKTOP`. The
 /// compositor says so (`AIZOME_SESSION`): headless and nested compositors
 /// run inside the user's real login session too, so the desktop's name
@@ -2376,6 +2393,16 @@ mod tests {
         assert!(is_real_session(None, Some("foo:aizome")));
         assert!(!is_real_session(None, Some("Hyprland")));
         assert!(!is_real_session(None, None));
+    }
+
+    #[test]
+    fn only_the_real_session_takes_names_from_another_desktop() {
+        use aizome_sys::Takeover;
+        assert_eq!(takeover_for(true, None), Takeover::Any);
+        assert_eq!(takeover_for(true, Some(41)), Takeover::Any);
+        // A headless or nested restart replaces only its own old shell.
+        assert_eq!(takeover_for(false, Some(41)), Takeover::From(41));
+        assert_eq!(takeover_for(false, None), Takeover::Free);
     }
 
     // ---- two displays, each showing a Desk of its own ------------------

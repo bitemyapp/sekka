@@ -225,14 +225,15 @@ rustPlatform.buildRustPackage {
       }
     }
     export TZDIR=${tzdata}/share/zoneinfo
-    # Exercise the socket fixture with a TMPDIR longer than sockaddr_un:
-    # runtime sockets must use their own short directory.
+    # The compositor this package installs, as built above: its process
+    # tests need only the IPC client, so nothing rebuilds the core with
+    # aizome-comp's test dependencies. Exercise the socket fixture with a
+    # TMPDIR longer than sockaddr_un: runtime sockets must use their own
+    # short directory.
     sessionTestTmp="$TMPDIR/session-environment-long-temporary-directory/session-environment-long-temporary-directory/session-environment-long-temporary-directory"
     mkdir -p "$sessionTestTmp"
-    TMPDIR="$sessionTestTmp" ${cargo}/bin/cargo test --offline --target ${target} --release -p aizome-comp --test session_environment
-    # Test-only dependency features can change the dylib ABI. Restore the
-    # production compositor and logic together before installing them.
-    ${cargo}/bin/cargo build --offline --target ${target} --release -p aizome-comp -p aizome-comp-logic
+    TMPDIR="$sessionTestTmp" AIZOME_TEST_COMPOSITOR="$PWD/target/${target}/release/aizome" \
+      ${cargo}/bin/cargo test --offline --target ${target} --release -p aizome-comp-process-tests -- --include-ignored
     cargo test --offline --target ${target} --profile release-lto -p aizome-yukimi -p aizome-kit --lib --test headless --test look --test golden
     # A successful spawn is not a successful application launch. Gate the
     # shipped shell on process outcomes and its failure/details interface.
