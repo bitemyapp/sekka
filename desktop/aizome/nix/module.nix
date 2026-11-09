@@ -101,6 +101,59 @@ let
     EOF
     done
   '';
+  # Reclaim protection (MemoryLow) for the services the desktop waits on
+  # (programs.aizome.memoryReserve), as drop-ins: they apply to whichever
+  # package or module defines the unit, and do nothing where it isn't
+  # installed. A unit is protected only as far as its parent is, so the
+  # slices and user managers above these services get the sums.
+  reserveSum = units: "${toString (lib.foldl' builtins.add 0 (lib.attrValues units))}M";
+  reserve = lib.mapAttrs (_: lib.filterAttrs (_: mib: mib > 0)) cfg.memoryReserve;
+  services = {
+    session = config.systemd.user.services;
+    system = config.systemd.services;
+  };
+  # A NixOS-defined service carries serviceConfig in its main unit, which a
+  # drop-in would override, so an explicit MemoryLow keeps its unit. The
+  # sums still count the budget, hence the warning.
+  explicitLow =
+    manager: unit:
+    lib.attrByPath [
+      (lib.removeSuffix ".service" unit)
+      "serviceConfig"
+      "MemoryLow"
+    ] null services.${manager};
+  explicit = lib.concatLists (
+    lib.mapAttrsToList (
+      manager: units: lib.filter (unit: explicitLow manager unit != null) (lib.attrNames units)
+    ) cfg.memoryReserve
+  );
+  # A 0 is written too: it overrides what the unit asks for itself
+  # (systemd-oomd's 64 MiB).
+  dropIns = lib.mapAttrs (
+    manager: lib.filterAttrs (unit: _: explicitLow manager unit == null)
+  ) cfg.memoryReserve;
+  # Named to sort after packaged drop-ins (10-…) and before an
+  # administrator's (50-…, override.conf), which can still change them.
+  memoryDropIns = pkgs.runCommand "aizome-memory-reserve" { } ''
+    mkdir -p "$out"
+    ${lib.concatStrings (
+      lib.concatLists (
+        lib.mapAttrsToList
+          (
+            manager: units:
+            lib.mapAttrsToList (unit: mib: ''
+              dir="$out/lib/systemd/${manager}/"${lib.escapeShellArg "${unit}.d"}
+              mkdir -p "$dir"
+              printf '[Service]\nMemoryLow=%sM\n' ${toString mib} > "$dir/40-aizome-memory.conf"
+            '') units
+          )
+          {
+            user = dropIns.session;
+            inherit (dropIns) system;
+          }
+      )
+    )}
+  '';
   # wf-recorder (the fallback recorder) puts its wl_shm buffers in files in
   # /tmp, which on most NixOS systems is on disk: every frame the compositor
   # copies would be written out (over 1 GB/s at 2880 × 1800 and 60 fps) and
@@ -191,6 +244,53 @@ in
         description = "The Day theme's default wallpaper.";
       };
     };
+    memoryReserve = {
+      session = lib.mkOption {
+        type = lib.types.attrsOf lib.types.ints.unsigned;
+        default = { };
+        defaultText = lib.literalMD ''
+          `aizome.service` 1024, `aizome-portal.service` 32, the session bus
+          16, `xdg-desktop-portal.service` 16, and PipeWire's `pipewire`,
+          `pipewire-pulse` and `wireplumber` services 32, 48 and 32, each
+          where installed as user services.
+        '';
+        example = {
+          "aizome.service" = 1536;
+          "aizome-portal.service" = 0;
+        };
+        description = ''
+          Best-effort reclaim protection (`MemoryLow`), in MiB, for user
+          services in `session.slice` that the desktop waits on: drawing and
+          input, audio, the session bus and the portals. The defaults cover
+          what each service keeps resident, not the reclaimable caches
+          charged alongside it. `session.slice`, each user manager and
+          `user-UID.slice`, and `user.slice` get the sum; people signed in
+          at the same time share `user.slice`'s. 0 turns a service's
+          protection off. Unused protection stays available to other
+          programs, and the kernel reclaims protected memory rather than
+          run out.
+        '';
+      };
+      system = lib.mkOption {
+        type = lib.types.attrsOf lib.types.ints.unsigned;
+        default = { };
+        defaultText = lib.literalMD ''
+          `systemd-logind.service` 16, `systemd-udevd.service` 64, the system
+          bus 32, and, where enabled, `rtkit-daemon.service` 8,
+          `bluetooth.service` 16 and `systemd-oomd.service` 64. With system-wide
+          PipeWire, its `pipewire`, `pipewire-pulse` and `wireplumber` services
+          receive 32, 48 and 32 respectively, each where enabled.
+        '';
+        description = ''
+          The same, for system services the desktop waits on: logind (the
+          compositor's seat and input and display devices), udev (hotplug),
+          the system bus, RealtimeKit (realtime audio threads), BlueZ
+          (Bluetooth keyboards and mice deliver every event through it) and
+          systemd-oomd, and PipeWire's services when `services.pipewire.systemWide`
+          is enabled. `system.slice` gets the sum.
+        '';
+      };
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -234,6 +334,7 @@ in
     systemd.packages = [
       cfg.package
       nmAppletDropIns
+      memoryDropIns
     ];
     systemd.user.services.xdg-desktop-portal-wlr = {
       overrideStrategy = "asDropin";
@@ -243,14 +344,87 @@ in
       ];
     };
 
-    # Under load, the session (the compositor, which also weighs 1000 within
-    # it, pipewire, the portals) runs before apps, so the desktop keeps
-    # drawing and answering and Ctrl+Alt+Del opens at once. Raising
-    # session.slice rather than lowering app.slice keeps apps ahead of
-    # background.slice (30): 400 : 100 : 30.
+    assertions = [
+      {
+        assertion = lib.all (lib.hasSuffix ".service") (
+          lib.attrNames (cfg.memoryReserve.session // cfg.memoryReserve.system)
+        );
+        message = "programs.aizome.memoryReserve names services (unit names ending in .service).";
+      }
+    ];
+    warnings = lib.optional (explicit != [ ]) ''
+      programs.aizome.memoryReserve: ${lib.concatStringsSep ", " explicit} set
+      serviceConfig.MemoryLow, which their units keep, but the slices above them
+      still count the budgets. Set the sizes in programs.aizome.memoryReserve instead.
+    '';
+    # CPU/I/O weights help only while what these services run on is
+    # resident: a compositor waiting on swapped-out pages misses input
+    # whatever its weight. Each budget covers what that service keeps
+    # resident on a 4K workstation (measured peaks, and resident plus
+    # swapped memory under heavy load), with headroom, so reclaim takes
+    # applications' pages and the caches charged to these services first.
+    programs.aizome.memoryReserve =
+      let
+        bus =
+          if config.services.dbus.implementation == "broker" then "dbus-broker.service" else "dbus.service";
+        pipewire = config.services.pipewire;
+        audio = lib.optionalAttrs pipewire.enable (
+          {
+            "pipewire.service" = 32;
+          }
+          // lib.optionalAttrs pipewire.pulse.enable { "pipewire-pulse.service" = 48; }
+          // lib.optionalAttrs pipewire.wireplumber.enable { "wireplumber.service" = 32; }
+        );
+      in
+      {
+        session = lib.mapAttrs (_: lib.mkDefault) (
+          {
+            # The compositor, shell, Xwayland and xwayland-satellite: about
+            # 800 MiB of heap, mapped code and the shell's shared buffers.
+            "aizome.service" = 1024;
+            "aizome-portal.service" = 32;
+            ${bus} = 16;
+          }
+          # Apps ask the Settings portal for the color scheme as they start.
+          // lib.optionalAttrs config.xdg.portal.enable { "xdg-desktop-portal.service" = 16; }
+          // lib.optionalAttrs (!pipewire.systemWide) audio
+        );
+        system = lib.mapAttrs (_: lib.mkDefault) (
+          {
+            # Through libseat, logind opens the compositor's input and DRM
+            # devices, pauses and resumes them across VT switches and sleep.
+            "systemd-logind.service" = 16;
+            # Hotplugged keyboards, mice and displays reach libinput and the
+            # compositor only after udev has processed them.
+            "systemd-udevd.service" = 64;
+            # Carries logind's signals to the compositor.
+            ${bus} = 32;
+          }
+          // lib.optionalAttrs config.security.rtkit.enable { "rtkit-daemon.service" = 8; }
+          # Bluetooth LE keyboards and mice deliver every event through BlueZ.
+          // lib.optionalAttrs config.hardware.bluetooth.enable { "bluetooth.service" = 16; }
+          # oomd's own unit asks for 64 MiB, which has no effect unless
+          # system.slice grants it.
+          // lib.optionalAttrs config.systemd.oomd.enable { "systemd-oomd.service" = 64; }
+          // lib.optionalAttrs pipewire.systemWide audio
+        );
+      };
+    systemd.slices.system.sliceConfig.MemoryLow = lib.mkDefault (reserveSum reserve.system);
+    # Every account's slice and user manager claim the sum. Accounts busy
+    # at the same time share user.slice's reserve by usage, so a machine
+    # with several raises user.slice.
+    systemd.slices.user.sliceConfig.MemoryLow = lib.mkDefault (reserveSum reserve.session);
+    systemd.slices."user-" = {
+      overrideStrategy = "asDropin";
+      sliceConfig.MemoryLow = lib.mkDefault (reserveSum reserve.session);
+    };
+    systemd.services."user@".serviceConfig.MemoryLow = lib.mkDefault (reserveSum reserve.session);
+    # Keep the compositor, shell, audio and portals ahead of applications
+    # for CPU/I/O too: session : app : background = 400 : 100 : 30.
     systemd.user.slices.session.sliceConfig = {
       CPUWeight = lib.mkDefault 400;
       IOWeight = lib.mkDefault 400;
+      MemoryLow = lib.mkDefault (reserveSum reserve.session);
     };
 
     # In Aizome, Settings owns the time zone and the computer's name:

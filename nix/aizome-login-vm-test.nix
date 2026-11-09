@@ -23,7 +23,7 @@ pkgs.testers.runNixOSTest {
   globalTimeout = 1200;
   node.pkgsReadOnly = false;
   nodes.machine =
-    { lib, ... }:
+    { config, lib, ... }:
     {
       imports = [ desktopsModule ];
       calamares.desktops = [ "aizome" ];
@@ -55,8 +55,13 @@ pkgs.testers.runNixOSTest {
       environment.systemPackages = [
         (import ./libsecret-dh-padding.nix { inherit (pkgs) lib libsecret; })
       ];
+      # Each service's budget in MiB, for the test to compare with
+      # systemd's and the kernel's.
+      environment.etc."aizome-memory-reserve.json".text =
+        builtins.toJSON config.programs.aizome.memoryReserve;
     };
   testScript = ''
+    import json
     import shlex
     import time
     from typing import Any
@@ -118,6 +123,29 @@ pkgs.testers.runNixOSTest {
         machine.fail("test -e /home/demo/.config/aizome/settings.toml")
         machine.sleep(10)
         machine.screenshot("aizome-session")
+
+    with subtest("the services the desktop waits on keep their reclaim budgets"):
+        # A service's MemoryLow counts only as far as every ancestor grants
+        # it, so the user slices, the user manager and system.slice carry
+        # the sums. Read the kernel's view of them after a real login.
+        mib = 1024 * 1024
+        reserve = json.loads(machine.succeed("cat /etc/aizome-memory-reserve.json"))
+        session, system = reserve["session"], reserve["system"]
+        def low(path):
+            return int(machine.succeed(f"cat /sys/fs/cgroup/{path}/memory.low"))
+        manager = "user.slice/user-1000.slice/user@1000.service"
+        for path in ("user.slice", "user.slice/user-1000.slice", manager, manager + "/session.slice"):
+            assert low(path) == sum(session.values()) * mib, (path, low(path))
+        assert low("system.slice") == sum(system.values()) * mib, low("system.slice")
+        assert low(manager + "/app.slice") == 0
+        assert low(manager + "/session.slice/aizome.service") == session["aizome.service"] * mib
+        assert low("system.slice/systemd-logind.service") == system["systemd-logind.service"] * mib
+        for unit, size in session.items():
+            assert user(f"systemctl --user show -P LoadState {unit}").strip() == "loaded", unit
+            assert int(user(f"systemctl --user show -P MemoryLow {unit}")) == size * mib, unit
+        for unit, size in system.items():
+            assert machine.succeed(f"systemctl show -P LoadState {unit}").strip() == "loaded", unit
+            assert int(machine.succeed(f"systemctl show -P MemoryLow {unit}")) == size * mib, unit
 
     with subtest("the login keyring is unlocked by that password"):
         machine.wait_until_succeeds(

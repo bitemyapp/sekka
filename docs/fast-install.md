@@ -65,7 +65,9 @@ and the fixture checked: the password hash and PAM login, locked root, time
 zone and DST rules, migrated Wi-Fi, the requested filesystem pinned by the
 booted UUID, `noatime`, desktops, Determinate Nix and the absence of live-only
 files. With swap on it also checked the RAM-matched swap size, zswap, swappiness
-100 and `resume=`; with tuning on, ananicy-cpp and the dirty limits.
+100 and `resume=`; with tuning on, ananicy-cpp and the dirty limits. These runs
+predate swappiness 60: since then the fixture checks swappiness 60 and
+`vm.page-cluster = 1`, as swappiness 60 alone is also the kernel's default.
 
 | Firmware / disk | Filesystem (old) | Desktops, apps | Swap / tuning | Prepare (s) | Click → complete (s) | Copy (s) | Result |
 |---|---|---|---|---|---|---|---|

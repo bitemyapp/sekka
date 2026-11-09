@@ -10,6 +10,16 @@ are from this laptop, debug builds unless said (dependencies at
 `opt-level = 2`, the workspace's own crates unoptimised), so they're upper
 bounds. Exceptions to the budget are written up with their reasons.
 
+## Responsiveness under memory pressure
+
+CPU frame cost is not input latency: a swapped-out compositor can miss seconds
+of input despite high CPU weight. The NixOS module gives the compositor, shell,
+audio, portals and the system services they wait on best-effort `MemoryLow`
+reserves (`programs.aizome.memoryReserve`), described in
+[Sekka's tuning guide](../../../docs/tuning.md#keeping-the-desktop-resident).
+The frame-budget measurements below don't cover memory or GPU contention: for
+those, read PSI, swap traffic and the compositor's stall warnings.
+
 ## At a glance
 
 Every part below was measured again on 18 October 2026 between 00:00 and
