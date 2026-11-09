@@ -19,3 +19,12 @@ change.
 
 [plymouth/README.md](plymouth/README.md) explains where the three Plymouth bugs
 come from, how the fixes were tested, and how they are being submitted.
+
+## Reports
+
+Bugs in code Sekka can't patch, with a reproducer and what Sekka does
+instead.
+
+| Project | Report | What goes wrong | Upstream, 2026-11-05 |
+| --- | --- | --- | --- |
+| NVIDIA driver | [sync-object-leak](nvidia/sync-object-leak.md) | Each GL sync, and each EGL sync after GPU work, leaks 16–28 bytes; Aizome's compositor reached 410 MiB in two days | Not sent |

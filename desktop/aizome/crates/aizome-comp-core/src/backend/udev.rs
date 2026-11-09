@@ -24,7 +24,7 @@ use smithay::backend::drm::exporter::gbm::GbmFramebufferExporter;
 use smithay::backend::drm::output::{DrmOutput, DrmOutputManager, DrmOutputRenderElements};
 use smithay::backend::drm::{DrmDevice, DrmDeviceFd, DrmEvent, DrmEventMetadata, DrmEventTime, DrmNode, NodeType};
 use smithay::backend::egl::context::ContextPriority;
-use smithay::backend::egl::{EGLDevice, EGLDisplay};
+use smithay::backend::egl::{EGLContext, EGLDevice, EGLDisplay};
 use smithay::backend::input::InputEvent;
 use smithay::backend::libinput::{LibinputInputBackend, LibinputSessionInterface};
 use smithay::backend::renderer::element::RenderElementStates;
@@ -167,7 +167,11 @@ impl Udev {
         info!("primary GPU {primary_gpu}");
         let renderers = match renderer {
             Some(RendererKind::Pixman) => Renderers::Pixman(PixmanRenderer::new().map_err(|e| e.to_string())?),
-            _ => match GpuManager::new(GbmGlesBackend::with_context_priority(ContextPriority::High)) {
+            _ => match GpuManager::new(GbmGlesBackend::with_factory(|display| {
+                let context = EGLContext::new_with_priority(display, ContextPriority::High)?;
+                // Safety: the GpuManager renders on this (the main) thread only.
+                Ok(unsafe { super::gles_renderer(context) }?)
+            })) {
                 Ok(g) => Renderers::Gles(Box::new(g)),
                 Err(e) => {
                     warn!("GLES unavailable ({e:?}); rendering with pixman");
