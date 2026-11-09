@@ -3129,6 +3129,14 @@ the backport returns Nixpkgs' own package. `checks.x86_64-linux.libsecret-dh`
 forces short shared secrets at the GnuTLS boundary and verifies their padding,
 with the original backend as a negative control.
 
+The NixOS test driver fails at once when QEMU exits before connecting, but
+waits for the whole test timeout when QEMU neither connects nor exits. On
+loaded hosts `network-dns-vm`, `tuning` and `network-vm` logged "starting vm"
+and nothing more. `network-vm` hung that way on 2026-11-08 while 15 other test
+VMs started within 13 seconds. `tests/vm_start.py` gives their VMs five
+minutes, logs the state and wait channel of each process and thread, kills
+them and starts the VM once more.
+
 The runner's Nix client comes from Sekka's pinned Determinate input, matching
 the host daemon's implementation. An upstream client cannot decode every build
 status a Determinate daemon sends, and loses the original error when sibling
