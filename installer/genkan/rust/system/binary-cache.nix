@@ -15,11 +15,10 @@
 # CUDA is unfree, so cache.nixos.org has no CUDA build of anything and Sekka's
 # cache can't publish one. The NixOS CUDA team's Hydra builds Nixpkgs with
 # CUDA on, the unstable channel Sekka follows included, and serves the result
-# from cache.nixos-cuda.org. With it, a CUDA llama.cpp that someone with an
-# NVIDIA GPU adds to their system downloads instead of compiling again each
-# time Nixpkgs changes it. Nothing Sekka installs comes from there, so only
-# systems with NVIDIA's driver ask it, and last (60; its nix-cache-info says
-# 50, as Sekka's does).
+# from cache.nixos-cuda.org. With it, a CUDA llama.cpp downloads instead of
+# compiling again each time Nixpkgs changes it. CUDA software needs NVIDIA's
+# driver, so only installed systems with the driver ask this cache, and last
+# (60; its nix-cache-info says 50, as Sekka's does).
 { config, lib, ... }:
 {
   options.calamares.binaryCache = {

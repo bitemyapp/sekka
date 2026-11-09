@@ -1271,9 +1271,8 @@ follows `calamares.nvidia.enable`), signed with `cache.nixos-cuda.org`, as the
 NixOS wiki's CUDA page documents. CUDA is unfree, so cache.nixos.org has no
 CUDA build of anything and Sekka's cache can't publish one. That team's Hydra
 builds Nixpkgs with CUDA on, the unstable channel Sekka follows included.
-Nothing Sekka installs comes from there. It is for what people add themselves:
-without it, a CUDA llama.cpp compiles again whenever Nixpkgs changes it, twice
-in the week before the cache was added. Three limits:
+Without the cache, a CUDA llama.cpp compiles again whenever Nixpkgs changes
+it, twice in the week before the cache was added. Three limits:
 
 - Only Nixpkgs' own builds are there. `llama-cpp.override { cudaSupport =
   true; }`, `pkgsCuda.llama-cpp` and `nixpkgs.config.cudaSupport = true` all
