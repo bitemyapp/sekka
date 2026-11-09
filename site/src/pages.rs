@@ -1117,6 +1117,7 @@ pub fn status(site: &Site) -> Result<Page> {
       <li>Genkan's GitHub step is optional. It reads your public SSH keys and sets your Git identity.</li>
       <li>Sekka's own packages download from cache.sekka.computer, on Cloudflare R2. Only free software is published there.</li>
       <li>The AI applications download from numtide's cache.numtide.com, which Nix asks only for what cache.nixos.org and Sekka's cache don't have.</li>
+      <li>With an NVIDIA GPU, Nix also asks the NixOS CUDA team's cache.nixos-cuda.org, last, for CUDA builds you add yourself, such as llama.cpp's. Nothing Sekka installs comes from it.</li>
     </ul>
   </article>
 </section>

@@ -587,24 +587,48 @@
           assert latest.hardware.nvidia.powerManagement.finegrained;
           pkgs.writeText "nvidia-on-media" latest.hardware.nvidia.package.version;
         # The live media and installed systems use the caches this flake
-        # advertises, with the same keys.
+        # advertises, with the same keys. An installed system with NVIDIA's
+        # driver, and no other, also uses the NixOS CUDA team's cache, which
+        # the flake leaves out: nothing built from it is a CUDA build.
         binary-cache =
           let
             advertised = (import ./flake.nix).nixConfig;
-            installed =
+            reference =
               (import ./nix/reference-systems.nix {
                 inherit inputs applicationCatalog;
                 desktops = [ "tatami" ];
-              }).systems.tatami.config;
+              }).systems.tatami;
+            installed = reference.config;
+            nvidia = (reference.extendModules { modules = [ { calamares.nvidia.enable = true; } ]; }).config;
             uses =
               c:
               builtins.all (name: builtins.all (v: builtins.elem v c.nix.settings.${name}) advertised.${name}) [
                 "extra-substituters"
                 "extra-trusted-public-keys"
               ];
+            # Whether a system asks the CUDA cache, and whether it trusts its key.
+            cuda =
+              c:
+              map (builtins.any (nixpkgs.lib.hasInfix "cache.nixos-cuda.org")) [
+                c.nix.settings.extra-substituters
+                c.nix.settings.extra-trusted-public-keys
+              ];
+            both = [
+              true
+              true
+            ];
+            neither = [
+              false
+              false
+            ];
           in
           assert uses installer.config;
           assert uses installed;
+          assert uses nvidia;
+          assert cuda nvidia == both;
+          assert cuda installed == neither;
+          assert cuda installer.config == neither;
+          assert cuda { nix.settings = advertised; } == neither;
           pkgs.writeText "binary-cache.json" (builtins.toJSON advertised);
         cache-coverage =
           pkgs.runCommand "cache-coverage-tests"

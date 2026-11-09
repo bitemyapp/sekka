@@ -1250,7 +1250,8 @@ before accepting it (and ignores it non-interactively) unless
 `accept-flake-config` is set, and only trusted users can add a substituter
 that `trusted-substituters` does not already list.
 `nix build .#checks.x86_64-linux.binary-cache` checks that the flake, the live
-media and an installed system name the same caches and keys.
+media and an installed system name the same caches and keys, and that only an
+installed system with NVIDIA's driver adds the CUDA cache below.
 
 The same module adds numtide's `https://cache.numtide.com`
 (`calamares.binaryCache.numtide.enable`, default on), signed with
@@ -1259,8 +1260,36 @@ catalog's AI applications as built from that flake's own lock, which installed
 systems keep, so an update that moves `ai-apps` downloads them instead of
 compiling them. Its `nix-cache-info` asks for priority 30; the URL's `?priority=55` makes Nix ask
 it last, only for paths neither cache.nixos.org nor Sekka's cache has. A
-system takes a new substituter only once activated, so the first update to
-this module still builds anything new itself.
+system's daemon takes a new substituter only once activated, so Yukimi's
+helper passes the new system's caches to the build that adds them (`caches` in
+`apps/yukimi/yukimi-helper/src/main.rs`). A build started another way, such
+as `nixos-rebuild`, still builds anything new itself the first time.
+
+On a system with NVIDIA's driver the module also adds the NixOS CUDA team's
+`https://cache.nixos-cuda.org` (`calamares.binaryCache.cuda.enable`, which
+follows `calamares.nvidia.enable`), signed with `cache.nixos-cuda.org`, as the
+NixOS wiki's CUDA page documents. CUDA is unfree, so cache.nixos.org has no
+CUDA build of anything and Sekka's cache can't publish one. That team's Hydra
+builds Nixpkgs with CUDA on, the unstable channel Sekka follows included.
+Nothing Sekka installs comes from there. It is for what people add themselves:
+without it, a CUDA llama.cpp compiles again whenever Nixpkgs changes it, twice
+in the week before the cache was added. Three limits:
+
+- Only Nixpkgs' own builds are there. `llama-cpp.override { cudaSupport =
+  true; }`, `pkgsCuda.llama-cpp` and `nixpkgs.config.cudaSupport = true` all
+  give the store path the cache has; other `cudaCapabilities`, or an overlay
+  under the package, give one it doesn't.
+- Nothing promises a build is there by the time a nightly locks its Nixpkgs.
+  The reference systems refuse unfree packages, so
+  `scripts/check_cache_coverage.py` neither lists this cache nor covers what
+  it serves; a build it lacks compiles as before.
+- Its key is trusted for any path the earlier caches lack, as numtide's is.
+  `?priority=60` makes Nix ask it last (its `nix-cache-info` says 50, as
+  Sekka's does).
+
+The flake's `nixConfig` leaves it out, since nothing built from this flake is
+a CUDA build. So do the live media, which carry NVIDIA's driver for any
+machine but don't import `nvidia.nix`.
 
 The cache workflow publishes every commit that reaches `main` (see Caching
 main), and the nightly workflow every revision it moves `nightly` to (see
