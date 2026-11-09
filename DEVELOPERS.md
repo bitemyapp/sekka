@@ -1435,8 +1435,9 @@ The compositor, its core/logic dylibs and their ABI record remain one package.
 `nix/package-sources.nix` follows the locked Cargo dependency graph to include
 each component's local sources, resources and build scripts. Other workspace
 members retain Cargo metadata and inert sources. Crane shares third-party
-artifacts, then caches real local dependencies through each app's inert entry
-point, preserving its feature/LTO context; a source-only app edit does not
+artifacts, then a shared real-toolkit layer and each application's remaining
+local dependencies through its inert entry point. Each layer preserves the
+consumer's actual feature/LTO context; a source-only app edit does not
 rebuild those dependency artifacts. Incremental compressed archives keep
 inherited Cargo metadata writable and avoid retaining complete copied target
 trees per application. Different Cargo feature sets can
@@ -1451,7 +1452,8 @@ package derivations in a disposable copy. It verifies that calculator code and
 metadata, clock data and terminal integration changes replace only the relevant
 application and aggregate, that reverts recover the old identities, and that a
 toolkit build-script change invalidates its consumers without replacing the
-compositor. A font-asset change
+compositor or third-party cache. A private library edit must leave the shared
+toolkit unchanged while invalidating its consumers. A font-asset change
 must also leave compiler caches and applications without font wrappers/checks
 unchanged. Package builds and the existing session VMs additionally validate
 binaries and integration.
