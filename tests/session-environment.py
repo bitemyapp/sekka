@@ -23,9 +23,10 @@ def wait_text(machine, expected, timeout=60, regex=False):
         mode = "11"
         if expected == "Password":
             # Fixed 1280x800 fixture: read the actual GDM input placeholder,
-            # whose low contrast makes full-screen sparse OCR omit it.
+            # whose low contrast makes full-screen sparse OCR omit it. The
+            # crop is GDM 51's password entry, border included.
             prepared = Path(machine.out_dir) / (machine.name + "-password-ocr.png")
-            subprocess.run(["@magick@", str(image), "-crop", "210x25+510+478", "+repage",
+            subprocess.run(["@magick@", str(image), "-crop", "320x50+480+446", "+repage",
                             "-resize", "400%", "-colorspace", "Gray", "-negate", "-normalize",
                             str(prepared)], check=True, timeout=10)
             image, mode = prepared, "7"
