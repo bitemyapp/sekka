@@ -1,6 +1,8 @@
 # A real Koyomi window: confirmation sheets must own input above its editor.
 { pkgs, self }:
 pkgs.testers.runNixOSTest {
+  # Let the session module apply its shared system-package fixes.
+  node.pkgsReadOnly = false;
   name = "aizome-koyomi-modal";
   globalTimeout = 300;
   nodes.machine = {

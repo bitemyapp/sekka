@@ -1,6 +1,8 @@
 # Real packaged Tansu input, UDisks2 and ext4 on one disposable VM disk.
 { self, pkgs, package ? self.packages.${pkgs.stdenv.hostPlatform.system}.aizome, expectFailure ? false }:
 pkgs.testers.runNixOSTest {
+  # Let the session module apply its shared system-package fixes.
+  node.pkgsReadOnly = false;
   name = "aizome-tansu-resize${if expectFailure then "-negative" else ""}";
   globalTimeout = 300;
   nodes.machine = { lib, ... }: {

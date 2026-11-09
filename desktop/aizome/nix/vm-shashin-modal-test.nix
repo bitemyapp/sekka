@@ -19,6 +19,8 @@ let
       '';
 in
 pkgs.testers.runNixOSTest {
+  # Let the session module apply its shared system-package fixes.
+  node.pkgsReadOnly = false;
   name = "aizome-shashin-modal";
   globalTimeout = 300;
   nodes.machine = {

@@ -60,6 +60,8 @@ let
   '';
 in
 pkgs.testers.runNixOSTest {
+  # Let the session module apply its shared system-package fixes.
+  node.pkgsReadOnly = false;
   name = "aizome-polkit-recovery";
   globalTimeout = 420;
   nodes.machine = { lib, ... }: {

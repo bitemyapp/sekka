@@ -10,6 +10,8 @@ let
   fixture = import ./encrypted-volumes-fixture.nix { inherit self pkgs; };
 in
 pkgs.testers.runNixOSTest {
+  # Let the session module apply its shared system-package fixes.
+  node.pkgsReadOnly = false;
   name = "aizome-encrypted-volumes";
   enableOCR = true;
   globalTimeout = 420;

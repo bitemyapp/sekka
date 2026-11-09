@@ -1,6 +1,8 @@
 # Koyomi must not retain a completed desktop when the user manager lingers.
 { pkgs, self }:
 pkgs.testers.runNixOSTest {
+  # Let the session module apply its shared system-package fixes.
+  node.pkgsReadOnly = false;
   name = "aizome-koyomi-session";
   globalTimeout = 600;
   nodes.machine = {
