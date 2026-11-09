@@ -1436,12 +1436,16 @@ The compositor, its core/logic dylibs and their ABI record remain one package.
 each component's local sources, resources and build scripts. Other workspace
 members retain Cargo metadata and inert sources. Crane shares third-party
 artifacts, then a shared real-toolkit layer and each application's remaining
-local dependencies through its inert entry point. Each layer preserves the
-consumer's actual feature/LTO context; a source-only app edit does not
+local dependencies through its inert entry point. Every application build uses
+the original desktop's workspace feature/LTO context, with real sources only
+for that component and its dependencies. Other roots remain inert and are
+never installed. This shares compiler units without coupling application
+sources; a source-only app edit does not
 rebuild those dependency artifacts. Incremental compressed archives keep
 inherited Cargo metadata writable and avoid retaining complete copied target
-trees per application. Different Cargo feature sets can
-still require separate compiler artifacts. Dependency caches are build inputs
+trees per application. Test selections can still require separate compiler
+artifacts. Applications retain Cargo's embedded dependency audit metadata;
+the compositor uses plain Cargo to preserve its Rust dylib ABI. Dependency caches are build inputs
 and are not included in the installed desktop. The existing CI retention
 wrapper keeps build dependencies for persistent runners. Runtime-only binary
 cache publication does not publish these artifacts, so a fresh builder must

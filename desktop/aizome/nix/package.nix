@@ -26,6 +26,15 @@ let
       ;
   };
   target = stdenv.hostPlatform.rust.rustcTarget;
+  auditableCargo = pkgs.buildPackages.cargo-auditable-cargo-wrapper.override {
+    cargo = rustPlatform.rust.cargo;
+  };
+  cargoFor =
+    profile:
+    if profile == "release-lto" then
+      "${auditableCargo}/bin/cargo"
+    else
+      "${rustPlatform.rust.cargo}/bin/cargo";
   secretService = import ../../../nix/libsecret-dh-padding.nix { inherit (pkgs) lib libsecret; };
   select = names: lib.concatMapStringsSep " " (name: "-p ${lib.escapeShellArg name}") names;
   runtimeLibs = with pkgs; [
@@ -137,13 +146,11 @@ let
     "ipc"
   ];
   libraryNames = names: lib.subtractLists names (sources.localClosure names);
-  packageFlags =
-    names:
-    "${select names} ${lib.optionalString (builtins.elem "aizome-koe" names) "--features aizome-koe/openblas,aizome-koe/vulkan"}";
-  runtimePackages = map (name: "aizome-${name}") (appNames ++ commandNames);
-  # Warm actual app selections, whose feature unification differs from a
-  # workspace-wide build, in one shared target directory.
-  appFlags = map (name: packageFlags [ name ]) runtimePackages;
+  # Preserve the monolithic package's workspace feature/LTO context in every
+  # layer. Only the selected component and its dependencies have real sources;
+  # all other roots stay inert and their outputs are never installed. Keeping
+  # those roots selected lets Cargo reuse one feature graph across components.
+  runtimeSelection = "--workspace --exclude aizome-comp --exclude aizome-comp-core --exclude aizome-comp-logic --features aizome-koe/openblas,aizome-koe/vulkan";
   dependencies =
     profile: flags:
     craneLib.buildDepsOnly (
@@ -156,67 +163,25 @@ let
           unset LIBSQLITE3_SYS_USE_PKG_CONFIG
         '';
         buildPhaseCargoCommand = lib.concatMapStringsSep "\n" (
-          selection: "cargo build --locked --offline --target ${target} --profile ${profile} ${selection}"
+          selection:
+          "${cargoFor profile} build --locked --offline --target ${target} --profile ${profile} ${selection}"
         ) flags;
       }
     );
-  appDependencies = dependencies "release-lto" appFlags;
+  appDependencies = dependencies "release-lto" [ runtimeSelection ];
   # The compositor's Rust dylibs must keep their own non-LTO feature graph.
   compositorDependencies = dependencies "release" [ "-p aizome-comp -p aizome-comp-logic" ];
-  # Most applications compile the same toolkit. Build its real sources once
-  # in every consumer's actual feature/LTO context before the smaller caches
-  # add their application-specific libraries. Cargo reuses identical units
-  # between selections; distinct feature sets remain distinct artifacts.
-  # Only toolkit sources enter this layer, so unrelated application/library
-  # edits do not invalidate other consumers' caches.
-  kitConsumers = builtins.filter (name: builtins.elem "aizome-kit" (libraryNames [ name ])) (
-    # Let the applications with substantial mandatory test suites start while
-    # later toolkit variants are still building.
-    lib.unique (
-      [
-        "aizome-yukimi"
-        "aizome-hotaru"
-        "aizome-hako"
-        "aizome-shell"
-      ]
-      ++ runtimePackages
-    )
+  # Share the real toolkit without including application-specific libraries.
+  # Their source edits must not invalidate this layer or other applications.
+  kitArtifacts = craneLib.mkCargoDerivation (
+    common
+    // {
+      pname = "aizome-toolkit-artifacts";
+      src = sources.forPackages [ "aizome-kit" ];
+      cargoArtifacts = appDependencies;
+      buildPhaseCargoCommand = "${cargoFor "release-lto"} build --locked --offline --target ${target} --profile release-lto ${runtimeSelection}";
+    }
   );
-  # A separate archive per application repeatedly restores the same large
-  # external-dependency cache. Small groups amortize that I/O while letting
-  # checked applications start well before every toolkit variant is ready.
-  kitGroups = lib.genList (index: lib.sublist (index * 4) 4 kitConsumers) (
-    builtins.div (builtins.length kitConsumers + 3) 4
-  );
-  toolkitCacheChain =
-    lib.foldl'
-      (
-        state: names:
-        let
-          artifacts = craneLib.mkCargoDerivation (
-            common
-            // {
-              pname = "aizome-toolkit-artifacts";
-              src = sources.forPackages [ "aizome-kit" ];
-              cargoArtifacts = state.previous;
-              buildPhaseCargoCommand = lib.concatMapStringsSep "\n" (
-                name:
-                "cargo build --locked --offline --target ${target} --profile release-lto ${packageFlags [ name ]}"
-              ) names;
-            }
-          );
-        in
-        {
-          previous = artifacts;
-          byPackage = state.byPackage // lib.genAttrs names (_: artifacts);
-        }
-      )
-      {
-        previous = appDependencies;
-        byPackage = { };
-      }
-      kitGroups;
-  kitArtifacts = toolkitCacheChain.previous;
   libraryArtifacts =
     names:
     let
@@ -224,23 +189,18 @@ let
     in
     if libraries == [ ] then
       appDependencies
+    else if libraries == sources.localClosure [ "aizome-kit" ] then
+      kitArtifacts
     else
       craneLib.mkCargoDerivation (
         common
         // {
           pname = "aizome-libraries";
           src = sources.forPackages libraries;
-          # Consume the earliest shared archive that warms this selection,
-          # rather than waiting for every toolkit variant before starting.
-          cargoArtifacts =
-            if builtins.elem "aizome-kit" libraries then
-              toolkitCacheChain.byPackage.${builtins.head names} or kitArtifacts
-            else
-              appDependencies;
+          cargoArtifacts = if builtins.elem "aizome-kit" libraries then kitArtifacts else appDependencies;
           # Keep the app itself inert, but compile its real local dependencies
-          # in the same LTO/feature context as the final app. Selecting the
-          # libraries themselves as Cargo roots changes that context.
-          buildPhaseCargoCommand = "cargo build --locked --offline --target ${target} --profile release-lto ${packageFlags names}";
+          # in the same workspace LTO/feature context as the final app.
+          buildPhaseCargoCommand = "${cargoFor "release-lto"} build --locked --offline --target ${target} --profile release-lto ${runtimeSelection}";
         }
       );
   meta = {
@@ -292,8 +252,10 @@ let
         preCheck = lib.optionalString (tests != "") (checkEnv + checkSetup);
         nativeCheckInputs = [ pkgs.dbus ];
         buildInputs = common.buildInputs ++ extraInputs;
-        buildPhaseCargoCommand = "cargo build --locked --offline --target ${target} --profile ${profile} ${select packages} ${flags}";
-        checkPhaseCargoCommand = "cargo test --locked --offline --target ${target} --profile ${profile} ${tests}";
+        buildPhaseCargoCommand = "${cargoFor profile} build --locked --offline --target ${target} --profile ${profile} ${
+          if profile == "release-lto" then runtimeSelection else select packages
+        } ${flags}";
+        checkPhaseCargoCommand = "${cargoFor profile} test --locked --offline --target ${target} --profile ${profile} ${tests}";
         installPhaseCommand = ''
           rel=target/${target}/${profile}
           mkdir -p $out/bin
@@ -303,6 +265,12 @@ let
           for bin in $out/bin/* $out/libexec/*; do
             if [ -f "$bin" ] && [ ! -L "$bin" ] && isELF "$bin"; then
               patchelf --add-rpath ${lib.makeLibraryPath runtimeLibs} "$bin"
+              ${lib.optionalString (profile == "release-lto") ''
+                # Match buildRustPackage's dependency audit metadata. This
+                # runs before application wrappers hide the ELF executable.
+                ${pkgs.buildPackages.binutils}/bin/readelf --wide --section-headers "$bin" |
+                  grep -F .dep-v0 > /dev/null
+              ''}
             fi
           done
           ${fixup}
@@ -498,7 +466,7 @@ let
       preCheck = checkEnvironment;
       nativeCheckInputs = [ pkgs.dbus ];
       buildPhaseCargoCommand = "true";
-      checkPhaseCargoCommand = "cargo test --locked --offline --target ${target} --profile release-lto -p aizome-kit -p aizome-sys --lib";
+      checkPhaseCargoCommand = "${cargoFor "release-lto"} test --locked --offline --target ${target} --profile release-lto -p aizome-kit -p aizome-sys --lib";
       installPhaseCommand = "touch $out";
     }
   );
