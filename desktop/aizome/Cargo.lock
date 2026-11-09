@@ -75,6 +75,7 @@ dependencies = [
  "aizome-sofa",
  "aizome-sys",
  "aizome-theme",
+ "cc",
  "chd",
  "crc32fast",
  "env_logger",

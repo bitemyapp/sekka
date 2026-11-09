@@ -62,3 +62,7 @@ roxmltree = "0.21"
 # Which system's a CHD disc is (a Saturn's, a PlayStation's), from its
 # first sectors: CHD's codecs in Rust, the encoders left out.
 chd = { version = "0.4", default-features = false, features = ["std", "fast_lzma"] }
+
+[build-dependencies]
+# The cores' log function, in C (src/retro/log.c).
+cc = "1"

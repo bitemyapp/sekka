@@ -6,8 +6,9 @@
 # Settings' helper (aizome-tv-account, as root) makes the TV account with a
 # PIN; the controller chooses it and presses the PIN on the PIN pad; its
 # session is Chanoma alone (no shell), set up for the first time by the
-# controller, in kids' mode; Log Out ends it and the login screen comes
-# back.
+# controller, in kids' mode; the drive it opens Alice may read, not
+# change, then and after it logs out; Log Out ends it and the login screen
+# comes back.
 #
 #     nix build .#aizome-checks.tv -L
 {
@@ -79,6 +80,22 @@ let
                     press(ui, words[1], words[0] == "down")
                 print("did", line.strip(), flush=True)
   '';
+  # A FAT stick plugged in from the start, as a television's drives are,
+  # with a file on it: the TV account's Chanoma opens it.
+  stick =
+    pkgs.runCommand "tv-test-stick.img"
+      {
+        nativeBuildInputs = [
+          pkgs.dosfstools
+          pkgs.mtools
+        ];
+      }
+      ''
+        truncate -s 32M "$out"
+        mkfs.vfat -n TVSTICK "$out"
+        echo hello > hello.txt
+        mcopy -i "$out" hello.txt ::/hello.txt
+      '';
 in
 pkgs.testers.runNixOSTest {
   name = "aizome-tv";
@@ -128,6 +145,11 @@ pkgs.testers.runNixOSTest {
         qemu.options = [
           "-vga none"
           "-device virtio-gpu-pci,xres=1920,yres=1080"
+          # Writable (the writes go to a scratch copy), so it's the files'
+          # owners that keep Alice from changing them.
+          "-device qemu-xhci,id=xhci"
+          "-drive if=none,id=stick,format=raw,snapshot=on,file=${stick}"
+          "-device usb-storage,bus=xhci.0,drive=stick,removable=on"
         ];
       };
     };

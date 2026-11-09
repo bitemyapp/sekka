@@ -101,7 +101,9 @@ keyboard and mouse work too, with a way back to Home from anywhere, a
 streaming page included. A grown-up can give the television an account of
 its own in Settings, under Users & Groups: it opens straight into Chanoma
 in kids' mode and can't open anything else, it signs in with nothing, a
-PIN or a password, as you choose, and leaving Chanoma logs out. The login
+PIN or a password, as you choose, and leaving Chanoma logs out. The
+drives it opens everyone else's accounts can read but not change, even
+after it logs out. The login
 screen takes a game controller too, so the whole evening needs no
 keyboard: nothing changes there until a button is pressed, then the
 controller chooses who logs in and types a password on an on-screen

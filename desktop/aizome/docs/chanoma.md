@@ -43,7 +43,7 @@ explicitly (and Chanoma also looks in NixOS's profiles).
 | Module | |
 |---|---|
 | `pad/` | Controllers from `/dev/input`: hot-plug through inotify, the exclusive grab, player slots, mappings, menu navigation with repeat, batteries, rumble |
-| `retro/` | The libretro frontend: the C interface, the host (callbacks, environment, core options), video, OpenGL for the cores that draw with it, sound, the consoles' BIOS images, and a session thread per game |
+| `retro/` | The libretro frontend: the C interface, the host (callbacks, environment, core options), the cores' log (`log.c`, in C for printf's arguments), video, OpenGL for the cores that draw with it, sound, the consoles' BIOS images, and a session thread per game |
 | `browser.rs` | Services in Chrome: profiles, kiosk flags, the window followed through the compositor's IPC, input through it |
 | `devtools.rs` | Services kept to their sites, and Chanoma's keyboard asking and typing on their pages, over the browser's DevTools pipe |
 | `services.rs` | The services, the sites each one's pages may go to, and which need Chanoma's keyboard |
@@ -227,8 +227,11 @@ pausing, saving and leaving are Chanoma's.
   table, XRGB8888), core options in all three forms (with Chanoma's
   preferences over a core's defaults: the Game Boy's green palette),
   system and save folders, rumble, input bitmasks, geometry and timing
-  changes, and OpenGL (below). Vulkan is declined, as is logging (a C
-  varargs callback).
+  changes, OpenGL (below), and a log: a C function (`retro/log.c`, as
+  it takes printf's arguments, which Rust can't) formats each line for
+  Chanoma's own, a core's errors as warnings and the rest quieter. Some
+  cores log without asking whether they may (Flycast, as it loads a
+  game). Vulkan is declined.
 - **OpenGL** (`retro/gl.rs`), for the Dreamcast's core (Flycast) and the
   PlayStation 2's (PCSX2, Play!): the context the core asks for (OpenGL,
   its core profile, or OpenGL ES 3), made through EGL as it asks
@@ -640,7 +643,9 @@ one mounted meanwhile by someone else counts as opened where it is
 (`Disks::open`). A drive another account has open is under that account's
 `/run/media/USER`, which this one can't read (a grown-up's desktop opened
 it, then the TV account logged in): it's said the same way, once, with
-what to do (eject it there, or unplug it and plug it back in).
+what to do (eject it there, or unplug it and plug it back in). The TV
+account's drives are the exception: every account may read them (under
+The TV account).
 
 *Add a folder…*, and Home's *Add games*, open a picker of Chanoma's own
 (`folders.rs`, `app/picker.rs`, `ui/picker.rs`), as the kit's file panel
@@ -927,6 +932,20 @@ before `/etc`. Services D-Bus starts when something asks (the portals)
 are as they were. No keyring runs: nothing in the session asks for one
 (the browser's sign-ins, under Services).
 
+The drives the account opens every other account may read, but not
+change (`programs.aizome.chanoma.shareTvDrives`, on unless turned off).
+UDisks mounts them in `/run/media/tv`, and makes that folder for its
+account alone unless it's there already: the module makes it at boot
+(systemd-tmpfiles) for every account to look in. On a FAT, exFAT or
+NTFS drive, which has no owners of its own, every file is the TV
+account's, so others may read and not write; a Linux filesystem's own
+owners and permissions apply as they would anywhere. A drive stays open
+after the account logs out, so a grown-up's account can read it then
+without unplugging it. Chanoma keeps its folders by their paths, though:
+one a grown-up's Chanoma added while the drive was open in their own
+account (`/run/media/USER/…`) isn't found while it's open in the TV
+account's.
+
 The account is made and changed by `aizome-tv-account`, Settings' helper,
 run as root through pkexec under the polkit action
 `org.aizome.Settei.tv-account` (an administrator's password): `useradd`
@@ -1096,7 +1115,10 @@ cargo run --release -p aizome-chanoma --example library -- FOLDER… \
   PCSX2, Play!) loaded and took every extension Chanoma sends them, but
   for Play! and a playlist (`.m3u`), which goes to PCSX2. No Saturn,
   Dreamcast or PlayStation 2 game has been played in the tests: there's
-  none free to.
+  none free to. Each core is also given a file that isn't a game, as a
+  game of its system's, through a whole session: it must say it can't,
+  or start on it, and not take Chanoma down, as Flycast did on ganymede
+  on 2026-11-08 by logging through a log it hadn't been given.
 - **PlayStation games with OpenBIOS** (`tests/cores.rs`'s
   `playstation_games_start_with_a_bios`, opt-in, with
   `CHANOMA_TEST_PSX_GAMES`, `_SYSTEM`, `_OUT` and `_STAGES`): each game
@@ -1269,7 +1291,10 @@ before calling any of it tested on hardware.
   sharing them with the compositor as dmabufs, and the Dreamcast's and
   PlayStation 2's real cores with real games, haven't been tried in the
   tests. Play! (the PlayStation 2 without its BIOS) plays fewer games than
-  PCSX2, and no playlists.
+  PCSX2, and no playlists; it brings its own C++ runtime, and given a
+  disc it can't read it takes Chanoma down (an exception of its comes
+  through Chanoma's frames), as it does Mesa's LLVM when it's loaded
+  before Mesa is.
 - Discs are told apart only among Chanoma's four disc systems: a disc of
   another (a Mega-CD's, a PC Engine CD's) isn't shown, even in a folder
   not named for it.

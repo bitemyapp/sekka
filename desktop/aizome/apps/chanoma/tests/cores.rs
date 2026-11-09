@@ -145,6 +145,76 @@ fn every_systems_cores_load_and_say_what_they_play() {
 
 #[test]
 #[ignore = "needs CHANOMA_TEST_CORES"]
+fn every_core_given_a_file_that_isnt_a_game_goes_on() {
+    // Each loads it as a game of its system's, through a whole session:
+    // it says it can't, or starts on it, and Chanoma goes on (Flycast once
+    // logged as it loaded, through a log it hadn't been given, and took
+    // Chanoma down).
+    let Some(dir) = cores() else { return };
+    // Play! brings its own C++ runtime (libstdc++'s call_once machinery
+    // among what it exports): given a disc it can't read, an exception of
+    // its comes through Chanoma, and loaded before Mesa it breaks Mesa's
+    // LLVM starting up. Its own to mend, not Chanoma's.
+    const NOT_HERE: &[&str] = &["play"];
+    let _ = env_logger::builder().is_test(true).filter_level(log::LevelFilter::Debug).try_init();
+    let tmp = std::env::temp_dir().join(format!("chanoma-not-a-game-{}", std::process::id()));
+    let mut tried = 0;
+    for sys in SYSTEMS {
+        let Some(ext) = sys.extensions.first() else { continue };
+        for stem in sys.cores {
+            let core = dir.join(format!("{stem}_libretro.so"));
+            if !core.is_file() || NOT_HERE.contains(stem) {
+                continue;
+            }
+            let here = tmp.join(stem);
+            std::fs::create_dir_all(&here).unwrap();
+            let game = here.join(format!("Not a Game.{ext}"));
+            // A sheet names a track that isn't there (a copy left
+            // unfinished); anything else is bytes that are no disc.
+            let bytes = match *ext {
+                "cue" => b"FILE \"Not a Game.bin\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\n".to_vec(),
+                "gdi" => b"1\n1 0 4 2352 \"Not a Game.bin\" 0\n".to_vec(),
+                "m3u" => b"Not a Game.cue\n".to_vec(),
+                _ => vec![0x5a; 64 * 1024],
+            };
+            std::fs::write(&game, bytes).unwrap();
+            let launch = Launch {
+                core: CoreSource::Library(core.clone()),
+                game,
+                save_ram: here.join("game.srm"),
+                state: here.join("game.state"),
+                picture: here.join("game.png"),
+                resume: false,
+                system_dir: here.join("system"),
+                bios: Vec::new(),
+                found_bios: Vec::new(),
+                save_dir: here.join("saves"),
+                players: 1,
+                prefer: Vec::new(),
+                screen_lines: 1080,
+                silent: true,
+                unpack_dir: here.join("unzipped"),
+                extensions: &[],
+            };
+            let (tx, rx) = mpsc::channel();
+            let session = Session::start(launch, None, Arc::new(Shared::default()), None, move |e| {
+                let _ = tx.send(e);
+            });
+            match rx.recv_timeout(Duration::from_secs(30)) {
+                Ok(Event::Started { .. }) => println!("{:12} {stem}: started on it", sys.id),
+                Ok(Event::Failed(why)) => println!("{:12} {stem}: {why}", sys.id),
+                other => panic!("{stem}: {other:?}"),
+            }
+            session.stop(false);
+            tried += 1;
+        }
+    }
+    let _ = std::fs::remove_dir_all(&tmp);
+    assert!(tried > 0, "no cores in {}", dir.display());
+}
+
+#[test]
+#[ignore = "needs CHANOMA_TEST_CORES"]
 fn game_boy_cores_play_hear_the_controller_and_carry_on() {
     let Some(dir) = cores() else { return };
     let work = std::env::temp_dir().join(format!("chanoma-cores-{}", std::process::id()));

@@ -6,8 +6,10 @@ her password on the on-screen keyboard, and her desktop starts. The TV
 account, made by Settings' helper with a PIN, is chosen with the
 controller and its PIN pressed on the PIN pad; its session is the
 compositor in kiosk mode with Chanoma alone, which the controller sets up
-for the first time (a grown-up's PIN, then kids' mode); Log Out ends it
-all and the login screen comes back, the TV account's PIN pad ready.
+for the first time (a grown-up's PIN, then kids' mode). The drive it
+opens Alice may read but not change, then and after it logs out. Log Out
+ends it all and the login screen comes back, the TV account's PIN pad
+ready.
 """
 
 import json
@@ -181,6 +183,24 @@ with subtest("the controller sets Chanoma up, and it's kids' mode"):
     time.sleep(1)
     machine.screenshot("tv-chanoma-kids")
 
+
+def alice_reads_the_stick():
+    # Made at boot for every account to look in, not by UDisks for the TV
+    # account alone.
+    assert machine.succeed("stat -c %a /run/media/tv").strip() == "755"
+    assert machine.succeed("runuser -u alice -- cat /run/media/tv/TVSTICK/hello.txt").strip() == "hello"
+    machine.fail("runuser -u alice -- touch /run/media/tv/TVSTICK/alice.txt")
+    # -f, or rm asks first about a file it may not write.
+    machine.fail("runuser -u alice -- rm -f /run/media/tv/TVSTICK/hello.txt")
+    machine.succeed("test -f /run/media/tv/TVSTICK/hello.txt")
+
+
+with subtest("the drive the TV account opened, Alice may read but not change"):
+    until("the stick opened", lambda: "chanoma: opened the drive TVSTICK at /run/media/tv/TVSTICK" in session_log())
+    alice_reads_the_stick()
+    # The TV account itself still may.
+    machine.succeed("runuser -u tv -- touch /run/media/tv/TVSTICK/tv.txt")
+
 with subtest("Log Out ends the session and the login screen comes back"):
     for _ in range(5):
         pad("tap down")
@@ -189,6 +209,9 @@ with subtest("Log Out ends the session and the login screen comes back"):
     until("the TV account's session ended", lambda: machine.execute("pgrep -u tv -f aizome-chanoma")[0] != 0)
     until("the login screen again", greeter_up, timeout=60)
     until("no compositor of the TV's", lambda: machine.execute("pgrep -u tv -x aizome")[0] != 0)
+    # The stick stays open where the TV account opened it, and readable.
+    machine.succeed("findmnt -n /run/media/tv/TVSTICK")
+    alice_reads_the_stick()
     shows("TV")
     # The TV was last: its PIN is asked for, on the pad when a controller
     # presses.
