@@ -68,7 +68,7 @@ pkgs.testers.runNixOSTest {
       hardware.graphics.enable = true;
       environment.sessionVariables.LIBGL_ALWAYS_SOFTWARE = "1";
     };
-  testScript = ''
+  testScript = builtins.readFile ../tests/vm_start.py + ''
     import shlex, time
 
     ${wifi.script}
@@ -99,7 +99,7 @@ pkgs.testers.runNixOSTest {
             "nmcli -t -f NAME,STATE connection show --active | grep -qx "
             + shlex.quote(name + ":activated"), timeout=timeout)
 
-    machine.start()
+    start_vm(machine)
     start_access_points(machine)
     machine.wait_until_succeeds("test -S /run/user/1000/hypr/*/.socket.sock", timeout=180)
     signature = machine.succeed("basename /run/user/1000/hypr/*").strip()

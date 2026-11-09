@@ -1,10 +1,11 @@
 # Start a VM, and start it again if QEMU never connects to the test driver.
 #
 # The driver fails at once when QEMU exits before connecting, but waits for
-# the test's whole timeout when it never connects and never exits: twice, on
-# hosts loaded past 150, "starting vm" was the last line until the timeout
-# (network-dns-vm's 15 minutes, tuning's hour). Log what the processes
-# were waiting on, end them, and try once more.
+# the test's whole timeout when it never connects and never exits: on loaded
+# hosts "starting vm" was the last line until the timeout (network-dns-vm's
+# 15 minutes and tuning's hour, under load past 150; network-vm's 25 minutes,
+# one of 16 test VMs started within 13 seconds). Log what the processes were
+# waiting on, end them, and try once more.
 import os
 import threading
 from pathlib import Path
