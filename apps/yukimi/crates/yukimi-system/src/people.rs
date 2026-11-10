@@ -91,25 +91,35 @@ pub enum Blocked {
 
 /// Why the account `name` of a `shadow` file isn't taken to log in by
 /// itself on day `today`. First by the rules of PAM's account check
-/// (pam_unix, which every login screen's automatic login still runs): an
-/// expired account, or a password to set or change. Then a locked
-/// password: `!` before a hash. A `!` alone isn't one: NixOS writes that
-/// for an account declared without a password, which is one way to make an
-/// account only an automatic login reaches.
+/// (pam_unix's `check_shadow_expiry`, which every login screen's automatic
+/// login still runs): an expired account, or a password to set or change.
+/// Then a locked password: `!` before a hash. A `!` alone isn't one: NixOS
+/// writes that for an account declared without a password, which is one
+/// way to make an account only an automatic login reaches.
+///
+/// The login screens' own guard (`canLogInByItself` in Sekka's
+/// `desktops.nix`) applies the same account rules at each start; keep the
+/// two alike.
 pub fn blocked(shadow: &str, name: &str, today: i64) -> Option<Blocked> {
     let line = shadow.lines().find(|line| line.split(':').next() == Some(name))?;
     let fields: Vec<&str> = line.split(':').collect();
-    // An empty field is unset, which shadow(5) gives as -1.
-    let days = |i: usize| fields.get(i).and_then(|f| f.parse::<i64>().ok()).unwrap_or(-1);
+    // A field that isn't a number of days (empty, or the -1 some tools
+    // write) is unset, which shadow(5) gives as -1.
+    let days = |i: usize| {
+        let field = fields.get(i).filter(|f| !f.is_empty() && f.bytes().all(|b| b.is_ascii_digit()));
+        field.and_then(|f| f.parse::<i64>().ok()).unwrap_or(-1)
+    };
     let (changed, most, expires) = (days(2), days(4), days(7));
-    if expires != -1 && today >= expires {
+    if expires >= 0 && today >= expires {
         return Some(Blocked::Expired);
     }
     if changed == 0 {
         return Some(Blocked::MustSetPassword);
     }
-    // Changed in the future (a clock set back since): as it is.
-    if today >= changed && most != -1 && today - changed > most {
+    // No last change: the password doesn't age. Changed in the future (a
+    // clock set back since): as it is. Otherwise it has to be changed once
+    // it is as old as the account allows, on that day already.
+    if changed > 0 && today >= changed && most >= 0 && today - changed >= most {
         return Some(Blocked::MustSetPassword);
     }
     if fields.get(1).is_some_and(|password| password.len() > 1 && password.starts_with('!')) {
@@ -224,6 +234,39 @@ from-the-future:$y$j9T$salt$hash:20900:0:90:7:::
         assert_eq!(why("from-the-future"), None);
         // No entry: nothing to stop it.
         assert_eq!(why("nobody-here"), None);
+    }
+
+    #[test]
+    fn the_account_rules_are_pam_unix_s_to_the_day() {
+        // pam_unix (check_shadow_expiry, Linux-PAM 1.7): expired from the
+        // expiry day on; a password to change once it is as old as the
+        // maximum, that day included; no ageing without a last change; and
+        // a field that isn't a number of days unset. The login screens'
+        // guard in Sekka's desktops.nix decides the same lines the same way.
+        let rules = [
+            ("kara:$y$hash:20737:0:30:7:::", Some(Blocked::MustSetPassword), "as old as the maximum, to the day"),
+            ("kara:$y$hash:20736:0:30:7:::", Some(Blocked::MustSetPassword), "a day older than the maximum"),
+            ("kara:$y$hash:20738:0:30:7:::", None, "a day younger than the maximum"),
+            ("kara:$y$hash:20767:0:0:7:::", Some(Blocked::MustSetPassword), "a maximum of no days"),
+            ("kara:$y$hash::0:30:7:::", None, "a maximum, but no last change: it doesn't age"),
+            ("kara:$y$hash:-1:0:30:7:::", None, "a last change of -1 is none"),
+            ("kara:$y$hash:20900:0:30:7:::", None, "changed in the future"),
+            ("kara:$y$hash:20000:0:-1:7:::", None, "a maximum of -1 is none"),
+            ("kara:$y$hash:0::::::", Some(Blocked::MustSetPassword), "a password to change at the next login"),
+            ("kara:$y$hash:00::::::", Some(Blocked::MustSetPassword), "the same, written 00"),
+            ("kara:$y$hash:20767:0:99999:7::20766:", Some(Blocked::Expired), "expired yesterday"),
+            ("kara:$y$hash:20767:0:99999:7::20767:", Some(Blocked::Expired), "expires today"),
+            ("kara:$y$hash:20767:0:99999:7::20768:", None, "expires tomorrow"),
+            ("kara:$y$hash:20767:0:99999:7::0:", Some(Blocked::Expired), "an expiry of day 0"),
+            ("kara:$y$hash:20767:0:99999:7::-1:", None, "an expiry of -1 is none"),
+            ("kara:$y$hash:soon:0:late:7::never:", None, "fields that aren't days are unset"),
+            ("kara:$y$hash", None, "a line cut short"),
+        ];
+        for (line, expected, what) in rules {
+            assert_eq!(blocked(&format!("root:!:1::::::\n{line}\n"), "kara", TODAY), expected, "{what}: {line}");
+        }
+        // Only the first entry for a name counts, as for getspnam.
+        assert_eq!(blocked("kara:$y$hash:20767::::::\nkara::0::::::\n", "kara", TODAY), None);
     }
 
     #[test]
