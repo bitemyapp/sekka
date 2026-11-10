@@ -1,11 +1,42 @@
 //! Settings the logic follows: key bindings, Desks, and the caches that
 //! depend on the theme and the installed apps. The Desks go both ways:
 //! added, renamed, moved or removed here, they're written to the settings,
-//! which Settei shows and saves from.
+//! which Settei shows and saves from, where the settings are this
+//! compositor's to write ([`owns_settings`]).
 
-use aizome_comp_core::aizome_config::{DeskConfig, Settings, default_desks};
+use std::path::Path;
+
+use aizome_comp_core::aizome_config::{self, DeskConfig, Settings, default_desks};
+use aizome_comp_core::aizome_ipc::Event;
 
 use crate::prelude::*;
+
+/// Whether the settings are this compositor's to write. The login
+/// session's compositor owns the person's settings. A headless or nested
+/// one (a test, `scripts/headless-session`, Aizome tried inside another
+/// desktop) runs as the same person beside their login session and reads
+/// the same file, so it owns only settings given to it alone: a file named
+/// with `--config`, or a configuration directory other than the person's
+/// own (`XDG_CONFIG_HOME` away from `~/.config`). Otherwise a Desk removed
+/// while trying something would be removed, its windows moved, in the
+/// session the person is working in, which follows the file.
+pub fn owns_settings(login_session: bool, given_a_file: bool, config_dir: &Path, persons: &Path) -> bool {
+    login_session || given_a_file || !same_dir(config_dir, persons)
+}
+
+/// The same directory, by name or (where both are there) by where the
+/// names lead.
+fn same_dir(a: &Path, b: &Path) -> bool {
+    a == b || matches!((a.canonicalize(), b.canonicalize()), (Ok(a), Ok(b)) if a == b)
+}
+
+/// Whether this compositor runs the person's login session: what it tells
+/// its shell and every program it starts (`AIZOME_SESSION=1`, only on a
+/// TTY without `--no-session`), and what the shell goes by for Keep Awake
+/// and logind.
+fn login_session(az: &Aizome) -> bool {
+    az.children.env.iter().rev().find(|(name, _)| name == "AIZOME_SESSION").is_some_and(|(_, value)| value == "1")
+}
 
 /// The Desks as they are here, as the settings keep them: by name and
 /// folder, each keeping keys this version doesn't know from the entry of
@@ -29,8 +60,10 @@ pub fn desk_configs(old: &[DeskConfig], live: &[(String, Option<String>)]) -> Ve
 /// Write the Desks to the settings after a change made here (from the
 /// overview, the bar's Desks menu, `aizomectl`), so Settei shows them, and
 /// a change it saves keeps them rather than putting back the ones the file
-/// had (#228). The file is read again first: another program's save that
-/// hasn't been applied yet stays.
+/// had (#228). Only where the settings are this compositor's to write
+/// ([`owns_settings`]). The file is read again first, so what another
+/// program saved there outside the Desks stays, applied here yet or not;
+/// the Desks become the ones here.
 pub fn save_desks(st: &mut State) {
     let live: Vec<(String, Option<String>)> =
         st.lg.r().wm.desks().iter().map(|d| (d.name.clone(), d.folder.clone())).collect();
@@ -38,8 +71,12 @@ pub fn save_desks(st: &mut State) {
     if desks == st.az.settings.desks {
         return;
     }
-    st.az.settings.desks = desks.clone();
-    let path = st.az.options.config.clone().unwrap_or_else(Settings::path);
+    let given = st.az.options.config.clone();
+    let persons = aizome_config::home_dir().join(".config");
+    if !owns_settings(login_session(&st.az), given.is_some(), &aizome_config::config_dir(), &persons) {
+        return;
+    }
+    let path = given.unwrap_or_else(Settings::path);
     let mut file = match Settings::load_from(&path) {
         Ok(file) => file,
         Err(e) => {
@@ -48,10 +85,20 @@ pub fn save_desks(st: &mut State) {
             return;
         }
     };
-    file.desks = desks;
+    file.desks = desks.clone();
     if let Err(e) = file.save_to(&path) {
         tracing::warn!("saving the Desks to {}: {e}", path.display());
+        return;
     }
+    // Only now that the file has them. Applying the settings brings the
+    // Desks into line with the file when its Desks differ from the ones
+    // kept here: had these been kept before a save that failed, the next
+    // change to any setting would take the Desks back to the file's.
+    st.az.settings.desks = desks;
+    // Whoever holds the settings reads them again now, not at its next
+    // look at the file: a whole-file save from a copy read before this
+    // would put the old Desks back.
+    st.az.ipc.emit(&Event::ConfigChanged);
 }
 
 /// Settings were applied (the old ones given).
@@ -107,5 +154,32 @@ mod tests {
         assert!(moved[1].extra.is_empty());
         let renamed = desk_configs(&old, &live(&["1", "Post"]));
         assert_eq!(renamed[1].extra.get("wallpaper").and_then(|v| v.as_str()), Some("sea.png"));
+    }
+
+    #[test]
+    fn only_settings_of_its_own_are_this_compositors_to_write() {
+        let persons = Path::new("/home/a/.config");
+        // The login session's compositor: the person's settings are its own.
+        assert!(owns_settings(true, false, persons, persons));
+        // A headless or nested one beside it reads the same settings, and
+        // leaves them as they are,
+        assert!(!owns_settings(false, false, persons, persons));
+        assert!(!owns_settings(false, false, Path::new("/home/a/.config/"), persons));
+        // unless they were given to it: a file (`--config`), or a
+        // configuration directory of its own.
+        assert!(owns_settings(false, true, persons, persons));
+        assert!(owns_settings(false, false, Path::new("/tmp/aizome-test-1-0/config"), persons));
+    }
+
+    #[test]
+    fn another_name_for_the_persons_directory_is_still_theirs() {
+        let dir = std::env::temp_dir().join(format!("aizome-owns-settings-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("home/.config")).unwrap();
+        std::os::unix::fs::symlink(dir.join("home/.config"), dir.join("config")).unwrap();
+        assert!(!owns_settings(false, false, &dir.join("config"), &dir.join("home/.config")));
+        // One that isn't there yet is compared by name.
+        assert!(owns_settings(false, false, &dir.join("other"), &dir.join("home/.config")));
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }
