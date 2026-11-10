@@ -20,8 +20,15 @@
 //! An administrator can still suspend past an inhibitor on purpose
 //! (`systemctl suspend -i`), and nothing here stops a flat battery,
 //! firmware or thermal shutdown.
+//!
+//! The idle inhibitor is [`IdleInhibitor`], which the shell holds too,
+//! while an app asks the session bus to keep the screen awake.
+
+mod idle;
 
 use std::path::PathBuf;
+
+pub use idle::IdleInhibitor;
 
 /// The service that holds the locks.
 pub const UNIT: &str = "aizome-keep-awake.service";
