@@ -75,26 +75,37 @@ def outputs(drv, info):
     return paths
 
 
+# Each cache's current answer rather than Nix's remembered one, and a bounded
+# wait, so a stalled cache fails the check instead of hanging it.
+FRESH = ['--option', 'narinfo-cache-positive-ttl', '0',
+         '--option', 'narinfo-cache-negative-ttl', '0',
+         '--option', 'http-connections', '4']
+TIMEOUT = 180
+
+
+def invalid_paths(cache, batch):
+    """The paths of one batch the cache lacks, without downloading anything."""
+    result = subprocess.run(
+        ['nix-store', '--store', cache, *FRESH, '--check-validity', '--print-invalid', *batch],
+        check=True, capture_output=True, text=True, timeout=TIMEOUT)
+    missing = set(result.stdout.split())
+    if not missing <= set(batch):
+        raise ValueError(f'{cache}: unexpected missing paths')
+    return missing
+
+
 def cache_info(cache, paths):
     """Read fresh metadata through Nix without substituting any store paths."""
     # path-info can fail before emitting JSON for a missing path. Filter misses
     # first, and fail closed on network errors or malformed metadata.
-    options = ['--option', 'narinfo-cache-positive-ttl', '0',
-               '--option', 'narinfo-cache-negative-ttl', '0',
-               '--option', 'http-connections', '4']
     def batch_info(batch):
-        result = subprocess.run(
-            ['nix-store', '--store', cache, *options, '--check-validity', '--print-invalid', *batch],
-            check=True, capture_output=True, text=True, timeout=180)
-        missing = set(result.stdout.split())
-        if not missing <= set(batch):
-            raise ValueError(f'{cache}: unexpected missing paths')
+        missing = invalid_paths(cache, batch)
         present = sorted(set(batch) - missing)
         info = {}
         if present:
             result = subprocess.run(
-                ['nix', 'path-info', '--store', cache, *options, '--json', '--json-format', '1', '--stdin'],
-                input='\n'.join(present) + '\n', check=True, capture_output=True, text=True, timeout=180)
+                ['nix', 'path-info', '--store', cache, *FRESH, '--json', '--json-format', '1', '--stdin'],
+                input='\n'.join(present) + '\n', check=True, capture_output=True, text=True, timeout=TIMEOUT)
             info = json.loads(result.stdout)
             if set(info) != set(present) or any(value is None for value in info.values()):
                 raise ValueError(f'{cache}: unexpected store path metadata')

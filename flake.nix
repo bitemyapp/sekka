@@ -660,6 +660,10 @@
               python3 -m unittest discover -s tests -p test_cache_coverage.py -v
               touch $out
             '';
+        cache-publication = import ./nix/cache-publication-test.nix {
+          inherit pkgs;
+          nixPackage = runnerNix;
+        };
         # Tatami's login entry starts uwsm and tatami from the system profile.
         # A store path in it would change display-manager.service with every
         # Tatami build, and Yukimi would stage each such update for the next
