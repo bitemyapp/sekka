@@ -118,8 +118,8 @@ mod tests {
         assert_eq!(Screen::from(&holds.state()), Screen::MayIdle);
         let vlc = aizome_sys::screensaver::Peer::new(":1.7").unwrap();
         let firefox = aizome_sys::screensaver::Peer::new(":1.9").unwrap();
-        let first = holds.take(vlc.clone(), "vlc", "Playing some media.").unwrap();
-        holds.take(firefox.clone(), "firefox", "Playing video").unwrap();
+        let first = holds.take(vlc.clone(), None, "vlc", "Playing some media.").unwrap();
+        holds.take(firefox.clone(), None, "firefox", "Playing video").unwrap();
         assert_eq!(Screen::from(&holds.state()), Screen::Awake);
         holds.release(&vlc, first.cookie);
         assert_eq!(Screen::from(&holds.state()), Screen::Awake, "another app still holds");

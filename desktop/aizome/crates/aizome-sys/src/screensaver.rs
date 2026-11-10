@@ -103,6 +103,10 @@ impl Peer {
 pub struct Hold {
     pub cookie: Cookie,
     pub peer: Peer,
+    /// The process behind that connection, when the bus said in time:
+    /// what names the app where it says little of itself (Chromium gives
+    /// its program's path, the desktop portal nothing).
+    pub pid: Option<u32>,
     /// The app's name for itself ("vlc").
     pub app: String,
     /// Why ("Playing some media.").
@@ -146,8 +150,9 @@ impl Holds {
         Holds { last: seed, ..Holds::default() }
     }
 
-    /// `peer` takes a hold, and gets it as it's kept.
-    pub fn take(&mut self, peer: Peer, app: &str, reason: &str) -> Result<Hold, Refused> {
+    /// `peer`, the connection of process `pid` when that's known, takes a
+    /// hold, and gets it as it's kept.
+    pub fn take(&mut self, peer: Peer, pid: Option<u32>, app: &str, reason: &str) -> Result<Hold, Refused> {
         if self.held.values().filter(|h| h.peer == peer).count() >= MAX_HOLDS_PER_PEER {
             return Err(Refused::TooMany);
         }
@@ -157,7 +162,7 @@ impl Holds {
                 break c;
             }
         };
-        let hold = Hold { cookie, peer, app: kept(app), reason: kept(reason) };
+        let hold = Hold { cookie, peer, pid, app: kept(app), reason: kept(reason) };
         self.held.insert(cookie, hold.clone());
         Ok(hold)
     }
@@ -235,7 +240,22 @@ impl Server {
         #[zbus(connection)] connection: &zbus::Connection,
     ) -> fdo::Result<u32> {
         let peer = caller(&header)?;
-        let taken = self.0.change(|holds| holds.take(peer, &application_name, &reason_for_inhibit));
+        let bus = Bus::from_connection(connection.clone());
+        // Whose connection it is, for the shell to name the app by. An
+        // answer that doesn't come leaves the hold without one, and the
+        // check below still says whether the caller is there.
+        let pid = bus
+            .call_async::<_, u32>(
+                Opts::QUERY,
+                DBUS,
+                "/org/freedesktop/DBus",
+                DBUS,
+                "GetConnectionUnixProcessID",
+                &(peer.as_str(),),
+            )
+            .await
+            .ok();
+        let taken = self.0.change(|holds| holds.take(peer, pid, &application_name, &reason_for_inhibit));
         let hold = taken.map_err(|refused| match refused {
             Refused::TooMany => fdo::Error::LimitsExceeded(format!(
                 "this connection has {MAX_HOLDS_PER_PEER} holds already: give one back with UnInhibit"
@@ -244,7 +264,6 @@ impl Server {
         // Register first, then check: checking before registration would
         // let a disconnect between the two leave an orphaned hold. Unique
         // names are never reused. A failed/timed-out check fails closed.
-        let bus = Bus::from_connection(connection.clone());
         let error = match bus
             .call_async::<_, bool>(
                 Opts::QUERY,
@@ -505,7 +524,7 @@ mod tests {
 
     /// A hold for the connection `who`, by its cookie.
     fn take(holds: &mut Holds, who: &str, app: &str, reason: &str) -> Cookie {
-        holds.take(peer(who), app, reason).expect("a hold").cookie
+        holds.take(peer(who), None, app, reason).expect("a hold").cookie
     }
 
     #[test]
@@ -533,10 +552,16 @@ mod tests {
     #[test]
     fn a_hold_lasts_until_its_cookie_comes_back() {
         let mut holds = Holds::default();
-        let vlc = take(&mut holds, ":1.7", "vlc", "Playing some media.");
+        let vlc = holds.take(peer(":1.7"), Some(4242), "vlc", "Playing some media.").expect("a hold").cookie;
         assert_eq!(
             holds.state().holds,
-            [Hold { cookie: vlc, peer: peer(":1.7"), app: "vlc".into(), reason: "Playing some media.".into() }]
+            [Hold {
+                cookie: vlc,
+                peer: peer(":1.7"),
+                pid: Some(4242),
+                app: "vlc".into(),
+                reason: "Playing some media.".into()
+            }]
         );
         assert!(holds.state().held());
         assert_eq!(holds.release(&peer(":1.7"), vlc).map(|h| h.app), Some("vlc".into()));
@@ -583,7 +608,8 @@ mod tests {
         assert_eq!(take(&mut holds, ":1.7", "a", "").get(), u32::MAX);
         let one = Cookie::new(1).unwrap();
         // Round the end: past 0, and past the one still held.
-        holds.held.insert(one, Hold { cookie: one, peer: peer(":1.7"), app: "a".into(), reason: String::new() });
+        let held = Hold { cookie: one, peer: peer(":1.7"), pid: None, app: "a".into(), reason: String::new() };
+        holds.held.insert(one, held);
         assert_eq!(take(&mut holds, ":1.7", "a", "").get(), 2);
     }
 
@@ -631,19 +657,19 @@ mod tests {
         for _ in 1..MAX_HOLDS_PER_PEER {
             take(&mut holds, ":1.7", "greedy", "");
         }
-        assert_eq!(holds.take(peer(":1.7"), "greedy", ""), Err(Refused::TooMany));
+        assert_eq!(holds.take(peer(":1.7"), None, "greedy", ""), Err(Refused::TooMany));
         assert_eq!(holds.state().holds.len(), MAX_HOLDS_PER_PEER);
         // Another connection isn't kept out by it, and giving one back
         // makes room.
-        assert!(holds.take(peer(":1.9"), "player", "").is_ok());
+        assert!(holds.take(peer(":1.9"), None, "player", "").is_ok());
         holds.release(&peer(":1.7"), first);
-        assert!(holds.take(peer(":1.7"), "greedy", "").is_ok());
+        assert!(holds.take(peer(":1.7"), None, "greedy", "").is_ok());
     }
 
     #[test]
     fn long_words_are_cut_where_they_are_kept() {
         let mut holds = Holds::default();
-        let hold = holds.take(peer(":1.7"), &"a".repeat(5000), &"é".repeat(5000)).unwrap();
+        let hold = holds.take(peer(":1.7"), None, &"a".repeat(5000), &"é".repeat(5000)).unwrap();
         assert_eq!(hold.app.chars().count(), MAX_TEXT);
         assert_eq!(hold.reason, "é".repeat(MAX_TEXT));
         assert_eq!(holds.state().holds, [hold]);
