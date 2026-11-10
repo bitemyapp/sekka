@@ -28,7 +28,7 @@ use std::time::Duration;
 
 use aizome_ipc::{IdleHolder, IdleInhibitorInfo, WindowId, WindowInfo};
 use aizome_kit::{Cx, Icon};
-use aizome_sys::apps::{App, AppIndex};
+use aizome_sys::apps::{App, AppIndex, program_name};
 use aizome_sys::screensaver::Hold;
 
 use crate::apps::catalog;
@@ -149,16 +149,6 @@ pub struct Known<'a> {
     /// The shell this one replaces, in a restart. It holds its own such
     /// inhibitor until the compositor stops it, seconds later.
     pub shell_before: Option<Pid>,
-}
-
-/// A program's file name, without what NixOS's wrappers add
-/// (`/nix/store/…/bin/.vlc-wrapped` is `vlc`).
-fn program_name(program: &str) -> &str {
-    let mut name = program.trim().rsplit('/').next().unwrap_or_default();
-    while let Some(inner) = name.strip_prefix('.').and_then(|n| n.strip_suffix("-wrapped")) {
-        name = inner;
-    }
-    name
 }
 
 impl Known<'_> {
