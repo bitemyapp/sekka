@@ -26,6 +26,7 @@ use wayland_client::protocol::{
     wl_surface,
 };
 use wayland_client::{Connection, Dispatch, EventQueue, QueueHandle, WEnum};
+use wayland_protocols::wp::idle_inhibit::zv1::client::{zwp_idle_inhibit_manager_v1, zwp_idle_inhibitor_v1};
 use wayland_protocols::wp::text_input::zv3::client::{zwp_text_input_manager_v3, zwp_text_input_v3};
 use wayland_protocols::xdg::decoration::zv1::client::{zxdg_decoration_manager_v1, zxdg_toplevel_decoration_v1};
 use wayland_protocols::xdg::foreign::zv2::client::{zxdg_exported_v2, zxdg_exporter_v2};
@@ -498,6 +499,10 @@ pub enum Cmd {
     /// Exports the window (xdg-foreign v2), as an app does for a portal
     /// dialog: its handle comes in `Seen::exported`.
     Export,
+    /// Takes an idle inhibitor on the window's surface (true), as a video
+    /// player does while it plays, or lets it go (false), as it does
+    /// paused.
+    InhibitIdle(bool),
     Quit,
 }
 
@@ -562,6 +567,7 @@ struct App {
     toplevel: Option<xdg_toplevel::XdgToplevel>,
     dialog: Option<(wl_surface::WlSurface, xdg_surface::XdgSurface, xdg_toplevel::XdgToplevel)>,
     exported: Option<zxdg_exported_v2::ZxdgExportedV2>,
+    inhibitor: Option<zwp_idle_inhibitor_v1::ZwpIdleInhibitorV1>,
     pending_size: Option<(i32, i32)>,
     size: (i32, i32),
     needs_draw: bool,
@@ -602,6 +608,7 @@ fn run_client(stream: UnixStream, spec: Spec, rx: Receiver<Cmd>, seen: Arc<Mutex
         toplevel: None,
         dialog: None,
         exported: None,
+        inhibitor: None,
         pending_size: None,
         needs_draw: false,
         configured: false,
@@ -667,6 +674,17 @@ fn run_client(stream: UnixStream, spec: Spec, rx: Receiver<Cmd>, seen: Arc<Mutex
                     let exporter: zxdg_exporter_v2::ZxdgExporterV2 =
                         globals.bind(&qh, 1..=1, ()).expect("zxdg_exporter_v2");
                     app.exported = Some(exporter.export_toplevel(app.surface.as_ref().unwrap(), &qh, ()));
+                }
+                Cmd::InhibitIdle(true) if app.inhibitor.is_none() => {
+                    let manager: zwp_idle_inhibit_manager_v1::ZwpIdleInhibitManagerV1 =
+                        globals.bind(&qh, 1..=1, ()).expect("zwp_idle_inhibit_manager_v1");
+                    app.inhibitor = Some(manager.create_inhibitor(app.surface.as_ref().unwrap(), &qh, ()));
+                }
+                Cmd::InhibitIdle(true) => {}
+                Cmd::InhibitIdle(false) => {
+                    if let Some(inhibitor) = app.inhibitor.take() {
+                        inhibitor.destroy();
+                    }
                 }
                 Cmd::Quit => app.quit = true,
             }
@@ -762,7 +780,9 @@ ignore!(
     zxdg_decoration_manager_v1::ZxdgDecorationManagerV1,
     wl_seat::WlSeat,
     zwp_text_input_manager_v3::ZwpTextInputManagerV3,
-    zxdg_exporter_v2::ZxdgExporterV2
+    zxdg_exporter_v2::ZxdgExporterV2,
+    zwp_idle_inhibit_manager_v1::ZwpIdleInhibitManagerV1,
+    zwp_idle_inhibitor_v1::ZwpIdleInhibitorV1
 );
 
 impl Dispatch<zxdg_exported_v2::ZxdgExportedV2, ()> for App {

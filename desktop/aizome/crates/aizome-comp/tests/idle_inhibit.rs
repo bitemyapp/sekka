@@ -1,9 +1,13 @@
 //! An idle inhibitor holds off idleness even on a surface that's never
-//! shown. Keep Awake (`aizome-awake hold`) relies on that: it has no
-//! window, only a bare surface with an inhibitor. Watched through
-//! ext-idle-notify, as idle daemons see it: with the inhibitor there's no
-//! `idled`, and once it's gone idleness comes as usual. It's gone too when
-//! its client goes without destroying it, as a killed holder does.
+//! shown. The shell relies on that for the apps that ask the session bus,
+//! and so does Keep Awake (`aizome-awake hold`) under a compositor that
+//! doesn't know its own request: neither has a window, only a bare surface
+//! with an inhibitor. Watched through ext-idle-notify, as idle daemons see
+//! it: with the inhibitor there's no `idled`, and once it's gone idleness
+//! comes as usual. It's gone too when its client goes without destroying
+//! it, as a killed holder does. Keep Awake's hold over IPC (`keep-awake`)
+//! holds idle daemons off the same way, for as long as its connection
+//! lasts (`idle_holders.rs` has who holds, and what a lock changes).
 
 mod common;
 
@@ -125,6 +129,33 @@ fn an_inhibitor_goes_with_its_client() {
     let until = Instant::now() + Duration::from_secs(3);
     while watcher.heard.idled == 0 {
         assert!(Instant::now() < until, "never idle after the inhibitor's client went");
+        watcher.run_for(Duration::from_millis(100));
+    }
+}
+
+#[test]
+fn keep_awakes_hold_over_ipc_holds_idle_daemons_off_while_its_connection_lasts() {
+    let c = Compositor::start(Options { outputs: &["1280x800@1"], ..Default::default() });
+    let conn = Connection::from_socket(UnixStream::connect(c.dir.join(&c.socket)).unwrap()).unwrap();
+    let (globals, queue) = registry_queue_init::<Heard>(&conn).unwrap();
+    let qh = queue.handle();
+    let seat: wl_seat::WlSeat = globals.bind(&qh, 1..=7, ()).unwrap();
+    let notifier: ext_idle_notifier_v1::ExtIdleNotifierV1 = globals.bind(&qh, 1..=1, ()).expect("ext_idle_notifier_v1");
+    let mut watcher = Client { conn, queue, heard: Heard::default() };
+
+    // Keep Awake's service asks on a connection of its own, and keeps it.
+    let mut service = aizome_ipc::Client::connect_to(&c.ipc).unwrap();
+    assert_eq!(service.request(&aizome_ipc::Request::KeepAwake).unwrap(), aizome_ipc::Response::Ok);
+
+    let _note = notifier.get_idle_notification(300, &seat, &qh, ());
+    watcher.run_for(Duration::from_millis(1500));
+    assert_eq!(watcher.heard.idled, 0, "idle while Keep Awake held");
+
+    // The service ends, however it ends: idleness comes.
+    drop(service);
+    let until = Instant::now() + Duration::from_secs(5);
+    while watcher.heard.idled == 0 {
+        assert!(Instant::now() < until, "never idle after Keep Awake's connection closed");
         watcher.run_for(Duration::from_millis(100));
     }
 }

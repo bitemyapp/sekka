@@ -22,6 +22,16 @@ struct Conn {
     inbuf: Vec<u8>,
     outbuf: Vec<u8>,
     subscribed: bool,
+    /// It asked to hold idleness off as Keep Awake (`keep-awake`), which
+    /// it does until it closes.
+    keep_awake: Option<KeepAwake>,
+}
+
+/// A connection's hold as Keep Awake.
+#[derive(Clone, Copy, Debug)]
+struct KeepAwake {
+    /// The process that asked, as the socket says.
+    pid: Option<i32>,
 }
 
 #[derive(Default)]
@@ -30,6 +40,9 @@ pub struct IpcServer {
     conns: HashMap<u64, Conn>,
     next: u64,
     events_sent: u64,
+    /// A connection holding as Keep Awake closed, and idleness hasn't
+    /// heard yet.
+    keep_awake_changed: bool,
 }
 
 impl IpcServer {
@@ -40,6 +53,33 @@ impl IpcServer {
     /// Whether connection `id` is still open and listening for events.
     pub fn is_subscribed(&self, id: u64) -> bool {
         self.conns.get(&id).is_some_and(|c| c.subscribed)
+    }
+
+    /// Whether a connection holds idleness off as Keep Awake.
+    pub fn keeps_awake(&self) -> bool {
+        self.conns.values().any(|c| c.keep_awake.is_some())
+    }
+
+    /// The processes of the connections holding as Keep Awake, the
+    /// connection made first first.
+    pub fn keep_awake_pids(&self) -> impl Iterator<Item = Option<i32>> {
+        let mut held: Vec<(u64, Option<i32>)> =
+            self.conns.iter().filter_map(|(id, c)| c.keep_awake.map(|k| (*id, k.pid))).collect();
+        held.sort_unstable_by_key(|(id, _)| *id);
+        held.into_iter().map(|(_, pid)| pid)
+    }
+
+    /// Whether a connection holding as Keep Awake has closed since this
+    /// was last asked.
+    pub fn take_keep_awake_changed(&mut self) -> bool {
+        std::mem::take(&mut self.keep_awake_changed)
+    }
+
+    /// Forgets connection `id`, and what it held.
+    fn close(&mut self, id: u64) -> Option<Conn> {
+        let conn = self.conns.remove(&id)?;
+        self.keep_awake_changed |= conn.keep_awake.is_some();
+        Some(conn)
     }
 
     /// Binds the socket and starts accepting connections.
@@ -133,11 +173,24 @@ impl IpcServer {
             }
         }
         for id in dead {
-            if let Some(c) = self.conns.remove(&id) {
+            if let Some(c) = self.close(id) {
                 let _ = c.stream.shutdown(std::net::Shutdown::Both);
             }
         }
     }
+}
+
+/// The process at the other end of a connection (`SO_PEERCRED`).
+fn peer_pid(stream: &UnixStream) -> Option<i32> {
+    use std::os::fd::AsRawFd;
+    let mut cred = libc::ucred { pid: 0, uid: 0, gid: 0 };
+    let mut len = std::mem::size_of::<libc::ucred>() as libc::socklen_t;
+    // Safety: an open socket, and a `ucred` of the length given for the
+    // kernel to fill.
+    let status = unsafe {
+        libc::getsockopt(stream.as_raw_fd(), libc::SOL_SOCKET, libc::SO_PEERCRED, (&raw mut cred).cast(), &raw mut len)
+    };
+    (status == 0 && cred.pid > 0).then_some(cred.pid)
 }
 
 impl Drop for IpcServer {
@@ -156,7 +209,8 @@ impl State {
         let Ok(reader) = stream.try_clone() else { return };
         let id = self.az.ipc.next;
         self.az.ipc.next += 1;
-        self.az.ipc.conns.insert(id, Conn { stream, inbuf: Vec::new(), outbuf: Vec::new(), subscribed: false });
+        let conn = Conn { stream, inbuf: Vec::new(), outbuf: Vec::new(), subscribed: false, keep_awake: None };
+        self.az.ipc.conns.insert(id, conn);
         let res = self.az.lh.insert_source(
             Generic::new(reader, Interest::READ, Mode::Level),
             move |_, stream, state: &mut State| {
@@ -167,30 +221,41 @@ impl State {
         );
         if let Err(e) = res {
             warn!("IPC connection: {e}");
-            self.az.ipc.conns.remove(&id);
+            self.az.ipc.close(id);
         }
     }
 
     fn ipc_readable(&mut self, id: u64, stream: &mut UnixStream) -> PostAction {
+        let action = self.ipc_read(id, stream);
+        // Keep Awake's connection closed (its service stopped, or died):
+        // idleness comes again.
+        if self.az.ipc.take_keep_awake_changed() {
+            info!("Keep Awake's connection closed: its hold on idleness goes with it");
+            self.idle_holds_changed();
+        }
+        action
+    }
+
+    fn ipc_read(&mut self, id: u64, stream: &mut UnixStream) -> PostAction {
         let mut buf = [0u8; 8192];
         loop {
             match stream.read(&mut buf) {
                 Ok(0) => {
-                    self.az.ipc.conns.remove(&id);
+                    self.az.ipc.close(id);
                     return PostAction::Remove;
                 }
                 Ok(n) => {
                     let Some(c) = self.az.ipc.conns.get_mut(&id) else { return PostAction::Remove };
                     c.inbuf.extend_from_slice(&buf[..n]);
                     if c.inbuf.len() > MAX_BACKLOG {
-                        self.az.ipc.conns.remove(&id);
+                        self.az.ipc.close(id);
                         return PostAction::Remove;
                     }
                 }
                 Err(e) if e.kind() == io::ErrorKind::WouldBlock => break,
                 Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
                 Err(_) => {
-                    self.az.ipc.conns.remove(&id);
+                    self.az.ipc.close(id);
                     return PostAction::Remove;
                 }
             }
@@ -224,6 +289,19 @@ impl State {
                 Ok(Request::CatchKey { tag: None }) => {
                     if self.az.keyboards.catch.as_ref().is_some_and(|(_, c)| *c == id) {
                         self.az.keyboards.catch = None;
+                    }
+                    Response::Ok
+                }
+                // The connection's as well: Keep Awake holds idleness off
+                // for as long as this one stays open, so the hold goes
+                // with its service however that ends.
+                Ok(Request::KeepAwake) => {
+                    if let Some(c) = self.az.ipc.conns.get_mut(&id)
+                        && c.keep_awake.is_none()
+                    {
+                        c.keep_awake = Some(KeepAwake { pid: peer_pid(&c.stream) });
+                        info!("Keep Awake holds idleness off");
+                        self.idle_holds_changed();
                     }
                     Response::Ok
                 }
