@@ -61,9 +61,12 @@ let
   );
   autoLogin = config.services.displayManager.autoLogin;
   automatic = autoLogin.enable && autoLogin.user != null;
-  # Where greetd notes that it has started once since boot (its default,
-  # named here so the unit below marks the same file).
-  runFile = "/run/greetd.run";
+  # Whether greetd has an initial session, however it was given: from
+  # services.displayManager.autoLogin below, or set as greetd's own.
+  initial = config.services.greetd.settings ? initial_session;
+  # Where greetd notes that it has started once since boot: what its
+  # settings say, or its default.
+  runFile = config.services.greetd.settings.general.runfile or "/run/greetd.run";
 in
 {
   options.programs.aizome.greeter = {
@@ -131,24 +134,26 @@ in
         }";
         inherit (autoLogin) user;
       };
-      settings.general = lib.mkIf automatic { runfile = runFile; };
       # NixOS stops restarting greetd once there is an initial session, from
       # when a restart logged the person in again. greetd starts it only on
       # its first run since boot (the run file), so with it greetd is
       # restarted as it is without: after the greeter dies, the login screen
       # comes back, and nobody is logged in again.
-      restart = lib.mkIf automatic true;
+      restart = lib.mkIf initial true;
     };
     # The login screen always comes up. When the initial session can't
     # start (the account is gone, expired, or has to set a password first),
     # greetd exits with status 1 before it has noted its first run, and
     # would try the same session at every start. So whenever greetd stops,
     # its first run is over, and after that exit it is started again: the
-    # second start shows the login screen. Only with automatic login, so
-    # every other system's unit stays as it was.
-    systemd.services.greetd.serviceConfig = lib.mkIf automatic {
-      RestartForceExitStatus = 1;
-      ExecStopPost = "${pkgs.coreutils}/bin/touch ${runFile}";
+    # second start shows the login screen. Only with an initial session
+    # (whichever way it was set), so every other system's unit stays as it
+    # was.
+    systemd.services.greetd = lib.mkIf initial {
+      serviceConfig = {
+        RestartForceExitStatus = 1;
+        ExecStopPost = "${pkgs.coreutils}/bin/touch ${runFile}";
+      };
     };
     services.xserver.displayManager.startx.enable = lib.mkIf g.x11 true;
     # Who logged in last and each person's session (nothing secret).
