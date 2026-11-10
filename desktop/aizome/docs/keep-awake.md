@@ -114,10 +114,16 @@ holds again. Keep Awake is your own word and still counts, locked or not.
    process's name: only programs of the session reach that socket, and an
    app's Wayland idle inhibitor is never taken for Keep Awake.
    `crates/aizome-comp/tests/idle_holders.rs` and `idle_inhibit.rs` check
-   it. A compositor that doesn't know the request (an Aizome from before
-   it, still running after an update; another desktop) gets a Wayland
-   idle inhibitor on a surface never shown instead, as before: idleness
-   is held off there all the same, as an app's hold is;
+   it. Where the request can't be asked, the compositor gets a Wayland
+   idle inhibitor on a surface never shown instead, as before, and
+   idleness is held off there all the same, as an app's hold is: an
+   Aizome from before the request, still running after an update, which
+   answers that it doesn't know it, and another desktop, which has no
+   such socket. Only there. An Aizome that takes the request and doesn't
+   answer within five seconds, drops the connection or refuses is an
+   error: the service ends, and systemd starts it again a second later
+   to ask afresh. Held as an app's instead, the hold would stop counting
+   behind a lock while the cup stayed amber;
 4. tells systemd it's ready (`Type=notify`). `aizome-awake on` then
    confirms with logind before it says Keep Awake is on.
 
@@ -147,8 +153,10 @@ ways an app asks, how the shell names who holds, and the cup's waits.
 - `cargo test -p aizome-awake`: an inhibitor counts as Keep Awake only as
   a block on all three, held by the right user (and process); "on" and
   "protected" are never confused. The compositor's hold is asked for by
-  name, ends with its compositor, and isn't claimed from one that doesn't
-  know the request.
+  name and ends with its compositor. A compositor that says it doesn't
+  know the request, or a socket nobody listens at, gets the inhibitor
+  instead; one that answers late, hangs up or refuses is an error, and
+  never an app's hold.
 - `cargo test -p aizome-comp --test idle_inhibit`: an inhibitor on a
   surface never shown holds off idleness, and idleness comes once it's
   gone, or once its client goes without destroying it. Keep Awake's hold

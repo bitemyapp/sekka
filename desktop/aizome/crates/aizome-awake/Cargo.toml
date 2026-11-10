@@ -15,7 +15,7 @@ path = "src/main.rs"
 # The compositor's `keep-awake` request, which tells Keep Awake's hold from
 # an app's idle inhibitor.
 aizome-ipc.workspace = true
-zbus ={ version = "5.19", default-features = false, features = ["async-io", "blocking-api"] }
+zbus = { version = "5.19", default-features = false, features = ["async-io", "blocking-api"] }
 wayland-client = "0.31"
 wayland-protocols = { version = "0.32", features = ["client", "unstable"] }
 libc = "0.2"

@@ -163,7 +163,8 @@ fn status() -> Result<()> {
 /// them, checking every second that logind still lists the locks (a
 /// restarted logind forgets them) and that the compositor is still there.
 /// Losing either ends this with an error, and systemd starts it again,
-/// taking them afresh.
+/// taking them afresh. So does a compositor that has `keep-awake` and
+/// doesn't grant it in time: the next try asks again.
 fn hold() -> Result<()> {
     let bus = system_bus()?;
     let _lock = inhibit(&bus)?;
@@ -174,7 +175,9 @@ fn hold() -> Result<()> {
     let mut idle = KeepAwakeHold::take()?;
     if !idle.asked() {
         // An older Aizome, or another desktop: held as an app would.
-        eprintln!("aizome-awake: the compositor doesn't know keep-awake; holding a Wayland idle inhibitor instead");
+        eprintln!(
+            "aizome-awake: this compositor has no keep-awake to ask for; holding a Wayland idle inhibitor instead"
+        );
     }
     sd_notify("READY=1\nSTATUS=Sleep, idle and lid-close sleep are blocked");
     loop {
