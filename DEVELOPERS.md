@@ -1677,6 +1677,9 @@ library. It stops its own video subscription only after a valid full retained
 image; other viewers continue receiving video. This first implementation covers
 fullscreen Sukumo root painting, rather than a mixed native/pixel desktop scene
 graph or arbitrary GTK/Qt widget reconstruction.
+Voxl also requires source-owner opt-in with `--native-widgets=true`. Cached
+assets and drawing commands may contain clipped or occluded data beyond the
+final visible pixels; a normal pixel share does not grant that richer capability.
 
 Component validation commands:
 
