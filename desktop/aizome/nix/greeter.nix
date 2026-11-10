@@ -154,6 +154,14 @@ in
         RestartForceExitStatus = 1;
         ExecStopPost = "${pkgs.coreutils}/bin/touch ${runFile}";
       };
+      # A greeter that can't start exits, and greetd with it, to be started
+      # again: without end, taking the console back each time, when each try
+      # takes longer than systemd's usual limit counts (five starts in ten
+      # seconds). The greeter waits up to 20 s for its compositor, so five
+      # starts in three minutes stop that too: the unit fails, and a text
+      # console stays where it was switched to.
+      startLimitIntervalSec = 180;
+      startLimitBurst = 5;
     };
     services.xserver.displayManager.startx.enable = lib.mkIf g.x11 true;
     # Who logged in last and each person's session (nothing secret).
