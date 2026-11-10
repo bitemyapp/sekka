@@ -116,7 +116,8 @@ pub struct Followed {
     /// "WIDTHxHEIGHT" or "WIDTHxHEIGHT@HZ".
     mode: Option<String>,
     scale: Option<f64>,
-    position: Option<(i64, i64)>,
+    /// In logical pixels, as Aizome's reader holds it.
+    position: Option<(i32, i32)>,
     /// wl_output transform, 0-7.
     transform: Option<i64>,
     /// The connector of the display this one shows.
@@ -171,8 +172,66 @@ fn mode(text: &str) -> Option<String> {
     }
 }
 
-/// The `[[outputs]]` of Aizome's settings, in order. A value Aizome would
-/// not take is left out: that setting keeps Tatami's default.
+/// A key of an entry as Aizome's reader types it: nothing when unset, and
+/// no answer at all when set to what the reader refuses.
+fn typed<T>(
+    entry: &toml::Table,
+    key: &str,
+    read: impl Fn(&toml::Value) -> Option<T>,
+) -> Option<Option<T>> {
+    match entry.get(key) {
+        None => Some(None),
+        Some(value) => read(value).map(Some),
+    }
+}
+
+/// An `[[outputs]]` entry as Aizome's reader takes it (aizome-config's
+/// OutputConfig), or nothing for one it refuses: a key of another type, a
+/// position that is not two whole numbers an i32 holds (the reader looks at
+/// the first two), a rotation it has no name for. A value it reads but
+/// cannot use (a mode that is not a size, a scale out of range) is left
+/// out: that setting keeps Tatami's default.
+fn entry(table: &toml::Table) -> Option<Entry> {
+    let text = |key: &str| typed(table, key, |value| value.as_str().map(str::to_owned));
+    let whole = |value: &toml::Value| i32::try_from(value.as_integer()?).ok();
+    let position = typed(table, "position", |value| {
+        match value.as_array()?.as_slice() {
+            [x, y, ..] => Some((whole(x)?, whole(y)?)),
+            _ => None,
+        }
+    })?;
+    let scale = typed(table, "scale", |value| {
+        value
+            .as_float()
+            .or_else(|| value.as_integer().map(|n| n as f64))
+    })?;
+    let turned = typed(table, "transform", |value| transform(value.as_str()?))?;
+    Some(Entry {
+        name: text("name")?,
+        make: text("make")?,
+        model: text("model")?,
+        serial: text("serial")?,
+        enabled: typed(table, "enabled", toml::Value::as_bool)?,
+        settings: Followed {
+            connector: String::new(),
+            mode: text("mode")?.as_deref().and_then(mode),
+            scale: scale.filter(|scale| (0.25..=10.0).contains(scale)),
+            position,
+            transform: turned,
+            // Not a key the reader types: whatever is there is read, and
+            // only a connector's name is followed.
+            mirror: table
+                .get("mirror")
+                .and_then(toml::Value::as_str)
+                .filter(|mirror| hypr::safe_name(mirror))
+                .map(str::to_owned),
+        },
+    })
+}
+
+/// The `[[outputs]]` of Aizome's settings, in order: none when Aizome's
+/// reader refuses one of them. Aizome then starts from its defaults for the
+/// whole file, so a file it refuses is not followed in part either.
 fn entries(text: &str) -> Vec<Entry> {
     let Ok(table) = text.parse::<toml::Table>() else {
         return vec![];
@@ -182,43 +241,9 @@ fn entries(text: &str) -> Vec<Entry> {
     };
     outputs
         .iter()
-        .filter_map(toml::Value::as_table)
-        .map(|entry| {
-            let text = |key: &str| {
-                entry
-                    .get(key)
-                    .and_then(toml::Value::as_str)
-                    .map(str::to_owned)
-            };
-            let position = entry
-                .get("position")
-                .and_then(toml::Value::as_array)
-                .and_then(|xy| match xy.as_slice() {
-                    [x, y] => Some((x.as_integer()?, y.as_integer()?)),
-                    _ => None,
-                });
-            let scale = entry.get("scale").and_then(|scale| {
-                scale
-                    .as_float()
-                    .or_else(|| scale.as_integer().map(|n| n as f64))
-            });
-            Entry {
-                make: text("make"),
-                model: text("model"),
-                serial: text("serial"),
-                enabled: entry.get("enabled").and_then(toml::Value::as_bool),
-                settings: Followed {
-                    connector: String::new(),
-                    mode: text("mode").as_deref().and_then(mode),
-                    scale: scale.filter(|scale| (0.25..=10.0).contains(scale)),
-                    position,
-                    transform: text("transform").as_deref().and_then(transform),
-                    mirror: text("mirror").filter(|mirror| hypr::safe_name(mirror)),
-                },
-                name: text("name"),
-            }
-        })
-        .collect()
+        .map(|output| entry(output.as_table()?))
+        .collect::<Option<Vec<Entry>>>()
+        .unwrap_or_default()
 }
 
 impl Entry {
@@ -513,7 +538,7 @@ enabled = true
     }
 
     #[test]
-    fn what_aizome_leaves_unset_or_cannot_take_keeps_tatamis_defaults() {
+    fn what_aizome_leaves_unset_or_cannot_use_keeps_tatamis_defaults() {
         let tall = [display("DP-2", "RHT", "Tall", "")];
         let rule = |toml: &str| {
             followed(&format!("[[outputs]]\nmodel = \"Tall\"\n{toml}\n"), &tall)
@@ -525,7 +550,7 @@ enabled = true
             "hl.monitor({ output = \"DP-2\", mode = \"preferred\", position = \"auto\", scale = \"auto\", transform = 7, disabled = false, mirror = \"\" })"
         );
         assert_eq!(
-            rule("mode = \"2560 X 1440 @ 59.951Hz\"\nscale = 2\nposition = [-1440, 120]\ntransform = \"sideways\"").unwrap(),
+            rule("mode = \"2560 X 1440 @ 59.951Hz\"\nscale = 2\nposition = [-1440, 120]").unwrap(),
             "hl.monitor({ output = \"DP-2\", mode = \"2560x1440@59.951\", position = \"-1440x120\", scale = 2, transform = 0, disabled = false, mirror = \"\" })"
         );
         assert!(
@@ -533,14 +558,13 @@ enabled = true
                 .unwrap()
                 .contains("mode = \"1920x1080\"")
         );
+        // Read by Aizome, and of no use to it or to Tatami.
         for bad in [
             "mode = \"wide\"",
             "mode = \"0x1080@60\"",
             "mode = \"1920x1080@0\"",
             "scale = 0",
-            "position = [1]",
-            "position = \"0x0\"",
-            "transform = 1",
+            "mirror = 3",
             "mirror = \"\\\"; os.exit()\"",
         ] {
             let rule = rule(bad).unwrap();
@@ -552,6 +576,53 @@ enabled = true
         // Not Aizome's settings at all.
         assert!(followed("outputs = [", &tall).is_empty());
         assert!(followed("", &tall).is_empty());
+    }
+
+    /// Aizome's reader gives an error for each of these (aizome-config's
+    /// `Settings::from_toml`), and Aizome then shows its defaults for every
+    /// display: Tatami follows none of the file either.
+    #[test]
+    fn a_file_aizome_refuses_is_followed_in_nothing() {
+        let displays = [
+            display("DP-1", "RHT", "Wide", ""),
+            display("DP-2", "RHT", "Tall", ""),
+        ];
+        let file = |toml: &str| {
+            format!(
+                "[[outputs]]\nmodel = \"Wide\"\ntransform = \"90\"\n\
+                 [[outputs]]\nmodel = \"Tall\"\n{toml}\n"
+            )
+        };
+        // Read: a position to the ends of what an i32 holds, and of more
+        // than two numbers the first two.
+        let ends = followed(&file("position = [2147483647, -2147483648]"), &displays);
+        assert_eq!(ends.len(), 2);
+        assert!(
+            ends[1]
+                .rule()
+                .contains("position = \"2147483647x-2147483648\"")
+        );
+        let three = followed(&file("position = [1, 2, 3]"), &displays);
+        assert!(three[1].rule().contains("position = \"1x2\""));
+        for refused in [
+            "position = [3000000000, 0]",
+            "position = [0, -3000000000]",
+            "position = [1]",
+            "position = \"0x0\"",
+            "position = [0.0, 0.0]",
+            "transform = \"sideways\"",
+            "transform = 1",
+            "enabled = \"yes\"",
+            "name = 3",
+            "serial = 7",
+            "mode = 5",
+            "scale = \"2\"",
+        ] {
+            let rules = followed(&file(refused), &displays);
+            assert!(rules.is_empty(), "{refused}: {rules:?}");
+        }
+        // An entry that is no table.
+        assert!(followed("outputs = [1]", &displays).is_empty());
     }
 
     #[test]
