@@ -1038,3 +1038,145 @@ fn a_widget_in_a_kept_subtree_lives_on_and_is_drawn_as_it_is() {
     let check = h.check_frame_exact(w, 1.0);
     assert_eq!(check.differing_pixels, 0, "{check:?}");
 }
+
+mod coming_and_going {
+    //! Rows that leave a window and come back, as a list with part of it
+    //! folded away does: the tree keeps its nodes from view to view, so
+    //! what it does with the ones that died matters.
+
+    use super::*;
+
+    thread_local! {
+        /// Marks dropped on this thread.
+        static DROPPED: Cell<usize> = const { Cell::new(0) };
+    }
+
+    fn dropped() -> usize {
+        DROPPED.with(Cell::get)
+    }
+
+    /// A square that counts when it's dropped: each row has one.
+    struct Mark;
+
+    impl Drop for Mark {
+        fn drop(&mut self) {
+            DROPPED.with(|d| d.set(d.get() + 1));
+        }
+    }
+
+    impl Widget for Mark {
+        fn name(&self) -> &'static str {
+            "mark"
+        }
+
+        fn layout(&mut self, _cx: &mut LayoutCx, bc: Constraints) -> Size {
+            bc.constrain(Size::new(8.0, 8.0))
+        }
+    }
+
+    /// Nodes to a row: the lazy element, its row, a label and a mark.
+    const TO_A_ROW: usize = 4;
+
+    struct Folding {
+        rows: usize,
+        /// The rows that don't show.
+        folded: std::ops::Range<usize>,
+    }
+
+    fn folding_row(n: &usize) -> Element<()> {
+        aizome_kit::row![text(format!("row {n}")), Element::new(Mark, Vec::new())].spacing(4.0).into()
+    }
+
+    impl Program for Folding {
+        type Msg = ();
+        fn info(&self) -> AppInfo {
+            AppInfo::new("org.aizome.LazyFolding", "Lazy Folding", "Test")
+        }
+        fn launched(&mut self, cx: &mut Cx<()>) {
+            cx.open_window(WindowSpec::new("Folding").size(240.0, 300.0));
+        }
+        fn update(&mut self, _: (), _cx: &mut Cx<()>) {}
+        fn view(&self, _w: WindowKey) -> Element<()> {
+            let rows = (0..self.rows).filter(|n| !self.folded.contains(n)).map(|n| lazy(n, folding_row).key(n));
+            scroll(column(rows.collect())).into()
+        }
+    }
+
+    fn open(rows: usize) -> (Harness<Folding>, WindowKey) {
+        aizome_kit::fonts::install();
+        let h = Harness::new(Folding { rows, folded: 0..0 });
+        let w = h.window();
+        (h, w)
+    }
+
+    fn fold(h: &mut Harness<Folding>, folded: std::ops::Range<usize>) {
+        h.program_mut().folded = folded;
+        h.send(());
+    }
+
+    #[test]
+    fn rows_folded_away_at_the_end_and_shown_again_leave_nothing_behind() {
+        let (mut h, w) = open(600);
+        let all = h.widgets(w);
+        assert_eq!(h.nodes_held(w), all);
+        // A tenth of the rows, the last, away and back by turns: what a
+        // structural update in a long window is.
+        for turn in 0..40 {
+            let before = dropped();
+            fold(&mut h, 540..600);
+            assert_eq!(h.widgets(w), all - 60 * TO_A_ROW, "turn {turn}");
+            assert_eq!(h.nodes_held(w), h.widgets(w), "turn {turn}: the dead ones' room was given up");
+            assert_eq!(dropped(), before + 60, "turn {turn}: and their widgets with them");
+            fold(&mut h, 0..0);
+            assert_eq!(h.widgets(w), all, "turn {turn}");
+            assert_eq!(h.nodes_held(w), all, "turn {turn}: shown again, in the room they left");
+        }
+        let check = h.check_frame_exact(w, 1.0);
+        assert_eq!(check.differing_pixels, 0, "{check:?}");
+    }
+
+    #[test]
+    fn rows_folded_away_in_the_middle_give_up_their_widgets_at_once() {
+        let (mut h, w) = open(600);
+        let all = h.widgets(w);
+        // The same sixty in the middle, away and back: their first nodes'
+        // room waits among the others' for the dead to be dropped together,
+        // and no more room than that is ever held.
+        for turn in 0..40 {
+            let before = dropped();
+            fold(&mut h, 200..260);
+            assert_eq!(dropped(), before + 60, "turn {turn}: a dead row's widgets go when it dies");
+            assert!(h.nodes_held(w) <= all, "turn {turn}: {} held for {all}", h.nodes_held(w));
+            fold(&mut h, 0..0);
+            assert_eq!(h.widgets(w), all);
+            assert!(h.nodes_held(w) <= all + 60 * TO_A_ROW, "turn {turn}: {} held for {all}", h.nodes_held(w));
+        }
+    }
+
+    #[test]
+    fn rows_folded_away_here_and_there_are_dropped_before_they_outnumber_the_living() {
+        let (mut h, w) = open(600);
+        let all = h.widgets(w);
+        // Sixty away, a different sixty each time, the ones before shown
+        // again at the end of the tree's nodes: dead nodes gather among the
+        // living until they are dropped together.
+        let mut most = 0;
+        let mut away = 0..0;
+        for turn in 0..200 {
+            let from = (turn * 37) % 540;
+            let next = from..from + 60;
+            let going = next.clone().filter(|n| !away.contains(n)).count();
+            let before = dropped();
+            fold(&mut h, next.clone());
+            away = next;
+            assert_eq!(dropped(), before + going, "turn {turn}: the rows that went gave up their widgets");
+            most = most.max(h.nodes_held(w));
+            assert!(h.nodes_held(w) <= 2 * all + 256, "turn {turn}: {} held for {all}", h.nodes_held(w));
+        }
+        fold(&mut h, 0..0);
+        assert_eq!(h.widgets(w), all);
+        assert!(most > all, "dead nodes did wait among the living ({most} held at most)");
+        let check = h.check_frame_exact(w, 1.0);
+        assert_eq!(check.differing_pixels, 0, "{check:?}");
+    }
+}

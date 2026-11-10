@@ -1097,6 +1097,13 @@ impl<P: Program> Harness<P> {
         self.rt.core.wins.get(&self.win(key)).map_or(0, |w| w.tree.nodes.iter().filter(|n| !n.dead).count())
     }
 
+    /// How many nodes window `key`'s tree holds room for: its live widgets
+    /// ([`widgets`](Self::widgets)) and the dead ones it hasn't dropped
+    /// yet. A window whose widgets come and go must not hold ever more.
+    pub fn nodes_held(&self, key: WindowKey) -> usize {
+        self.rt.core.wins.get(&self.win(key)).map_or(0, |w| w.tree.nodes.len())
+    }
+
     pub fn theme(&self) -> &crate::theme::Theme {
         &self.rt.core.theme
     }

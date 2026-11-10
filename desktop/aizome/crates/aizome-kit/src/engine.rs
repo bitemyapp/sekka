@@ -802,8 +802,10 @@ impl Core {
             tree.snapshot_into(&mut w.snapshot);
             (vec![Rect::from_origin_size(Point::ZERO, w.size)], true)
         };
-        // A tree that keeps nodes keeps its dead ones' room too, till
-        // there are too many.
+        // The dead nodes at the end go at once. The rest keep their room
+        // until there are too many, in a tree that keeps its nodes from
+        // one view to the next.
+        tree.trim();
         let dead = tree.dead();
         if dead > 256 && dead > tree.nodes.len() / 2 {
             tree.compact();
@@ -989,6 +991,7 @@ impl Core {
             w.tree.compact();
         }
         let damage = settle(&mut w.tree, &mut w.snapshot, w.focused, win, platform);
+        w.tree.trim();
         let ticks = std::mem::take(&mut w.tree.ticks);
         let widget_timers = std::mem::take(&mut w.tree.widget_timers);
         if w.tree.lost_nodes() {

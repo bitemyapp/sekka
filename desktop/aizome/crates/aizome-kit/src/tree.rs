@@ -667,6 +667,12 @@ impl Tree {
     }
 
     /// Take a node and its children out.
+    ///
+    /// A dead node keeps its place among the nodes, since the others are
+    /// named by theirs, until the dead are dropped ([`trim`](Self::trim),
+    /// [`compact`](Self::compact)). It keeps nothing else: its widget and
+    /// its settings go now, so what waits is a husk and not what the widget
+    /// held.
     pub fn kill(&mut self, idx: usize) {
         if !self.nodes[idx].dead {
             if self.kept {
@@ -681,6 +687,9 @@ impl Tree {
             if n.lazy != LazyNode::No {
                 self.lazies -= 1;
             }
+            n.widget = Box::new(Vacant);
+            n.common = Common::default();
+            n.cache = None;
         }
         let n = &self.nodes[idx];
         if self.by_id.get(&n.id) == Some(&idx) {
@@ -689,6 +698,27 @@ impl Tree {
         for k in std::mem::take(&mut self.nodes[idx].children) {
             self.kill(k);
         }
+    }
+
+    /// Drop the dead nodes at the end of the nodes: no other node's place
+    /// is counted past them, so they can go without renumbering anything.
+    /// What comes and goes in a tree is most often what was mounted last
+    /// (rows shown, hidden and shown again), and then no dead node waits
+    /// at all.
+    ///
+    /// For between passes, as [`compact`](Self::compact) is: a layout names
+    /// nodes by place for the comparison after it.
+    pub fn trim(&mut self) {
+        if !self.nodes.last().is_some_and(|n| n.dead) {
+            return;
+        }
+        while self.nodes.last().is_some_and(|n| n.dead) {
+            self.nodes.pop();
+            self.dead -= 1;
+        }
+        let len = self.nodes.len();
+        self.popovers.retain(|p| p.node < len);
+        self.modal = self.modal.filter(|m| *m < len);
     }
 
     /// Lay `idx` out within `bc`, as narrowed by its own lengths.

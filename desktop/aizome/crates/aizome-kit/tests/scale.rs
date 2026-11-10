@@ -68,6 +68,9 @@ struct Scene {
     /// the view: a group whose rows didn't change is the same allocation.
     groups: Vec<Rc<Vec<Item>>>,
     children: Vec<Vec<usize>>,
+    /// How many rows, the last, don't show (rows only: a whole number of
+    /// groups).
+    away: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -76,6 +79,8 @@ enum Msg {
     Fill(usize, u64),
     Labels(u64),
     Fills(u64),
+    /// This many rows, the last, are away.
+    Away(usize),
 }
 
 /// A box with rounded corners, a border and a soft shadow, drawn on the
@@ -166,7 +171,7 @@ impl Scene {
             Shape::GroupedColumn => items[1..].chunks(GROUP).map(|rows| Rc::new(rows.to_vec())).collect(),
             _ => Vec::new(),
         };
-        Scene { shape, items, groups, children }
+        Scene { shape, items, groups, children, away: 0 }
     }
 
     /// Change item `id`, and its group's copy of it.
@@ -201,15 +206,19 @@ impl Program for Scene {
             Msg::Fill(i, tick) => self.change(i, |it| it.fill = tick),
             Msg::Labels(tick) => (0..self.items.len()).for_each(|i| self.change(i, |it| it.label = tick)),
             Msg::Fills(tick) => (0..self.items.len()).for_each(|i| self.change(i, |it| it.fill = tick)),
+            Msg::Away(rows) => self.away = rows,
         }
     }
 
     fn view(&self, _w: WindowKey) -> Element<Msg> {
-        let (first, rows) = (self.items[0], &self.items[1..]);
+        let (first, rows) = (self.items[0], &self.items[1..self.items.len() - self.away]);
         let tree = match self.shape {
             Shape::Column => item(false, first, rows.iter().map(|it| item(false, *it, Vec::new())).collect()),
             Shape::LazyColumn => item(false, first, rows.iter().map(|it| lazy(*it, row)).collect()),
-            Shape::GroupedColumn => item(false, first, self.groups.iter().map(|g| lazy(g.clone(), group)).collect()),
+            Shape::GroupedColumn => {
+                let groups = &self.groups[..self.groups.len() - self.away / GROUP];
+                item(false, first, groups.iter().map(|g| lazy(g.clone(), group)).collect())
+            }
             Shape::Cards => self.nested(0),
         };
         // In a scroll, as content taller than its window is: every row keeps
@@ -338,6 +347,14 @@ fn changes_in_very_large_windows() {
                             }
                             h.send(Msg::Label(nodes / 2, t));
                         }),
+                    ),
+                    // A tenth of the rows, the last, away and back by turns:
+                    // the nodes that die and the ones that take their place.
+                    // (Last of all: it may leave them away.)
+                    (
+                        "a tenth of the rows away or back",
+                        60,
+                        send(move |t| Msg::Away(if t % 2 == 1 { nodes / 10 } else { 0 })),
                     ),
                 ],
             );
