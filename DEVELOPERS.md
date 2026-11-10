@@ -2868,10 +2868,12 @@ Sekka's ISO") starts it:
 gh workflow run iso.yml --ref main
 ```
 
-Pull requests, main and the nightly leave these checks out: evaluating the
-media means evaluating the installer and its seven installed systems, which
-took 221 seconds of single-threaded evaluation, five times any other check
-(2026-11-03). `nix build .#iso-checks.desktop-references` runs one of them. The
+Pull requests and main leave these checks out: evaluating the media means
+evaluating the installer and its seven installed systems, which took 221
+seconds of single-threaded evaluation, five times any other check
+(2026-11-03). The nightly runs them after its other checks (see
+[Nightly builds](#nightly-builds)), and
+`nix build .#iso-checks.desktop-references` runs one of them. The
 workflow publishes nothing and holds no secrets; the image stays rooted on the
 builder with main's generations, and the job summary gives its path and
 SHA-256. Qualification and publication still happen on a workstation (see
