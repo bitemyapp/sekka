@@ -3,6 +3,7 @@
 //! the diff between two of them; painting through damage; hit testing and
 //! the focus chain.
 
+use std::collections::hash_map::Entry;
 use std::hash::Hasher;
 use std::sync::Arc;
 
@@ -151,17 +152,26 @@ impl Tree {
 
     fn mount_under(&mut self, el: RawElement, parent: Option<usize>, index: usize, base: NodeId) -> usize {
         let RawElement { mut widget, common, children } = el;
+        let kind = widget.as_ref().type_id();
         let mut id = match common.key {
             // A key preserves state across moves only for the same widget
             // type. Replacing its concrete type ends timers and state together.
-            Some(k) => base.keyed(k, widget.as_ref().type_id()),
-            None => base.indexed(index, widget.name(), widget.as_ref().type_id()),
+            Some(k) => base.keyed(k, kind),
+            None => base.indexed(index, widget.name(), kind),
         };
-        if self.by_id.contains_key(&id) {
-            // Siblings with the same key: tell them apart by place.
-            id = id.indexed(index, "duplicate", widget.as_ref().type_id());
-        }
         let idx = self.nodes.len();
+        // Looked for and put in at one go: this runs for every node of
+        // every build.
+        match self.by_id.entry(id) {
+            Entry::Vacant(place) => {
+                place.insert(idx);
+            }
+            Entry::Occupied(_) => {
+                // Siblings with the same key: tell them apart by place.
+                id = id.indexed(index, "duplicate", kind);
+                self.by_id.insert(id, idx);
+            }
+        }
         if let Some(name) = &common.name {
             self.names.insert(name.clone(), id);
         }
@@ -182,7 +192,6 @@ impl Tree {
             dead: false,
             cache: None,
         });
-        self.by_id.insert(id, idx);
         if let Some(content) = popover {
             self.popovers.push(Popover { node: idx, content });
         }
