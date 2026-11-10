@@ -95,7 +95,7 @@ What `launched` and `update` act with:
 | `element_rect(window, name)` | Where the element given `.id(name)` is in a window, as last laid out (to put something by it without a press: the shell's panels asked for over its socket). |
 | `theme() -> &Theme`, `quit()` | |
 | `show_context_menu(window, at, Menu)` | A menu at a point. |
-| `show_menu(window, anchor_rect, Menu, MenuStyle)` | A menu anchored to any rectangle of any window (the shell's bar menus). |
+| `show_menu(window, anchor_rect, Menu, MenuStyle)` | A menu anchored to any rectangle of any window (the shell's bar menus). One menu is open at a time: one opening closes another (and dismisses a popover), and a press outside it closes it, in whichever of the app's windows it lands (the compositor closes menus for a press in another app only). |
 | `show_sheet(parent) -> WindowKey` | A sheet over a window: its content is `view(key)`; close it with `close_window`. |
 | `alert(window, Alert)` | Title, message, buttons; Return and Escape press the default and cancel ones. |
 | `open_panel(window, FileDialog, \|paths\| msg)`, `save_panel(…)` | File panels. |
@@ -288,7 +288,7 @@ a `bevel_lo` bottom): compact pop-ups, `button(..).toolbar()`,
 
 | | |
 |---|---|
-| `popover(anchor, content, open).on_dismiss(msg)` | Content in a floating popup under the anchor (raised, the hard shadow) while `open`; a click elsewhere or Escape sends `on_dismiss`. It takes the keyboard (Tab moves within it), resizes with its content, and follows its anchor when that moves. |
+| `popover(anchor, content, open).on_dismiss(msg)` | Content in a floating popup under the anchor (raised, the hard shadow) while `open`; a click elsewhere (in any of the app's windows, or another app's) or Escape sends `on_dismiss`, and so does a menu opening; a click on the anchor is the program's (a toggle). It takes the keyboard (Tab moves within it), resizes with its content, and follows its anchor when that moves. |
 | `context_menu(el, Menu)` | The menu on a right click (or ⌃-click). |
 | `tooltip(el, "text")` (or `.tooltip(..)`) | After the pointer rests 650 ms. |
 | `mouse_area(el)` | `.on_press`, `.on_release`, `.on_double_click`, `.on_right_click(\|at\| ..)`, `.on_hover(\|in\| ..)`, `.on_move`, `.on_drag(\|DragEvent\| ..)`, `.on_drop(\|Dropped { urls, text, .. }\| ..)` (files and text from other programs, and this program's own drags out), `.drag_out(\|\| DragSource)` (pressed and moved four points, it goes out as the desktop's drag; `on_drag` hears no more of that press), `.cursor(c)`. |

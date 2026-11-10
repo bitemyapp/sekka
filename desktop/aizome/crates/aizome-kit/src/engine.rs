@@ -1152,7 +1152,9 @@ impl Core {
         }
     }
 
-    /// The compositor dismissed popup `win` (it's closed already).
+    /// Popup `win` is dismissed: by the compositor (a press in another
+    /// app; it's closed already), or by a press elsewhere in this app
+    /// ([`dismiss_outside`](Self::dismiss_outside)).
     pub fn popup_dismissed(&mut self, win: WinId, platform: &mut dyn Platform) {
         // A popup of the program's own is gone: the program hears it as a
         // close request (whatever it answers).
@@ -1175,29 +1177,87 @@ impl Core {
         self.close_popup(win, platform);
     }
 
+    fn is_menu(&self, win: WinId) -> bool {
+        matches!(self.wins.get(&win).map(|w| &w.kind), Some(WinKind::Popup { kind: PopupKind::Menu { .. }, .. }))
+    }
+
+    /// Whether `win` is a popup that holds a grab: a menu or a popover. A
+    /// press outside it dismisses it, wherever in the app the press lands.
+    fn grabs(&self, win: WinId) -> bool {
+        matches!(
+            self.wins.get(&win).map(|w| &w.kind),
+            Some(WinKind::Popup { kind: PopupKind::Menu { .. } | PopupKind::Popover { .. }, .. })
+        )
+    }
+
+    /// The window `win`'s menus hang from: itself, or the first window
+    /// under it that isn't a menu.
+    fn menu_owner(&self, mut win: WinId) -> WinId {
+        while let Some(WinKind::Popup { owner, kind: PopupKind::Menu { .. } }) = self.wins.get(&win).map(|w| &w.kind) {
+            win = *owner;
+        }
+        win
+    }
+
+    /// The grabbing popups (menus, popovers) a press in `win` is outside
+    /// of: those over `win`, and those hanging from the app's other windows,
+    /// each chain by its root (closing it closes what's over it). The
+    /// compositor dismisses them for a press in another app only; one in
+    /// another window of this app (the Shell opens the desktop's menu over
+    /// the bar) is the app's to answer (#207).
+    fn popups_outside(&self, win: WinId) -> Vec<WinId> {
+        // `win` and the windows under it, out to the first that isn't a
+        // grabbing popup: a press in a submenu is inside its menu.
+        let mut chain = vec![win];
+        while let Some(WinKind::Popup { owner, .. }) =
+            self.wins.get(chain.last().unwrap()).filter(|w| self.grabs(w.id)).map(|w| &w.kind)
+        {
+            chain.push(*owner);
+        }
+        self.wins
+            .iter()
+            .filter_map(|(&id, w)| match &w.kind {
+                WinKind::Popup { owner, kind: PopupKind::Menu { .. } | PopupKind::Popover { .. } }
+                    if *owner == win || (!self.grabs(*owner) && !chain.contains(&id)) =>
+                {
+                    Some(id)
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// A press in `win`, or a menu opening over it, dismisses the grabbing
+    /// popups it's outside of ([`popups_outside`](Self::popups_outside)) as
+    /// the compositor does for a press in another app: a menu closes, a
+    /// popover tells its program. `keep` stays open: the popover whose
+    /// anchor the press is on.
+    fn dismiss_outside(&mut self, win: WinId, keep: Option<WinId>, platform: &mut dyn Platform) {
+        for p in self.popups_outside(win) {
+            if Some(p) != keep {
+                self.popup_dismissed(p, platform);
+            }
+        }
+    }
+
+    /// The popover over `win` whose anchor is under `p`: a press there is
+    /// its program's to answer (the button that opened it, pressed again),
+    /// not a dismissal.
+    fn popover_anchored_at(&self, win: WinId, p: Point) -> Option<WinId> {
+        let w = self.wins.get(&win)?;
+        let path = w.tree.path_under(p, w.modal());
+        w.popups.iter().copied().find(|q| match self.wins.get(q).map(|pw| &pw.kind) {
+            Some(WinKind::Popup { kind: PopupKind::Popover { node, .. }, .. }) => {
+                w.tree.get(*node).is_some_and(|i| path.contains(&i))
+            }
+            _ => false,
+        })
+    }
+
     /// The menus open from `win` (and over them) close.
     fn close_menus(&mut self, win: WinId, platform: &mut dyn Platform) {
-        // Up to the first window that isn't a menu.
-        let mut top = win;
-        while let Some(WinKind::Popup { owner, kind: PopupKind::Menu { .. } }) = self.wins.get(&top).map(|w| &w.kind) {
-            top = *owner;
-        }
-        let menus: Vec<WinId> = self
-            .wins
-            .get(&top)
-            .map(|w| {
-                w.popups
-                    .iter()
-                    .copied()
-                    .filter(|p| {
-                        matches!(
-                            self.wins.get(p).map(|w| &w.kind),
-                            Some(WinKind::Popup { kind: PopupKind::Menu { .. }, .. })
-                        )
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
+        let top = self.menu_owner(win);
+        let menus = self.menu_popups_of(top);
         let had = !menus.is_empty();
         for m in menus {
             self.close_win(m, platform);
@@ -1235,7 +1295,9 @@ impl Core {
         mapper: Option<Mapper>,
         platform: &mut dyn Platform,
     ) -> WinId {
-        self.close_menus(win, platform);
+        // One menu at a time: the app's other menus (and popovers) make
+        // way, in whichever of its windows they're open.
+        self.dismiss_outside(win, None, platform);
         self.settle_menu(&mut spec);
         let root = MenuView::element(spec.clone(), look.clone());
         let keyboard = look.keyboard;
@@ -1274,7 +1336,7 @@ impl Core {
 
     /// Open the in-window menu bar's menu `index`.
     pub fn open_bar_menu(&mut self, win: WinId, index: usize, anchor: Rect, platform: &mut dyn Platform) {
-        self.close_menus(win, platform);
+        self.dismiss_outside(win, None, platform);
         let Some(mut spec) = self.menubar.get(index).cloned() else { return };
         self.settle_app_menu(&mut spec, Some(win));
         let root = MenuView::element(spec.clone(), MenuLook::default());
@@ -1310,23 +1372,10 @@ impl Core {
         Some((spec, look))
     }
 
-    /// The menu popups opened from `win` (its submenus).
+    /// The menu popups opened from `win`: a window's menus, a menu's
+    /// submenus.
     fn menu_popups_of(&self, win: WinId) -> Vec<WinId> {
-        self.wins
-            .get(&win)
-            .map(|w| {
-                w.popups
-                    .iter()
-                    .copied()
-                    .filter(|p| {
-                        matches!(
-                            self.wins.get(p).map(|w| &w.kind),
-                            Some(WinKind::Popup { kind: PopupKind::Menu { .. }, .. })
-                        )
-                    })
-                    .collect()
-            })
-            .unwrap_or_default()
+        self.wins.get(&win).map(|w| w.popups.iter().copied().filter(|&p| self.is_menu(p)).collect()).unwrap_or_default()
     }
 
     fn menu_sub(&mut self, win: WinId, node: NodeId, path: Vec<usize>, anchor: Rect, platform: &mut dyn Platform) {
@@ -2144,21 +2193,12 @@ impl Core {
         }
         let mods = self.mods;
         if pressed {
-            // A press in a window closes the menus over it (outside them).
-            let menus: Vec<WinId> = self.wins[&win]
-                .popups
-                .iter()
-                .copied()
-                .filter(|p| {
-                    matches!(
-                        self.wins.get(p).map(|w| &w.kind),
-                        Some(WinKind::Popup { kind: PopupKind::Menu { .. }, .. })
-                    )
-                })
-                .collect();
-            for m in menus {
-                self.close_win(m, platform);
-            }
+            // A press dismisses the grabbing popups it's outside of: the
+            // menus and popovers over this window, and those open elsewhere
+            // in the app (the compositor sees to a press in another app).
+            // A popover's own anchor pressed is its program's to answer.
+            let keep = self.popover_anchored_at(win, p);
+            self.dismiss_outside(win, keep, platform);
             self.update_hot(win, p, platform);
             let Some(w) = self.wins.get_mut(&win) else { return };
             w.press_under = None;
@@ -2717,12 +2757,7 @@ impl Core {
                     Some(WinKind::Popup { owner, kind: PopupKind::Menu { .. } }) => Some(*owner),
                     _ => None,
                 };
-                if owner.is_some_and(|o| {
-                    matches!(
-                        self.wins.get(&o).map(|w| &w.kind),
-                        Some(WinKind::Popup { kind: PopupKind::Menu { .. }, .. })
-                    )
-                }) {
+                if owner.is_some_and(|o| self.is_menu(o)) {
                     self.close_win(window, platform);
                 }
             }
