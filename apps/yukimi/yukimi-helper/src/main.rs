@@ -860,7 +860,7 @@ fn change(args: &[String]) -> Result<String> {
             .iter()
             .find(|c| &c.setting == setting)
             .ok_or_else(|| Failure(format!("{setting} isn't a choice this system offers")))?;
-        declared.allows_people(values, people::is_person).map_err(Failure)?;
+        declared.allows_people(values, people::takes).map_err(Failure)?;
     }
     let main = setup.main.clone();
     let packages_file = setup.packages_file();

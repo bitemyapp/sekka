@@ -111,18 +111,21 @@ impl Choice {
     /// Whether `values` may be written: declared ones, one for a string or
     /// a boolean (`true` or `false`), at least one and no repeats for a list.
     pub fn allows(&self, values: &[String]) -> Result<(), String> {
-        self.allows_people(values, |_| false)
+        self.allows_people(values, not_a_person)
     }
 
     /// As [`allows`](Choice::allows), where a `people` choice may also name
-    /// anyone `is_person` says has an account on this computer, or no one.
-    pub fn allows_people(&self, values: &[String], is_person: impl Fn(&str) -> bool) -> Result<(), String> {
+    /// no one, or anyone `takes` accepts: someone with an account on this
+    /// computer that can log in by itself
+    /// ([`people::takes`](crate::people::takes)), which says why not
+    /// otherwise.
+    pub fn allows_people(&self, values: &[String], takes: impl Fn(&str) -> Result<(), String>) -> Result<(), String> {
         if self.people {
             return match values {
                 [] => Ok(()),
                 [v] if v.is_empty() || self.options.iter().any(|o| &o.id == v) => Ok(()),
-                [v] if crate::people::valid_name(v) && is_person(v) => Ok(()),
-                [v] => Err(format!("{v:?} isn't one of the people on this computer")),
+                [v] if crate::people::valid_name(v) => takes(v),
+                [v] => not_a_person(v),
                 _ => Err(format!("{} takes one person", self.setting)),
             };
         }
@@ -173,6 +176,10 @@ impl Choice {
         }
         Choice { options, ..self.clone() }
     }
+}
+
+fn not_a_person(name: &str) -> Result<(), String> {
+    Err(format!("{name:?} isn't one of the people on this computer"))
 }
 
 /// A catalog of applications that comes with the system, such as an
@@ -468,11 +475,23 @@ mod tests {
         let login = &facts.choices[0];
         assert!(login.people);
         let v = |s: &[&str]| s.iter().map(|x| x.to_string()).collect::<Vec<_>>();
-        let here = |name: &str| ["adama", "kara"].contains(&name);
+        // Whom the computer takes, and why not the others: `lee` has an
+        // account that can't log in by itself yet.
+        let here = |name: &str| match name {
+            "adama" | "kara" => Ok(()),
+            "lee" => Err("lee has to set a password at their next login".to_owned()),
+            _ => Err(format!("{name:?} isn't one of the people on this computer")),
+        };
         assert!(login.allows_people(&v(&["kara"]), here).is_ok(), "added after the system was built");
         assert!(login.allows_people(&v(&[]), here).is_ok(), "no one");
         assert!(login.allows_people(&v(&[""]), here).is_ok(), "no one, as the empty value");
         assert!(login.allows_people(&v(&["starbuck"]), here).is_err(), "no such account");
+        assert_eq!(
+            login.allows_people(&v(&["lee"]), here),
+            Err("lee has to set a password at their next login".to_owned()),
+            "the reason reaches whoever chose them"
+        );
+        assert!(login.allows_people(&v(&["Lee"]), here).unwrap_err().contains("isn't one of the people"));
         assert!(login.allows_people(&v(&["adama", "kara"]), here).is_err(), "one person");
         assert!(login.allows(&v(&["adama"])).is_err(), "only with the computer's people");
         // As Yukimi offers it: no one first, then each person.
