@@ -43,7 +43,13 @@ pub enum AutoLogin {
 
 /// How this computer logs in by itself.
 pub fn auto_login() -> AutoLogin {
-    if let Some(now) = choices::read(AUTO_LOGIN) {
+    auto_login_from(&choices::Files::system())
+}
+
+/// How this computer logs in by itself, with Sekka's choice read from
+/// `files`.
+pub fn auto_login_from(files: &choices::Files) -> AutoLogin {
+    if let Some(now) = files.read(AUTO_LOGIN) {
         return AutoLogin::Choice(now);
     }
     let greetd = aizome_sys::Bus::system().and_then(|bus| aizome_sys::users::greetd_config(&bus)).ok().flatten();
@@ -56,6 +62,13 @@ pub fn auto_login() -> AutoLogin {
         None if aizome_sys::sysinfo::os_release().id == "nixos" => AutoLogin::Configuration(None),
         None => AutoLogin::Accounts,
     }
+}
+
+/// How the computer logs in by itself as it is now, read again from
+/// `files`. In the sample only Sekka's choice is read (from a test's
+/// files): `None` when they don't offer it, and the pane keeps what it has.
+fn read_again(files: &choices::Files, sample: bool) -> Option<AutoLogin> {
+    if sample { files.read(AUTO_LOGIN).map(AutoLogin::Choice) } else { Some(auto_login_from(files)) }
 }
 
 /// The user of greetd's initial session (`[initial_session]`, `user = "…"`).
@@ -225,6 +238,9 @@ pub enum Msg {
     /// Turn automatic login off (in Yukimi) before removing who it is for.
     AutoLoginOffFirst,
     Remove(String),
+    /// Ask about removing someone, now that how the computer logs in by
+    /// itself has been read again (`None`: nothing to read, so as it was).
+    RemoveAsked(String, Option<AutoLogin>),
     DeleteFiles(bool),
     RemoveConfirmed,
     Done(&'static str, Result<(), String>),
@@ -320,6 +336,27 @@ impl Users {
         if let Some(t) = self.checking.take() {
             cx.cancel(t);
         }
+    }
+
+    /// Take how the computer logs in by itself, as just read.
+    fn took(&mut self, how: AutoLogin, cx: &mut PaneCx<Msg>) {
+        // What was proposed has come, or the choice has gone.
+        let waiting = match &how {
+            AutoLogin::Choice(c) => self.proposed.as_deref().is_some_and(|p| p != c.next),
+            _ => false,
+        };
+        if !waiting {
+            self.stop_checking(cx);
+        }
+        self.auto_login = Some(how);
+    }
+
+    /// Open the sheet that asks about removing `user`: to remove them, or
+    /// to turn automatic login off first when it is for them.
+    fn ask_to_remove(&mut self, user: String, cx: &mut PaneCx<Msg>) {
+        let Some(home) = Self::user(cx, &user).map(|u| u.home.clone()) else { return };
+        self.sheet = Some(Sheet::Remove { user, home, delete_files: false });
+        cx.open_sheet();
     }
 
     /// Whether Sekka's choice starts the computer straight into `user`'s
@@ -655,17 +692,7 @@ impl Pane for Users {
                 self.propose_auto_login(who.as_deref().unwrap_or(""), cx);
             }
             Msg::AutoLoginCheck => cx.spawn(|| Msg::AutoLoginRead(auto_login())),
-            Msg::AutoLoginRead(how) => {
-                // What was proposed has come, or the choice has gone.
-                let waiting = match &how {
-                    AutoLogin::Choice(c) => self.proposed.as_deref().is_some_and(|p| p != c.next),
-                    _ => false,
-                };
-                if !waiting {
-                    self.stop_checking(cx);
-                }
-                self.auto_login = Some(how);
-            }
+            Msg::AutoLoginRead(how) => self.took(how, cx),
             Msg::AutoLoginConfirmed(who) if matches!(self.auto_login, Some(AutoLogin::Accounts)) => {
                 let snap = cx.sys().accounts.snapshot();
                 let target = match &who {
@@ -679,9 +706,23 @@ impl Pane for Users {
             // Not read yet, or only the configuration sets it.
             Msg::AutoLoginConfirmed(_) => {}
             Msg::Remove(user) => {
-                let Some(home) = Self::user(cx, &user).map(|u| u.home.clone()) else { return };
-                self.sheet = Some(Sheet::Remove { user, home, delete_files: false });
-                cx.open_sheet();
+                // Whom the computer starts into may have changed since this
+                // pane read it (a choice applied in Yukimi while it stayed
+                // open), and removing someone goes by it: read it again
+                // before asking.
+                match cx.choices() {
+                    Some(files) => {
+                        let sample = cx.sample();
+                        cx.spawn(move || Msg::RemoveAsked(user, read_again(&files, sample)));
+                    }
+                    None => self.ask_to_remove(user, cx),
+                }
+            }
+            Msg::RemoveAsked(user, how) => {
+                if let Some(how) = how {
+                    self.took(how, cx);
+                }
+                self.ask_to_remove(user, cx);
             }
             Msg::DeleteFiles(on) => {
                 if let Some(Sheet::Remove { delete_files, .. }) = &mut self.sheet {

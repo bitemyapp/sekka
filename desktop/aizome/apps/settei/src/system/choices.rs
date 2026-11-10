@@ -4,6 +4,8 @@
 //! Yukimi prepared waits for a restart). Settei proposes changes to them by
 //! launching `aizome-yukimi --choose SETTING=VALUE`.
 
+use std::path::PathBuf;
+
 use serde::Deserialize;
 
 /// The running system's choices.
@@ -16,6 +18,31 @@ pub const NEXT: &str = "/nix/var/nix/profiles/system/etc/yukimi/system.json";
 pub struct Now<T> {
     pub now: T,
     pub next: T,
+}
+
+/// Where the choices are read from: the system's two files, or a test's.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Files {
+    /// The running system's.
+    pub now: PathBuf,
+    /// Those of the system the computer starts next.
+    pub next: PathBuf,
+}
+
+impl Files {
+    /// The system's own ([`NOW`] and [`NEXT`]).
+    pub fn system() -> Files {
+        Files { now: NOW.into(), next: NEXT.into() }
+    }
+
+    /// `setting` now and from the next start, if the running system offers
+    /// it (the next one is as now when it doesn't say).
+    pub fn read(&self, setting: &str) -> Option<Now<String>> {
+        let read = |path: &PathBuf| std::fs::read_to_string(path).ok().and_then(|text| value(&text, setting));
+        let now = read(&self.now)?;
+        let next = read(&self.next).unwrap_or_else(|| now.clone());
+        Some(Now { now, next })
+    }
 }
 
 /// `setting`'s value in a `yukimi/system.json`, if the system offers it as
@@ -44,10 +71,7 @@ pub fn value(text: &str, setting: &str) -> Option<String> {
 /// `setting` now and from the next start, if the running system offers it
 /// (the next one is as now when it doesn't say).
 pub fn read(setting: &str) -> Option<Now<String>> {
-    let read = |path: &str| std::fs::read_to_string(path).ok().and_then(|text| value(&text, setting));
-    let now = read(NOW)?;
-    let next = read(NEXT).unwrap_or_else(|| now.clone());
-    Some(Now { now, next })
+    Files::system().read(setting)
 }
 
 /// Propose `value` for `setting` in Yukimi, which asks for an administrator
