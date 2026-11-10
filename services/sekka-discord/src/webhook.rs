@@ -30,8 +30,10 @@ const MAX_BODY: usize = 25 * 1024 * 1024;
 // A body is the only proof of the secret, so it has to be read for anyone who
 // sends one. What the receiver holds for senders it has not verified is still
 // bounded: for each connection a request head and this much body, and for all
-// bodies needing more one shared allowance. Together that is
-// MAX_CONNECTIONS * (MAX_HEAD + UNSHARED_BODY) + SHARED_BODIES, or 90 MiB.
+// bodies needing more one shared allowance. A head is checked against MAX_HEAD
+// between reads, so one that arrives in large reads can reach just under twice
+// that before it is refused. Together that is at most
+// MAX_CONNECTIONS * (2 * MAX_HEAD + UNSHARED_BODY) + SHARED_BODIES, or 98 MiB.
 const MAX_HEAD: usize = 64 * 1024;
 const UNSHARED_BODY: usize = 256 * 1024;
 const SHARED_BODIES: usize = 2 * MAX_BODY;
@@ -101,8 +103,12 @@ const LIMITS: Limits = Limits {
 
 /// The connections the listener holds. Those already here never keep a new one
 /// out: when every place is taken, the connection that has gone longest without
-/// showing the secret is closed. An idle or stalled sender therefore costs a
-/// signed delivery nothing, however many of them there are.
+/// showing the secret is closed, without an answer. Idle and stalled senders
+/// therefore cannot hold the places against a signed delivery, however many of
+/// them there are. A delivery shows the secret only with its last byte, though:
+/// one that is still arriving when as many further connections as there are
+/// places have come in behind it is closed like any other, and of more
+/// deliveries at once than there are places the excess are closed.
 struct Gate {
     places: Arc<Semaphore>,
     unproven: Mutex<VecDeque<(u64, AbortHandle)>>,

@@ -76,34 +76,61 @@ responses are limited to 16 MiB; redirects and inherited HTTP proxies are
 disabled.
 
 A body is the only proof of the secret, so the listener has to read one for
-anyone who sends it. Admission is arranged so that senders it has not verified
-cost a signed delivery nothing, within a stated amount of memory:
+anyone who sends it. Senders it has not verified take none of the workers and
+a stated amount of memory; what they can still cost a signed delivery is listed
+after the bounds:
 
 - Reading a body takes no slot. A sender that stalls holds only the bytes it has
   sent, until its deadline.
-- Each connection may hold a request head of up to 64 KiB and the first 256 KiB
-  of a body. Bodies needing more draw on one shared allowance of 50 MiB; one
+- Each connection may hold a request head and the first 256 KiB of a body. A
+  head of up to 64 KiB is taken however it arrives. The bound is checked
+  between reads, so a larger head that arrives in large reads can be taken up
+  to just under 128 KiB: 100,224 bytes sent in one write were taken and 118,224
+  were refused with 431, as is a head with more than 100 header fields. Bodies
+  needing more than their 256 KiB draw on one shared allowance of 50 MiB; one
   that finds it used up receives 503 at once. A delivery under 256 KiB, which
   is nearly every delivery GitHub sends, is never crowded out by larger ones.
 - The listener holds at most 128 connections, well under the unit's 1,024 file
-  descriptors, and serves one request on each. A new connection is never kept
-  out: when all places are taken, the connection that has gone longest without
-  showing the secret is closed. A connection with no complete request head
-  after 5 seconds is closed, and every connection after 30.
+  descriptors, and serves one request on each. When all places are taken, a new
+  connection gets one by closing, without an answer, the connection that has
+  gone longest without showing the secret. A connection with no complete
+  request head after 5 seconds is closed, and every connection after 30.
 - The two workers that parse and commit are taken only after the signature
   verifies. A verified delivery waits for one until its deadline, then receives
   503; workers still running after an HTTP timeout or disconnect stay counted.
 
 Before a signature verifies, the listener therefore holds at most
-128 × (64 KiB + 256 KiB) + 50 MiB = 90 MiB of heads and bodies for all senders
+128 × (128 KiB + 256 KiB) + 50 MiB = 98 MiB of heads and bodies for all senders
 together. Verified bodies stay inside the same allowances until they are
-committed. The process's memory runs above what it holds: with 76 MiB of
-unverified bodies held it measured about 100 MiB resident, against the unit's
-limit of 512 MiB. The limits that remain: a delivery over 256 KiB can receive
-503 while unverified senders have filled the shared 50 MiB, which they must
-keep refilling every 10 seconds; and a process on the host itself can still
-open connections faster than the listener closes them. Connections closed for
-giving way or for sending no request head are counted with the rejections.
+committed. The process's memory runs above what it holds: with 81.5 MiB of
+unverified bodies held on 126 connections it measured about 126 to 146 MiB
+resident, and up to about 200 MiB over runs of abusive connections among
+signed deliveries, the longest 15 minutes, against the unit's limit of
+512 MiB.
+
+The limits that remain:
+
+- A delivery shows the secret only with its last byte, so while it is arriving
+  it gives way like any other connection: once 128 further connections have
+  arrived behind it, it is closed without an answer and nothing is committed.
+  Its sender sees the connection end; caddy and nginx in front of the listener
+  answered 502. Requests that stall at the body hold a place for 10 seconds
+  each, so about 13 of them a second keep every place taken. Past that the
+  rate decides: with 100 arriving a second, all ten signed 2 MiB deliveries
+  that took 2 seconds to arrive were closed, and all ten that took 1 second
+  were taken. Small deliveries written in one piece were all taken, 1,500 of
+  1,500, while 36,000 silent connections a second arrived.
+- More than 128 deliveries at once lose the excess in the same way. Of 128
+  small signed deliveries started together all were taken; of 200, about 140;
+  of 400, about 165.
+- A delivery over 256 KiB can receive 503 while unverified senders have filled
+  the shared 50 MiB, which they must keep refilling every 10 seconds.
+- A process on the host itself can still open connections faster than the
+  listener closes them.
+
+Connections closed for giving way or for sending no request head are counted
+with the rejections, in the one number: the journal does not say which they
+were.
 
 Diesel uses SQLite WAL, full synchronous commits, and an exclusive state-directory
 lock. Receipts are unique by source and source ID; a delivery ID reused with
@@ -296,11 +323,13 @@ loopback health check. Each tick:
    failed, never to be retried; re-running the workflow is a new attempt.
 
 The deployer never goes back to an earlier run and does not take a run's word
-for its branch. Its first tick on a host records the latest run and deploys
-nothing: a run from before the host looked was not a request to it, and its
-commit can be far older than the package the host already runs. After that a
-run is deployed only if its number is higher than that first one's and than
-every run deployed since. Run numbers only grow, so an older run becomes the
+for its branch. Its first tick on a host records the latest run that has
+succeeded and deploys nothing: a run that had finished before the host looked
+was not a request to it, and its commit can be far older than the package the
+host already runs. After that a run is deployed only if its number is higher
+than that first one's and than every run deployed since. A run still in
+progress at the first tick has a higher number than the one recorded, so it is
+deployed when it succeeds. Run numbers only grow, so an older run becomes the
 latest only when later runs are deleted, and the deployer refuses it. The commit
 must also be the head of `refs/heads/main` or an ancestor of it, which the
 deployer asks GitHub about by commit: a run dispatched on a tag named `main`
@@ -350,8 +379,10 @@ module and package copies in `/etc/nixos` to a revision that includes the
 deployer, add `deploy.enable = true;` to `services.sekka-discord` in
 `sekka-discord-host.nix` and activate that generation. Wait for the deployer's
 first tick, which logs `DEPLOY baseline`, and only then dispatch the workflow. A
-run dispatched earlier is the one the first tick records, and it is never
-deployed; dispatch another. To go back to the host's own package, stop
+run that had already succeeded by then is the one the first tick records, and
+it is never deployed; dispatch another. A run dispatched earlier that is still
+in progress at the first tick is deployed when it succeeds. To go back to the
+host's own package, stop
 `sekka-discord-deploy.timer`, remove the profile link and restart
 `sekka-discord.service`. `checks.sekka-discord-deploy` exercises the first tick,
 deployment, both kinds of rollback, skipped, older and off-`main` runs and a
