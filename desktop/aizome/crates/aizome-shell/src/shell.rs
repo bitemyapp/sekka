@@ -360,6 +360,9 @@ pub struct Shell {
     pub night: Option<aizome_ipc::NightLightState>,
     /// Keep Awake, as the watcher last saw it (`awake.rs`).
     pub awake: aizome_awake::Status,
+    /// The compositor's idle inhibitor, held while an app on the session
+    /// bus keeps the screen awake (`idle.rs`).
+    pub(crate) idle_hold: crate::idle::IdleHold,
     /// GeoClue is being asked where the computer is; when it last answered.
     pub(crate) locating: bool,
     pub(crate) located_at: Option<std::time::Instant>,
@@ -479,6 +482,7 @@ impl Shell {
             logind_power_key: None,
             night: None,
             awake: aizome_awake::Status::Off,
+            idle_hold: Default::default(),
             locating: false,
             located_at: None,
             recording: None,
@@ -1529,6 +1533,9 @@ impl Program for Shell {
                     self.ipc.send(aizome_ipc::Request::SetAudible { pids: playing.clone() });
                     self.audible_sent = playing;
                 }
+                // An app asked the session bus to keep the screen awake,
+                // or the last one let go.
+                self.idle_hold.want(self.sys.screen());
                 self.tray.awake = (self.awake != aizome_awake::Status::Off).then_some(self.awake);
                 self.sync_status_items();
                 self.session_events(cx);

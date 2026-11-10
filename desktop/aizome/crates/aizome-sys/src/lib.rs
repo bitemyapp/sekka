@@ -42,6 +42,7 @@
 //! | [`mpris`] | media players, media keys | MPRIS on the session bus | — |
 //! | [`notifications`] | the notification server (the shell) and a client (apps) | `org.freedesktop.Notifications` | — |
 //! | [`statusnotifier`] | apps' status icons and their menus (the watcher, for the shell) | `org.kde.StatusNotifierWatcher`, `com.canonical.dbusmenu` | — |
+//! | [`screensaver`] | apps keeping the screen awake over the session bus (for the shell) | `org.freedesktop.ScreenSaver` | — |
 //! | [`polkit`] | the authentication agent | polkit's helper | `security.polkit.enable` |
 //! | [`sysinfo`] | CPU, memory, processes, I/O, sensors, hardware | `/proc`, `/sys` | `pkgs.hwdata` for GPU names |
 //! | [`apps`] | desktop entries, icons, default apps (`aizome-apps`), and launching | XDG files, `systemd-run` | — |
@@ -68,6 +69,7 @@ mod oneshot;
 pub mod polkit;
 pub mod power;
 pub mod printers;
+pub mod screensaver;
 mod service;
 pub mod statusnotifier;
 pub mod sysinfo;

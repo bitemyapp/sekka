@@ -20,6 +20,7 @@ mod desktop_glue;
 mod greeter;
 pub mod gtk;
 pub mod icons;
+pub mod idle;
 pub mod ipc;
 pub mod launch;
 pub mod location;
