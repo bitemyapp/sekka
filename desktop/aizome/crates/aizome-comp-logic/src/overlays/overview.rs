@@ -215,6 +215,7 @@ pub fn pointer_button(state: &mut State, pressed: bool, x: f64, y: f64) -> bool 
                 let n = state.lg.m().wm.desks().len() + 1;
                 state.lg.m().wm.add_desk(n.to_string(), None, None);
                 state.emit_desks();
+                crate::config::save_desks(state);
                 let o = state.lg.m().overlays.overview.as_ref().unwrap().output.clone();
                 state.az.queue_redraw(&o);
             }
@@ -238,6 +239,7 @@ pub fn pointer_button(state: &mut State, pressed: bool, x: f64, y: f64) -> bool 
             let n = state.lg.m().wm.desks().len() + 1;
             let d = state.lg.m().wm.add_desk(n.to_string(), None, None);
             state.move_to_desk(id, d, false);
+            crate::config::save_desks(state);
         }
         None => {}
     }

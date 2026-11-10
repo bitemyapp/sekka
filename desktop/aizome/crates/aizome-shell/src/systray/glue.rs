@@ -378,14 +378,12 @@ impl Shell {
                     aizome_config::ThemeChoice::Day,
                     aizome_config::ThemeChoice::Auto,
                 ][i.min(2)];
-                self.settings.appearance.theme = choice;
-                self.save_appearance();
+                self.change_appearance(|a| a.theme = choice);
             }
             PanelMsg::Size(i) => {
-                self.settings.appearance.size =
-                    [aizome_config::UiSize::Small, aizome_config::UiSize::Medium, aizome_config::UiSize::Large]
-                        [i.min(2)];
-                self.save_appearance();
+                let size = [aizome_config::UiSize::Small, aizome_config::UiSize::Medium, aizome_config::UiSize::Large]
+                    [i.min(2)];
+                self.change_appearance(|a| a.size = size);
             }
             PanelMsg::KeepAwake(on) => {
                 if (self.awake != aizome_awake::Status::Off) != on {
@@ -402,13 +400,10 @@ impl Shell {
                 if let Some(s) = &mut self.night {
                     s.enabled = on;
                 }
-                self.settings.night_light.enabled = on;
                 if self.opts.live {
                     self.ipc.send(aizome_ipc::Request::NightLight { enabled: Some(on), temperature: None });
-                    if let Err(e) = self.settings.save() {
-                        log::warn!("saving Night Light: {e}");
-                    }
                 }
+                self.change_settings("Night Light", |s| s.night_light.enabled = on);
             }
             PanelMsg::PowerMode(mode) => {
                 if let Some(p) = &sys.profiles {
@@ -418,12 +413,10 @@ impl Shell {
         }
     }
 
-    /// Save `[appearance]` and have everything follow it.
-    pub fn save_appearance(&mut self) {
+    /// Change `[appearance]`, save it and have everything follow it.
+    pub fn change_appearance(&mut self, change: impl Fn(&mut aizome_config::Appearance)) {
+        self.change_settings("the appearance", |s| change(&mut s.appearance));
         if self.opts.live {
-            if let Err(e) = self.settings.save() {
-                log::warn!("saving the appearance: {e}");
-            }
             self.ipc.send(aizome_ipc::Request::ReloadConfig);
         }
         let day = self.settings.theme_now() == aizome_theme::ThemeName::Day;

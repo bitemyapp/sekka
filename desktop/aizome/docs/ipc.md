@@ -271,7 +271,7 @@ and for wl_shm reading it back).
 | `desk-changed` | `index`, `id`, `name` | the current Desk changed (another Desk on the display with the focus, or the focus on another display) |
 | `desks-changed` | `desks` | added, removed, renamed, reordered, shown on other displays, or their window counts changed |
 | `outputs-changed` | `outputs` | plugged, unplugged, reconfigured, or their usable area changed |
-| `config-changed` | | settings were applied |
+| `config-changed` | | settings were applied, or the compositor wrote its Desks to them |
 | `binding` | `action`, `pointer? [x,y]`, `output?` | a key or pointer binding that belongs to the shell |
 | `screenshot-taken` | `path` | |
 | `idle` | `kind` (`lock` or `monitors-off`) | no input for the configured minutes |

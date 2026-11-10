@@ -154,18 +154,21 @@ fn wm_request(st: &mut State, req: Request) -> Result<Option<Response>, String> 
         Request::AddDesk { name, folder, index } => {
             st.lg.m().wm.add_desk(name, folder, index);
             st.emit_desks();
+            crate::config::save_desks(st);
             Response::Ok
         }
         Request::RenameDesk { desk, name } => {
             let desk = desk_arg(st, &desk)?;
             st.lg.m().wm.rename_desk(desk, name);
             st.emit_desks();
+            crate::config::save_desks(st);
             Response::Ok
         }
         Request::SetDeskFolder { desk, folder } => {
             let desk = desk_arg(st, &desk)?;
             st.lg.m().wm.set_desk_folder(desk, folder);
             st.emit_desks();
+            crate::config::save_desks(st);
             Response::Ok
         }
         Request::RemoveDesk { desk } => {
@@ -189,12 +192,14 @@ fn wm_request(st: &mut State, req: Request) -> Result<Option<Response>, String> 
             } else {
                 st.emit_desks();
             }
+            crate::config::save_desks(st);
             Response::Ok
         }
         Request::MoveDesk { desk, index } => {
             let desk = desk_arg(st, &desk)?;
             st.lg.m().wm.move_desk(desk, index);
             st.emit_desks();
+            crate::config::save_desks(st);
             Response::Ok
         }
         Request::Stack { a, b } => {

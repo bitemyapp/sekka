@@ -46,6 +46,11 @@ pub struct Options<'a> {
     pub renderer: Option<&'a str>,
     /// settings.toml contents.
     pub settings: &'a str,
+    /// Keep the settings in `$HOME/.config`, with no `XDG_CONFIG_HOME`: the
+    /// person's own settings, as a headless or nested compositor started
+    /// inside their session finds them, rather than a configuration
+    /// directory of the test's own (`config`).
+    pub persons_settings: bool,
     /// The compositor to run (default: this package's `aizome`).
     pub exe: Option<&'a Path>,
     /// The logic library to load (default: the one beside the binary).
@@ -61,6 +66,7 @@ impl Default for Options<'_> {
             outputs: &["1280x800@1"],
             renderer: None,
             settings: "[appearance]\neffects = \"austere\"\n",
+            persons_settings: false,
             exe: None,
             logic: None,
             args: &[],
@@ -79,7 +85,9 @@ impl Compositor {
         std::fs::create_dir_all(dir.join("home")).unwrap();
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).unwrap();
-        std::fs::write(dir.join("config/aizome/settings.toml"), opts.settings).unwrap();
+        let config = if opts.persons_settings { dir.join("home/.config") } else { dir.join("config") };
+        std::fs::create_dir_all(config.join("aizome")).unwrap();
+        std::fs::write(config.join("aizome/settings.toml"), opts.settings).unwrap();
         let socket = format!("aztest-{}-{n}", std::process::id());
         let log = dir.join("aizome.log");
         let mut cmd = Command::new(opts.exe.unwrap_or(Path::new(env!("CARGO_BIN_EXE_aizome"))));
@@ -122,6 +130,9 @@ impl Compositor {
             .env("AIZOME_LOG", "info,smithay=warn")
             .stdout(Stdio::null())
             .stderr(std::fs::File::create(&log).unwrap());
+        if opts.persons_settings {
+            cmd.env_remove("XDG_CONFIG_HOME");
+        }
         let child = cmd.spawn().expect("start aizome");
         let ipc = dir.join(format!("aizome.{socket}.sock"));
         let c = Compositor { child, dir, socket, ipc, log };

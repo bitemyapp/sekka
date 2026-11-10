@@ -109,6 +109,9 @@ Headless and nested runs never do any of that, even without `--no-session`
 and even when started by systemd. Their display and IPC addresses belong
 only to their children; otherwise a portal restarted during a test could
 inherit the test display and lose its file chooser when the test exits.
+Nor do they write the person's settings, which the login session follows:
+Desks changed in them are saved only to settings of their own (Desks,
+below).
 
 Service supervision is separate: a headless service can still report
 `READY=1` to its own `NOTIFY_SOCKET`. `--no-session` suppresses that readiness
@@ -393,7 +396,22 @@ Notes for client authors:
   showing tab out; ❖⇧[ and ❖⇧] show the previous and next tab, and
   ⌃⇧❖[ and ⌃⇧❖] move the showing one along; IPC `stack`/`unstack`
   (`stack` adds at the end).
-- **Desks**: four by default (settings `[[desks]]`). Each display shows a
+- **Desks**: four by default (settings `[[desks]]`). Desks added, renamed,
+  given a folder, moved or removed here (the overview, the bar's Desks
+  menu, `aizomectl`) are written back to `[[desks]]`, so Settei shows them
+  and a change it saves keeps them. All the Desks are written, one made
+  for a newly plugged display among them; the four defaults are no
+  entries. The file is read again first and written whole, as Settei
+  writes it: its comments and the order of its keys go, and every setting
+  is spelled out. A file that doesn't parse is left alone, and Desks that
+  couldn't be saved stay as they are until the next change here saves
+  them. The compositor says `config-changed` as it writes, so the shell
+  holds the new Desks before it saves anything of its own (it reads the
+  file again before each save, too). Only settings of its own are written:
+  the login session's compositor (`AIZOME_SESSION=1`, above) owns the
+  person's, and a headless or nested one beside it keeps its Desks to
+  itself unless it was given settings alone, a `--config` file or an
+  `XDG_CONFIG_HOME` other than `~/.config`. Each display shows a
   Desk of its own, as XMonad's screens show workspaces: the main display
   starts on the first, the others on the next ones. The current Desk is
   the one of the display with the focus, which moves with the focused
@@ -512,6 +530,15 @@ nix develop .#aizome --command cargo test -p aizome-comp
   display's Desk comes along and goes back when it's plugged in again.
   The model's rules (swaps, homes, hotplug, stepping, removing Desks) are
   unit tests in `wm/tests.rs`.
+- `tests/desks_settings.rs`: Desks added, renamed and removed through IPC
+  reach `settings.toml`, and a Desk Settei adds there keeps the others.
+  Desks added while the file doesn't parse, or can't be written, stay when
+  another setting changes, and are saved by the next change. A compositor
+  on the person's own settings without being their login session leaves
+  the file alone, and writes a file given with `--config`. The write is
+  announced (`config-changed`) before the request is answered. With the
+  real shell (`AIZOME_LAYOUT_TEST_SHELL`, ignored otherwise), folding the
+  Deskbar the moment after a Desk is added keeps the Desk.
 - `tests/input_method.rs`: an input method counting its serial as IBus
   does types into a text input that checks serials as foot does, across a
   display turned off and on.
