@@ -564,10 +564,20 @@ The budget is 4 ms from an event to its frame drawn, at 2880 × 1800 (scale 2).
 - A picture drawn at another size than its own is scaled once (the second
   time it's drawn at that size) and copied one to one after; smooth
   scaling is slow.
-- Text layouts are cached by text, style and width (an LRU of 4096), so
-  views rebuilt every frame shape nothing new.
+- Text layouts are cached by text, style and width, so views rebuilt
+  every frame shape nothing new. A layout stays for as long as anything
+  shows it, however many a window has; of the rest, the 4096 used most
+  recently are kept.
+- Labels that are new together (a window opening, a list whose every row
+  changed) are laid out together: the first one found new takes the new
+  ones after it along, and Sidestep shares them out to its text threads.
 - Virtual lists build the rows that show; a 10,000-row list costs ~15
   rows.
+- A message costs every widget of the window something, whatever changed:
+  about a quarter of a microsecond each for its part of the view, the
+  mount, the layout, its hash and the diff. A thousand rows of a box and
+  a label are half a millisecond and ten thousand are five (measured at
+  the end of this document), which is what `virtual_list` is for.
 
 Rules for apps: keep `view` cheap (no I/O, no sorting of big data: sort in
 `update`), share big data with `Rc`/`Arc`, key elements that move, use
@@ -709,6 +719,34 @@ included now that it moves pixels (under the heaviest load seen, load
 average 25, the list and table scrolling took 2.7 ms at the median and
 5.8 ms at the 95th percentile): moving a region costs about a millisecond
 at 2× (copying it), against 2.5–5 ms to draw rows and lines again.
+
+Far past what a window should build, to see what each widget costs: a
+change in a scroll of rows that aren't virtualised (each a box and a
+label), and in boxes nested eight to a box, each with a soft shadow. On a
+desktop this time (a Ryzen 7 9800X3D), in the headless harness, at
+1200 × 800 points at scale 2
+(`cargo test --release -p aizome-kit --test scale -- --ignored --nocapture`:
+handling is `update`, `view`, the mount, layout and the diff; drawing is
+the damage, offscreen):
+
+| Window | Change | Handling ms | Drawing ms |
+|---|---|---|---|
+| 1,000 rows | one label, or one fill | 0.50 | 0.00 |
+| 1,000 rows | every label | 3.6 | 0.3 |
+| 3,000 rows | one label, or one fill | 1.5 | 0.00 |
+| 3,000 rows | every label | 10 | 0.5 |
+| 10,000 rows | one label, or one fill | 5.0 | 0.00 |
+| 10,000 rows | every label | 40 | 1.1 |
+| 10,000 rows | opened, and drawn whole | 26 | |
+| 64 shadowed boxes | every fill | 0.05 | 7.6 |
+| 1,024 shadowed boxes | every fill | 0.7 | 9.0 |
+| 8,192 shadowed boxes | every fill | 7.3 | 10 |
+
+Handling grows with the widgets, whatever changed and wherever it is: a
+row costs half a microsecond. A row out of sight costs nothing to draw,
+and a label nothing has shown costs 5 to 16 µs to lay out, the more digits
+it has the more (parley takes each for an emoji and sets its font query's
+families again), on as many threads as there are labels for.
 
 To drive a running app from outside (the NixOS VM test of Settings clicks
 and types through `aizomectl input`), set `AIZOME_KIT_INSPECT` to a
