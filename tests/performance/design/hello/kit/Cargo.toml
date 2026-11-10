@@ -20,3 +20,5 @@ codegen-units = 4
 moxcms = { git = "https://github.com/bitemyapp/moxcms", rev = "b63298023362c19b0ea5499c2c8d35802fc1adac" }
 zune-core = { git = "https://github.com/bitemyapp/zune-image", branch = "scaled-idct" }
 simdutf8 = { path = "../../../../../apps/hotaru/vendor/simdutf8" }
+parley = { git = "https://github.com/bitemyapp/parley", rev = "0746e802f5dcc4c19807f801242b4a7af0156a87" }
+fontique = { git = "https://github.com/bitemyapp/parley", rev = "0746e802f5dcc4c19807f801242b4a7af0156a87" }

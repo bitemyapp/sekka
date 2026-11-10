@@ -1931,6 +1931,42 @@ session, not only Shiori's tests:
   name and version: the fork's work released and hayro's fork moved to
   it, or the fork's zune-core given a version of its own.
 
+The same `[patch.crates-io]` takes parley and fontique, which Sukumo lays
+text out and finds fonts with, from
+[bitemyapp/parley](https://github.com/bitemyapp/parley)'s `sekka-0.11.1`
+branch: the commit the published 0.11.1 crates were built from, with two
+changes that only save work and a third that keeps parlance and
+parley_data coming from crates.io. Parley 0.11 takes a cluster for an
+emoji when a character in it has the Emoji property, which the digits, `#`
+and `*` have, and set its font query's families again around each one;
+Fontique made a cache entry for every family it was given before it looked
+at any, and fontconfig's `emoji` and `sans-serif` lists run past a hundred
+families. A digit in text nothing had laid out cost a microsecond or two
+more than a letter. On the branch a query's families are expanded as
+matching reaches them, and Parley leaves the query alone when the font
+stack's first font has all of such a cluster. Every cluster gets the font
+it got before
+([record](docs/test-results/parley-fork-2026-11-09.json)): a corpus of
+strings in 21 fonts and six layouts drew to the same pixels and placed the
+same glyphs from the same font files, and the published and patched crates
+side by side in one program agreed on 450,000 random layouts and 600,000
+random font queries.
+
+- Both crates are pinned by `rev`, in three workspaces: Aizome's and the
+  two performance kits' (`tests/performance/design/hello/kit` and
+  `tests/performance/why-toolkits/apps/kit`), which are built as Aizome's
+  apps are. To move the branch, push it, change the six revisions, run
+  `cargo update -p parley -p fontique` in each workspace, and replace the
+  parley hash in `outputHashes` (it serves both crates: they are one
+  commit). The branch's last commit must stay last: without it the patch
+  swaps parlance 0.1.1 for the 0.1.0 in Parley's tree.
+- Sukumo's own workspace and Genkan's keep the published crates, which
+  draw the same and only cost the digits.
+- Parley's change can go when Sukumo moves to Parley 0.12 or later, which
+  no longer takes a lone digit for an emoji (linebender/parley#811).
+  Fontique's is about what 0.12 still does; it hasn't been proposed
+  upstream yet.
+
 Only the worker process, `aizome-shiori --worker`, one for each open
 document, runs hayro: a document can panic it or keep it busy, and the
 SIMD decoding Shiori turns on (hayro-syntax's `unsafe` feature) runs

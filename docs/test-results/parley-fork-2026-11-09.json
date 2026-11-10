@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "date": "2026-11-09",
+  "scope": "What a digit costs in text Sukumo lays out for the first time, with the published parley and fontique 0.11.1 and with the two changes Aizome's workspace patches in, and whether the changes alter anything that is drawn. Component evidence and one package build on a shared workstation; not VM, ISO or hardware qualification, and nothing was looked at in a session.",
+  "workstation": "wx-workstation (AMD Ryzen Threadripper PRO 9985WX, 64 cores and 128 threads), shared with CI and other sessions (one-minute load average 7 to 27 during the timings); fontconfig as the Aizome development shell sees it: 425 families, 134 in the emoji generic family and 182 in sans-serif as fontique lists them; Sukumo's interface font there is Noto Sans",
+  "builds": {
+    "tree": "bitemyapp/sekka perf/kit-large-trees at f89eb41d (pull request 373, not merged), in release builds for the timings and the corpus",
+    "published": "parley 0.11.1 and fontique 0.11.1 from crates.io, built from linebender/parley eea3503d (their .cargo_vcs_info.json; the tag v0.11.1, whose crate sources are byte for byte the published ones)",
+    "patched": "that commit with three more, head 0746e802f5dcc4c19807f801242b4a7af0156a87: fontique expands a query's families as matching reaches them and keeps what it knows about the families two lists start with (ec9253e); parley gives the font stack's first font the first try at a cluster it takes for an emoji, and leaves the query as it is when that font has all of it (fe8132f); parlance and parley_data keep coming from crates.io (0746e80, the manifest only)",
+    "variants": "published; patched fontique alone; patched parley alone; both. The timings and the corpus ran on all four; the last was also built as Aizome's workspace now names it, as git dependencies on that head, and gave the same lock file but for the two crates' sources, the same corpus and the same timings"
+  },
+  "method": {
+    "timing": "a scratch test of sidestep-ui: for each kind of string, 4,000 strings no layout has seen laid out one after another with TextLayout::new in the interface font at 13 points, nine rounds of new strings after one to warm up, the mean time a string of the fastest round; seven passes of each build in turn, pinned to one core; the fastest pass is given",
+    "kit": "cargo test --release -p aizome-kit --test scale -- --ignored --nocapture with SCALE_ONLY='rows, every label' SCALE_RUNS=5 (the median of 60 changes, each laying out every row's label `item 00012 · 0034` anew on up to eight threads), pinned to eight cores, four passes of each build in turn",
+    "corpus": "a scratch test of sidestep-ui: 101 strings (Latin, digits, `#` and `*`, keycap sequences and presentation selectors, symbols, Han, kana, Hangul, Hebrew, Arabic, Devanagari, Thai and other scripts, emoji and their sequences, mixtures, control characters, text long enough to wrap) in 21 fonts (the interface font plain, bold, italic, medium and with tabular digits, the monospaced and serif fonts, and 14 named families, among them an emoji face and faces without Latin or without digits) and six layouts (a line; wrapped at 90 points; truncated to a line at 70; wrapped by character at 160, centered; three styles in a line; three fonts wrapped at 120, right-aligned), each drawn offscreen at scale 2, and every string four times over laid out together on the text threads in two fonts: 13,534 drawings, 1,112,967,152 bytes of pixels. Also the engine's glyph runs for each string in 19 fonts, unbounded and in a width: 3,838 layouts, 85,790 glyphs from 37 font files, each run with a hash of the font file it draws from, its face, variation coordinates and synthesis, and every glyph's id and position",
+    "side_by_side": "a scratch program with the published crates and the patched ones in one process (Cargo keeps them apart by source), on the system's fonts. Queries: random sessions with one fontique query (lists of zero to five families by name, by identifier or generic, set one after another and mostly sharing their start; attributes; fallback scripts; matching stopped after 1 to 200 fonts or never), comparing each font yielded: its file, face, synthesis and order. Layouts: random texts of 1 to 24 pieces (letters; digits and the other characters with the Emoji property outside the emoji blocks; variation selectors, the keycap mark, joiners and a skin tone; emoji; nine other scripts; other digits; symbols, marks and characters no font has) in a random family, family list or CSS source, with up to three spans changing the family, weight, style or size, a quarter of them wrapped, laid out by parley's ranged builder in four builds (published; patched parley on published fontique; published parley on patched fontique; both patched), comparing every run's font file, face, size, synthesis, coordinates, text range and direction, and every cluster's range and glyphs with their positions and advances",
+    "controls": "seven deliberately wrong versions of the changes went through the side-by-side program, 20,000 layouts and 20,000 query sessions each, each built from nothing; one wrong fontique also went through the corpus"
+  },
+  "results": {
+    "microseconds_a_new_layout": {
+      "columns": ["published", "patched fontique", "patched parley", "both"],
+      "item abcde": [3.89, 3.96, 4.03, 3.93],
+      "item abcd7": [5.11, 4.00, 4.07, 4.01],
+      "item 00012": [9.03, 3.98, 3.99, 3.92],
+      "item 00012 · 0034": [15.34, 5.56, 5.53, 5.51],
+      "item abcde · abcd": [5.67, 5.62, 5.66, 5.68],
+      "#00012 *": [10.64, 3.38, 3.38, 3.41],
+      "項目 00012": [18.98, 5.84, 6.01, 4.96],
+      "項目 abcde": [8.65, 5.91, 8.06, 5.80],
+      "😀 00012": [21.85, 5.82, 6.68, 4.75],
+      "😀 abcde": [9.13, 5.04, 6.76, 4.78],
+      "twenty digits": [25.64, 5.65, 5.51, 5.48],
+      "twenty letters": [5.58, 5.68, 5.67, 5.85],
+      "between_builds": "rows without digits differ by up to 0.3 µs from one build to another, which is what the placement of the code does; a difference of that size says nothing"
+    },
+    "kit_every_label_handling_ms": {
+      "columns": ["published, fastest and slowest of four passes", "both, fastest and slowest of four passes"],
+      "1,000 rows": [[3.59, 4.55], [2.62, 3.08]],
+      "3,000 rows": [[12.13, 13.93], [8.88, 10.21]],
+      "10,000 rows": [[47.37, 47.95], [36.43, 36.80]]
+    },
+    "corpus": "each of the three patched builds, and the build with git dependencies, wrote byte for byte what the published build wrote: the pixels of all 13,534 drawings, their sizes, baselines and lines, and the 3,838 layouts' glyph runs. The published build run twice wrote the same both times",
+    "side_by_side": {
+      "layouts": "450,000 (three seeds of 150,000, one with the collections opened shared as Sukumo opens them): 3,367,490 runs (in 82 or 83 fonts a seed) and 6,174,494 clusters; none differed in any of the three patched builds",
+      "queries": "600,000 sessions (two seeds, one with shared collections): 2,281,073 matches yielding 19,408,717 fonts, the longest 1,038; none differed"
+    },
+    "controls": {
+      "fontique keeps cache entries past the part of a list that stayed the same": "19,403 of 20,000 layouts and 12,747 of 20,000 sessions differed; in the corpus, 10,682 of 13,534 drawings and 3,500 of 3,838 layouts' runs",
+      "fontique keeps the whole list when the new one is its start": "2,777 layouts and 4,223 sessions differed",
+      "fontique doesn't forget fonts when the attributes change": "5,727 layouts and 1,826 sessions differed",
+      "parley takes the first font whatever it covers": "13,958 layouts differed",
+      "parley takes the first font without its being one of the stack's": "1,691 layouts differed",
+      "parley never sets the emoji families again once they are set": "2,223 layouts differed",
+      "parley doesn't put a cluster back after a first try that fails": "none differed, and none can: the first font is tried again and selected or passed over as it would have been. The change puts the cluster back all the same, so that what follows is exactly what happened before"
+    },
+    "what_the_corpus_cannot_see": "with parley changed so that it never adds the emoji families while it has a plain stack, Sukumo's corpus still came out byte for byte the same: Sukumo gives emoji a style of their own with the emoji families first, and text a stack that ends in fontconfig's sans-serif list, so the families parley adds never decide anything for it. The side-by-side layouts, in stacks of one family and the like, are what check that change",
+    "upstream_tests": "linebender/parley's own tests for fontique, parley and parley_tests (cargo test --locked --all-features) gave the same outcomes on the tag and on the two changes: 228 passed, none failed, 1 ignored; cargo fmt --all --check and cargo clippy -p fontique -p parley --features std --all-targets -- -D warnings are clean on the changes",
+    "component_tests": "cargo test -p sidestep-engine -p sidestep-ui -p aizome-kit: the same 432 tests passed and 14 were ignored on the published build and on the build with git dependencies, and again with --locked on this change as committed, once the branch was on GitHub to fetch",
+    "nix_package": "nix build of the aizome package with this change's manifests, lock file and hash (the documents were still being worded): built with parley and fontique from the branch's commit, parlance 0.1.1 and parley_data 0.11.1 from crates.io, and its check phase passed. The commit came from a copy prefetched from a local clone, at the store path a fetch of bitemyapp/parley gives for that hash; hotaru's vendor directory is the same one. Once the branch was on GitHub, nix-prefetch-git gave the same hash and store path from there, and cargo metadata --locked passed in all three workspaces"
+  },
+  "not_verified": [
+    "the user's desktop (a Ryzen 7 9800X3D), where the figures in desktop/aizome/docs/kit.md were measured: nothing was built or run there, so that table's `every label` rows are from before the changes",
+    "the hotaru package and the VM checks: not built. The timings, the corpus and the side-by-side runs took the commit from a local clone, before bitemyapp/parley existed; the commit on GitHub is the same one",
+    "a font registered or a generic family changed from another thread while a layout is under way: what a query then sees depended on timing before and still does, and nothing here exercises it",
+    "fontique's other backends (CoreText, DirectWrite, Android): fontconfig only",
+    "parley 0.12 and main: read, not built. They no longer take a lone digit for an emoji, and their fontique still makes an entry for every family"
+  ]
+}
