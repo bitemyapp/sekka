@@ -229,6 +229,15 @@ impl Shell {
         }
     }
 
+    /// Whether a new shell's Deskbar has replaced this one's where it
+    /// would open, on the main display (a restart, see
+    /// `deskbar_replaced_on`). It opens on another display as ever: when
+    /// the one it was closed on has gone, the compositor closed it for
+    /// that, and no shell's replaced it.
+    fn deskbar_replaced(&self) -> bool {
+        self.deskbar_replaced_on.is_some() && self.deskbar_replaced_on == self.primary().map(|s| s.output.id)
+    }
+
     /// Open, size or close the Deskbar to match the settings and its
     /// content.
     pub fn sync_deskbar(&mut self, cx: &mut Cx<Msg>) {
@@ -279,6 +288,9 @@ impl Shell {
                 self.deskbar_visibility.native_drag = None;
                 self.deskbar_drag = None;
             }
+            // Replaced there by a new shell's (a restart): the compositor
+            // closed this one's for it, and it isn't opened there again.
+            (true, None) if self.deskbar_replaced() => {}
             (true, None) => {
                 let Some(output) = self.primary().map(|s| s.output.id) else { return };
                 let model = self.deskbar_model();
