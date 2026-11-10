@@ -694,7 +694,12 @@ longer; paused, it locks and goes dark; and so it does when VLC is killed
 while it plays. Chromium plays a page's video there too: in a window and
 full screen, started by itself with another window in use, and as an X11
 client. Chromium stands for Google Chrome, which isn't free software;
-Firefox isn't in that check.
+Firefox isn't in that check. While each plays there, the cup's panel
+lists it by name (Chromium once, though it holds both ways; the shell's
+own inhibitor never), and the cup goes when it pauses. With mpv and with
+VLC playing, the session is locked by hand: the displays turn off on
+their minute and the video plays on. With Keep Awake turned on beside
+VLC, they stay on behind the lock for as long as it's on.
 
 `cargo test -p aizome-shell --lib holders` checks the list (names, one
 row an app, whose rows there are none of) and the cup's two waits, and

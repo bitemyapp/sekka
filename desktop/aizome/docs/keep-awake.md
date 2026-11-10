@@ -174,3 +174,10 @@ ways an app asks, how the shell names who holds, and the cup's waits.
   real logind: on puts the block in `BlockInhibited` and the cup in the
   bar; a killed holder takes the locks again; off lets them go and takes
   the cup away; and with it off, the unit doesn't start.
+- `nix build .#aizome-checks.idle-inhibit`, in a real session: with
+  Utsushi, mpv, VLC and Chromium playing in turn, the cup's panel lists
+  each by name, and the cup goes when it pauses; locked by hand with mpv
+  or VLC playing, the displays turn off on their minute and the video
+  plays on; with Keep Awake on beside VLC, its service's hold is the
+  compositor's `keep-awake`, the cup is amber over the same list, and
+  locked by hand the displays stay on until it's turned off.
