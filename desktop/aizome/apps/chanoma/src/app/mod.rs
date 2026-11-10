@@ -79,6 +79,9 @@ const HUD: &str = "hud";
 const BAR_SHOWS: Duration = Duration::from_secs(3);
 /// And over a page, with the pointer resting in it.
 const BAR_SHOWS_OVER_PAGE: Duration = Duration::from_secs(8);
+/// How long what a look through the folders found stays in the header:
+/// longer than a toast, which may cover it.
+pub const LOOK_SAID: Duration = Duration::from_secs(8);
 
 /// What menus hear, from a controller or the keyboard.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -124,6 +127,8 @@ pub enum Msg {
     /// What the folders hold: as the files index knew it, or (`true`) read
     /// again.
     Scanned(Arc<Library>, bool),
+    /// What a look found has been in the header long enough.
+    LookSaid(u64),
     /// Starting has shown long enough ([`splash`]).
     SplashOver,
     /// UDisks has had its time to say of the drives.
@@ -460,6 +465,12 @@ pub struct Chanoma {
     /// The look has gone on long enough to show (an unfinished folder's
     /// read was told of): one the index answers at once isn't shown.
     pub look_shown: bool,
+    /// The folders the look shown went through, for what it found.
+    pub look_folders: Vec<PathBuf>,
+    /// What it found, in the header for a while once it's over (its
+    /// number, for the timer that takes it away).
+    pub look_said: Option<(u64, Activity)>,
+    pub looks_said: u64,
     pub site: Option<(WindowKey, String, String)>,
     /// The one-instance socket, served once the program runs.
     pub instance: Option<std::os::unix::net::UnixListener>,
@@ -552,6 +563,9 @@ impl Chanoma {
             reset: None,
             looking: None,
             look_shown: false,
+            look_folders: Vec::new(),
+            look_said: None,
+            looks_said: 0,
             setup: None,
             finding: None,
             site: None,
@@ -1544,18 +1558,50 @@ impl Chanoma {
 
     /// The folders being read, for the header: which, how far through its
     /// own folders (the bar) and how many files so far; then the games
-    /// being recognised.
+    /// being recognised; then, for a while, what was found.
     fn activity(&self) -> Option<Activity> {
-        let look = self.looking.as_ref().filter(|_| self.look_shown)?;
+        let Some(look) = self.looking.as_ref().filter(|_| self.look_shown) else {
+            return self.look_said.as_ref().map(|(_, a)| a.clone());
+        };
         Some(match &look.folder {
+            // Every start looks again, for games added since: only what
+            // changed is read.
             Some(folder) => Activity {
-                label: format!("Reading {}", self.said(folder).0),
+                label: format!("Checking {} for new games", self.said(folder).0),
                 step: look.parts.map(|(done, n)| format!("{done} of {n} folders")).unwrap_or_default(),
                 count: format!("{} files", ui::grouped(look.files)),
                 progress: look.parts.map(|(done, n)| (done * 1000 / n.max(1)) as u16),
             },
             None => Activity { label: "Recognising the games".into(), progress: Some(1000), ..Activity::default() },
         })
+    }
+
+    /// What the look just over found, in the header for a while: the games
+    /// new since the last look, and those gone. Without it, a look that
+    /// ends unseen (under a toast, on a screen with a title) leaves no word
+    /// of whether it ended or stopped.
+    fn say_look(&mut self, found: &Library, cx: &mut Cx<Msg>) {
+        let before: HashSet<&str> = self.library.games.iter().map(|g| g.key.as_str()).collect();
+        let after: HashSet<&str> = found.games.iter().map(|g| g.key.as_str()).collect();
+        let (new, gone) = (after.difference(&before).count(), before.difference(&after).count());
+        let label = match self.look_folders.as_slice() {
+            [one] => format!("Checked {}", self.said(one).0),
+            [] => "Checked your folders".into(),
+            many => format!("Checked {} folders", many.len()),
+        };
+        let noun = |n: usize| if n == 1 { "game" } else { "games" };
+        let games = |n: usize| format!("{} {}", ui::grouped(n), noun(n));
+        let count = match (new, gone) {
+            (0, 0) => "Nothing new".to_owned(),
+            (n, 0) if before.is_empty() => format!("{} found", games(n)),
+            (n, 0) => format!("{} new {}", ui::grouped(n), noun(n)),
+            (0, g) => format!("{} gone", games(g)),
+            (n, g) => format!("{} new, {} gone", ui::grouped(n), ui::grouped(g)),
+        };
+        self.looks_said += 1;
+        self.look_said =
+            Some((self.looks_said, Activity { label, count, progress: Some(1000), ..Activity::default() }));
+        cx.after(LOOK_SAID, Msg::LookSaid(self.looks_said));
     }
 
     /// The header without Chanoma's name, for screens with a title there.
@@ -2014,10 +2060,14 @@ impl Program for Chanoma {
             Msg::Edge => self.edge_reached(cx),
             Msg::Tick => self.tick(cx),
             Msg::Scanned(lib, fresh) => {
+                if fresh && self.look_shown {
+                    self.say_look(&lib, cx);
+                }
                 self.library = lib;
                 if fresh {
                     self.looking = None;
                     self.look_shown = false;
+                    self.look_folders.clear();
                 }
                 self.reshow();
                 self.scanned |= fresh;
@@ -2080,7 +2130,17 @@ impl Program for Chanoma {
             Msg::Suggested(s) => self.suggested(s, cx),
             Msg::Looking(look) => {
                 self.look_shown |= !look.over;
+                if let Some(f) = &look.folder
+                    && !self.look_folders.contains(f)
+                {
+                    self.look_folders.push(f.clone());
+                }
                 self.looking = Some(look);
+            }
+            Msg::LookSaid(n) => {
+                if self.look_said.as_ref().is_some_and(|(m, _)| *m == n) {
+                    self.look_said = None;
+                }
             }
             Msg::SignedIn(ok) => self.signed_in(ok, cx),
             Msg::SiteName(s) => {
@@ -2247,5 +2307,31 @@ mod tests {
         assert_eq!(app.ok_button(Family::Xbox), Button::South);
         assert_eq!(app.ok_button(Family::Nintendo), Button::East);
         assert_eq!(app.back_button(Family::Nintendo), Button::South);
+    }
+
+    #[test]
+    fn box_art_missing_by_the_databases_name_is_asked_for_by_the_files() {
+        let dirs = Dirs::under(&std::env::temp_dir().join(format!("chanoma-unit-art-{}", std::process::id())));
+        let art = dirs.art();
+        let mut app = Chanoma::new(Config { dirs, scan: false, pads: false, ..Config::standard() });
+        let g = crate::library::Game {
+            key: "dreamcast/Crazy Taxi (USA).chd".into(),
+            title: "Crazy Taxi".into(),
+            path: "/games/dreamcast/Crazy Taxi (USA).chd".into(),
+            system: crate::library::system("dreamcast").unwrap(),
+            art: None,
+            info: None,
+            known_as: Some("Crazy Taxi (USA) (En,Ja)".into()),
+        };
+        let by_name = crate::art::cached(&art, "dreamcast", "Crazy Taxi (USA) (En,Ja)");
+        let by_file = crate::art::cached(&art, "dreamcast", "Crazy Taxi (USA)");
+        assert_eq!(app.box_art(&g), Some(by_name.clone()));
+        app.art_missing.insert(by_name);
+        assert_eq!(app.box_art(&g), Some(by_file.clone()));
+        app.art_missing.insert(by_file);
+        assert_eq!(app.box_art(&g), None);
+        // One its database doesn't know isn't asked for by its file's name.
+        let unknown = crate::library::Game { known_as: None, ..g };
+        assert_eq!(app.box_art(&unknown), None);
     }
 }

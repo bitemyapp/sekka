@@ -10,7 +10,7 @@
 use std::ffi::{c_uint, c_void};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
 use aizome_chanoma::app::play::{FilmItem, START_WAIT};
@@ -37,7 +37,8 @@ use aizome_media::CueBody;
 
 // A libretro core: a 160 × 120 picture, blue (green while B is held) with
 // a white square that moves right while Right is held; it counts frames,
-// keeps the count in its state, and writes it to its save RAM on Start.
+// keeps the count in its state, and writes it to its save RAM on Start;
+// it rumbles while B is held.
 
 static CORE: Mutex<()> = Mutex::new(());
 static ENV: Mutex<Option<retro_environment_t>> = Mutex::new(None);
@@ -58,6 +59,8 @@ static OPTION: Mutex<String> = Mutex::new(String::new());
 /// test lets it go: then a stuck one fails, a slow one starts.
 static LOADING: AtomicBool = AtomicBool::new(false);
 static LET_GO: AtomicBool = AtomicBool::new(false);
+/// The host's rumble, asked for as a game loads.
+static RUMBLE: Mutex<Option<unsafe extern "C" fn(c_uint, c_uint, u16) -> bool>> = Mutex::new(None);
 
 unsafe extern "C" fn set_environment(cb: retro_environment_t) {
     *ENV.lock().unwrap() = Some(cb);
@@ -133,6 +136,9 @@ unsafe extern "C" fn run() {
     let bits = unsafe { input(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MASK) } as u16;
     let b = bits & (1 << RETRO_DEVICE_ID_JOYPAD_B) != 0;
     HELD_B.store(b, Ordering::SeqCst);
+    if let Some(rumble) = *RUMBLE.lock().unwrap() {
+        unsafe { rumble(0, RETRO_RUMBLE_STRONG, if b { 0xffff } else { 0 }) };
+    }
     if bits & (1 << RETRO_DEVICE_ID_JOYPAD_RIGHT) != 0 {
         X.store((X.load(Ordering::SeqCst) + 1) % 150, Ordering::SeqCst);
     }
@@ -179,6 +185,13 @@ unsafe extern "C" fn load_game(game: *const retro_game_info) -> bool {
     let env = ENV.lock().unwrap().unwrap();
     let mut format = RETRO_PIXEL_FORMAT_XRGB8888;
     unsafe { env(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, (&mut format as *mut c_uint).cast()) };
+    unsafe extern "C" fn none(_: c_uint, _: c_uint, _: u16) -> bool {
+        false
+    }
+    let mut rumble = retro_rumble_interface { set_rumble_state: none };
+    let asked =
+        unsafe { env(RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE, (&mut rumble as *mut retro_rumble_interface).cast()) };
+    *RUMBLE.lock().unwrap() = asked.then_some(rumble.set_rumble_state);
     let g = unsafe { &*game };
     let data =
         if g.data.is_null() { &[][..] } else { unsafe { std::slice::from_raw_parts(g.data.cast::<u8>(), g.size) } };
@@ -195,6 +208,7 @@ unsafe extern "C" fn load_game(game: *const retro_game_info) -> bool {
 }
 unsafe extern "C" fn unload_game() {
     LOADED.store(false, Ordering::SeqCst);
+    *RUMBLE.lock().unwrap() = None;
 }
 unsafe extern "C" fn memory_data(id: c_uint) -> *mut c_void {
     if id == RETRO_MEMORY_SAVE_RAM { std::ptr::addr_of_mut!(SRAM).cast() } else { std::ptr::null_mut() }
@@ -1105,7 +1119,7 @@ fn every_system_tab_stays_in_sight_and_all_games_comes_first() {
 }
 
 #[test]
-fn reading_a_folder_shows_quietly_on_home_with_how_far_it_has_got() {
+fn checking_a_folder_shows_quietly_on_home_how_far_it_got_then_what_it_found() {
     let (dirs, cores) = household("reading", |_| {});
     let games = cores.parent().unwrap().join("Games");
     let clock = ManualClock::at(2026, 10, 31, 17, 0);
@@ -1121,16 +1135,87 @@ fn reading_a_folder_shows_quietly_on_home_with_how_far_it_has_got() {
     // how many files so far.
     h.send(Msg::Looking(look(212, 4812, Some((12, 31)), false)));
     let a = activity(&h).expect("shown");
-    assert!(a.label.starts_with("Reading "), "{}", a.label);
+    // Every start looks: it says why.
+    assert_eq!(a.label, "Checking Games for new games");
     assert_eq!((a.step.as_str(), a.count.as_str()), ("12 of 31 folders", "4,812 files"));
     assert_eq!(a.progress, Some(387));
     shot(&mut h, "15-home-reading");
-    // Then the games recognised, and gone once they show.
+    // Then the games recognised, then what it found for a while (longer
+    // than the toast that may hide it): here, nothing new.
     h.send(Msg::Looking(Look::default()));
     assert_eq!(activity(&h).map(|a| a.label).as_deref(), Some("Recognising the games"));
     let library = h.program().library.clone();
-    h.send(Msg::Scanned(library, true));
+    h.send(Msg::Scanned(library.clone(), true));
+    let a = activity(&h).expect("what it found");
+    assert_eq!((a.label.as_str(), a.count.as_str(), a.progress), ("Checked Games", "Nothing new", Some(1000)));
+    shot(&mut h, "15-home-checked");
+    h.advance(aizome_chanoma::app::LOOK_SAID);
     assert_eq!(activity(&h), None);
+    // Another look, finding a game more: it says so.
+    h.send(Msg::Looking(look(212, 4813, Some((30, 31)), false)));
+    let mut more = (*library).clone();
+    let mut game = more.games[0].clone();
+    game.key.push_str(" II");
+    more.games.push(game);
+    h.send(Msg::Scanned(std::sync::Arc::new(more), true));
+    assert_eq!(activity(&h).map(|a| a.count).as_deref(), Some("1 new game"));
+}
+
+/// A controller told to rumble does until it's told to stop: a game paused
+/// or ended stops it, whatever its core asked last.
+#[test]
+fn a_games_rumble_stops_when_it_pauses_and_when_it_ends() {
+    use aizome_chanoma::retro::{CoreSource, Event, Launch, Session};
+    let _core = core_lock();
+    let here = temp("rumble");
+    let game = here.join("Test Quest (USA).sfc");
+    std::fs::write(&game, b"CHANOMA test game").unwrap();
+    let launch = Launch {
+        core: CoreSource::Api(test_core()),
+        game,
+        save_ram: here.join("game.srm"),
+        state: here.join("game.state"),
+        picture: here.join("game.png"),
+        resume: false,
+        system_dir: here.join("system"),
+        bios: Vec::new(),
+        found_bios: Vec::new(),
+        save_dir: here.join("saves"),
+        players: 1,
+        prefer: Vec::new(),
+        screen_lines: 1080,
+        silent: true,
+        unpack_dir: here.join("unzipped"),
+        extensions: &[],
+    };
+    let told = Arc::new(Mutex::new(Vec::new()));
+    let t = told.clone();
+    let rumble: aizome_chanoma::retro::Rumble =
+        Box::new(move |slot, strong, weak| t.lock().unwrap().push((slot, strong, weak)));
+    let pads = Arc::new(aizome_chanoma::pad::Shared::default());
+    let (tx, rx) = std::sync::mpsc::channel();
+    let session = Session::start(launch, None, pads.clone(), Some(rumble), move |e| {
+        let _ = tx.send(e);
+    });
+    assert!(matches!(rx.recv_timeout(Duration::from_secs(10)), Ok(Event::Started { .. })));
+    let last = || told.lock().unwrap().last().copied();
+    let wait_for = |want: (usize, u16, u16)| {
+        let end = Instant::now() + Duration::from_secs(10);
+        while last() != Some(want) {
+            assert!(Instant::now() < end, "rumbling {:?}, not {want:?}", last());
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    };
+    pads.set(0, true, Button::South.bit(), [0.0; 6]);
+    wait_for((0, 0xffff, 0));
+    // Paused under the menu, B still held: it stops, and starts again as
+    // the game carries on.
+    session.pause(true);
+    wait_for((0, 0, 0));
+    session.pause(false);
+    wait_for((0, 0xffff, 0));
+    session.stop(false);
+    assert_eq!(last(), Some((0, 0, 0)), "still rumbling after the game");
 }
 
 fn hold(h: &mut Harness<Chanoma>, b: Button, pressed: bool) {

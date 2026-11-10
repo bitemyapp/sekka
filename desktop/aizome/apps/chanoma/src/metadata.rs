@@ -14,7 +14,7 @@
 //! The databases are RetroArch's `.rdb` files: `RARCHDB\0`, an offset,
 //! then one MessagePack map a game until a nil.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 
 use aizome_index::Index;
@@ -91,15 +91,22 @@ pub fn dir() -> Option<PathBuf> {
 /// A system's databases, read.
 #[derive(Debug, Default)]
 pub struct Catalog {
-    names: HashMap<String, Info>,
+    /// In order, for the names that only add tags to a file's.
+    names: BTreeMap<String, Info>,
     crcs: HashMap<u32, String>,
     serials: HashMap<String, String>,
 }
 
 /// A serial as compared: letters and digits, upper case (`SCUS-94900`,
-/// `SCUS_949.00` and `scus94900` are one).
+/// `SCUS_949.00` and `scus94900` are one), without the `MK-` Sega put
+/// before its own: a Dreamcast disc says `MK-51035` where RetroArch's
+/// database has `51035`, though it keeps `MK-51136-50`.
 fn serial_key(s: &str) -> String {
-    s.chars().filter(char::is_ascii_alphanumeric).map(|c| c.to_ascii_uppercase()).collect()
+    let key: String = s.chars().filter(char::is_ascii_alphanumeric).map(|c| c.to_ascii_uppercase()).collect();
+    match key.strip_prefix("MK") {
+        Some(rest) if rest.starts_with(|c: char| c.is_ascii_digit()) => rest.to_owned(),
+        _ => key,
+    }
 }
 
 impl Catalog {
@@ -160,6 +167,23 @@ impl Catalog {
         self.names.contains_key(name)
     }
 
+    /// The name that is a file's `stem` (one with a tag, its region, as
+    /// No-Intro's and Redump's are) with more tags after it, as a database
+    /// adds a release's languages: `Crazy Taxi (USA) (En,Ja)` for the
+    /// Dreamcast's `Crazy Taxi (USA)`. Of several, the one with fewest.
+    fn name_adding_tags(&self, stem: &str) -> Option<&str> {
+        if !stem.ends_with(')') {
+            return None;
+        }
+        let start = format!("{stem} (");
+        self.names
+            .range::<str, _>((std::ops::Bound::Included(start.as_str()), std::ops::Bound::Unbounded))
+            .map(|(n, _)| n.as_str())
+            .take_while(|n| n.starts_with(&start))
+            .filter(|n| only_tags(&n[stem.len()..]))
+            .min_by_key(|n| (n.matches(" (").count(), n.len()))
+    }
+
     /// The name of the game with this CRC, or this disc serial.
     fn name_by_crc(&self, crc: u32) -> Option<&str> {
         self.crcs.get(&crc).map(String::as_str)
@@ -168,6 +192,15 @@ impl Catalog {
     fn name_by_serial(&self, serial: &str) -> Option<&str> {
         self.serials.get(&serial_key(serial)).map(String::as_str)
     }
+}
+
+/// Whether `s` is only tags, each ` (…)`.
+fn only_tags(mut s: &str) -> bool {
+    while let Some(rest) = s.strip_prefix(" (") {
+        let Some(end) = rest.find(')') else { return false };
+        s = &rest[end + 1..];
+    }
+    s.is_empty()
 }
 
 /// A database's game.
@@ -401,13 +434,19 @@ pub fn describe(games: &mut [Game], index: &Index, dir: &Path, read: bool, catal
             g.known_as = Some(stem);
             continue;
         }
-        let Some(ids) = ids(&mut facts, &g.path, g.system.is_disc(), read) else { continue };
-        let name =
-            ids.crcs.iter().find_map(|crc| c.name_by_crc(*crc)).or_else(|| c.name_by_serial(ids.serial.as_deref()?));
+        let by_ids = ids(&mut facts, &g.path, g.system.is_disc(), read).and_then(|ids| {
+            ids.crcs.iter().find_map(|crc| c.name_by_crc(*crc)).or_else(|| c.name_by_serial(ids.serial.as_deref()?))
+        });
+        // Else its name with the tags a database adds (a Dreamcast CHD's
+        // serial isn't read).
+        let (name, counted) = match by_ids {
+            Some(n) => (Some(n), &mut by_content),
+            None => (c.name_adding_tags(&stem), &mut by_name),
+        };
         if let Some(n) = name {
             if let Some(i) = c.by_name(n) {
                 g.info = Some(i.clone());
-                by_content += 1;
+                *counted += 1;
             }
             g.known_as = Some(n.to_owned());
         }
@@ -459,6 +498,27 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn a_files_name_is_found_with_the_tags_its_database_adds() {
+        let mut c = Catalog::default();
+        c.add(&rdb(&[
+            &[("name", V::S("Crazy Taxi (USA) (En,Ja)")), ("genre", V::S("Racing"))],
+            &[("name", V::S("Crazy Taxi (USA) (Rev 1) (En,Ja)"))],
+            &[("name", V::S("Crazy Taxi (Japan)"))],
+            &[("name", V::S("Crazy Taxi 2 (USA)"))],
+            &[("name", V::S("Crazy Taxi (USA) Demo"))],
+        ]))
+        .unwrap();
+        // The one with fewest tags; never another region, another game, or
+        // more than tags.
+        assert_eq!(c.name_adding_tags("Crazy Taxi (USA)"), Some("Crazy Taxi (USA) (En,Ja)"));
+        assert_eq!(c.by_name("Crazy Taxi (USA) (En,Ja)").unwrap().genre.as_deref(), Some("Racing"));
+        assert_eq!(c.name_adding_tags("Crazy Taxi (Europe)"), None);
+        assert_eq!(c.name_adding_tags("Crazy Taxi 2 (USA)"), None, "its own name, nothing added");
+        // A file without a tag of its own isn't guessed at.
+        assert_eq!(c.name_adding_tags("Crazy Taxi"), None);
+    }
+
+    #[test]
     fn a_database_is_read_and_games_found_by_name_crc_and_serial() {
         let mut c = Catalog::default();
         c.add(&rdb(&[
@@ -476,8 +536,17 @@ pub(crate) mod tests {
                 ("users", V::I(2)),
             ],
             &[("name", V::S("Nothing Known (USA)")), ("crc", V::B(&[0, 0, 0, 2]))],
+            &[("name", V::S("Crazy Taxi (USA) (En,Ja)")), ("serial", V::B(b"51035"))],
+            &[("name", V::S("Soulcalibur (Europe)")), ("serial", V::B(b"MK-51136-50"))],
         ]))
         .unwrap();
+        // Sega's serials with their `MK-` or without, either way round.
+        assert_eq!(c.name_by_serial("MK-51035"), Some("Crazy Taxi (USA) (En,Ja)"));
+        assert_eq!(c.name_by_serial("MK-51136-50"), Some("Soulcalibur (Europe)"));
+        assert_eq!(c.name_by_serial("51136-50"), Some("Soulcalibur (Europe)"));
+        assert_eq!(c.name_by_serial("MKX-51035"), None);
+        assert!(!only_tags(" (USA) extra"));
+        assert!(only_tags(" (En,Ja) (Rev 1)"));
         let crash = c.by_name("Crash Bandicoot (USA)").unwrap();
         assert_eq!(crash.summary(), "1996 · Action · 1 player");
         assert_eq!(crash.developer.as_deref(), Some("Naughty Dog"));

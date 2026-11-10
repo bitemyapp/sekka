@@ -65,13 +65,21 @@ impl Chanoma {
     }
 
     /// Where `g`'s box art from libretro-thumbnails is, fetched or to be,
-    /// when it may be fetched and hasn't been found missing.
-    fn box_art(&self, g: &Game) -> Option<PathBuf> {
+    /// when it may be fetched and hasn't been found missing: by the name
+    /// its database knows it by, else by its file's, which the thumbnails
+    /// sometimes have instead (`Crazy Taxi (USA)` for the Dreamcast's
+    /// `Crazy Taxi (USA) (En,Ja)`).
+    pub(crate) fn box_art(&self, g: &Game) -> Option<PathBuf> {
         if !self.settings.fetch_art || self.config.art_url.is_none() {
             return None;
         }
-        let p = crate::art::cached(&self.config.dirs.art(), g.system.id, g.known_as.as_ref()?);
-        (!self.art_missing.contains(&p)).then_some(p)
+        let art = self.config.dirs.art();
+        let p = crate::art::cached(&art, g.system.id, g.known_as.as_ref()?);
+        if !self.art_missing.contains(&p) {
+            return Some(p);
+        }
+        let q = crate::art::cached(&art, g.system.id, &g.path.file_stem()?.to_string_lossy());
+        (q != p && !self.art_missing.contains(&q)).then_some(q)
     }
 
     pub(crate) fn game_tile(&self, g: &Game, picture: bool) -> Tile {
