@@ -669,13 +669,15 @@ impl Moved {
     }
 }
 
-/// The parts of `a` outside `r`: bands above and below, and beside.
-fn outside(a: Rect, r: Rect) -> Vec<Rect> {
+/// The parts of `a` outside `r`: bands above and below, and beside, any
+/// of which may be empty. (No list is made for them: this is asked twice
+/// for every node of content that scrolls.)
+fn outside(a: Rect, r: Rect) -> [Rect; 4] {
     let i = a.intersect(r);
     if i.area() <= 0.0 {
-        return vec![a];
+        return [a, Rect::ZERO, Rect::ZERO, Rect::ZERO];
     }
-    vec![
+    [
         Rect::new(a.x0, a.y0, a.x1, i.y0),
         Rect::new(a.x0, i.y1, a.x1, a.y1),
         Rect::new(a.x0, i.y0, i.x0, i.y1),
