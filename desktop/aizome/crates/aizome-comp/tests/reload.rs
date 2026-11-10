@@ -6,7 +6,8 @@
 //! logic in later. And restarting the shell: the apps stay, a kit app
 //! finds the new shell, notifications (on a D-Bus of the test's own)
 //! carry over, and the bar and the desktop, wallpaper and all, never
-//! leave the screen.
+//! leave the screen. The restart ends as the new shell's surfaces replace
+//! the old one's even when the old shell opens its Deskbar again.
 //!
 //! The variant is built here, in a target directory of its own
 //! (`target/reload-test`, kept between runs), with the compositor it is
@@ -464,8 +465,13 @@ impl Drop for Bus {
 
 fn private_bus() -> Option<Bus> {
     use std::io::BufRead;
+    use std::sync::atomic::{AtomicU32, Ordering};
+    // A bus for each test: they run side by side in this process, and one
+    // folder for all would go as the first of them ended.
+    static BUSES: AtomicU32 = AtomicU32::new(0);
     let daemon = which("dbus-daemon")?;
-    let dir = PathBuf::from(format!("/tmp/aizome-test-{}-bus", std::process::id()));
+    let n = BUSES.fetch_add(1, Ordering::Relaxed);
+    let dir = PathBuf::from(format!("/tmp/aizome-test-{}-bus-{n}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let conf = dir.join("bus.conf");
@@ -564,14 +570,32 @@ const WALLPAPER: u32 = 0x3c6e5a;
 
 /// That wallpaper, the output's size: the shell would otherwise show the
 /// person's (`$AIZOME_WALLPAPER_NIGHT`, inherited inside an Aizome
-/// session), whenever it had decoded it.
-fn wallpaper() -> PathBuf {
-    let path = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("reload-wallpaper.png");
-    let tmp = path.with_extension(format!("{}.png", std::process::id()));
-    let [r, g, b] = rgb(WALLPAPER);
-    Image { width: 1280, height: 800, rgba: [r, g, b, 0xff].repeat(1280 * 800) }.save(&tmp);
-    std::fs::rename(&tmp, &path).unwrap();
-    path
+/// session), whenever it had decoded it. Written once for the tests here.
+fn wallpaper() -> &'static Path {
+    static FILE: OnceLock<PathBuf> = OnceLock::new();
+    FILE.get_or_init(|| {
+        let path = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("reload-wallpaper.png");
+        let tmp = path.with_extension(format!("{}.png", std::process::id()));
+        let [r, g, b] = rgb(WALLPAPER);
+        Image { width: 1280, height: 800, rgba: [r, g, b, 0xff].repeat(1280 * 800) }.save(&tmp);
+        std::fs::rename(&tmp, &path).unwrap();
+        path
+    })
+}
+
+/// The surfaces the shell says it has open (`Deskbar`, `MenuBar { .. }`),
+/// once it answers.
+fn shell_surfaces(shell: &Path, c: &Compositor) -> Option<Vec<String>> {
+    shell_state(shell, c).map(|s| strings(&s, "surfaces"))
+}
+
+/// Asks the bus for the notifications' name as `bus`'s own.
+fn take_notifications(
+    bus: &zbus::blocking::Connection,
+    flags: zbus::fdo::RequestNameFlags,
+) -> zbus::fdo::RequestNameReply {
+    let name = zbus::names::WellKnownName::try_from("org.freedesktop.Notifications").unwrap();
+    zbus::blocking::fdo::DBusProxy::new(bus).unwrap().request_name(name, flags.into()).unwrap()
 }
 
 #[test]
@@ -749,6 +773,65 @@ fn restarting_the_shell_keeps_apps_and_notifications() {
     assert_eq!(c.request(Request::Outputs), outputs_before, "the bar's area is the same");
     let log = c.log_text();
     assert!(log.contains("shell restart finished"), "{log}");
+}
+
+/// A shell that can't tell it's being replaced puts its Deskbar back when
+/// the compositor closes it for the new shell's. Here neither shell ever
+/// has the notifications' name (another server keeps it), so the old one
+/// loses none and never steps down. The compositor closes what the old
+/// shell opens during the restart, so the restart still ends as the new
+/// shell's surfaces replace the old one's, not at the timeout.
+#[test]
+fn the_compositor_closes_what_the_old_shell_opens_during_a_restart() {
+    let Some(bus) = private_bus() else {
+        eprintln!("no dbus-daemon; skipping the old shell's Deskbar test");
+        return;
+    };
+    let sb = shell_build();
+    let shell_bin = sb.shell.to_string_lossy().into_owned();
+    let wallpaper = wallpaper().to_string_lossy().into_owned();
+    // Someone else's notification server, there before any shell: a
+    // headless shell takes the name only from the shell it replaces.
+    let server = bus_connection(&bus.address);
+    let reply = take_notifications(&server, zbus::fdo::RequestNameFlags::DoNotQueue);
+    assert!(matches!(reply, zbus::fdo::RequestNameReply::PrimaryOwner), "{reply:?}");
+    let env = [
+        ("AIZOME_SHELL_BIN", shell_bin.as_str()),
+        ("DBUS_SESSION_BUS_ADDRESS", bus.address.as_str()),
+        ("DBUS_SYSTEM_BUS_ADDRESS", bus.address.as_str()),
+        ("AIZOME_WALLPAPER_NIGHT", wallpaper.as_str()),
+        ("AIZOME_WALLPAPER_DAY", wallpaper.as_str()),
+    ];
+    let settings = "[notifications]\nblocked_apps = [\"Screenshot\"]\n";
+    let c = Compositor::start(Options { args: &["--shell"], env: &env, settings, ..Default::default() });
+    wait_for("the shell's bar, desktop and Deskbar", 60, || {
+        shell_surfaces(&sb.shell, &c).is_some_and(|s| {
+            ["MenuBar", "Desktop", "Deskbar"].iter().all(|want| s.iter().any(|have| have.starts_with(want)))
+        })
+    });
+
+    match c.request(Request::Reload {
+        logic: false,
+        shell: false,
+        from: None,
+        shell_from: Some(shell_bin.clone()),
+        check: false,
+    }) {
+        Response::Reload { report } => assert_eq!(report.shell.action, "restarted", "{report:?}\n{}", c.log_text()),
+        r => panic!("{r:?}"),
+    }
+    // Each screenshot's event reaches both shells, and whatever the old
+    // one takes in has it put back a Deskbar it finds closed. The
+    // compositor ends the restart itself; the deadline only stops one that
+    // never does.
+    let deadline = Instant::now() + Duration::from_secs(60);
+    while !c.log_text().contains("shell restart finished") {
+        c.screenshot();
+        assert!(Instant::now() < deadline, "the restart didn't finish:\n{}", c.log_text());
+    }
+    let log = c.log_text();
+    assert!(!log.contains("shell restart cut short"), "the old shell held the restart open:\n{log}");
+    assert_eq!(notifications_owner(&server), Some(std::process::id()), "neither shell took the name");
 }
 
 /// A spot of the desktop with nothing on it: the screen's bottom-right
