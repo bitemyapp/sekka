@@ -1,8 +1,7 @@
 # Compare the actual GUI inventory with the evaluated ISO's prebuilt systems.
 {
   pkgs,
-  inputs,
-  applicationCatalog,
+  references,
   fixture,
   installer,
 }:
@@ -10,9 +9,6 @@ let
   inherit (pkgs) lib;
   config = installer.config;
   desktops = config.respin.referenceDesktops;
-  references = import ./reference-systems.nix {
-    inherit inputs applicationCatalog desktops;
-  };
   roots = map toString config.isoImage.storeContents;
   files = map (entry: entry.target) config.isoImage.contents;
 in

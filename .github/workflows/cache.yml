@@ -82,9 +82,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Every check runs even after one fails: the log names each failure,
-          # and the passing checks stay rooted for the next run (DEVELOPERS.md).
-          python3 scripts/ci-retain.py main checks flake check --keep-going --no-update-lock-file --print-build-logs
+          # Each check builds as soon as it is evaluated, and every check runs
+          # even after one fails: the log names each failure, and the passing
+          # checks stay rooted for the next run (DEVELOPERS.md).
+          python3 scripts/ci-retain.py main checks fast-build --flake .#checks.x86_64-linux
           git diff --exit-code
       - name: Publish Sekka's packages to its binary cache
         shell: bash

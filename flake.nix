@@ -118,6 +118,19 @@
           ./modules/installer.nix
         ];
       };
+      # The installed systems the media carries (nix/reference-systems.nix),
+      # evaluated once for all the checks that inspect them: each evaluating
+      # its own copy repeated the same seven NixOS evaluations.
+      referenceSystems = import ./nix/reference-systems.nix {
+        inherit inputs applicationCatalog;
+        desktops = installer.config.respin.referenceDesktops;
+      };
+      # An installed system with Genkan's defaults and no desktop chosen.
+      installedDefault = nixpkgs.lib.nixosSystem {
+        inherit system;
+        inherit (applicationCatalog) specialArgs;
+        modules = [ inputs.calamares.nixosModules.default ];
+      };
       # Googlebook construction is temporarily disabled. Its module, builders
       # and fixture remain in source, without configuration/package/check outputs.
       etc = installer.config.environment.etc;
@@ -182,7 +195,27 @@
       # Aizome's own VM checks (desktop/aizome/nix), under the names its
       # flake gave them: `nix build .#aizome-checks.session`. Not among
       # `checks`, which CI runs, as they weren't in Aizome's repository.
-      legacyPackages.${system}.aizome-checks = inputs.aizome.checks.${system};
+      legacyPackages.${system} = {
+        aizome-checks = inputs.aizome.checks.${system};
+        # The ISO's own checks, which the manual ISO workflow (and a release)
+        # runs with the image: `nix build .#iso-checks.desktop-references`.
+        # Not among `checks`: evaluating the media means evaluating every
+        # prebuilt desktop system, which alone took most of a CI evaluation.
+        iso-checks = {
+          desktop-references = import ./nix/iso-desktop-references-test.nix {
+            inherit pkgs fixture installer;
+            references = referenceSystems;
+          };
+          copytoram = import ./nix/iso-copytoram-test.nix { inherit pkgs; };
+          store-integrity = import ./nix/iso-integrity-test.nix { inherit pkgs; };
+          copytoram-initrd = import ./nix/iso-copytoram-initrd-test.nix {
+            inherit pkgs installer;
+          };
+          application-cache = import ./nix/iso-application-cache-test.nix {
+            inherit pkgs applicationCatalog installer;
+          };
+        };
+      };
       apps.${system} = {
         update = {
           type = "app";
@@ -313,12 +346,9 @@
       checks.${system} = {
         cargo-geiger = self.packages.${system}.cargo-geiger;
         pipewire-packages = import ./nix/pipewire-packages-test.nix {
-          inherit
-            pkgs
-            inputs
-            installer
-            applicationCatalog
-            ;
+          inherit pkgs installer;
+          references = referenceSystems;
+          installed = installedDefault;
           patched = pipewirePkgs.sekka-pipewire-daemon;
         };
         pipewire-x11-disconnect = import ./nix/pipewire-x11-disconnect-test.nix {
@@ -326,12 +356,9 @@
           patched = pipewirePkgs.sekka-pipewire-daemon;
         };
         avahi-packages = import ./nix/avahi-packages-test.nix {
-          inherit
-            pkgs
-            inputs
-            installer
-            applicationCatalog
-            ;
+          inherit pkgs installer;
+          references = referenceSystems;
+          installed = installedDefault;
           patched = avahiPkgs.sekka-avahi-daemon;
         };
         avahi-startup = import ./nix/avahi-startup-test.nix {
@@ -367,6 +394,7 @@
             applicationCatalog
             installer
             ;
+          references = referenceSystems;
           patched = xappPkgs.xdg-desktop-portal-xapp;
         };
         xapp-settings = import ./nix/xapp-settings-test.nix {
@@ -375,7 +403,6 @@
         };
         hyprlauncher-software = import ./nix/hyprlauncher-software-test.nix { pkgs = hyprlandPkgs; };
         aizome-ibus = import ./nix/aizome-ibus-test.nix { inherit pkgs inputs; };
-        aizome-ibus-policy = import ./nix/aizome-ibus-policy-test.nix { inherit pkgs inputs; };
         aizome-memory-policy = import ./nix/aizome-memory-policy-test.nix { inherit pkgs inputs; };
         # Aizome's toolkit's own tests, under a headless sway
         # (desktop/aizome/sukumo).
@@ -385,25 +412,11 @@
         };
         ibus-wayland-serial = import ./nix/ibus-wayland-serial-test.nix { inherit pkgs; };
         mpv-software = import ./nix/mpv-software-test.nix { inherit pkgs inputs; };
-        iso-desktop-references = import ./nix/iso-desktop-references-test.nix {
-          inherit
-            pkgs
-            inputs
-            applicationCatalog
-            fixture
-            installer
-            ;
-        };
-        iso-copytoram = import ./nix/iso-copytoram-test.nix { inherit pkgs; };
         genkan-live-media = import ./nix/genkan-live-media-test.nix { inherit pkgs; };
         genkan-preflight = import ./nix/genkan-preflight-test.nix {
           inherit pkgs;
           helper = calamares.helper;
           nixPackage = runnerNix;
-        };
-        iso-store-integrity = import ./nix/iso-integrity-test.nix { inherit pkgs; };
-        iso-copytoram-initrd = import ./nix/iso-copytoram-initrd-test.nix {
-          inherit pkgs installer;
         };
         chatgpt-plugins = import ./nix/chatgpt/test.nix {
           inherit pkgs;
@@ -411,6 +424,7 @@
         };
         hyprland-packages = import ./nix/hyprland-packages-test.nix {
           inherit pkgs inputs applicationCatalog;
+          references = referenceSystems;
           inherit (hyprlandPkgs)
             aquamarine
             hyprland
@@ -758,12 +772,7 @@
           inherit pkgs;
           # The live session, in each of its boot entries, and an installed
           # system.
-          systems = liveConfigs ++ [
-            (import ./nix/reference-systems.nix {
-              inherit inputs applicationCatalog;
-              desktops = [ "plasma" ];
-            }).systems.plasma.config
-          ];
+          systems = liveConfigs ++ [ referenceSystems.systems.plasma.config ];
         };
         activity-vm = import ./nix/activity-vm-test.nix {
           inherit pkgs;
@@ -949,7 +958,9 @@
             ${tools}/bin/respin-tools check-config settings ${lts} ${latest}
             touch $out
           '';
-      };
+      }
+      # aizome-ibus-policy and one check per system it evaluates.
+      // import ./nix/aizome-ibus-policy-test.nix { inherit pkgs inputs; };
       formatter.${system} = pkgs.nixfmt;
     };
 }

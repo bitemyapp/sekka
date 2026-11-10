@@ -39,7 +39,7 @@ pkgs.testers.runNixOSTest {
   nodes.machine =
     { lib, ... }:
     {
-      virtualisation.memorySize = 2048;
+      virtualisation.memorySize = 4096;
       nix.package = nixPackage;
       nix.settings = {
         experimental-features = [
@@ -59,6 +59,7 @@ pkgs.testers.runNixOSTest {
       environment.systemPackages = [
         pkgs.python3
         pkgs.bash
+        pkgs.nix-fast-build
       ];
       virtualisation.additionalPaths = [
         fixture
@@ -94,8 +95,10 @@ pkgs.testers.runNixOSTest {
         machine.succeed(f"test -e {check} && test -e {dependency}")
         machine.fail(f"test -e {unrelated}")
         # Force an error if a cached result attempts to build: GC reuse, not a
-        # second successful execution, must account for this success.
-        runner(retain + " main checks flake check --max-jobs 0 --no-update-lock-file")
+        # second successful execution, must account for this success. The
+        # check's recorded build inputs serve again without a query.
+        log = runner(retain + " main checks flake check --max-jobs 0 --no-update-lock-file 2>&1")
+        assert "(queried 0 of 1 derivations)" in log, log
 
     with subtest("failures remain failures and never become a successful generation"):
         runner(f"if {retain} pr uta build .#fail > /tmp/ci-failure.log 2>&1; then exit 1; fi")
@@ -110,6 +113,16 @@ pkgs.testers.runNixOSTest {
         machine.succeed(f"test -e {passing} && test -e {partial_input}")
         machine.succeed(f"test -z \"$(find {root}/pr-checks -name success)\"")
 
+    with subtest("fast-build links each passing check and keeps its inputs"):
+        runner(f"if {retain} pr packages fast-build --flake .#checks.x86_64-linux --eval-workers 1 > /tmp/ci-fast.log 2>&1; then exit 1; fi", "partial")
+        machine.succeed(f"test -L \"$(find {root}/pr-packages -name result-passing)\"")
+        machine.succeed(f"test -z \"$(find {root}/pr-packages -name 'result-failing*')\"")
+        machine.succeed(f"test -z \"$(find {root}/pr-packages -name success)\"")
+        # Only this generation keeps them now.
+        machine.succeed(f"rm -rf {root}/pr-checks")
+        machine.succeed("nix-store --gc")
+        machine.succeed(f"test -e {passing} && test -e {partial_input}")
+
     with subtest("without the roots mount, it runs plain Nix and roots nothing"):
         before = machine.succeed(f"find {root} | sort")
         runner("env -u SEKKA_CI_ROOTS " + retain + " pr uta build .#unrelated 2> /tmp/ci-plain.log")
@@ -118,7 +131,7 @@ pkgs.testers.runNixOSTest {
 
     with subtest("low free space drops pull request roots first"):
         runner(f"SEKKA_CI_MIN_FREE_BYTES={2**62} " + retain + " prune")
-        machine.succeed(f"test -z \"$(find {root}/pr-uta {root}/pr-checks -mindepth 1)\"")
+        machine.succeed(f"test -z \"$(find {root}/pr-uta {root}/pr-packages -mindepth 1)\"")
         machine.succeed(f"test -n \"$(find {root}/main-checks -name success)\"")
         machine.succeed("nix-store --gc")
         machine.fail(f"test -e {partial_input}")
