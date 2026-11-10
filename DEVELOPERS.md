@@ -1464,6 +1464,78 @@ nix develop .#aizome
 nix build .#aizome-checks.session -L
 ```
 
+### Aizome's builds
+
+An edit to Aizome compiles Aizome's crates, not the hundreds of third-party
+crates under them. `desktop/aizome/nix/workspace.nix` gives the packages
+built from Aizome's workspace (`aizome`, Yukimi's app `aizome-yukimi`, and
+`hotaru`) a `dependencies` derivation each. It runs the package's own Cargo
+commands, its check phase's test builds included, over a copy of the
+workspace in which every first-party crate is its manifest and empty
+targets (`workspace.stubs`), then saves the target directory without those
+stubs. That copy changes with `Cargo.lock`, the manifests, the toolchain and
+the package's inputs and flags, never with Rust source. The package unpacks
+the saved directory before its build, and Cargo finds the third-party
+crates fresh and compiles the first-party ones. The crates are vendored once,
+from the lockfile alone (`workspace.vendor`).
+
+The two derivations share every attribute that reaches Cargo: the commands,
+profiles, features, wrappers, inputs and environment. Two things differ by
+nature and are evened out. Stdenv seeds the C compilers with each
+derivation's own hash, which bindgen's build script watches, so both builds
+use a fixed seed (`workspace.sameEnvironment`). cargoSetupHook copies the
+vendored crates into each build afresh, so the package dates them back
+before Cargo looks (`workspace.restoreTarget`). Any other difference would
+make Cargo compile the dependencies again inside the package, which would
+still build but lose the gain silently. So each package's build and its
+tests end by looking at what Cargo wrote since the dependency build's
+crates were restored (`workspace.onlyFirstParty`): a third-party library or
+build script newer than that fails the build and names the crates. After
+changing a package's build, that failure says the two derivations differ in
+something Cargo fingerprints; even it out in both, as `sameEnvironment` does.
+
+Yukimi's app is a package of its own (`desktop/aizome/nix/yukimi.nix`), and
+`hotaru` builds from a source with only its crates real. `workspace.withCrates`
+keeps the real source of the crates a package builds and every first-party
+crate they reach by path (dev-dependencies too, for its tests), with stubs
+for the rest. Every desktop has Yukimi, so an edit to the compositor or an
+Aizome app Yukimi doesn't use no longer changes Tatami's, Plasma's, GNOME's
+or the other desktops' systems and VM checks. Aizome's package links
+Yukimi's for its session.
+
+This is written on Nixpkgs' `buildRustPackage` rather than crane: Aizome's
+build runs two Cargo commands with different profiles and wrappers and its
+checks build chosen test targets, so crane's dependency commands would be
+replaced anyway, and the Git dependencies keep their hashes in
+`cargo-output-hashes.nix`.
+
+Measured on wx-workstation on 2026-11-03, with CI's `cores = 16` and the
+host's 1-minute load between 20 and 60:
+
+| Build | Before | After |
+| --- | --- | --- |
+| `aizome` after an edit to the compositor | 574 s | 243 s (448–458 s with 16 jobs) |
+| its dependencies, after a `Cargo.lock` or Nixpkgs change | (in the above) | 154 s, then `aizome` in 247 s; a 1.06 GB zstd archive |
+| Yukimi's app (dependencies, then the app) | (in `aizome`) | 61 s, then 60 s |
+| `hotaru` (dependencies, then the package and its tests) | one build | 32 s, then 123 s |
+
+The package compiles 64 first-party units and no third-party crate.
+Aizome's own crates are most of its build: two dozen applications, each
+linked with thin LTO. That step scales with Cargo's jobs (280 s with 16,
+142 s with 32, 86 s with 64; the dependency build gains 30 s), so the
+`release-lto` build runs 64 jobs, or the builder's `cores` when that is
+higher, never more than its processors. Builds with 16, 32 and 64 jobs gave
+the same bytes. Evaluating `aizome`'s derivation takes as long as before
+(1.5 s).
+
+An in-place comment in a compositor crate, or in `aizome-apps`, changed 22
+of the flake's 93 checks before and 9 after: the six with Aizome in their
+systems (`aizome-login`, `aizome-ibus`, `aizome-greeter-desktops`,
+`genkan-keyboard`, `mpv-software`, `tuning`) and the three that stamp the
+revision (`site`, `aizome-site`, `template-lock`). The network, display,
+activity, Plasma login, session environment, update and Yukimi checks no
+longer change, nor do the `hotaru`, `yukimi` and `yukimi-discover` packages.
+
 The shell observes application launch attempts through `aizome-sys`:
 process creation and exit are separate events, and only a compositor window
 event confirms that a window opened. D-Bus acceptance and successful
