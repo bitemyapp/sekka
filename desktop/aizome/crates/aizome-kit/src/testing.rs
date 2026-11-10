@@ -33,6 +33,7 @@ use crate::layout::{Point, Rect, Size, Vec2};
 use crate::platform::{LayerChange, OpenKind, OpenSpec, Placement, Platform, Waker, WinId};
 use crate::program::{Output, Program, WindowKey};
 use crate::theme::Appearance;
+pub use crate::tree::LazyCounts;
 use crate::widget::Semantics;
 
 /// A window the stand-in platform opened.
@@ -1081,6 +1082,19 @@ impl<P: Program> Harness<P> {
     /// out nothing.
     pub fn text_layouts(&self) -> TextLayouts {
         TextLayouts { made: self.rt.core.text.misses, found: self.rt.core.text.hits }
+    }
+
+    /// How often the windows' [`lazy`](crate::lazy) elements have been
+    /// built so far (their functions called), and how often one was kept
+    /// as it was instead: a view of what hasn't changed builds none.
+    pub fn lazies(&self) -> LazyCounts {
+        self.rt.core.lazies
+    }
+
+    /// How many live widgets window `key` has, each element one: lazy
+    /// elements too, and what's under them.
+    pub fn widgets(&self, key: WindowKey) -> usize {
+        self.rt.core.wins.get(&self.win(key)).map_or(0, |w| w.tree.nodes.iter().filter(|n| !n.dead).count())
     }
 
     pub fn theme(&self) -> &crate::theme::Theme {

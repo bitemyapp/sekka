@@ -1,15 +1,22 @@
 //! What a change costs in a window far larger than an app should build:
 //! thousands of live widgets, none of them virtualised. A message runs
 //! `update` and `view`, then the kit mounts, lays out and compares the
-//! whole tree whatever changed, so this is where a cost per widget shows.
+//! whole tree whatever changed, so this is where a cost per widget shows;
+//! and where keeping what didn't change ([`lazy`]) shows what it saves.
 //!
 //! The scenes are the ones a cross-toolkit benchmark draws: a column of
 //! labelled rows, and boxes nested eight to a box, each casting a soft
-//! shadow. Times are from the message to its damage drawn, at scale 2 in
-//! a 1200 × 800 point window.
+//! shadow. The rows come three ways: built outright at every view, each a
+//! lazy element kept by what it shows, and those gathered a hundred to a
+//! lazy group. Times are from the message to its damage drawn, at scale 2
+//! in a 1200 × 800 point window. Each scene's changes run in turn in one
+//! window, so the later ones find it as a session leaves it: its memory
+//! scattered by the views before. The first change is run again at the end
+//! to show what that costs, with and without the pointer in the window.
 //!
 //! `cargo test --release -p aizome-kit --test scale -- --ignored --nocapture`
 
+use std::rc::Rc;
 use std::time::Instant;
 
 use aizome_kit::hash::PaintHasher;
@@ -30,19 +37,36 @@ const CHANGED: Color = Color::hex(0x357d74);
 const TEXT: Color = Color::hex(0xe8eefc);
 const BORDER: Color = Color::hex(0x3b4d6b);
 
+/// Rows to a lazy group.
+const GROUP: usize = 100;
+
 #[derive(Clone, Copy, PartialEq)]
 enum Shape {
-    /// Every row a child of the first.
+    /// Every row a child of the first, built at every view.
     Column,
+    /// The same, each row a lazy element.
+    LazyColumn,
+    /// The same, the lazy rows in lazy groups of [`GROUP`].
+    GroupedColumn,
     /// Eight to a box, each a soft-shadowed card.
     Cards,
 }
 
+/// What an item shows: which it is, and the ticks that last changed its
+/// label and its fill.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Item {
+    id: usize,
+    label: u64,
+    fill: u64,
+}
+
 struct Scene {
     shape: Shape,
-    /// The tick that last changed each node's label, and its fill.
-    labels: Vec<u64>,
-    fills: Vec<u64>,
+    items: Vec<Item>,
+    /// The rows after the first by the hundred, each hundred shared with
+    /// the view: a group whose rows didn't change is the same allocation.
+    groups: Vec<Rc<Vec<Item>>>,
     children: Vec<Vec<usize>>,
 }
 
@@ -94,6 +118,41 @@ impl Widget for Card {
     }
 }
 
+/// An item of the scene: its box, its label, and the items inside it.
+fn item(card: bool, it: Item, children: Vec<Element<Msg>>) -> Element<Msg> {
+    let fill = if it.fill % 2 == 1 { CHANGED } else { ITEM };
+    let label = match it.label {
+        0 => format!("item {:05}", it.id),
+        tick => format!("item {:05} · {tick:04}", it.id),
+    };
+    let label = text(label).size(12.0).color(TEXT);
+    let body: Element<Msg> = if children.is_empty() {
+        label.into()
+    } else {
+        let mut all = Vec::with_capacity(children.len() + 1);
+        all.push(label.into());
+        all.extend(children);
+        column(all).into()
+    };
+    let padding = Padding { top: 0.0, right: 4.0, bottom: 0.0, left: 4.0 };
+    let item: Element<Msg> = if card {
+        Element::new(Card { fill, padding }, vec![body])
+    } else {
+        container(body).padding(padding).fill(Tone::Color(fill)).into()
+    };
+    item.min_width(18.0).min_height(16.0)
+}
+
+/// A row, from what it shows: what a lazy row builds.
+fn row(it: &Item) -> Element<Msg> {
+    item(false, *it, Vec::new())
+}
+
+/// A hundred rows, each lazy: what a lazy group builds.
+fn group(rows: &Rc<Vec<Item>>) -> Element<Msg> {
+    column(rows.iter().map(|it| lazy(*it, row)).collect()).into()
+}
+
 impl Scene {
     fn new(shape: Shape, nodes: usize) -> Scene {
         let mut children = vec![Vec::new(); nodes];
@@ -102,34 +161,26 @@ impl Scene {
                 children[(id - 1) / 8].push(id);
             }
         }
-        Scene { shape, labels: vec![0; nodes], fills: vec![0; nodes], children }
+        let items: Vec<Item> = (0..nodes).map(|id| Item { id, label: 0, fill: 0 }).collect();
+        let groups = match shape {
+            Shape::GroupedColumn => items[1..].chunks(GROUP).map(|rows| Rc::new(rows.to_vec())).collect(),
+            _ => Vec::new(),
+        };
+        Scene { shape, items, groups, children }
     }
 
-    fn item(&self, id: usize, children: Vec<Element<Msg>>) -> Element<Msg> {
-        let fill = if self.fills[id] % 2 == 1 { CHANGED } else { ITEM };
-        let label = match self.labels[id] {
-            0 => format!("item {id:05}"),
-            tick => format!("item {id:05} · {tick:04}"),
-        };
-        let label = text(label).size(12.0).color(TEXT);
-        let body: Element<Msg> = if children.is_empty() {
-            label.into()
-        } else {
-            let mut all = Vec::with_capacity(children.len() + 1);
-            all.push(label.into());
-            all.extend(children);
-            column(all).into()
-        };
-        let padding = Padding { top: 0.0, right: 4.0, bottom: 0.0, left: 4.0 };
-        let item: Element<Msg> = match self.shape {
-            Shape::Column => container(body).padding(padding).fill(Tone::Color(fill)).into(),
-            Shape::Cards => Element::new(Card { fill, padding }, vec![body]),
-        };
-        item.min_width(18.0).min_height(16.0)
+    /// Change item `id`, and its group's copy of it.
+    fn change(&mut self, id: usize, to: impl Fn(&mut Item)) {
+        to(&mut self.items[id]);
+        if id > 0
+            && let Some(rows) = self.groups.get_mut((id - 1) / GROUP)
+        {
+            to(&mut Rc::make_mut(rows)[(id - 1) % GROUP]);
+        }
     }
 
     fn nested(&self, id: usize) -> Element<Msg> {
-        self.item(id, self.children[id].iter().map(|&c| self.nested(c)).collect())
+        item(true, self.items[id], self.children[id].iter().map(|&c| self.nested(c)).collect())
     }
 }
 
@@ -146,17 +197,19 @@ impl Program for Scene {
 
     fn update(&mut self, msg: Msg, _cx: &mut Cx<Msg>) {
         match msg {
-            Msg::Label(i, tick) => self.labels[i] = tick,
-            Msg::Fill(i, tick) => self.fills[i] = tick,
-            Msg::Labels(tick) => self.labels.fill(tick),
-            Msg::Fills(tick) => self.fills.fill(tick),
+            Msg::Label(i, tick) => self.change(i, |it| it.label = tick),
+            Msg::Fill(i, tick) => self.change(i, |it| it.fill = tick),
+            Msg::Labels(tick) => (0..self.items.len()).for_each(|i| self.change(i, |it| it.label = tick)),
+            Msg::Fills(tick) => (0..self.items.len()).for_each(|i| self.change(i, |it| it.fill = tick)),
         }
     }
 
     fn view(&self, _w: WindowKey) -> Element<Msg> {
-        let nodes = self.labels.len();
+        let (first, rows) = (self.items[0], &self.items[1..]);
         let tree = match self.shape {
-            Shape::Column => self.item(0, (1..nodes).map(|id| self.item(id, Vec::new())).collect()),
+            Shape::Column => item(false, first, rows.iter().map(|it| item(false, *it, Vec::new())).collect()),
+            Shape::LazyColumn => item(false, first, rows.iter().map(|it| lazy(*it, row)).collect()),
+            Shape::GroupedColumn => item(false, first, self.groups.iter().map(|g| lazy(g.clone(), group)).collect()),
             Shape::Cards => self.nested(0),
         };
         // In a scroll, as content taller than its window is: every row keeps
@@ -247,22 +300,48 @@ fn changes_in_very_large_windows() {
             println!("| {name} | {change} | {handle:.2} | {draw:.2} |");
         }
     };
-    for nodes in [1_000, 3_000, 10_000] {
-        run(
-            Shape::Column,
-            format!("{nodes} rows"),
-            nodes,
-            vec![
-                ("one label", 60, send(move |t| Msg::Label(nodes / 2, t))),
-                ("one fill", 60, send(move |t| Msg::Fill(nodes / 2, t))),
-                ("one label in sight", 60, send(|t| Msg::Label(3, t))),
-                ("every fill", 30, send(Msg::Fills)),
-                ("every label", 12, send(Msg::Labels)),
-                // Last: it leaves the pointer in the window, and every build
-                // after looks for what is under it.
-                ("scrolled a notch", 60, Box::new(notch)),
-            ],
-        );
+    for (shape, kind) in
+        [(Shape::Column, "rows"), (Shape::LazyColumn, "lazy rows"), (Shape::GroupedColumn, "lazy rows in hundreds")]
+    {
+        for nodes in [1_000, 3_000, 10_000] {
+            run(
+                shape,
+                format!("{nodes} {kind}"),
+                nodes,
+                vec![
+                    ("one label", 60, send(move |t| Msg::Label(nodes / 2, t))),
+                    ("one fill", 60, send(move |t| Msg::Fill(nodes / 2, t))),
+                    ("one label in sight", 60, send(|t| Msg::Label(3, t))),
+                    ("every fill", 30, send(Msg::Fills)),
+                    ("every label", 12, send(Msg::Labels)),
+                    ("scrolled a notch", 60, Box::new(notch)),
+                    // The first change again, now that the window has
+                    // lived a while: with the pointer out of it, and with
+                    // it over the rows, where every build looks for what's
+                    // under it.
+                    (
+                        "one label, later",
+                        60,
+                        Box::new(move |h: &mut Harness<Scene>, w: WindowKey, t: u64| {
+                            if t == 1 {
+                                h.leave(w);
+                            }
+                            h.send(Msg::Label(nodes / 2, t));
+                        }),
+                    ),
+                    (
+                        "one label, later, the pointer over the rows",
+                        60,
+                        Box::new(move |h: &mut Harness<Scene>, w: WindowKey, t: u64| {
+                            if t == 1 {
+                                h.move_to(w, Point::new(WINDOW.width / 2.0, WINDOW.height / 2.0));
+                            }
+                            h.send(Msg::Label(nodes / 2, t));
+                        }),
+                    ),
+                ],
+            );
+        }
     }
     for nodes in [64, 1_024, 8_192] {
         run(

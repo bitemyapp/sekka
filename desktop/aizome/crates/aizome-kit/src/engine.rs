@@ -189,6 +189,10 @@ pub(crate) struct Win {
     /// the opaque region last given a see-through window that shows them.
     pub videos: Vec<(crate::widgets::video::VideoId, sidestep_ui::video::VideoPlace)>,
     pub opaque: Option<Vec<Rect>>,
+    /// The scale or the theme has changed since its tree was built: no
+    /// layout made before holds, so the next view mounts the tree anew
+    /// though it keeps nodes.
+    mount_anew: bool,
 }
 
 impl Win {
@@ -234,6 +238,7 @@ impl Win {
             refresh: false,
             videos: Vec::new(),
             opaque: None,
+            mount_anew: false,
         }
     }
 
@@ -312,6 +317,9 @@ pub(crate) struct Core {
     pub quit: bool,
     /// Hooks for what only the compositor can do (Window menu).
     pub wm: Option<Box<dyn crate::cx::WindowManager>>,
+    /// Lazy elements built and kept in the windows' trees, for whoever
+    /// counts.
+    pub lazies: crate::tree::LazyCounts,
 }
 
 impl Core {
@@ -342,6 +350,7 @@ impl Core {
             key_window: None,
             quit: false,
             wm: None,
+            lazies: Default::default(),
         }
     }
 
@@ -739,10 +748,28 @@ impl Core {
             WinKind::App { .. } => "window",
             WinKind::Popup { .. } => "popup",
         });
-        let mut tree = Tree::new(root, base, w.tree.nodes.len());
+        // Where the focus is, by the tree as it was.
+        let focus = w.active_focus();
+        // A tree with lazy elements in it takes the view in place, keeping
+        // what the view says is as it was. Not once the scale or the theme
+        // has changed, which every layout hangs on: then, and with no lazy
+        // element left, the tree is mounted anew as any other is.
+        let in_place = w.tree.takes_views() && !w.is_popup() && !w.mount_anew;
+        w.mount_anew = false;
+        let mut tree = if in_place {
+            let mut tree = std::mem::take(&mut w.tree);
+            tree.rebuild(root, base);
+            tree
+        } else {
+            let mut tree = Tree::new(root, base, w.tree.nodes.len());
+            if w.is_popup() {
+                tree.keep_nothing();
+            }
+            tree
+        };
         let mut env = Env {
             scale: w.scale,
-            focus: w.active_focus(),
+            focus,
             theme: &self.theme,
             text: &mut self.text,
             states: &mut w.states,
@@ -750,22 +777,33 @@ impl Core {
             on_selection: false,
         };
         tree.layout_window(w.size, &mut env);
-        let damage = if w.built {
-            settle(&mut tree, &mut w.snapshot, w.focused, win, platform)
+        let (damage, lost) = if w.built {
+            let damage = settle(&mut tree, &mut w.snapshot, w.focused, win, platform);
+            (damage, tree.lost_nodes())
         } else {
-            tree.scrolls.clear();
-            tree.local_damage.clear();
+            tree.forget_changes();
             tree.snapshot_into(&mut w.snapshot);
-            vec![Rect::from_origin_size(Point::ZERO, w.size)]
+            (vec![Rect::from_origin_size(Point::ZERO, w.size)], true)
         };
+        // A tree that keeps nodes keeps its dead ones' room too, till
+        // there are too many.
+        let dead = tree.dead();
+        if dead > 256 && dead > tree.nodes.len() / 2 {
+            tree.compact();
+        }
         let ticks = std::mem::take(&mut tree.ticks);
         let widget_timers = std::mem::take(&mut tree.widget_timers);
+        let counts = tree.take_lazy_counts();
         w.tree = tree;
         w.built = true;
         w.dirty = false;
         w.refresh = false;
-        let live = &w.tree.by_id;
-        w.states.retain(|(id, _), _| live.contains_key(id));
+        if lost {
+            let live = &w.tree.by_id;
+            w.states.retain(|(id, _), _| live.contains_key(id));
+        }
+        self.lazies.built += counts.built;
+        self.lazies.kept += counts.kept;
         for (node, after) in ticks {
             self.tick_later(win, node, after, platform);
         }
@@ -810,38 +848,49 @@ impl Core {
     fn sync_videos(&mut self, win: WinId, platform: &mut dyn Platform) {
         use sidestep_ui::video::VideoPlace;
         let Some(w) = self.wins.get_mut(&win) else { return };
-        // What's drawn over videos, where it was laid out.
-        let over: Vec<Rect> = w
-            .tree
-            .nodes
-            .iter()
-            .filter(|n| !n.dead && n.widget.over_video())
-            .map(|n| n.rect.intersect(n.clip))
-            .filter(|r| r.width() > 0.0 && r.height() > 0.0)
-            .collect();
         let mut now: Vec<(crate::widgets::video::VideoId, VideoPlace)> = Vec::new();
         let mut redraw = Vec::new();
-        for n in w.tree.nodes.iter().filter(|n| !n.dead) {
-            let Some(v) = n.widget.video() else { continue };
-            if now.iter().any(|(id, _)| *id == v.id) {
-                continue;
+        // A tree that keeps nodes knows whether any of them could matter
+        // here; with none, and no video placed, there is nothing to read
+        // every node for.
+        if w.tree.may_have_video() || !w.videos.is_empty() {
+            let mut any = false;
+            // What's drawn over videos, where it was laid out.
+            let mut over: Vec<Rect> = Vec::new();
+            for n in w.tree.nodes.iter().filter(|n| !n.dead && n.widget.over_video()) {
+                any = true;
+                let r = n.rect.intersect(n.clip);
+                if r.width() > 0.0 && r.height() > 0.0 {
+                    over.push(r);
+                }
             }
-            let r = (v.rect + n.rect.origin().to_vec2()).intersect(n.clip);
-            let r = Rect::new(r.x0.round(), r.y0.round(), r.x1.round(), r.y1.round());
-            if r.width() < 1.0 || r.height() < 1.0 {
-                continue;
+            for n in w.tree.nodes.iter().filter(|n| !n.dead) {
+                let Some(v) = n.widget.video() else { continue };
+                any = true;
+                if now.iter().any(|(id, _)| *id == v.id) {
+                    continue;
+                }
+                let r = (v.rect + n.rect.origin().to_vec2()).intersect(n.clip);
+                let r = Rect::new(r.x0.round(), r.y0.round(), r.x1.round(), r.y1.round());
+                if r.width() < 1.0 || r.height() < 1.0 {
+                    continue;
+                }
+                let covered = over.iter().any(|o| {
+                    let i = o.intersect(r);
+                    i.width() > 0.0 && i.height() > 0.0
+                });
+                // The element draws the picture clear while it's under.
+                let placed = crate::widget::state_of::<crate::widgets::video::Placed>(&mut w.states, n.id);
+                if placed.below != covered {
+                    placed.below = covered;
+                    redraw.push(r);
+                }
+                now.push((
+                    v.id,
+                    VideoPlace::new(r.x0, r.y0, r.width(), r.height(), v.below || covered, v.inhibit_idle),
+                ));
             }
-            let covered = over.iter().any(|o| {
-                let i = o.intersect(r);
-                i.width() > 0.0 && i.height() > 0.0
-            });
-            // The element draws the picture clear while it's under.
-            let placed = crate::widget::state_of::<crate::widgets::video::Placed>(&mut w.states, n.id);
-            if placed.below != covered {
-                placed.below = covered;
-                redraw.push(r);
-            }
-            now.push((v.id, VideoPlace::new(r.x0, r.y0, r.width(), r.height(), v.below || covered, v.inhibit_idle)));
+            w.tree.found_video(any);
         }
         for r in redraw {
             platform.invalidate(win, r);
@@ -924,8 +973,10 @@ impl Core {
         let damage = settle(&mut w.tree, &mut w.snapshot, w.focused, win, platform);
         let ticks = std::mem::take(&mut w.tree.ticks);
         let widget_timers = std::mem::take(&mut w.tree.widget_timers);
-        let live = &w.tree.by_id;
-        w.states.retain(|(id, _), _| live.contains_key(id));
+        if w.tree.lost_nodes() {
+            let live = &w.tree.by_id;
+            w.states.retain(|(id, _), _| live.contains_key(id));
+        }
         let mut area = 0.0;
         for r in &damage {
             area += r.area();
@@ -958,6 +1009,8 @@ impl Core {
             _ => 900.0,
         };
         let mut tree = Tree::new(root, NodeId::ROOT.child("popup"), w.tree.nodes.len());
+        // Mounted anew each time its content changes: nothing to keep.
+        tree.keep_nothing();
         let mut env = Env {
             scale: w.scale,
             focus: w.active_focus(),
@@ -1032,6 +1085,7 @@ impl Core {
             w.dirty = true;
             w.built = false;
             w.refresh = true;
+            w.mount_anew = true;
         }
     }
 
@@ -1049,6 +1103,7 @@ impl Core {
         // no taller than the compositor let it be.
         let Some(w) = self.wins.get_mut(&win) else { return };
         let mut tree = Tree::new(root, NodeId::ROOT.child("popup"), w.tree.nodes.len());
+        tree.keep_nothing();
         let mut env = Env {
             scale: w.scale,
             focus: w.active_focus(),
@@ -1517,7 +1572,10 @@ impl Core {
         let Some(w) = self.wins.get_mut(&win) else { return };
         let found = std::mem::take(&mut w.tree.popovers);
         let mut wanted: Vec<(NodeId, Rect, RawElement, Option<MsgFn>, usize)> = Vec::new();
+        // The popovers this view mounted, open or not.
+        let mut mounted: Vec<NodeId> = Vec::new();
         for p in found {
+            mounted.push(w.tree.nodes[p.node].id);
             if p.content.open && !w.tree.nodes[p.node].dead {
                 let n = &w.tree.nodes[p.node];
                 wanted.push((n.id, n.rect, p.content.content, p.content.on_dismiss, p.node));
@@ -1533,7 +1591,12 @@ impl Core {
             })
             .collect();
         for (p, node) in &existing {
-            if !wanted.iter().any(|(n, ..)| n == node) {
+            // One whose node lives and wasn't mounted by this view is in a
+            // subtree kept as it was, open as it was: its popup stays, with
+            // the content it has.
+            let kept = !mounted.contains(node)
+                && self.wins.get(&win).is_some_and(|w| w.tree.kept() && w.tree.get(*node).is_some());
+            if !kept && !wanted.iter().any(|(n, ..)| n == node) {
                 self.close_win(*p, platform);
             }
         }
@@ -1668,6 +1731,13 @@ impl Core {
             drag,
             ..
         } = out;
+        // What it did may have changed what the widget draws. A tree that
+        // keeps nodes has that looked at now, since its next layout won't.
+        if let Some(w) = self.wins.get_mut(&win)
+            && let Some(r) = w.tree.touched(idx, self.theme.generation, &mut w.snapshot)
+        {
+            platform.invalidate(win, r);
+        }
         if let Some(source) = drag {
             // The pointer is the compositor's now: nothing here is pressed.
             if let Some(w) = self.wins.get_mut(&win) {
@@ -1698,16 +1768,31 @@ impl Core {
             self.relayout_popup(win, platform);
         }
         // A popover's content comes from its owner's view.
-        let owner = match self.wins.get(&win).map(|w| &w.kind) {
-            Some(WinKind::Popup { owner, .. }) if rebuild && !menu_popup => Some(*owner),
-            _ => None,
+        let (owner, anchor) = match self.wins.get(&win).map(|w| &w.kind) {
+            Some(WinKind::Popup { owner, kind }) if rebuild && !menu_popup => (
+                Some(*owner),
+                match kind {
+                    PopupKind::Popover { node, .. } => Some(*node),
+                    _ => None,
+                },
+            ),
+            _ => (None, None),
         };
+        // A widget that asks to be viewed again gets a new widget, laid out
+        // anew, as every view gave it before there were lazy elements: the
+        // ones around it are built again whatever their values.
         if let Some(o) = owner.and_then(|o| self.wins.get_mut(&o)) {
             o.dirty = true;
+            if let Some(i) = anchor.and_then(|a| o.tree.get(a)) {
+                o.tree.spoil(i);
+            }
         }
         if let Some(w) = self.wins.get_mut(&win) {
             if rebuild && !menu_popup && owner.is_none() {
                 w.dirty = true;
+                if idx < w.tree.nodes.len() {
+                    w.tree.spoil(idx);
+                }
             }
             match capture {
                 Some(true) => w.active = w.tree.nodes.get(idx).map(|n| n.id),
@@ -2906,6 +2991,7 @@ impl Core {
                 w.built = false;
                 // Drawn ahead, it's drawn again in the new look.
                 w.refresh = w.hidden && w.ahead.is_some();
+                w.mount_anew = true;
             }
             platform.invalidate_all(id);
         }
