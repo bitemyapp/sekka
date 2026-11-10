@@ -295,14 +295,30 @@ with subtest("Chromium playing a page's video holds idleness off, in a window an
     press("f")
     until("Chromium out of full screen", lambda: (w := window("chromium-browser")) and not w["fullscreen"])
     held, let_go = said(CHROMIUM_NAME, HELD), said(CHROMIUM_NAME, LET_GO)
+    # The page plays twenty seconds after this key.
     press("d")
+    asked = time.monotonic()
     user("aizomectl spawn foot")
     foot = until("another window", lambda: window("foot"))
     middle = f"{foot['geometry']['x'] + foot['geometry']['w'] // 2} {foot['geometry']['y'] + foot['geometry']['h'] // 2}"
     user(f"aizomectl focus {foot['id']} && aizomectl input motion {middle}")
-    until("Chromium playing by itself", page_playing, timeout=40)
     focus = ipc("input-state")["state"]
     assert (focus["keyboard_focus"], focus["pointer_focus"]) == ("foot", "foot"), focus
+    # The other window had both before the video started, or this would be
+    # the case above again, passing on Chromium's own inhibitor.
+    elsewhere = time.monotonic() - asked
+    still = page()
+    assert elsewhere < 15 and still.startswith("paused"), (
+        f"the video may have started with Chromium in use: {elsewhere:.1f} s after the key the page said {still!r}"
+    )
+    until("Chromium playing by itself", page_playing, timeout=40)
+    started = time.monotonic() - asked
+    focus = ipc("input-state")["state"]
+    assert (focus["keyboard_focus"], focus["pointer_focus"]) == ("foot", "foot"), focus
+    print(
+        f"Chromium's video started by itself: the other window had the keyboard and the pointer {elsewhere:.1f} s "
+        f"after the key, with the page still saying {still!r}; it was seen playing {started:.1f} s after the key"
+    )
     stays_awake("Chromium playing a video that started by itself")
     assert page_playing(), "Chromium stopped playing"
     assert said(CHROMIUM_NAME, HELD) > held, "Chromium played on without asking the shell's screen saver"
@@ -337,8 +353,8 @@ with subtest("an app that asks the desktop portal reaches the same screen saver"
     # answer it with the GTK portal, which asks the session bus's screen
     # saver in turn, with no name for an app that isn't sandboxed. Giving
     # the hold back is the portal's to do when its caller goes. This
-    # caller goes at once, and then the portal now and again doesn't (its
-    # GTK backend is told to close before it has its cookie), so that
+    # caller goes at once, and then now and again the hold isn't given
+    # back (2 of 30 such callers in a trial; why isn't known), so that
     # isn't asked of it, and this comes last.
     user(
         "busctl --user call org.freedesktop.portal.Desktop /org/freedesktop/portal/desktop "

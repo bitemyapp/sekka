@@ -24,10 +24,10 @@
 }:
 let
   # A page with a video and nothing else. Its keys are a person's: p plays
-  # and pauses, f goes full screen and back, and d plays twelve seconds
-  # later, by which time the person is in another window, as when a
-  # playlist's next video starts. Its title says what the video is doing,
-  # which the test reads from the window.
+  # and pauses, f goes full screen and back, and d plays twenty seconds
+  # later, by which time the person is in another window (the test checks
+  # that they were), as when a playlist's next video starts. Its title says
+  # what the video is doing, which the test reads from the window.
   page = pkgs.writeText "video.html" ''
     <!doctype html>
     <meta charset="utf-8">
@@ -39,7 +39,7 @@ let
     addEventListener("keydown", e => {
       if (e.key === "p") { v.paused ? v.play() : v.pause(); }
       if (e.key === "f") { document.fullscreenElement ? document.exitFullscreen() : v.requestFullscreen(); }
-      if (e.key === "d") { setTimeout(() => v.play(), 12000); }
+      if (e.key === "d") { setTimeout(() => v.play(), 20000); }
     });
     setInterval(() => {
       document.title = (v.paused ? "paused" : "playing") + " " + Math.floor(v.currentTime * 10)

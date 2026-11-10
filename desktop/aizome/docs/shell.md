@@ -612,9 +612,9 @@ What it doesn't do:
   does. Nothing is filtered.
 - A hold the desktop portal takes for an app is the portal's to give
   back, on its own connection. When the app leaves the bus straight after
-  asking, the portal's GTK backend is now and again told to close the
-  request before it has its cookie, and never gives it back (2 of 30
-  callers in a trial): the hold then lasts as long as that backend runs.
+  asking, it now and again isn't: of 30 such callers in a trial, the
+  portal's GTK backend asked the shell for 30 holds and gave back 28. Why
+  it kept two isn't known. Such a hold lasts as long as that backend runs.
 - Of the interface only `Inhibit` and `UnInhibit` are served; `GetActive`,
   `Lock` and the rest answer `UnknownMethod`. Chromium asks `GetActive`
   as it starts, and carries on without an answer.
