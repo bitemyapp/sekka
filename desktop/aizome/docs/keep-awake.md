@@ -38,8 +38,10 @@ it):
   and the login screen's own suspend when it's left alone.
 
 Aizome itself also doesn't **lock the screen or turn the displays off**
-when the computer is left alone. Keep Awake holds the compositor's idle
-inhibitor, as a video player does.
+when the computer is left alone. Keep Awake holds idleness off at the
+compositor, as a video player does, and unlike a player's its hold still
+counts once the screen is locked: lock the screen yourself with Keep Awake
+on, and the displays stay lit behind the lock, as they always have.
 
 Some things still put the computer to sleep, on purpose:
 
@@ -58,11 +60,19 @@ the machine overheats.
 
 1. takes logind's inhibitor (the descriptor logind's `Inhibit` returns);
 2. checks that logind lists it, held by its own process;
-3. connects to the compositor and creates an idle inhibitor on a surface
-   it never shows. Aizome holds off idleness while any surface has one,
-   and lets go when the surface goes, with its client if it dies, so a
-   killed holder doesn't keep the screen awake after Keep Awake is off;
-   `crates/aizome-comp/tests/idle_inhibit.rs` checks both;
+3. asks the compositor, over its IPC, to hold idleness off (`keep-awake`,
+   `docs/ipc.md`), on a connection it keeps open. The hold is the
+   connection: it goes when the service stops, and with the service if
+   it's killed, so a dead holder doesn't keep the screen awake after Keep
+   Awake is off. Asking this way is also how the compositor tells the
+   user's own switch from an app's hold, with nothing guessed from a
+   process's name: only programs of the session reach that socket, and an
+   app's Wayland idle inhibitor is never taken for Keep Awake.
+   `crates/aizome-comp/tests/idle_holders.rs` and `idle_inhibit.rs` check
+   it. A compositor that doesn't know the request (an Aizome from before
+   it, still running after an update; another desktop) gets a Wayland
+   idle inhibitor on a surface never shown instead, as before: idleness
+   is held off there all the same, as an app's hold is;
 4. tells systemd it's ready (`Type=notify`). `aizome-awake on` then
    confirms with logind before it says Keep Awake is on.
 
@@ -88,10 +98,17 @@ Awake. A headless or nested Aizome, or a test, leaves it alone.
 
 - `cargo test -p aizome-awake`: an inhibitor counts as Keep Awake only as
   a block on all three, held by the right user (and process); "on" and
-  "protected" are never confused.
+  "protected" are never confused. The compositor's hold is asked for by
+  name, ends with its compositor, and isn't claimed from one that doesn't
+  know the request.
 - `cargo test -p aizome-comp --test idle_inhibit`: an inhibitor on a
   surface never shown holds off idleness, and idleness comes once it's
-  gone, or once its client goes without destroying it.
+  gone, or once its client goes without destroying it. Keep Awake's hold
+  over IPC does the same for as long as its connection lasts.
+- `cargo test -p aizome-comp --test idle_holders`: the compositor says who
+  holds idleness off, and tells subscribers when that changes. Locked,
+  an app's inhibitor lets the displays turn off on their timer and Keep
+  Awake's hold doesn't; unlocked, both hold as before.
 - `cargo test -p aizome-comp --test displays lid`: closing the lid turns
   the laptop's panel off and leaves other monitors on, turning the
   displays on doesn't light the panel behind it, and opening the lid

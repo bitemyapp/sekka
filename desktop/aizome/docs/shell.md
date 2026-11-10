@@ -563,16 +563,19 @@ session locked even while no outputs are available.
 
 The compositor counts idleness, and holds it off while any client has a
 Wayland idle inhibitor (`docs/compositor.md`): no `idle` event comes, so
-the screen doesn't lock and the displays stay on. Utsushi and mpv take one
-while a video plays and let it go when it pauses; Keep Awake's service has
-one while it's on (`docs/keep-awake.md`). Chromium and Google Chrome take
-one too, on their window, from a page's video starting until it pauses, in
-a window or full screen, but not for a video that starts while their
-window has neither the keyboard nor the pointer: one that starts by itself
-with the person in another window, as the next in a playlist does, gets
-none. They are Wayland clients in an Aizome session: they choose that
-themselves, and the session's `NIXOS_OZONE_WL` has Nixpkgs' wrappers ask
-for it besides.
+the screen doesn't lock and the displays stay on. That is for someone at
+the screen: once the session is locked the inhibitors stop counting, and
+the displays turn off on their timer whatever plays behind the lock.
+Utsushi and mpv take one while a video plays and let it go when it
+pauses. Keep Awake's service holds idleness off in a way of its own while
+it's on, which counts locked or not (`docs/keep-awake.md`). Chromium and
+Google Chrome take an inhibitor too, on their window, from a page's video
+starting until it pauses, in a window or full screen, but not for a video
+that starts while their window has neither the keyboard nor the pointer:
+one that starts by itself with the person in another window, as the next
+in a playlist does, gets none. They are Wayland clients in an Aizome
+session: they choose that themselves, and the session's `NIXOS_OZONE_WL`
+has Nixpkgs' wrappers ask for it besides.
 
 Other apps ask the session bus instead, with `Inhibit` and `UnInhibit` of
 `org.freedesktop.ScreenSaver`. VLC does (it's an X11 client here, through
@@ -588,7 +591,7 @@ theirs that reaches the compositor when they're started as X11 clients
 both cases. The shell serves the interface (`aizome_sys::screensaver`), at
 `/org/freedesktop/ScreenSaver` and at KDE's `/ScreenSaver`, which VLC
 calls. While any app holds, the shell holds an idle inhibitor for them on
-a connection of its own to the compositor (`idle.rs`, with Keep Awake's
+a connection of its own to the compositor (`idle.rs`, with
 `aizome_awake::IdleInhibitor`), and lets it go with the last hold.
 
 - `Inhibit` gives a cookie for one hold, and `UnInhibit` with it lets go.
