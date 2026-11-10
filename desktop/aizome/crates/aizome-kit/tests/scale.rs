@@ -165,17 +165,32 @@ impl Program for Scene {
     }
 }
 
-/// `runs` messages, each followed by drawing its damage: the median time
+/// One change to a scene: the `tick`th of its kind.
+type Act = dyn Fn(&mut Harness<Scene>, WindowKey, u64);
+
+/// A message to the program.
+fn send(msg: impl Fn(u64) -> Msg + 'static) -> Box<Act> {
+    Box::new(move |h, _, tick| h.send(msg(tick)))
+}
+
+/// The wheel turned a notch over the rows, down and back up by turns: no
+/// message and no view, the tree laid out again where it scrolled.
+fn notch(h: &mut Harness<Scene>, w: WindowKey, tick: u64) {
+    let down = (tick / 20).is_multiple_of(2);
+    h.scroll(w, Point::new(WINDOW.width / 2.0, WINDOW.height / 2.0), Vec2::new(0.0, if down { 40.0 } else { -40.0 }));
+}
+
+/// `runs` changes, each followed by drawing its damage: the median time
 /// to handle one (update, view, mount, layout, diff) and to draw it, in
 /// milliseconds.
-fn measure(h: &mut Harness<Scene>, w: WindowKey, runs: u64, msg: impl Fn(u64) -> Msg) -> (f64, f64) {
+fn measure(h: &mut Harness<Scene>, w: WindowKey, runs: u64, act: &Act) -> (f64, f64) {
     let window = Rect::from_origin_size(Point::ZERO, WINDOW);
     h.take_damage(w);
     let (mut handling, mut drawing) = (Vec::new(), Vec::new());
     // The first few fill caches a steady run has.
     for tick in 1..=runs + 3 {
         let started = Instant::now();
-        h.send(msg(tick));
+        act(h, w, tick);
         let handled = started.elapsed();
         let mut damage: Vec<Rect> = Vec::new();
         for r in h.take_damage(w).into_iter().map(|r| r.intersect(window)).filter(|r| r.area() > 0.0) {
@@ -218,7 +233,7 @@ fn changes_in_very_large_windows() {
     let times: u64 = std::env::var("SCALE_RUNS").ok().and_then(|v| v.parse().ok()).unwrap_or(1);
     println!("| Scene | Change | Handle ms | Draw ms |");
     println!("|---|---|---|---|");
-    type Change = (&'static str, u64, Box<dyn Fn(u64) -> Msg>);
+    type Change = (&'static str, u64, Box<Act>);
     let run = |shape: Shape, name: String, nodes: usize, changes: Vec<Change>| {
         let wanted: Vec<Change> =
             changes.into_iter().filter(|(change, ..)| format!("{name}, {change}").contains(&only)).collect();
@@ -227,8 +242,8 @@ fn changes_in_very_large_windows() {
         }
         let (mut h, w, first) = scene(shape, nodes);
         println!("| {name} | (opened and drawn) | {first:.2} | |");
-        for (change, runs, msg) in wanted {
-            let (handle, draw) = measure(&mut h, w, runs * times, msg);
+        for (change, runs, act) in wanted {
+            let (handle, draw) = measure(&mut h, w, runs * times, &act);
             println!("| {name} | {change} | {handle:.2} | {draw:.2} |");
         }
     };
@@ -238,11 +253,14 @@ fn changes_in_very_large_windows() {
             format!("{nodes} rows"),
             nodes,
             vec![
-                ("one label", 60, Box::new(move |t| Msg::Label(nodes / 2, t))),
-                ("one fill", 60, Box::new(move |t| Msg::Fill(nodes / 2, t))),
-                ("one label in sight", 60, Box::new(|t| Msg::Label(3, t))),
-                ("every fill", 30, Box::new(Msg::Fills)),
-                ("every label", 12, Box::new(Msg::Labels)),
+                ("one label", 60, send(move |t| Msg::Label(nodes / 2, t))),
+                ("one fill", 60, send(move |t| Msg::Fill(nodes / 2, t))),
+                ("one label in sight", 60, send(|t| Msg::Label(3, t))),
+                ("every fill", 30, send(Msg::Fills)),
+                ("every label", 12, send(Msg::Labels)),
+                // Last: it leaves the pointer in the window, and every build
+                // after looks for what is under it.
+                ("scrolled a notch", 60, Box::new(notch)),
             ],
         );
     }
@@ -251,7 +269,7 @@ fn changes_in_very_large_windows() {
             Shape::Cards,
             format!("{nodes} shadowed cards"),
             nodes,
-            vec![("one fill", 30, Box::new(|t| Msg::Fill(1, t))), ("every fill", 12, Box::new(Msg::Fills))],
+            vec![("one fill", 30, send(|t| Msg::Fill(1, t))), ("every fill", 12, send(Msg::Fills))],
         );
     }
 }
