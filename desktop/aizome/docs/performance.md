@@ -727,10 +727,13 @@ the desktop colour, about 120 MB with a 2880 × 1800 wallpaper (the scaled
 picture, 20 MB, and the desktop's raster; the decoded original lives only
 on the worker while it's scaled), up to about 150 MB after the palette's
 first use (text and glyph caches, its surface's buffers). Pictures for
-another output size or the other theme are let go. The file index (20 MB
-for a large home folder) is read only while the palette is open and
-dropped when it closes; it's rebuilt in the background when older than ten
-minutes, or when its folders or the ones it skips change.
+another output size or the other theme are let go. The file index (about
+40 MB for a home folder at its limit of 300,000 entries: 33 MB of paths in
+the one measured below, and 6 MB of entries) is read only while the palette
+is open and dropped when it closes; it's checked every ten minutes and
+rebuilt in the background when older than that (every twenty in practice:
+at the check after a walk it's still a moment younger), or when its folders
+or the ones it skips change.
 
 Freed memory goes back to the system (5 November). glibc raises its mmap
 and trim thresholds to the largest block it has unmapped, up to 32 MB: on
@@ -779,7 +782,54 @@ that's still fresh. Over twenty-five minutes of the same, the shell went
 from 60 to 72 MB by the sixth walk and 73.5 MB after the thirteenth (55 MB
 without an index): what's left is the walk library's own short-lived
 allocations, about three per path. A walk takes as long as before:
-108–124 ms after the first, against 112–117.
+108–124 ms after the first, against 112–117. Those are the shell's own
+figures, headless (on the Radeon) and live on runnymede, from the live
+trial's build, the thresholds above with the tray's and the notifications'
+fixes, with and without the change.
+
+Outside the shell, the same walk shows where each ends (10 November, on
+wx-workstation: AMD Ryzen Threadripper PRO 9985WX, 64 cores, glibc 2.44,
+kernel 7.3.1, btrfs, at a load of 11–125 from other builds; `cargo build
+--release` of `aizome-search` at main, `c98a2582`, at the walk's change,
+`5f957dc9`, and with the load's, below). A harness called
+`FileIndex::build` and `save`, and `load` where it says so, from eight
+threads that stay, as the kit's pool does, with the shell's two thresholds
+set, over a made-up home of 420,000 files in 36,686 folders (paths of 124
+bytes on average; every walk stops at the limit, with 35 MB of paths and
+6 MB of entries). Anonymous memory after each walk, from `smaps_rollup`,
+in MB (0.3 before the first):
+
+| After walk | 1 | 5 | 10 | 20 | 50 | 100 | 200 |
+|---|---|---|---|---|---|---|---|
+| Before: walks alone | 45.9 | 65.7 | 81.0 | 92.7 | 97.7 | 99.8 | 100.8 |
+| Before: a load after each | 52.4 | 90.4 | 103.1 | 114.0 | 117.2 | 119.3 | 120.8 |
+| The walk changed: walks alone | 3.5 | 4.8 | 5.7 | 6.1 | 6.6 | 6.8 | 6.9 |
+| The walk changed: a load after each | 6.1 | 14.7 | 17.4 | 18.1 | 18.6 | 18.7 | 18.8 |
+| The load changed too: a load after each | 3.7 | 4.6 | 5.0 | 5.9 | 6.0 | 6.2 | 6.3 |
+
+Before, the growth ends near 100 MB after about a hundred walks, a day and
+a half of the shell's: twelve walkers' arenas of 6.6–7.8 MB and the pool
+threads' eight at 3.9 MB, 99% of it free. While a walk ran the process
+peaked at 94 MB (the first) to 143 MB (the twentieth); it peaks at
+44–46 MB now. A load after each walk is a palette opened that often (and
+what every other refresh did before). `load` grew its entries a push at a
+time on whichever pool thread read the index, and the blocks that doubling
+left under the 4 MB threshold stayed in that thread's arena, up to 3.8 MB
+for each thread that had read one. It now counts the file's lines and
+allocates the entries once, as it does the paths: a load takes 55.9 ms
+against 54.1 (medians of 240, the two builds alternating).
+
+The walk's change costs the save. The entries are sorted, but their paths
+stay in the order the walkers found them, so writing the index reads the
+paths out of order: 82 ms against 50 (medians of 160, alternating, at a
+load of 11–20, where the walk took 223 ms against 241; on a deeper tree of
+221,462 entries with paths of 308 bytes, 94 against 69, and the walk 224
+against 222). For the same reason a search that scans all of an index just
+walked, rather than read back, takes up to 4 ms longer (one letter, 10.6 ms
+against 6.7; longer queries of 24–59 ms, from none to 14% more). An index
+read back has its paths in saved order and is unchanged. So a palette
+opened on a stale index, whose files wait for the walk and the save, gets
+them 14–27 ms later than before.
 
 ### Exceptions
 
