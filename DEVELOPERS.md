@@ -1966,6 +1966,11 @@ random font queries.
   no longer takes a lone digit for an emoji (linebender/parley#811).
   Fontique's is about what 0.12 still does; it hasn't been proposed
   upstream yet.
+- The branch is a stopgap, and the move to 0.12 is owed.
+  [parley-0.12.md](desktop/aizome/docs/parley-0.12.md) lists what has to
+  come over, Sidestep's own savings among them, and what a first look at
+  0.12.0 found: the digits fixed, text that needs a generic family slower
+  than the branch, and a port of Sidestep's text code.
 
 Only the worker process, `aizome-shiori --worker`, one for each open
 document, runs hayro: a document can panic it or keep it busy, and the
