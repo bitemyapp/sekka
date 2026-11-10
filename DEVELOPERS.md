@@ -29,7 +29,8 @@ Sidestep (whose engine and native toolkit Sukumo continues), Upleft, Omperor, up
 ## Discord repository notifications
 
 `nix build .#sekka-discord --no-update-lock-file` builds the standalone Rust
-bot, embedded Diesel/SQLite migrations, and independent Python security monitor.
+bot, embedded Diesel/SQLite migrations, and the Python security monitor and
+deployer that run beside it under identities of their own.
 `nixosModules.sekka-discord` supplies the hardened system services. Yuki
 accepts signed GitHub webhooks on loopback behind Cloudflare Tunnel and posts
 through Discord REST; no Discord gateway or privileged intents are needed.
@@ -63,16 +64,46 @@ On every start, deployed Yuki opens `/var/lib/sekka-discord/state.sqlite3`, bind
 `X-Hub-Signature-256` against the exact body, validates the public repository's
 ID/name, and commits the delivery receipt and outbox transaction before HTTP 202.
 Payloads are bounded to 25 MiB. Missing, malformed, or duplicate signature
-headers receive 401 without reading the body; a well-formed signature is
-authenticated against the exact bytes before JSON parsing. Two immediate-admission
-slots cover body reading and blocking ingestion, including workers still running
-after an HTTP timeout or disconnect. Overload receives 503 rather than queuing
-bodies. Body reads have a 10-second deadline and requests a 20-second deadline.
-Oversized bodies receive 413; malformed payloads 400; wrong/private repositories
-403; uncommitted receipts 503. The local `/healthz` route is not exposed by the
-tunnel. Rejections are counted in bounded 60-second journal summaries rather than
-logging attacker-controlled request content. Outbound REST responses are limited
-to 16 MiB; redirects and inherited HTTP proxies are disabled.
+headers receive 401, bad delivery or event headers 400, and a declared length
+over the bound 413, all without reading the body; a well-formed signature is
+authenticated against the exact bytes, as they are read, before JSON parsing.
+Body reads have a 10-second deadline and requests a 20-second
+deadline. Oversized bodies receive 413; malformed payloads 400; wrong/private
+repositories 403; uncommitted receipts 503. The local `/healthz` route is not
+exposed by the tunnel. Rejections are counted in bounded 60-second journal
+summaries rather than logging attacker-controlled request content. Outbound REST
+responses are limited to 16 MiB; redirects and inherited HTTP proxies are
+disabled.
+
+A body is the only proof of the secret, so the listener has to read one for
+anyone who sends it. Admission is arranged so that senders it has not verified
+cost a signed delivery nothing, within a stated amount of memory:
+
+- Reading a body takes no slot. A sender that stalls holds only the bytes it has
+  sent, until its deadline.
+- Each connection may hold a request head of up to 64 KiB and the first 256 KiB
+  of a body. Bodies needing more draw on one shared allowance of 50 MiB; one
+  that finds it used up receives 503 at once. A delivery under 256 KiB, which
+  is nearly every delivery GitHub sends, is never crowded out by larger ones.
+- The listener holds at most 128 connections, well under the unit's 1,024 file
+  descriptors, and serves one request on each. A new connection is never kept
+  out: when all places are taken, the connection that has gone longest without
+  showing the secret is closed. A connection with no complete request head
+  after 5 seconds is closed, and every connection after 30.
+- The two workers that parse and commit are taken only after the signature
+  verifies. A verified delivery waits for one until its deadline, then receives
+  503; workers still running after an HTTP timeout or disconnect stay counted.
+
+Before a signature verifies, the listener therefore holds at most
+128 × (64 KiB + 256 KiB) + 50 MiB = 90 MiB of heads and bodies for all senders
+together. Verified bodies stay inside the same allowances until they are
+committed. The process's memory runs above what it holds: with 76 MiB of
+unverified bodies held it measured about 100 MiB resident, against the unit's
+limit of 512 MiB. The limits that remain: a delivery over 256 KiB can receive
+503 while unverified senders have filled the shared 50 MiB, which they must
+keep refilling every 10 seconds; and a process on the host itself can still
+open connections faster than the listener closes them. Connections closed for
+giving way or for sending no request head are counted with the rejections.
 
 Diesel uses SQLite WAL, full synchronous commits, and an exclusive state-directory
 lock. Receipts are unique by source and source ID; a delivery ID reused with
@@ -188,6 +219,14 @@ under `/run/systemd/system`; the system profile roots the permanent generation.
 Do not roll the system profile back to the pre-hardening generation without
 accounting for these services. A host reboot has not been exercised.
 
+Two parts described below were not running on the workstation as of 2026-11-10.
+Its monitor is the build from before `lanNetworks` existed and its unit lists no
+prefixes, so successful SSH logins from the home network are still reported.
+Deployment from `main` is not enabled: the host has no `yuki-deploy` identity,
+deployer unit or profile, and Yuki changes only when root rebuilds it from the
+`/etc/nixos` copies. Both start once those copies are updated to a revision
+that has them and that generation is activated.
+
 The remotely managed Cloudflare tunnel is `yuki-sekka`
 (`d6f32ec8-1638-4ea6-ad54-3090496b2be7`). Its proxied
 `yuki.sekka.computer` CNAME targets that UUID under `cfargotunnel.com`.
@@ -229,37 +268,57 @@ Neither host ingress ports nor a Discord gateway connection are required.
 ### Deploying from main
 
 With `services.sekka-discord.deploy.enable`, a host deploys Yuki's package from
-each successful **Yuki (manual)** run on `main`. Nothing on GitHub can reach the
-host for this: the runner keeps its unprivileged identity, the workflow its
-read-only token, and there is no deploy key or host credential anywhere. The host
-pulls instead. `sekka-discord-deploy.timer` runs the deployer every three minutes
-as `yuki-deploy` (UID/GID 983), a fourth isolated identity whose only egress is
-public HTTPS, fixed DNS and the bot's loopback health check. Each tick:
+each successful **Yuki (manual)** run on `main` made after it began looking.
+Nothing on GitHub can reach the host for this: the runner keeps its unprivileged
+identity, the workflow its read-only token, and there is no deploy key or host
+credential anywhere. The host pulls instead. `sekka-discord-deploy.timer` runs
+the deployer every three minutes as `yuki-deploy` (UID/GID 983), a fourth
+isolated identity whose own egress is public HTTPS, fixed DNS and the bot's
+loopback health check. Each tick:
 
 1. Asks GitHub's API, with a conditional request, for the latest successful
    `workflow_dispatch` run of `yuki.yml` on `main`. The run and its source must
    be this repository, and every job of that run attempt must have succeeded: a
    job skipped by the workflow's main-only guard is not a build.
-2. Builds the run's commit itself, `github:bitemyapp/sekka/<commit>#sekka-discord`,
+2. Takes that run only if it is newer than every run the host has settled and
+   its commit is the head of `main` or one of its ancestors, as described below.
+3. Builds the run's commit itself, `github:bitemyapp/sekka/<commit>#sekka-discord`,
    as an untrusted Nix user. The daemon builds or substitutes from its own trusted
    caches, and the package's tests run as part of the build.
-3. Switches `/var/lib/sekka-discord-deploy/profile` to the result and asks for a
+4. Switches `/var/lib/sekka-discord-deploy/profile` to the result and asks for a
    restart. `sekka-discord-deploy-restart.path` sees the request arrive and runs
    `systemctl restart sekka-discord.service` as root; root never reads the request
    or the profile.
-4. Requires the restarted bot to answer `/healthz` and stay up for ten seconds,
+5. Requires the restarted bot to answer `/healthz` and stay up for ten seconds,
    and the monitor's first tick on the new package to succeed if its last one did.
-   Otherwise it switches the profile back, restarts the bot again, and records that
-   run attempt as failed, never to be retried; re-running the workflow is a new
-   attempt.
+   Otherwise it returns to the package deployed before, or removes the profile
+   when there was none, restarts the bot again, and records that run attempt as
+   failed, never to be retried; re-running the workflow is a new attempt.
+
+The deployer never goes back to an earlier run and does not take a run's word
+for its branch. Its first tick on a host records the latest run and deploys
+nothing: a run from before the host looked was not a request to it, and its
+commit can be far older than the package the host already runs. After that a
+run is deployed only if its number is higher than that first one's and than
+every run deployed since. Run numbers only grow, so an older run becomes the
+latest only when later runs are deleted, and the deployer refuses it. The commit
+must also be the head of `refs/heads/main` or an ancestor of it, which the
+deployer asks GitHub about by commit: a run dispatched on a tag named `main`
+reports the same branch name and takes its workflow from the tag's commit. Both
+refusals reach the owner as a failed deployment. Another attempt of the run the
+host first recorded is not deployed either; dispatch a new run.
 
 The bot and monitor units run whatever the profile holds, and the host's `package`
-until the first deployment; the connector is untouched. Profile generations are
-garbage-collector roots, the newest five are kept, and they survive reboots. The
-switch is recorded in the deployer's private state first, so a deployment
-interrupted midway is rolled back by the next tick rather than trusted. A failed
-build is retried twice, 15 minutes apart. Failed or rolled-back deployments reach
-the owner as a security DM; successful ones are in the journal:
+while there is no profile: before the first deployment that passes its checks,
+and again after one that fails them with nothing deployed before. Once a
+deployment has passed, the profile outranks the host's `package`, a newer one
+from a later rebuild included, until the profile link is removed. The connector
+is untouched. Profile generations are garbage-collector roots, the newest five
+are kept, and they survive reboots. The switch is recorded in the deployer's
+private state first, so a deployment interrupted midway is rolled back by the
+next tick rather than trusted. A failed build is retried twice, 15 minutes
+apart. Failed, refused or rolled-back deployments reach the owner as a security
+DM; successful ones are in the journal:
 
 ```sh
 systemctl list-timers sekka-discord-deploy.timer
@@ -267,25 +326,36 @@ journalctl -u sekka-discord-deploy -u sekka-discord-deploy-restart
 readlink -f /var/lib/sekka-discord-deploy/profile
 ```
 
-Whoever can push to `main` or dispatch its workflows chooses the code Yuki runs,
+Whoever can push to `main` chooses the code Yuki runs once a run is dispatched,
 as merging already did; `main` is unprotected, and `bitemyapp` is the only
-collaborator. A compromised deployer could run any code as Yuki's identities,
-including the monitor that would report it, and restart the bot at will, but gains
-no root, no Nix trust, no credential and no LAN access. Only the package deploys
-this way: the units, sandboxing, egress policy, module options and the deployer
-itself come from the host's configuration and change only when root rebuilds it.
-A package needing a newer module fails its health checks and is rolled back until
-the host catches up. Rolling back does not undo SQLite migrations a newer bot
+collaborator. Whoever can only dispatch workflows deploys the head of `main` and
+nothing else. A deployed commit, or a compromised deployer, runs any code as
+`yuki` and `yuki-monitor` with everything those identities hold: the bot token,
+the webhook secret, read access to the whole system journal, and the monitor
+that would report it. It can restart the bot at will. While building it also has
+network access that the egress policy does not cover: the build goes through the
+Nix daemon, whose fixed-output derivations run as build users on the host's
+network and so reach the LAN and loopback services that Yuki's own identities
+cannot. It gains no root and no Nix trust. Only the package deploys this way: the
+units, sandboxing, egress policy, module options and the deployer itself come
+from the host's configuration and change only when root rebuilds it. A package
+needing a newer module fails its health checks and is rolled back; after
+updating the host's module, run the workflow again, because the failed attempt
+is not retried. Rolling back does not undo SQLite migrations a newer bot
 applied. Polling is unauthenticated: at most 20 requests an hour from the host's
-address, of GitHub's 60.
+address, of GitHub's 60, and up to three more for each run it considers.
 
-On wx-workstation, update the module and package copies in `/etc/nixos` to a
-revision that includes the deployer, then add `deploy.enable = true;` to
-`services.sekka-discord` in `sekka-discord-host.nix`. To go back to the host's own
-package, stop `sekka-discord-deploy.timer`, remove the profile link and restart
-`sekka-discord.service`. `checks.sekka-discord-deploy` exercises deployment,
-rollback, skipped runs and reboots in VMs, with stand-ins for the bot, monitor,
-connector and GitHub's API.
+The deployer is not enabled on wx-workstation yet. To enable it, update the
+module and package copies in `/etc/nixos` to a revision that includes the
+deployer, add `deploy.enable = true;` to `services.sekka-discord` in
+`sekka-discord-host.nix` and activate that generation. Wait for the deployer's
+first tick, which logs `DEPLOY baseline`, and only then dispatch the workflow. A
+run dispatched earlier is the one the first tick records, and it is never
+deployed; dispatch another. To go back to the host's own package, stop
+`sekka-discord-deploy.timer`, remove the profile link and restart
+`sekka-discord.service`. `checks.sekka-discord-deploy` exercises the first tick,
+deployment, both kinds of rollback, skipped, older and off-`main` runs and a
+reboot in VMs, with stand-ins for the bot, monitor, connector and GitHub's API.
 
 ### Host isolation and security alerts
 
@@ -318,11 +388,45 @@ The public tunnel still exposes only the exact webhook path. Even a compromised
 connector or changed remote ingress route cannot connect to host SSH, Docker,
 Nix, LAN services, or unrelated loopback listeners under this policy.
 
-`sekka-discord-monitor.timer` invokes the independent monitor roughly every
-60 seconds. `DISCORD_ALERT_USER_ID` is explicitly pinned to the application
-owner, `bitemyapp` (`869288104790458388`); it is not inferred from incoming events.
-It uses Yuki's bot identity to send **DMs**, never security reports to the public
-notifications channel. It reports:
+That table can be deleted, and a ruleset flush by other firewall tooling takes it
+too, while the units stay active: `sekka-discord-firewall.service` only records
+that it once loaded it. So each unit also carries `IPAddressDeny=` for the same
+private, shared-address, link-local, reserved and multicast IPv4 ranges and for
+all of IPv6. systemd enforces it in the unit's own control group, on packets in
+both directions, and no change to the tables reaches it. The two layers do not
+enforce the same things:
+
+- The LAN, other private IPv4 destinations and IPv6 are refused by both.
+- Loopback and the host's own public addresses are refused by the table alone.
+  The unit filter leaves loopback open, because the units reach each other there.
+- Ports, the fixed resolver and which identity may reach which public address
+  are the table's alone. Without it the connector, for one, can reach any public
+  address on any port.
+- The table applies to Yuki's identities wherever they run; the unit filter
+  applies to what runs inside the units. Builds that the deployer asks of the Nix
+  daemon run under neither, as described under [Deploying from main](#deploying-from-main).
+- The table refuses at once and logs; the unit filter drops in silence, so a
+  connection it stops times out and no denied-egress alert follows.
+
+After activating a generation that has the unit filter, check that it took
+effect. `systemctl show -p IPAddressDeny sekka-discord.service` lists the ranges
+whether or not they are enforced; systemd starts a unit without the filter, with
+one warning in the journal that the system does not support BPF/cgroup
+firewalling, when the kernel or control-group setup cannot attach it. With
+`bpftool`, `sudo bpftool cgroup show /sys/fs/cgroup/system.slice/sekka-discord.service`
+shows the ingress and egress programs. Then confirm that a webhook still reaches
+Discord, that `systemctl status sekka-discord-tunnel` shows registered
+connections and that the monitor's next tick succeeds: they prove the resolver,
+Discord, GitHub and Cloudflare's edge are still within reach.
+`checks.sekka-discord-deploy` proves both directions in a VM, from inside the
+units, with the table present and after `nft delete table inet yuki`.
+
+`sekka-discord-monitor.timer` invokes the monitor roughly every 60 seconds. It
+runs apart from the receiver, as its own process, identity and state.
+`DISCORD_ALERT_USER_ID` is explicitly pinned to the application owner,
+`bitemyapp` (`869288104790458388`); it is not inferred from incoming events.
+It sends **DMs** with Yuki's bot token, the same one the receiver holds, never
+security reports to the public notifications channel. It reports:
 
 - Bot/tunnel inactivity, failed loopback health/readiness checks and automatic
   restarts.
@@ -334,7 +438,7 @@ notifications channel. It reports:
   delegated prefix too if they connect over IPv6, and expect reports to resume
   if the ISP changes it.
 - Catch-up/dispatch errors and unresolved Discord sends.
-- Failed or rolled-back deployments.
+- Failed, refused or rolled-back deployments.
 - Less than 512 MiB or 5% free space on the state filesystem.
 - Journal coverage failures, retention gaps and collection backlogs.
 
@@ -381,11 +485,22 @@ The connector's metrics/readiness endpoint remains `127.0.0.1:20241`.
 This is process isolation on a shared kernel, not a VM boundary or proof against
 kernel exploits. The receiver and monitor can still send public IPv4 HTTPS and
 must possess the bot token; a compromise can abuse that token's remaining Discord
-permissions or exfiltrate to an external HTTPS service. The monitor is independent
-of the receiver, but cannot deliver while the host, monitor, network or Discord
-itself is unavailable. An off-host dead-man/uptime check is needed to cover that
-failure class. Journal access does not constitute a complete host intrusion
-detection system. Release publication remains inhibited and unchanged.
+permissions or exfiltrate to an external HTTPS service.
+
+The monitor is separate from the receiver in process, identity and state, and
+not in credential: both hold the one bot token. A compromised receiver could
+therefore send the owner DMs that read like the monitor's, delete the DMs the
+monitor has sent, and end their delivery altogether, for instance by taking the
+bot out of the community server it shares with the owner, after which Discord
+refuses the monitor's DMs and its ticks fail with nobody told. It could also
+keep the monitor's journal reading behind by logging more than 1,000 records a
+tick, which reaches the owner only as a repeated collection-backlog DM. A
+second Discord application for the monitor would take the first three away; it
+has not been created. Apart from a compromise, the monitor cannot deliver while
+the host, monitor, network or Discord itself is unavailable. An off-host
+dead-man/uptime check is needed to cover that failure class. Journal access
+does not constitute a complete host intrusion detection system. Release
+publication remains inhibited and unchanged.
 
 Hardening verification on 2026-11-05:
 
