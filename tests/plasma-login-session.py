@@ -136,14 +136,35 @@ def wait_plasma_panel(machine):
     raise AssertionError(("Plasma panel clock", text))
 
 
+def wait_greeter(machine):
+    # The greeter shows its controls over a blurred wallpaper for ten seconds
+    # after it starts, then only its clock over the sharp one until a key
+    # wakes it. The footer's "Show On-Screen Keyboard" is drawn in both
+    # states, but sparse OCR of the whole frame reads its small text only
+    # over the blur, and reads "Keyboard" off the boot console before any
+    # greeter (the kernel's "QEMU Virtio Keyboard"). Read the fixed 1280x800
+    # fixture's footer alone, enlarged four times, as one line.
+    deadline = time.monotonic() + 90
+    while time.monotonic() < deadline:
+        path = frame(machine, "greeter")
+        crop = path.with_name(path.stem + "-footer.png")
+        subprocess.run(["@magick@", str(path), "-crop", "240x30+0+768", "+repage", "-resize", "400%", "-colorspace", "Gray", "-normalize", str(crop)], check=True)
+        text = subprocess.check_output(["@tesseract@", str(crop), "stdout", "--psm", "7"], text=True, timeout=OCR_TIMEOUT).strip()
+        if re.search(r"Screen\W*Keyboard", text, re.IGNORECASE):
+            return
+        time.sleep(0.5)
+    raise AssertionError(("greeter footer", text))
+
+
 def login(machine, session="Xfce", expected_preselection=None):
     machine.wait_for_unit("display-manager.service")
     (Path(machine.out_dir) / (machine.name + "-login-configuration.txt")).write_text(
         machine.succeed("cat /etc/plasmalogin.conf.d/*.conf; systemctl cat plasmalogin.service")
     )
     # A running display-manager unit can precede the first greeter frame.
-    wait_word(machine, "Keyboard", timeout=90)
-    # Wake the greeter's normally hidden idle controls.
+    wait_greeter(machine)
+    # Show the controls if they are hidden. The space also lands in the
+    # password field, and the greeter doesn't hide a field with text in it.
     key(machine, "spc")
     wait_word(machine, "Demo", timeout=90)
     if expected_preselection:
