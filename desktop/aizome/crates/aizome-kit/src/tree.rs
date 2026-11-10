@@ -391,8 +391,11 @@ impl Tree {
         node.widget.hash(&mut PaintHasher(&mut fx));
         node.hash = fx.finish();
         let inner = if node.widget.clips() { clip.intersect(node.rect) } else { clip };
-        let mut bounds = node.own_rect();
+        // Its own rectangle (as `own_rect` has it) and what it surely
+        // covers, asking how far it draws outside itself once.
         let reach = node.widget.overflow();
+        let ring = if node.widget.focusable() != Focusable::No { 3.0 } else { 0.0 };
+        let mut bounds = node.rect.inflate(reach.max(ring), reach.max(ring)).intersect(clip);
         let mut covers = node.rect.inflate(reach, reach).intersect(clip);
         if !node.dead && node.widget.modal() {
             self.modal = Some(idx);
@@ -430,13 +433,17 @@ impl Tree {
         }
     }
 
-    /// What changed since `before` (the rectangles of nodes that moved,
-    /// resized, drew differently, came or went), where the pixels of `moved` regions
-    /// have moved: what moved with them needs nothing, and what changed
-    /// there is drawn where it is now and where its old pixels went. The
-    /// focused node (`focus`), whose ring reaches outside, is drawn again
-    /// if it moved.
-    pub fn diff_moved(&self, before: &Snapshot, moved: &[Moved], focus: Option<NodeId>) -> Vec<Rect> {
+    /// What changed since `drawn` was kept (the rectangles of nodes that
+    /// moved, resized, drew differently, came or went), where the pixels of
+    /// `moved` regions have moved: what moved with them needs nothing, and
+    /// what changed there is drawn where it is now and where its old pixels
+    /// went. The focused node (`focus`), whose ring reaches outside, is
+    /// drawn again if it moved.
+    ///
+    /// `drawn` is brought up to date as it's read: one look finds what a
+    /// node was and keeps what it is, where comparing and then keeping
+    /// were two for every node of every build.
+    pub fn diff_moved(&self, drawn: &mut Snapshot, moved: &[Moved], focus: Option<NodeId>) -> Vec<Rect> {
         let mut damage = Vec::new();
         // Which region each node's pixels were in.
         let mut region: Vec<Option<usize>> = Vec::new();
@@ -450,12 +457,18 @@ impl Tree {
                 }
             }
         }
+        let kept = drawn.len();
         let mut seen = 0usize;
         for (i, n) in self.nodes.iter().enumerate().filter(|(_, n)| !n.dead) {
             let now = n.own_rect();
-            let Some(was) = before.get(&n.id) else {
-                push_rect(&mut damage, now);
-                continue;
+            let is = Drawn { clip: now, hash: n.hash, rect: n.rect };
+            let was = match drawn.entry(n.id) {
+                Entry::Vacant(place) => {
+                    place.insert(is);
+                    push_rect(&mut damage, now);
+                    continue;
+                }
+                Entry::Occupied(mut place) => std::mem::replace(place.get_mut(), is),
             };
             seen += 1;
             match region.get(i).copied().flatten().map(|m| moved[m]) {
@@ -478,20 +491,23 @@ impl Tree {
                 }
             }
         }
-        if seen < before.len() {
-            for (id, was) in before {
-                if !self.by_id.get(id).is_some_and(|&i| !self.nodes[i].dead) {
-                    match moved.iter().find(|m| m.rect.intersect(was.clip).area() > 0.0) {
-                        Some(m) => {
-                            push_rect(&mut damage, m.carried(was.clip));
-                            for r in outside(was.clip, m.rect) {
-                                push_rect(&mut damage, r);
-                            }
-                        }
-                        None => push_rect(&mut damage, was.clip),
-                    }
+        if seen < kept {
+            // Some that were drawn are gone.
+            drawn.retain(|id, was| {
+                if self.by_id.get(id).is_some_and(|&i| !self.nodes[i].dead) {
+                    return true;
                 }
-            }
+                match moved.iter().find(|m| m.rect.intersect(was.clip).area() > 0.0) {
+                    Some(m) => {
+                        push_rect(&mut damage, m.carried(was.clip));
+                        for r in outside(was.clip, m.rect) {
+                            push_rect(&mut damage, r);
+                        }
+                    }
+                    None => push_rect(&mut damage, was.clip),
+                }
+                false
+            });
         }
         damage
     }

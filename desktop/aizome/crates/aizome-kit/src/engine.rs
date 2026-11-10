@@ -751,13 +751,13 @@ impl Core {
         };
         tree.layout_window(w.size, &mut env);
         let damage = if w.built {
-            settle(&mut tree, &w.snapshot, w.focused, win, platform)
+            settle(&mut tree, &mut w.snapshot, w.focused, win, platform)
         } else {
             tree.scrolls.clear();
             tree.local_damage.clear();
+            tree.snapshot_into(&mut w.snapshot);
             vec![Rect::from_origin_size(Point::ZERO, w.size)]
         };
-        tree.snapshot_into(&mut w.snapshot);
         let ticks = std::mem::take(&mut tree.ticks);
         let widget_timers = std::mem::take(&mut tree.widget_timers);
         w.tree = tree;
@@ -921,8 +921,7 @@ impl Core {
         if dead > 256 && dead > w.tree.nodes.len() / 2 {
             w.tree.compact();
         }
-        let damage = settle(&mut w.tree, &w.snapshot, w.focused, win, platform);
-        w.tree.snapshot_into(&mut w.snapshot);
+        let damage = settle(&mut w.tree, &mut w.snapshot, w.focused, win, platform);
         let ticks = std::mem::take(&mut w.tree.ticks);
         let widget_timers = std::mem::take(&mut w.tree.widget_timers);
         let live = &w.tree.by_id;
@@ -971,16 +970,16 @@ impl Core {
         let size = tree.layout_free(Size::new(1200.0, tall), &mut env);
         let size = Size::new(size.width.ceil(), size.height.ceil());
         if w.built && size == w.size {
-            for r in settle(&mut tree, &w.snapshot, w.focused, win, platform) {
+            for r in settle(&mut tree, &mut w.snapshot, w.focused, win, platform) {
                 platform.invalidate(win, r);
             }
         } else {
             tree.scrolls.clear();
             tree.local_damage.clear();
+            tree.snapshot_into(&mut w.snapshot);
             platform.invalidate_all(win);
         }
         w.size = size;
-        tree.snapshot_into(&mut w.snapshot);
         w.tree = tree;
         w.built = true;
         w.dirty = false;
@@ -1064,17 +1063,17 @@ impl Core {
         let size = Size::new(natural.width.ceil().max(w.size.width), height);
         tree.layout_window(size, &mut env);
         if size == w.size {
-            for r in settle(&mut tree, &w.snapshot, w.focused, win, platform) {
+            for r in settle(&mut tree, &mut w.snapshot, w.focused, win, platform) {
                 platform.invalidate(win, r);
             }
         } else {
             w.size = size;
             tree.scrolls.clear();
             tree.local_damage.clear();
+            tree.snapshot_into(&mut w.snapshot);
             platform.request_size(win, size);
             platform.invalidate_all(win);
         }
-        tree.snapshot_into(&mut w.snapshot);
         w.tree = tree;
         w.dirty = false;
     }
@@ -2923,13 +2922,12 @@ impl Core {
     }
 }
 
-/// An event in a widget's own coordinates.
-/// The damage of `tree` laid out anew since `before`: content that
-/// scrolled moves as pixels (the platform hears that first), and the
-/// rest is drawn again.
+/// The damage of `tree` laid out anew since `drawn` was kept: content
+/// that scrolled moves as pixels (the platform hears that first), and the
+/// rest is drawn again. `drawn` then holds the tree as it is now.
 fn settle(
     tree: &mut Tree,
-    before: &Snapshot,
+    drawn: &mut Snapshot,
     focus: Option<NodeId>,
     win: WinId,
     platform: &mut dyn Platform,
@@ -2938,15 +2936,16 @@ fn settle(
     // compare, or where moving pixels misbehaves).
     static DRAW_SCROLLS: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     let draw = *DRAW_SCROLLS.get_or_init(|| std::env::var_os("AIZOME_NO_PIXEL_SCROLL").is_some_and(|v| v != "0"));
-    let (moved, mut damage) = tree.take_scrolls(before, !draw);
+    let (moved, mut damage) = tree.take_scrolls(drawn, !draw);
     for m in &moved {
         platform.scroll(win, m.rect, m.delta);
     }
-    damage.extend(tree.diff_moved(before, &moved, focus));
+    damage.extend(tree.diff_moved(drawn, &moved, focus));
     damage.extend(tree.take_local_damage());
     damage
 }
 
+/// An event in a widget's own coordinates.
 fn localize(ev: &Event, origin: Vec2) -> Event {
     match ev {
         Event::PointerMove { pos, mods } => Event::PointerMove { pos: *pos - origin, mods: *mods },
