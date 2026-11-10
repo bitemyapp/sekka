@@ -16,7 +16,9 @@ import deploy
 
 OLD = "/nix/store/" + "0" * 32 + "-sekka-discord-0.1.0"
 NEW = "/nix/store/" + "1" * 32 + "-sekka-discord-0.1.0"
+NEWER = "/nix/store/" + "2" * 32 + "-sekka-discord-0.1.0"
 REV = "a" * 40
+LATER = "b" * 40
 
 
 def workflow_run(**fields):
@@ -32,10 +34,14 @@ def job(**fields):
 
 
 class FakeGitHub(deploy.GitHub):
+    """main's head is the latest run's commit, unless a test says main has moved on."""
+
     def __init__(self, runs, jobs=None):
         super().__init__("https://api.github.com", "bitemyapp/sekka")
         self.runs = runs
         self.jobs = [job()] if jobs is None else jobs
+        self.moved = None
+        self.ancestors = set()
         self.requests = []
         self.unchanged = 0
 
@@ -43,6 +49,14 @@ class FakeGitHub(deploy.GitHub):
         self.requests.append(path)
         if "/jobs" in path:
             return {"total_count": len(self.jobs), "jobs": self.jobs}, None
+        head = self.moved or (self.runs[0]["head_sha"] if self.runs else REV)
+        if "/git/ref/heads/" in path:
+            return {"ref": "refs/heads/main", "object": {"type": "commit", "sha": head}}, None
+        if "/compare/" in path:
+            base, sha = path.rsplit("/", 1)[1].split("...")
+            behind = base == head and sha in self.ancestors
+            return {"status": "behind" if behind else "diverged", "ahead_by": 0 if behind else 1, "behind_by": 3,
+                    "merge_base_commit": {"sha": sha if behind else "f" * 40}}, None
         tag = '"' + hashlib.sha256(json.dumps(self.runs).encode()).hexdigest() + '"'
         if etag == tag:
             self.unchanged += 1
@@ -79,12 +93,21 @@ class FakeSystem:
             raise self.result
         return self.result
 
+    def deployed(self):
+        return self.profile
+
     def current(self):
         return self.profile or self.fallback
 
     def switch(self, path):
         self.switches.append(path)
         self.profile = path
+
+    def restore(self, previous):
+        if previous is None:
+            self.profile = None
+        else:
+            self.switch(previous)
 
     def discard_candidate(self):
         self.discarded += 1
@@ -110,9 +133,14 @@ class FakeSystem:
         return {"InvocationID": str(self.invocation), "ActiveState": "active"}
 
 
+def listening_state():
+    """A deployer that has already taken its first look and found no run."""
+    return {**deploy.new_state(), "floor": 0}
+
+
 class DeployTests(unittest.TestCase):
     def setUp(self):
-        self.state = deploy.new_state()
+        self.state = listening_state()
         self.saves = []
         self.system = FakeSystem()
         self.output = io.StringIO()
@@ -129,13 +157,71 @@ class DeployTests(unittest.TestCase):
         self.assertEqual(self.system.built, [REV])
         self.assertEqual(self.system.switches, [NEW])
         self.assertEqual(self.system.running, NEW)
-        self.assertEqual(self.state["deployed"], REV)
+        self.assertEqual((self.state["deployed"], self.state["floor"]), (REV, 7))
         self.assertIsNone(self.state["switching"])
         # Persisted before the profile changed, so a crash cannot skip verification.
-        self.assertEqual(self.saves[-1]["switching"], {"key": "7.1", "rev": REV, "previous": OLD})
+        # No package was deployed before: going back means this host's own.
+        self.assertEqual(self.saves[-1]["switching"], {"key": "7.1", "rev": REV, "previous": None})
         self.assertEqual(self.system.discarded, 1)
         self.assertIn(f"DEPLOY succeeded rev={REV} path={NEW}", self.output.getvalue())
-        deploy.validate_state(json.loads(json.dumps(self.state)))
+        for state in (self.state, self.saves[-1]):
+            deploy.validate_state(json.loads(json.dumps(state)))
+
+    def test_first_look_records_the_latest_run_and_deploys_only_later_ones(self):
+        # A host that has just enabled deployment, with a run from before it did.
+        self.state = deploy.new_state()
+        github = FakeGitHub([workflow_run()])
+        self.assertEqual(self.tick(github), "baseline recorded")
+        self.assertEqual(self.state["floor"], 7)
+        self.assertEqual(self.tick(github), "up to date")
+        # Another attempt of that run is still the request from before.
+        github.runs = [workflow_run(run_attempt=2)]
+        self.assertEqual(self.tick(github), "up to date")
+        self.assertEqual((self.system.built, self.state["failed"]), ([], []))
+        self.assertFalse(any("/jobs" in path for path in github.requests))
+        # A run dispatched since is deployed, of the same commit or another.
+        github.runs = [workflow_run(id=8)]
+        self.assertEqual(self.tick(github), "deployed")
+        self.assertEqual((self.state["deployed"], self.state["floor"]), (REV, 8))
+
+    def test_first_look_without_any_run_lets_the_first_run_deploy(self):
+        self.state = deploy.new_state()
+        github = FakeGitHub([])
+        self.assertEqual(self.tick(github), "baseline recorded")
+        self.assertEqual(self.state["floor"], 0)
+        self.assertEqual(self.tick(github), "no successful run")
+        github.runs = [workflow_run()]
+        self.assertEqual(self.tick(github), "deployed")
+
+    def test_older_run_is_refused_when_a_later_one_is_gone(self):
+        github = FakeGitHub([workflow_run(id=7)])
+        self.assertEqual(self.tick(github), "deployed")
+        github.runs, github.jobs = [workflow_run(id=8, head_sha=LATER)], [job(head_sha=LATER)]
+        self.system.result = NEWER
+        self.assertEqual(self.tick(github), "deployed")
+        # Run 8 is deleted on GitHub: the latest successful run on main is 7 again.
+        github.runs, github.jobs = [workflow_run(id=7)], [job()]
+        self.system.result = NEW
+        self.assertEqual(self.tick(github), "refused")
+        self.assertEqual((self.state["deployed"], self.state["floor"], self.system.running), (LATER, 8, NEWER))
+        self.assertEqual((self.system.built, self.system.switches), ([REV, LATER], [NEW, NEWER]))
+        self.assertIn("DEPLOY FAILED run=7: older than run 8", self.output.getvalue())
+        self.assertEqual(self.tick(github), "up to date")
+        self.assertEqual(self.output.getvalue().count("DEPLOY FAILED"), 1)
+
+    def test_commit_must_be_the_head_of_main_or_one_of_its_ancestors(self):
+        # A run dispatched on a tag named main reports the branch name "main" as well.
+        github = FakeGitHub([workflow_run()])
+        github.moved = LATER
+        self.assertEqual(self.tick(github), "refused")
+        self.assertEqual((self.system.built, self.state["failed"]), ([], ["7.1"]))
+        self.assertIn(f"DEPLOY FAILED rev={REV} run=7: the commit is not on main", self.output.getvalue())
+        self.assertEqual(self.tick(github), "up to date")
+        # main moved on while the run was building: its commit is still on main.
+        github.runs = [workflow_run(id=8)]
+        github.ancestors = {REV}
+        self.assertEqual(self.tick(github), "deployed")
+        self.assertIn(f"/repos/bitemyapp/sekka/compare/{LATER}...{REV}", github.requests)
 
     def test_unchanged_runs_list_and_deployed_revision_do_nothing(self):
         github = FakeGitHub([workflow_run()])
@@ -150,11 +236,14 @@ class DeployTests(unittest.TestCase):
         github = FakeGitHub([workflow_run()])
         with self.assertRaises(deploy.DeployError):
             self.tick(github)
-        self.assertEqual(self.system.switches, [NEW, OLD])
+        # Nothing was deployed before, so no profile is left to outrank this host's package.
+        self.assertEqual(self.system.switches, [NEW])
+        self.assertIsNone(self.system.profile)
         self.assertEqual(self.system.running, OLD)
         self.assertIsNone(self.state["deployed"])
-        self.assertEqual(self.state["failed"], ["7.1"])
-        self.assertIn("DEPLOY FAILED rev=" + REV, self.output.getvalue())
+        self.assertEqual((self.state["failed"], self.state["floor"]), (["7.1"], 0))
+        self.assertIn(f"DEPLOY FAILED rev={REV}: health checks did not pass; restored this host's package",
+                      self.output.getvalue())
         self.assertEqual(self.tick(github), "up to date")
         self.assertEqual(self.system.built, [REV])
         # Re-running the workflow is how an operator asks for another attempt.
@@ -162,11 +251,25 @@ class DeployTests(unittest.TestCase):
         self.system.broken = set()
         self.assertEqual(self.tick(github), "deployed")
 
+    def test_unhealthy_bot_is_rolled_back_to_the_package_deployed_before(self):
+        github = FakeGitHub([workflow_run()])
+        self.assertEqual(self.tick(github), "deployed")
+        github.runs, github.jobs = [workflow_run(id=8, head_sha=LATER)], [job(head_sha=LATER)]
+        self.system.result = NEWER
+        self.system.broken = {NEWER}
+        with self.assertRaises(deploy.DeployError):
+            self.tick(github)
+        self.assertEqual(self.system.switches, [NEW, NEWER, NEW])
+        self.assertEqual((self.system.profile, self.system.running), (NEW, NEW))
+        self.assertEqual((self.state["deployed"], self.state["floor"]), (REV, 7))
+        self.assertIn(f"restored {NEW}", self.output.getvalue())
+
     def test_monitor_regression_rolls_back(self):
         self.system.broken_monitor = {NEW}
         with self.assertRaises(deploy.DeployError):
             self.tick(FakeGitHub([workflow_run()]))
-        self.assertEqual(self.system.switches, [NEW, OLD])
+        self.assertEqual(self.system.switches, [NEW])
+        self.assertIsNone(self.system.profile)
         self.assertEqual(self.state["failed"], ["7.1"])
 
     def test_monitor_already_failing_is_not_blamed_on_the_deploy(self):
@@ -175,7 +278,7 @@ class DeployTests(unittest.TestCase):
 
     def test_run_whose_job_was_skipped_or_missing_is_not_deployed(self):
         for jobs in ([job(conclusion="skipped")], [], [job(head_sha="b" * 40)]):
-            self.state = deploy.new_state()
+            self.state = listening_state()
             self.assertEqual(self.tick(FakeGitHub([workflow_run()], jobs)), "skipped")
             self.assertEqual(self.state["failed"], ["7.1"])
         self.assertEqual(self.system.built, [])
@@ -208,16 +311,25 @@ class DeployTests(unittest.TestCase):
         self.assertEqual(self.tick(FakeGitHub([workflow_run()])), "unchanged")
         self.assertEqual(self.system.switches, [])
         self.assertEqual(self.system.invocation, 1)
-        self.assertEqual(self.state["deployed"], REV)
+        self.assertEqual((self.state["deployed"], self.state["floor"]), (REV, 7))
 
     def test_interrupted_deployment_is_rolled_back_by_the_next_tick(self):
-        self.state["switching"] = {"key": "7.1", "rev": REV, "previous": OLD}
-        self.system.profile = self.system.running = NEW
+        self.state["switching"] = {"key": "7.1", "rev": REV, "previous": NEW}
+        self.system.profile = self.system.running = NEWER
         self.assertEqual(self.tick(FakeGitHub([workflow_run()])), "up to date")
-        self.assertEqual(self.system.switches, [OLD])
-        self.assertEqual(self.system.running, OLD)
+        self.assertEqual(self.system.switches, [NEW])
+        self.assertEqual(self.system.running, NEW)
         self.assertEqual(self.state["failed"], ["7.1"])
         self.assertIsNone(self.saves[0]["switching"])
+
+    def test_interrupted_first_deployment_leaves_this_hosts_package(self):
+        self.state["switching"] = {"key": "7.1", "rev": REV, "previous": None}
+        self.system.profile = self.system.running = NEW
+        self.assertEqual(self.tick(FakeGitHub([workflow_run()])), "up to date")
+        self.assertEqual(self.system.switches, [])
+        self.assertIsNone(self.system.profile)
+        self.assertEqual(self.system.running, OLD)
+        self.assertIn("rolled back to this host's package", self.output.getvalue())
 
     def test_rate_limit_defers_every_request(self):
         github = FakeGitHub([workflow_run()])
@@ -264,6 +376,60 @@ class GitHubTests(unittest.TestCase):
             with self.assertRaises(deploy.DeployError):
                 deploy.GitHub(api, "bitemyapp/sekka")
 
+    def test_rejected_and_oversized_responses_are_errors(self):
+        github = deploy.GitHub("https://api.github.com", "bitemyapp/sekka")
+        patcher, _ = self.response(404)
+        with patcher, self.assertRaises(deploy.DeployError) as error:
+            github.get("/x")
+        self.assertNotIsInstance(error.exception, deploy.TooLarge)
+        patcher, _ = self.response(200, b" " * (deploy.MAX_HTTP + 1))
+        with patcher, self.assertRaises(deploy.TooLarge):
+            github.get("/x")
+
+    def test_branch_head_is_the_branch_reference_and_nothing_else(self):
+        github = deploy.GitHub("https://api.github.com", "bitemyapp/sekka")
+        commit = {"type": "commit", "sha": REV}
+        with mock.patch.object(github, "get", return_value=({"ref": "refs/heads/main", "object": commit}, None)) as get:
+            self.assertEqual(github.branch_head("main"), REV)
+        get.assert_called_once_with("/repos/bitemyapp/sekka/git/ref/heads/main")
+        for body in ({"ref": "refs/tags/main", "object": commit}, {"ref": "refs/heads/maintenance", "object": commit},
+                     {"ref": "refs/heads/main", "object": {"type": "tag", "sha": REV}},
+                     {"ref": "refs/heads/main", "object": {"type": "commit", "sha": "main"}},
+                     [{"ref": "refs/heads/main", "object": commit}]):
+            with mock.patch.object(github, "get", return_value=(body, None)):
+                with self.assertRaises(deploy.DeployError, msg=str(body)):
+                    github.branch_head("main")
+
+    def test_commit_is_on_the_branch_only_as_its_head_or_strictly_behind_it(self):
+        github = deploy.GitHub("https://api.github.com", "bitemyapp/sekka")
+
+        def api(comparison):
+            def get(path, etag=None):
+                if "/git/ref/heads/" in path:
+                    return {"ref": "refs/heads/main", "object": {"type": "commit", "sha": LATER}}, None
+                self.assertEqual(path, f"/repos/bitemyapp/sekka/compare/{LATER}...{REV}")
+                if isinstance(comparison, Exception):
+                    raise comparison
+                return comparison, None
+            return mock.patch.object(github, "get", side_effect=get)
+
+        with api(None) as get:
+            self.assertIs(github.on_branch(LATER, "main"), True)
+        get.assert_called_once()
+        for comparison, expected in (
+                ({"status": "behind", "ahead_by": 0, "merge_base_commit": {"sha": REV}}, True),
+                ({"status": "diverged", "ahead_by": 1, "merge_base_commit": {"sha": "c" * 40}}, False),
+                ({"status": "ahead", "ahead_by": 2, "merge_base_commit": {"sha": LATER}}, False),
+                ({"status": "behind", "ahead_by": 0, "merge_base_commit": {"sha": "c" * 40}}, False),
+                ({"status": "behind", "ahead_by": 1, "merge_base_commit": {"sha": REV}}, False),
+                ({"status": "identical", "ahead_by": 0, "merge_base_commit": {"sha": REV}}, False),
+                # A commit that is not behind the head comes with its changes, of any size.
+                (deploy.TooLarge("GitHub API response exceeds its size limit"), False)):
+            with api(comparison):
+                self.assertIs(github.on_branch(REV, "main"), expected, msg=str(comparison))
+        with api({"status": "behind"}), self.assertRaises(deploy.DeployError):
+            github.on_branch(REV, "main")
+
 
 class SystemTests(unittest.TestCase):
     def test_restart_waits_for_a_new_invocation_and_steady_health(self):
@@ -293,6 +459,28 @@ class SystemTests(unittest.TestCase):
             self.assertEqual(run.call_args.args[0][-4:], ["--no-link", "--profile", str(root / "profile"), str(package)])
             self.assertEqual(sorted(p.name for p in root.glob("profile-*-link")),
                              [f"profile-{n}-link" for n in range(5, 10)])
+
+    def test_restore_returns_to_a_deployed_package_or_removes_the_profile(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(os.path.realpath(directory))
+            package = root / "package"
+            package.mkdir()
+            for number in (1, 2):
+                (root / f"profile-{number}-link").symlink_to(package)
+            (root / "profile").symlink_to("profile-2-link")
+            (root / "state.json").touch()
+            system = deploy.System(root, OLD, "github:bitemyapp/sekka/{rev}#sekka-discord")
+            with mock.patch.object(deploy, "STORE_PATH", re.compile(re.escape(str(package)))):
+                self.assertEqual((system.deployed(), system.current()), (str(package), str(package)))
+                with mock.patch.object(system, "switch") as switch:
+                    system.restore(str(package))
+                switch.assert_called_once_with(str(package))
+                self.assertTrue((root / "profile").is_symlink())
+                # With no earlier deployment, nothing may stay that Yuki's launchers would prefer.
+                system.restore(None)
+                self.assertEqual(sorted(entry.name for entry in root.iterdir()), ["package", "state.json"])
+                self.assertEqual((system.deployed(), system.current()), (None, OLD))
+                system.restore(None)
 
     def test_build_requires_one_store_path_with_both_programs(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -330,6 +518,26 @@ class SystemTests(unittest.TestCase):
                 (Path(directory) / "state.json").write_text('{"version": 1, "failed": "everything"}')
                 with self.assertRaises(deploy.DeployError):
                     store.load()
+
+    def test_state_file_must_be_private_and_earlier_state_gains_a_floor(self):
+        with tempfile.TemporaryDirectory() as directory:
+            os.chmod(directory, 0o755)
+            path = Path(directory) / "state.json"
+            earlier = deploy.new_state()
+            del earlier["floor"]
+            with deploy.Store(directory) as store:
+                path.write_text(json.dumps(earlier))
+                path.chmod(0o600)
+                self.assertEqual(store.load(), deploy.new_state())
+                for mode in (0o640, 0o604):
+                    path.chmod(mode)
+                    with self.assertRaises(deploy.DeployError, msg=oct(mode)):
+                        store.load()
+                for floor in (-1, True, "7", 7.0):
+                    path.write_text(json.dumps({**deploy.new_state(), "floor": floor}))
+                    path.chmod(0o600)
+                    with self.assertRaises(deploy.DeployError, msg=repr(floor)):
+                        store.load()
 
     def test_missing_settings_fail_before_any_request(self):
         with mock.patch.dict(os.environ, {"SEKKA_DEPLOY_REPOSITORY": "bitemyapp/sekka"}, clear=True), \

@@ -26,7 +26,7 @@ let
   ];
   deployDirectory = "/var/lib/sekka-discord-deploy";
   # With deployment on, Yuki's identities run the deployed profile, or this
-  # host's package until the first deployment.
+  # host's package while there is none.
   launch =
     name:
     if cfg.deploy.enable then
@@ -177,10 +177,10 @@ in
     deploy = {
       enable = lib.mkEnableOption ''
         deploying Yuki's package from each successful Yuki workflow run on the
-        repository's main branch. The deploying identity builds the run's commit
-        itself and can only change which package Yuki's identities run; their
-        units, sandboxing and egress policy still come from this host's
-        configuration'';
+        repository's main branch made after this host first looked. The
+        deploying identity builds the run's commit itself and can only change
+        which package Yuki's identities run; their units, sandboxing and egress
+        policy still come from this host's configuration'';
       repository = lib.mkOption {
         type = lib.types.strMatching "[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+";
         default = "bitemyapp/sekka";
