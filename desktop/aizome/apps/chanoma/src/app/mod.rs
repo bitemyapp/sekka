@@ -302,6 +302,11 @@ pub struct Config {
     /// Play every game with these entry points rather than a core
     /// library (tests).
     pub core_override: Option<crate::retro::ffi::Api>,
+    /// Offer cores only the free BIOS images packaged with Chanoma
+    /// (`CHANOMA_FREE_BIOS=1`): none kept by the games, and a system folder
+    /// of their own, where no console's own BIOS was linked before. Every
+    /// system plays as on a new installation.
+    pub free_bios: bool,
     /// Stop tidily when asked by a signal (`signals::block` was called).
     pub signals: bool,
     /// The computer's account Chanoma runs as (its login name and name),
@@ -349,6 +354,7 @@ impl Config {
             fullscreen: true,
             scan: true,
             core_override: None,
+            free_bios: std::env::var("CHANOMA_FREE_BIOS").is_ok_and(|v| v == "1"),
             signals: false,
             account: aizome_sys::pam::current_user(),
             authenticator: std::sync::Arc::new(aizome_sys::pam::Pam::new("aizome")),
@@ -2333,5 +2339,31 @@ mod tests {
         // One its database doesn't know isn't asked for by its file's name.
         let unknown = crate::library::Game { known_as: None, ..g };
         assert_eq!(app.box_art(&unknown), None);
+    }
+
+    #[test]
+    fn with_only_free_bios_the_bios_by_the_games_is_left_out() {
+        let root = std::env::temp_dir().join(format!("chanoma-unit-free-bios-{}", std::process::id()));
+        let games = root.join("Games");
+        std::fs::create_dir_all(games.join("psx")).unwrap();
+        std::fs::create_dir_all(root.join("bios")).unwrap();
+        std::fs::write(root.join("bios/scph5501.bin"), b"a console's own").unwrap();
+        let dirs = Dirs::under(&root);
+        let mut app = Chanoma::new(Config { dirs: dirs.clone(), scan: false, pads: false, ..Config::standard() });
+        app.settings.folders = vec![games.clone()];
+        let g = crate::library::Game {
+            key: "psx/Test Quest (USA).cue".into(),
+            title: "Test Quest".into(),
+            path: games.join("psx/Test Quest (USA).cue"),
+            system: crate::library::system("psx").unwrap(),
+            art: None,
+            info: None,
+            known_as: None,
+        };
+        let own = vec![(PathBuf::from("scph5501.bin"), root.join("bios/scph5501.bin"))];
+        assert_eq!(app.bios_for(&g), (dirs.system(), own));
+        app.config.free_bios = true;
+        assert_eq!(app.bios_for(&g), (dirs.free_system(), Vec::new()), "a folder of its own, none of the games'");
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

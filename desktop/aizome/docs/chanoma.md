@@ -325,8 +325,19 @@ pausing, saving and leaving are Chanoma's.
 - **Which core**: a system's cores are tried best first; one that plays
   nothing without its console's BIOS (Beetle Saturn, PCSX2) is chosen only
   where that's there, else the next (Yabause and Play!, which stand in
-  for it). Flycast stands in for the Dreamcast's BIOS by itself where it
-  isn't there. Flycast draws at twice the console's 640 by 480
+  for it). PCSX2's BIOS counts only as a 4 MiB image in `pcsx2/bios`, not
+  the settings PCSX2 writes beside it, which stay when the drive with the
+  BIOS is taken out. Flycast stands in for the Dreamcast's BIOS by itself
+  where it isn't there.
+- **Only free BIOS images** (`CHANOMA_FREE_BIOS=1`, for checking that
+  every system plays as on a new installation): no `bios` folder by the
+  games is looked in, and cores get a system folder of their own,
+  `system-free` beside `system`, holding only `$CHANOMA_BIOS`'s (OpenBIOS),
+  as `system` keeps links to a console's own BIOS from earlier games. So
+  the PlayStation plays with OpenBIOS, the Saturn with Yabause, the
+  PlayStation 2 with Play!, and the Dreamcast and Game Boy Advance with
+  their cores' stand-ins. Flycast's memory cards and settings are in the
+  system folder, so the Dreamcast's saves are kept apart in this mode. Flycast draws at twice the console's 640 by 480
   (`reicast_internal_resolution`: its options keep Reicast's names), for
   a television.
 - **Picture**: each frame is converted to XRGB8888 and enlarged by a whole
@@ -1038,7 +1049,8 @@ cargo run --release -p aizome-chanoma --example library -- FOLDER… \
   none of them; read once, then known from the index), BIOS images by a
   collection's games offered as the cores look (the PlayStation 2's,
   North America's first; a grown-up's own kept; a drive's taken out let
-  go) and the core chosen by them, through the files
+  go, PCSX2's settings left behind not taken for its BIOS) and the core
+  chosen by them, none of them with only free BIOS images, through the files
   index, layouts, and a language chosen found again in the next episode
   (by name, `en` as `eng`; by place without one; none rather than
   another language), and the sites a page may be on (subdomains; not
@@ -1376,7 +1388,9 @@ before calling any of it tested on hardware.
   plays fewer games than PCSX2, and no playlists; a disc it can't boot
   ends its game with what it said. Chanoma doesn't help anyone come by a
   console's BIOS: it's the console maker's, and a grown-up copies it from
-  their own console.
+  their own console. Its screens don't say which core plays a game or
+  whether a BIOS was found; only Play!'s failure points to PCSX2 and the
+  `bios` folder.
 - A core that crashes takes Chanoma with it (cores run in its process),
   and Chanoma starts again saying so (After a crash): the game since it
   last saved is lost. A core that hangs without crashing isn't noticed.

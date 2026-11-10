@@ -7,7 +7,8 @@
 //!   and controllers' button layouts set up here (`controllers.json`);
 //! - `$XDG_DATA_HOME/aizome/chanoma/`: games' saves (`saves/`), where they
 //!   were left (`states/`), each service's browser profile (`browser/`)
-//!   and BIOS files cores ask for (`system/`).
+//!   and BIOS files cores ask for (`system/`; `system-free/` when only
+//!   the free ones are offered).
 //! - `$XDG_CACHE_HOME/aizome/chanoma/unzipped/`: the last few zipped games
 //!   played, unpacked for their cores.
 //! - `$XDG_CACHE_HOME/aizome/chanoma/art/`: games' box art fetched from
@@ -88,6 +89,12 @@ impl Dirs {
 
     pub fn system(&self) -> PathBuf {
         self.data.join("system")
+    }
+
+    /// The cores' system folder when they're offered only free BIOS
+    /// images (`Config::free_bios`).
+    pub fn free_system(&self) -> PathBuf {
+        self.data.join("system-free")
     }
 
     pub fn browser(&self) -> PathBuf {
