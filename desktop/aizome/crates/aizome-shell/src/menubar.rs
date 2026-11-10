@@ -67,7 +67,8 @@ pub enum Slot {
 /// The systray's widgets.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum TrayWidget {
-    /// Keep Awake's cup, shown while it's on.
+    /// The cup, shown while Keep Awake is on, and while apps hold the
+    /// screen on ([`Cup`]).
     Awake,
     Network,
     Sound,
@@ -105,6 +106,32 @@ impl TrayWidget {
     }
 }
 
+/// What the cup at the front of the systray shows for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Cup {
+    /// Keep Awake is on and logind holds its locks: kohaku amber.
+    KeepAwake,
+    /// Keep Awake is on, but its locks aren't there (sleep may happen):
+    /// red.
+    Unprotected,
+    /// Keep Awake is off, and this many apps hold the screen on: the
+    /// bar's own colour, as the other widgets', since nothing here was
+    /// switched on and only the screen is held.
+    Apps(usize),
+}
+
+impl Cup {
+    /// What it says to a screen reader, and to tests.
+    pub fn label(self) -> String {
+        match self {
+            Cup::KeepAwake => "Keep Awake is on".into(),
+            Cup::Unprotected => "Keep Awake is on, but not working: the computer may sleep".into(),
+            Cup::Apps(1) => "An app is keeping the screen on".into(),
+            Cup::Apps(n) => format!("{n} apps are keeping the screen on"),
+        }
+    }
+}
+
 /// What the systray shows: each widget's state, `None` where its hardware
 /// is absent (or the setting hides it).
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -121,8 +148,10 @@ pub struct Tray {
     /// The battery's glyph alone, without its percentage (`[menubar]
     /// battery_percent = false`).
     pub battery_glyph_only: bool,
-    /// Keep Awake, while it's on (`None` while it's off).
-    pub awake: Option<aizome_awake::Status>,
+    /// The cup: Keep Awake while it's on, else apps holding the screen on
+    /// (`None` with neither). The shell fills it as the bar is drawn
+    /// (`Shell::cup`).
+    pub cup: Option<Cup>,
     pub cpu: bool,
     pub memory: bool,
     /// Apps' status items (Steam, Discord…), in the order they came.
@@ -602,13 +631,18 @@ fn tray_icon(widget: TrayWidget, icon: Icon, text: Option<String>, open: bool, l
     .into()
 }
 
-/// Keep Awake, while it's on: a cup in kohaku while logind holds its locks,
-/// in red while it's on but they aren't there (sleep may happen). Shown
-/// even when the systray folds, as recording is. Opens its panel.
-fn awake(status: aizome_awake::Status, open: bool) -> Element<BarMsg> {
-    use aizome_awake::Status;
-    let warning = status == Status::Unprotected;
-    drawn(15.0, HEIGHT, (warning, open), move |cx| {
+/// The cup. For Keep Awake, while it's on: in kohaku while logind holds
+/// its locks, in red while it's on but they aren't there (sleep may
+/// happen). For apps holding the screen on, with Keep Awake off: in the
+/// bar's own colour, as the widgets beside it. Shown even when the systray
+/// folds, as recording is. Opens its panel.
+fn cup(cup: Cup, open: bool) -> Element<BarMsg> {
+    let hue = match cup {
+        Cup::KeepAwake => look::Hue::Amber,
+        Cup::Unprotected => look::Hue::Red,
+        Cup::Apps(_) => look::Hue::Text2,
+    };
+    drawn(15.0, HEIGHT, (hue, open), move |cx| {
         let t = cx.theme();
         let b = cx.bounds();
         let face = Rect::new(0.0, 2.0, b.x1, HEIGHT - 3.0);
@@ -619,16 +653,13 @@ fn awake(status: aizome_awake::Status, open: bool) -> Element<BarMsg> {
             if cx.is_hovered() {
                 cx.canvas.fill_rect(face.inflate(3.0, 0.0), t.hover(t.bar()));
             }
-            if warning { look::Hue::Red.color(t) } else { look::Hue::Amber.color(t) }
+            hue.color(t)
         };
         Icon::Coffee.draw(cx.canvas, Point::new(0.0, ((HEIGHT - 15.0) / 2.0).round()), 15.0, fg);
     })
     .on_press(|p: Press| BarMsg::Press(Slot::Tray(TrayWidget::Awake), p.rect))
     .overflow(3.0)
-    .text(
-        if warning { "Keep Awake is on, but not working: the computer may sleep" } else { "Keep Awake is on" },
-        SemanticRole::Button,
-    )
+    .text(cup.label(), SemanticRole::Button)
     .key(("tray", TrayWidget::Awake))
     .id(tray_id(TrayWidget::Awake))
     .into()
@@ -905,8 +936,8 @@ fn header(model: &BarModel) -> Element<BarMsg> {
     if let Some(r) = &model.recording {
         items.push(recording(r));
     }
-    if let Some(s) = tray.awake {
-        items.push(awake(s, open(TrayWidget::Awake)));
+    if let Some(c) = tray.cup {
+        items.push(cup(c, open(TrayWidget::Awake)));
     }
     if tray.cpu {
         items.push(cpu_meter(&model.meters));
@@ -1050,7 +1081,7 @@ pub fn header_width(t: &aizome_kit::Theme, m: &mut Measure, model: &BarModel) ->
     if let Some(r) = &model.recording {
         items.push((DOT + DOT_GAP + m(&r.label, &record_spec(t, r.stopping))).ceil());
     }
-    if tray.awake.is_some() {
+    if tray.cup.is_some() {
         items.push(15.0);
     }
     if tray.cpu {

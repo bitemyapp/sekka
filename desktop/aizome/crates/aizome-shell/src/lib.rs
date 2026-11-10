@@ -19,6 +19,7 @@ pub mod desktop;
 mod desktop_glue;
 mod greeter;
 pub mod gtk;
+pub mod holders;
 pub mod icons;
 pub mod idle;
 pub mod ipc;

@@ -47,6 +47,9 @@ pub enum Msg {
     Awake(aizome_awake::Status),
     /// `aizome-awake on` or `off` finished: on or off, or why not.
     AwakeSet(Result<bool, String>),
+    /// A timer of the cup's came due: apps have held the screen on a
+    /// while, or one let go a moment ago (`holders.rs`).
+    Holders(crate::holders::Due),
     /// The clock's label turned.
     Tick,
     TimeChanged,
@@ -397,6 +400,18 @@ pub struct Shell {
     /// The compositor's idle inhibitor, held while an app on the session
     /// bus keeps the screen awake (`idle.rs`).
     pub(crate) idle_hold: crate::idle::IdleHold,
+    /// Who has an idle inhibitor, as the compositor last said.
+    pub(crate) inhibitors: Vec<aizome_ipc::IdleInhibitorInfo>,
+    /// The session bus's holds, as the screen saver last had them.
+    pub(crate) screen_holds: Vec<aizome_sys::screensaver::Hold>,
+    /// The apps holding the screen on, as the cup and its panel show them
+    /// (`holders.rs`).
+    pub holders: crate::holders::Showing,
+    /// Something the holders are merged from has changed since.
+    pub(crate) holders_stale: bool,
+    /// Processes' programs by process ID, for tests (the running shell
+    /// reads `/proc`).
+    pub programs_fixture: Option<HashMap<u32, String>>,
     /// GeoClue is being asked where the computer is; when it last answered.
     pub(crate) locating: bool,
     pub(crate) located_at: Option<std::time::Instant>,
@@ -519,6 +534,11 @@ impl Shell {
             night: None,
             awake: aizome_awake::Status::Off,
             idle_hold: Default::default(),
+            inhibitors: Vec::new(),
+            screen_holds: Vec::new(),
+            holders: Default::default(),
+            holders_stale: false,
+            programs_fixture: None,
             locating: false,
             located_at: None,
             recording: None,
@@ -726,7 +746,7 @@ impl Shell {
                 .or_else(|| self.panel.as_ref().filter(|p| Some(p.bar) == screen.bar).map(|p| Slot::Tray(p.widget))),
             desks: self.wm.desks.clone(),
             renaming: self.renaming.clone(),
-            tray: self.tray.clone(),
+            tray: Tray { cup: self.cup(), ..self.tray.clone() },
             meters: self.meters.clone(),
             clock: self.now.bar_label(self.bar_cfg.clock, self.bar_cfg.clock_seconds, self.bar_cfg.clock_date),
             folded_apps: folded,
@@ -1272,9 +1292,15 @@ impl Shell {
                 self.ipc.ask(Request::NightLight { enabled: None, temperature: None }, NIGHT_LIGHT_TAG);
                 // What's shared already (the shell restarted mid-share).
                 self.ipc.ask(Request::Shares, SHARES_TAG);
+                // Who holds the screen on already (a video was playing).
+                self.ipc.ask(Request::IdleInhibitors, IDLE_INHIBITORS_TAG);
+                self.holders_may_be_renamed();
             }
             IpcEvent::Event(e) => {
-                self.wm.apply(&e);
+                // A holder's row says its window's title.
+                if self.wm.apply(&e).windows {
+                    self.holders_may_be_renamed();
+                }
                 match e {
                     Event::WindowOpened { window } => {
                         self.startup_window(&window);
@@ -1294,6 +1320,7 @@ impl Shell {
                     Event::NightLightChanged { state } => self.night = Some(state),
                     Event::AreaPicked { tag, area, output, .. } => self.area_picked(&tag, area, output.as_deref(), cx),
                     Event::SharesChanged { shares } => self.shares_changed(shares),
+                    Event::IdleInhibitorsChanged { inhibitors } => self.idle_inhibitors_changed(inhibitors),
                     // Another main display: the Deskbar goes there.
                     Event::OutputsChanged { .. } => self.sync_screens(cx.outputs(), cx),
                     _ => {}
@@ -1306,6 +1333,12 @@ impl Shell {
             IpcEvent::Reply { tag: SHARES_TAG, response: aizome_ipc::Response::Shares { shares } } => {
                 self.shares_changed(shares)
             }
+            // A compositor from before the request answers an error, and
+            // then only the bus's holds are known.
+            IpcEvent::Reply {
+                tag: IDLE_INHIBITORS_TAG,
+                response: aizome_ipc::Response::IdleInhibitors { inhibitors },
+            } => self.idle_inhibitors_changed(inhibitors),
             IpcEvent::Reply { .. } => {}
         }
     }
@@ -1549,6 +1582,8 @@ impl Shell {
             })).collect::<Vec<_>>(),
             "recording": self.recording_json(),
             "sharing": self.sharing_json(),
+            // Keep Awake, the cup, and the apps holding the screen on.
+            "awake": self.awake_json(),
         })
         .to_string()
     }
@@ -1605,6 +1640,8 @@ impl Program for Shell {
                     })));
                 }
                 self.apps = Some(index);
+                // The holders' names come from the apps' desktop entries.
+                self.holders_may_be_renamed();
             }
             Msg::AppsChanged => {
                 if let Some(tx) = self.stream.clone() {
@@ -1622,15 +1659,20 @@ impl Program for Shell {
                     self.audible_sent = playing;
                 }
                 // An app asked the session bus to keep the screen awake,
-                // or the last one let go.
+                // or the last one let go: the compositor hears it from
+                // the shell, and the cup's panel says who.
                 self.idle_hold.want(self.sys.screen());
-                self.tray.awake = (self.awake != aizome_awake::Status::Off).then_some(self.awake);
+                if let Some(saver) = &self.sys.screensaver {
+                    let holds = saver.snapshot().holds.clone();
+                    self.screen_holds_changed(holds);
+                }
                 self.sync_status_items();
                 self.session_events(cx);
             }
             Msg::Meters(r) => self.meters = r,
             Msg::Awake(s) => self.keep_awake_status(s, cx),
             Msg::AwakeSet(r) => self.keep_awake_set(r, cx),
+            Msg::Holders(due) => self.holders_due(due, cx),
             Msg::Tick => {
                 self.refresh_clock(cx);
                 self.arm_clock(cx);
@@ -1915,6 +1957,7 @@ pub fn app_sel(app_id: &str) -> AppSel {
 /// The tag of the Night Light question asked at connecting.
 const NIGHT_LIGHT_TAG: u64 = 0x4e49_4748;
 const SHARES_TAG: u64 = 0x5348_4152;
+const IDLE_INHIBITORS_TAG: u64 = 0x4944_4c45;
 
 pub fn layer(opts: LayerOptions, width: f64, height: f64, title: &str) -> WindowSpec {
     let mut s = WindowSpec::layer(opts, width, height);
@@ -1936,6 +1979,7 @@ impl Shell {
             self.run(a, cx);
         }
         self.sync_deskbar(cx);
+        self.sync_holders(cx);
         self.sync_panel(cx);
         self.sync_tearoffs(cx);
         self.sync_cards(cx);
