@@ -46,10 +46,22 @@ pub fn speed_slider<Msg: Clone + Send + 'static>(
     right: &str,
     f: impl Fn(f64) -> Msg + 'static,
 ) -> Element<Msg> {
+    speed_slider_enabled(value, range, left, right, true, f)
+}
+
+/// `speed_slider`, greyed when not `enabled`.
+pub fn speed_slider_enabled<Msg: Clone + Send + 'static>(
+    value: f64,
+    range: ValueRange,
+    left: &str,
+    right: &str,
+    enabled: bool,
+    f: impl Fn(f64) -> Msg + 'static,
+) -> Element<Msg> {
     use aizome_kit::row;
     row![
         text(left.to_owned()).size(11.0).role(Role::Text3),
-        slider(value, range).on_change(f).width(180.0),
+        slider(value, range).on_change(f).enabled(enabled).width(180.0),
         text(right.to_owned()).size(11.0).role(Role::Text3),
     ]
     .spacing(8.0)
