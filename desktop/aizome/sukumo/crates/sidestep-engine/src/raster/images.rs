@@ -178,6 +178,19 @@ fn cost(p: &Pixmap) -> usize {
     p.data().len() + 64
 }
 
+/// The exact decoded, oriented premultiplied pixels used by local drawing.
+/// Remote paint exports an immutable asset once, then refers to it by id.
+pub(crate) fn remote_pixels(image: &ImageData) -> Option<(u32, u32, Vec<u8>)> {
+    if u64::from(image.width) * u64::from(image.height) > aizome_remote_protocol::MAX_PIXELS {
+        return None;
+    }
+    CACHE.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        let pixels = cache.entry(image)?.level(0);
+        Some((pixels.width(), pixels.height(), pixels.data().to_vec()))
+    })
+}
+
 fn base_cost(b: &Base) -> usize {
     match b {
         // Shared, but kept alive by the cache all the same.

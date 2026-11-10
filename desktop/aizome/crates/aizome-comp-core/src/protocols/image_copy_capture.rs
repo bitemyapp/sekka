@@ -635,3 +635,21 @@ fn report_later(state: &mut State) {
         warn!("image copy capture: a timer for the shares: {}", e.error);
     }
 }
+
+/// Bind the optional retained stream to an already authorized live capture,
+/// using Unix peer credentials, not a caller-supplied process identity.
+pub fn owned_output(az: &Aizome, pid: u32, object: u32, name: &str) -> Option<Output> {
+    az.screencopy.ext.sessions.iter().find_map(|s| {
+        if s.cursor || !s.resource.is_alive() || s.resource.id().protocol_id() != object || !s.shown {
+            return None;
+        }
+        let credentials = s.resource.client()?.get_credentials(&az.dh).ok()?;
+        if credentials.pid as u32 != pid {
+            return None;
+        }
+        match s.source.as_ref()? {
+            Source::Output(o) if o.name() == name => Some(o.clone()),
+            _ => None,
+        }
+    })
+}

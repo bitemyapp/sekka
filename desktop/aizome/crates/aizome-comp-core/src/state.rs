@@ -263,6 +263,7 @@ pub struct Aizome {
     pub foreign_toplevel_list: ForeignToplevelListState,
     pub foreign_toplevel_mgmt: ForeignToplevelManagerState,
     pub screencopy: ScreencopyManagerState,
+    pub remote_paint: crate::protocols::remote_paint::RemotePaint,
     pub output_management: OutputManagementState,
 
     pub seat: Seat<State>,
@@ -436,6 +437,7 @@ impl State {
         let foreign_toplevel_list = ForeignToplevelListState::new_with_filter::<State>(&dh, client_is_privileged);
         let foreign_toplevel_mgmt = ForeignToplevelManagerState::new(&dh, client_is_privileged);
         let screencopy = ScreencopyManagerState::new(&dh, client_is_privileged);
+        crate::protocols::remote_paint::create_global(&dh);
         crate::protocols::gamma_control::create_global(&dh, client_is_privileged);
         let output_management = OutputManagementState::new(&dh, client_is_privileged);
 
@@ -519,6 +521,7 @@ impl State {
             foreign_toplevel_list,
             foreign_toplevel_mgmt,
             screencopy,
+            remote_paint: Default::default(),
             output_management,
             seat,
             popups: PopupManager::default(),
@@ -600,6 +603,7 @@ impl State {
         self.redraw_due();
         self.check_lock();
         crate::protocols::screencopy::flush_pending(self);
+        crate::protocols::remote_paint::flush(self);
         if let Err(e) = self.az.dh.flush_clients() {
             warn!("flushing clients: {e}");
         }

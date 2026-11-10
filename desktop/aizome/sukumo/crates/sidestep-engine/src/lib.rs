@@ -36,6 +36,7 @@ pub mod palette;
 pub mod path;
 pub mod protocol;
 pub mod raster;
+pub mod remote;
 pub mod settings;
 pub mod stats;
 pub mod system;

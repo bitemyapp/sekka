@@ -66,3 +66,7 @@ harness = false
 [[test]]
 name = "image_budget"
 harness = false
+
+# The retained-scene fixture shares the observer's monotonic clock.
+[dev-dependencies]
+rustix = { version = "1", features = ["time"] }

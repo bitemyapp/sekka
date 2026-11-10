@@ -22,6 +22,7 @@ struct Conn {
     inbuf: Vec<u8>,
     outbuf: Vec<u8>,
     subscribed: bool,
+    pid: Option<u32>,
 }
 
 #[derive(Default)]
@@ -156,7 +157,20 @@ impl State {
         let Ok(reader) = stream.try_clone() else { return };
         let id = self.az.ipc.next;
         self.az.ipc.next += 1;
-        self.az.ipc.conns.insert(id, Conn { stream, inbuf: Vec::new(), outbuf: Vec::new(), subscribed: false });
+        use std::os::fd::AsRawFd;
+        let mut cred: libc::ucred = unsafe { std::mem::zeroed() };
+        let mut len = std::mem::size_of::<libc::ucred>() as libc::socklen_t;
+        let ok = unsafe {
+            libc::getsockopt(
+                stream.as_raw_fd(),
+                libc::SOL_SOCKET,
+                libc::SO_PEERCRED,
+                (&mut cred as *mut libc::ucred).cast(),
+                &mut len,
+            )
+        } == 0;
+        let pid = (ok && cred.pid > 0).then_some(cred.pid as u32);
+        self.az.ipc.conns.insert(id, Conn { stream, inbuf: Vec::new(), outbuf: Vec::new(), subscribed: false, pid });
         let res = self.az.lh.insert_source(
             Generic::new(reader, Interest::READ, Mode::Level),
             move |_, stream, state: &mut State| {
@@ -204,6 +218,12 @@ impl State {
                 continue;
             }
             let response = match serde_json::from_str::<Request>(&line) {
+                Ok(Request::RemoteScene { capture, output, enabled }) => {
+                    match self.az.ipc.conns.get(&id).filter(|c| c.subscribed).and_then(|c| c.pid) {
+                        Some(pid) => crate::protocols::remote_paint::subscribe(self, id, pid, capture, output, enabled),
+                        None => Response::error("subscribe with local peer credentials first"),
+                    }
+                }
                 Ok(Request::Subscribe) => {
                     if let Some(c) = self.az.ipc.conns.get_mut(&id) {
                         c.subscribed = true;

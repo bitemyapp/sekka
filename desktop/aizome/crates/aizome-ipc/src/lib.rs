@@ -110,6 +110,12 @@ pub enum Transform {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "request", rename_all = "kebab-case")]
 pub enum Request {
+    /// Optional paint replay for an output this process already captures.
+    RemoteScene {
+        capture: u32,
+        output: String,
+        enabled: bool,
+    },
     /// → [`Response::Version`].
     Version,
     /// → [`Response::Outputs`].
@@ -904,6 +910,12 @@ pub struct Percentiles {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "event", rename_all = "kebab-case")]
 pub enum Event {
+    /// Private to the authenticated capture subscriber; never broadcast.
+    RemoteScene {
+        capture: u32,
+        payload: Option<String>,
+        reason: Option<String>,
+    },
     WindowOpened {
         window: WindowInfo,
     },

@@ -1637,7 +1637,57 @@ of the instance. The UI tests check that reveal requests select the files,
 one window to a folder, and that the last window takes the token. These are
 component checks, not browser or ISO qualification.
 
-### Sukumo
+#### Optional retained drawing for Remote Desks
+
+`nix build .#aizome-remote-renderer` builds the local Sukumo rasterizer behind a
+small versioned C ABI for native viewers. Its source filter contains the renderer,
+paint protocol, engine and Sukumo workspace metadata; it links no compositor or
+privileged helper. The main compositor and the toolkit still build in their
+separate existing workspaces.
+
+Sukumo's `aizome_remote_paint_v1` producer objects belong to its own surfaces.
+When requested, a sealed memfd supplies bounded paint batches, individual damage
+clips, font/image assets and dictionary sequence numbers alongside normal buffer
+commits. Smithay caches and applies that state with synchronized subsurfaces and
+fences. A full state must replace its entire canvas. Unsupported drawing keeps
+ordinary pixels available.
+
+The private `remote-scene` IPC subscription requires an existing, live,
+cursor-free ext-image-copy-capture output session. Its resource ID and output
+must match a Wayland client with the IPC socket peer's PID. Events go only to the
+requesting connection. The compositor exports only an opaque, untransformed,
+uncropped first visible surface covering the output at native scale. Popups,
+overlays, tiles and unsupported toolkits select pixel streaming. Capture
+revocation also revokes the state stream. The public protocol conveys drawing,
+not executable code, resource URLs or application callbacks; the source app still
+owns input and its widget state.
+
+The matching Voxl fork offers an opt-in F9 toggle and an optional local renderer
+library. It stops its own video subscription only after a valid full retained
+image; other viewers continue receiving video. This first implementation covers
+fullscreen Sukumo root painting, rather than a mixed native/pixel desktop scene
+graph or arbitrary GTK/Qt widget reconstruction.
+
+Component validation commands:
+
+```sh
+nix develop .#aizome -c cargo test --manifest-path desktop/aizome/sukumo/Cargo.toml \
+  -p sidestep-engine remote::tests
+nix develop .#aizome -c cargo test --manifest-path desktop/aizome/sukumo/Cargo.toml \
+  -p aizome-remote-protocol -p aizome-remote-renderer
+nix develop .#aizome -c cargo build --release --manifest-path desktop/aizome/sukumo/Cargo.toml \
+  -p sidestep-ui --example remote_scene
+```
+
+Voxl's `bench/native-scene.py` supplies the cross-process capture/viewer fixture.
+The 2026-11-10 component runs produced identical RGB pixels for full text/path
+frames and partial button damage at 1x and 1.25x. They also exercised native/video
+toggling, mixed subscribers, popup fallback and recovery, bounded stalled clients,
+rapid toggles, rejected peer ownership and share revocation. The CPU server and
+root-flake renderer package passed the same fixture. These are private headless
+component checks, not ISO or physical-display qualification.
+
+## Sukumo
 
 Sukumo, Aizome's toolkit, is in `desktop/aizome/sukumo`: the Wayland engine
 and native Rust toolkit from Sidestep's `aizome` branch, without Sidestep's

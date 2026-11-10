@@ -1201,3 +1201,7 @@ mod tests {
         assert_eq!(dirty, [Rect::new(0.0, 0.0, 165.0, 10.0)]);
     }
 }
+
+pub(super) fn is_empty(layers: &Layers) -> bool {
+    layers.layers.is_empty()
+}

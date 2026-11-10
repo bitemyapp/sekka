@@ -86,6 +86,7 @@ dependencies = [
  "aizome-apps",
  "aizome-config",
  "aizome-ipc",
+ "aizome-remote-protocol",
  "aizome-theme",
  "bitflags 2.13.2",
  "libc",
@@ -376,6 +377,18 @@ name = "aizome-power-meter"
 version = "0.1.0"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "aizome-remote-protocol"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "serde",
+ "serde_json",
+ "wayland-client",
+ "wayland-scanner",
+ "wayland-server",
 ]
 
 [[package]]
@@ -4520,6 +4533,7 @@ checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
 name = "sidestep-engine"
 version = "0.0.1"
 dependencies = [
+ "aizome-remote-protocol",
  "fontique",
  "harfrust",
  "icu_properties",

@@ -88,6 +88,7 @@ let
     inputs = { inherit nixpkgs; };
 
     packages = forAll (pkgs: rec {
+      aizome-remote-renderer = pkgs.callPackage ./remote-renderer.nix { };
       aizome = pkgs.callPackage ./package.nix {
         inherit
           src

@@ -10,3 +10,5 @@ pub mod image_copy_capture;
 pub mod output_management;
 pub mod screencopy;
 pub mod toplevel_icon;
+
+pub mod remote_paint;

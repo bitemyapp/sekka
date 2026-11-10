@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<protocol name="aizome_remote_paint_v1">
+  <copyright>Copyright 2026 Aizome contributors. MIT OR Apache-2.0.</copyright>
+  <interface name="aizome_remote_paint_manager_v1" version="1">
+    <description summary="optional retained drawing for an application's own surface">
+      The compositor may ask an application to export the operations used to
+      paint a surface. Ordinary Wayland buffers remain authoritative and are
+      always committed. No remote viewer can execute application code or
+      supply drawing commands through this producer protocol.
+    </description>
+    <request name="destroy" type="destructor"/>
+    <request name="get_surface">
+      <arg name="id" type="new_id" interface="aizome_remote_paint_surface_v1"/>
+      <arg name="surface" type="object" interface="wl_surface"/>
+    </request>
+  </interface>
+  <interface name="aizome_remote_paint_surface_v1" version="1">
+    <description summary="double-buffered retained paint accompanying wl_surface commits">
+      Publish a sealed memfd containing one version-1 Frame. Its size is bounded
+      to 16 MiB. The frame accompanies the next wl_surface commit. A new enabled
+      event requires a full repaint with a fresh asset dictionary; deltas refer
+      only to assets sent since that full frame. Unsupported paints invalidate
+      retained replay on the next commit; normal pixels remain available.
+    </description>
+    <request name="destroy" type="destructor"/>
+    <request name="paint">
+      <arg name="serial" type="uint"/>
+      <arg name="fd" type="fd"/>
+      <arg name="bytes" type="uint"/>
+      <arg name="width" type="uint"/>
+      <arg name="height" type="uint"/>
+      <arg name="scale" type="fixed"/>
+      <arg name="full" type="uint"/>
+    </request>
+    <request name="unsupported"/>
+    <event name="enabled">
+      <arg name="enabled" type="uint" summary="zero disables export; nonzero requests a full repaint"/>
+    </event>
+  </interface>
+</protocol>

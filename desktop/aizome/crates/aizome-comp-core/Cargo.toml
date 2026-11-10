@@ -16,6 +16,7 @@ repository.workspace = true
 crate-type = ["dylib"]
 
 [dependencies]
+aizome-remote-protocol = { path = "../../sukumo/crates/aizome-remote-protocol", features = ["server"] }
 aizome-theme.workspace = true
 aizome-config.workspace = true
 aizome-ipc.workspace = true

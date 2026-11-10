@@ -31,6 +31,9 @@ impl State {
             },
             Request::Outputs => Response::Outputs { outputs: crate::outputs::all_info(&self.az) },
             Request::Keyboards => Response::Keyboards { keyboards: self.az.keyboards.info() },
+            Request::RemoteScene { .. } => {
+                return Err("retained replay belongs to its subscribing capture connection".into());
+            }
             Request::CatchKey { .. } => return Err("the connection that waits for the key asks".into()),
             Request::Spawn { argv, cwd, in_desk_folder } => {
                 let cwd = cwd.map(|c| aizome_config::expand_home(&c)).or_else(|| {

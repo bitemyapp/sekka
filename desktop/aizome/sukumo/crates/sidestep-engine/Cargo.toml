@@ -10,6 +10,7 @@ repository.workspace = true
 # Linux (and other non-Apple Unix) only; nothing here touches the
 # Objective-C runtime.
 [target.'cfg(not(target_vendor = "apple"))'.dependencies]
+aizome-remote-protocol = { path = "../aizome-remote-protocol", features = ["client"] }
 smithay-client-toolkit = { version = "0.19", default-features = false, features = ["calloop"] }
 tiny-skia = { version = "0.12", default-features = false, features = ["std", "simd"] }
 # Path geometry: bounds, winding, flattening, stroking.
@@ -24,7 +25,7 @@ kbvm = { version = "0.2", default-features = false, features = ["compose"] }
 wayland-cursor = "0.31"
 # Non-blocking clipboard pipes, and faulting in window memory ahead
 # (madvise); already built for the Wayland crates.
-rustix = { version = "1", default-features = false, features = ["std", "mm", "param", "time"] }
+rustix = { version = "1", default-features = false, features = ["std", "mm", "param", "time", "fs"] }
 # Loads fontconfig from where it's found when the dynamic linker can't
 # find it by name (NixOS; see src/system.rs). fontique's loader uses it.
 libloading = "0.8"

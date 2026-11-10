@@ -44,6 +44,7 @@ mod menubar;
 pub mod null;
 mod outputs;
 mod primary;
+mod remote;
 mod seat;
 mod selection;
 mod sheet;
@@ -292,6 +293,13 @@ fn run(channel: Channel<ToRender>, to_main: MainSender) {
         subcompositor,
         viewporter,
         fractional,
+        remote_manager: globals
+            .bind::<aizome_remote_protocol::client::aizome_remote_paint_manager_v1::AizomeRemotePaintManagerV1, _, _>(
+                &qh,
+                1..=1,
+                (),
+            )
+            .ok(),
         foreign: foreign::Foreign::new(&globals, &qh),
         xdg,
         shm,
@@ -360,6 +368,8 @@ pub struct State {
     subcompositor: SubcompositorState,
     viewporter: SimpleGlobal<WpViewporter, 1>,
     fractional: Option<WpFractionalScaleManagerV1>,
+    /// Optional paint export, activated only for an authorized capture viewer.
+    remote_manager: Option<aizome_remote_protocol::client::aizome_remote_paint_manager_v1::AizomeRemotePaintManagerV1>,
     /// xdg-foreign v2, to keep windows over other programs' (see `foreign`).
     foreign: foreign::Foreign,
     xdg: XdgShell,
@@ -491,6 +501,7 @@ pub struct Win {
     fractional: Option<WpFractionalScaleV1>,
     /// The other program's window this one is kept over, imported.
     foreign_parent: Option<ZxdgImportedV2>,
+    remote: Option<remote::Export>,
     /// Content size in points.
     width: u32,
     height: u32,
@@ -1281,6 +1292,7 @@ impl State {
                 viewport,
                 fractional,
                 foreign_parent: None,
+                remote: self.remote_manager.as_ref().map(|m| remote::Export::new(m, &surface, &self.qh, window)),
                 width,
                 height,
                 scale,
@@ -1870,6 +1882,7 @@ impl State {
         let format = window_format(rgba, win.transparent);
         let damage = std::mem::take(&mut win.damage);
         let pending = std::mem::take(&mut win.pending);
+        remote::paint(win, &pending);
         let (width, height, scale) = (win.px_width, win.px_height, win.scale);
         let free = |b: &RootBuffer, pool: &mut SlotPool| b.buffer.canvas(pool).is_some();
         let front = win.front.filter(|&f| free(&win.buffers[f], pool));
