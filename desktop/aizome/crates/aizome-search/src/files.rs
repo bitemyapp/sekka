@@ -88,6 +88,13 @@ fn rel_in<'a>(arena: &'a str, e: &Entry) -> &'a str {
     &arena[e.start as usize..(e.start + e.len) as usize]
 }
 
+/// How many lines end in `text`. Summed a byte at a time, in chunks no sum
+/// can overflow, the count compiles to byte-wide vector adds: a millisecond
+/// or two for a 40 MB index, where counting into a `usize` took eight.
+fn newlines(text: &str) -> usize {
+    text.as_bytes().chunks(255).map(|c| c.iter().map(|&b| u8::from(b == b'\n')).sum::<u8>() as usize).sum()
+}
+
 /// An index of files under some roots.
 #[derive(Default)]
 pub struct FileIndex {
@@ -342,9 +349,17 @@ impl FileIndex {
             return None;
         }
         let mut index = FileIndex { built, ..Default::default() };
-        // The paths are most of the file: one allocation rather than every
-        // power of two up to twice their size.
+        // One allocation for each, made before anything is read into it: the
+        // paths are most of the file, and it has a line for each entry (and
+        // a few more: its header and roots). Grown a push at a time, the
+        // entries were reallocated at every power of two on the thread that
+        // reads, and what the smaller ones left stayed in that thread's
+        // malloc arena after the index was dropped: a few MB for each of the
+        // shell's pool threads that had ever read one. (No line `save`
+        // writes for an entry is under eight bytes, so a file that isn't an
+        // index can't ask for much more than its own size.)
         index.arena.reserve(text.len());
+        index.entries.reserve(newlines(&text).min(text.len() / 8));
         for line in lines.by_ref() {
             if line.is_empty() {
                 break;
@@ -366,6 +381,7 @@ impl FileIndex {
             index.entries.push(Entry { root, start, len: rel.len() as u32, name, modified, folder });
         }
         index.arena.shrink_to_fit();
+        index.entries.shrink_to_fit();
         Some(index)
     }
 
@@ -495,6 +511,43 @@ mod tests {
         assert_eq!(loaded.len(), index.len());
         let none = |_: &Path| 0;
         assert_eq!(loaded.search("trace", 5, &none), index.search("trace", 5, &none));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn counts_lines_across_its_chunks() {
+        let text: String = (0..2000).map(|i| if i % 7 == 0 || i % 255 == 254 { '\n' } else { 'a' }).collect();
+        assert_eq!(newlines(&text), text.matches('\n').count());
+        // A chunk of nothing else is the most one sum holds.
+        assert_eq!(newlines(&"\n".repeat(1000)), 1000);
+        assert_eq!(newlines("no line ends here"), 0);
+        assert_eq!(newlines(""), 0);
+    }
+
+    #[test]
+    fn a_loaded_index_is_the_walked_one_in_blocks_its_own_size() {
+        let root = fixture("sized");
+        let index = FileIndex::build(std::slice::from_ref(&root), &Limits::default());
+        let path = root.join("idx");
+        index.save(&path).unwrap();
+        let loaded = FileIndex::load(&path).unwrap();
+        // The same entries in the same order, wherever each keeps its paths
+        // (in the order they were walked, or the order they were saved).
+        let entries = |i: &FileIndex| -> Vec<(u16, String, u32, u32, bool)> {
+            i.entries.iter().map(|e| (e.root, i.rel(e).to_owned(), e.name, e.modified, e.folder)).collect()
+        };
+        assert_eq!(entries(&loaded), entries(&index));
+        assert_eq!(loaded.roots, index.roots);
+        // Each block was sized once and holds no more than was read: none
+        // was grown into, which would leave it at a power of two (so the
+        // fixture mustn't have that many entries).
+        assert!(!loaded.entries.len().is_power_of_two(), "{}", loaded.entries.len());
+        assert_eq!(loaded.entries.capacity(), loaded.entries.len());
+        assert_eq!(loaded.arena.capacity(), loaded.arena.len());
+        // Saved again, it's the same file.
+        let again = root.join("idx2");
+        loaded.save(&again).unwrap();
+        assert_eq!(fs::read(&again).unwrap(), fs::read(&path).unwrap());
         let _ = fs::remove_dir_all(root);
     }
 }
