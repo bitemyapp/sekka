@@ -1,0 +1,188 @@
+From d3f7407fbf98e103787eb93aaba8b96478adee0c Mon Sep 17 00:00:00 2001
+From: Chris Allen <cma@bitemyapp.com>
+Date: Fri, 6 Nov 2026 01:36:47 -0600
+Subject: [PATCH] input/keyboard: Keep the layout in `set_modifier_state`
+
+`set_modifier_state` passed `layout_effective & STATE_LAYOUT_*` as the
+depressed, latched and locked layouts to `update_mask`. `layout_effective`
+is a layout index and the `STATE_LAYOUT_*` constants are state component
+flags (16, 32 and 64), so all three were 0 for any of the first 16 layouts,
+and each call switched the keyboard back to its first layout.
+
+`ModifiersState` doesn't select a layout, so pass the state's current
+layout components through unchanged.
+
+Found in Aizome, whose per-keyboard keymaps restore Caps Lock and Num
+Lock with `set_modifier_state` and had to set the layout again after it.
+The new test sets the second layout of a "us,de" keymap, sets Caps Lock,
+and checks the layout; it fails without this change.
+
+Developed with AI assistance (Claude Code).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ CHANGELOG.md                |   4 ++
+ src/input/keyboard/mod.rs   |  10 +++-
+ src/input/keyboard/tests.rs | 106 ++++++++++++++++++++++++++++++++++++
+ 3 files changed, 117 insertions(+), 3 deletions(-)
+ create mode 100644 src/input/keyboard/tests.rs
+
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 6c031ccd..ad6358de 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -292,6 +292,10 @@ additionally drops the buffers cached for copying between a render and a target
+ 
+ ### Bugfixes
+ 
++`KeyboardHandle::set_modifier_state` now keeps the active keyboard layout. Previously it masked the
++effective layout index with xkb state component flags, so every call switched the keyboard back to
++its first layout.
++
+ `LibinputInputBackend` now processes events libinput has queued without making its file descriptor
+ readable: the `DeviceAdded` events for devices already present after `Libinput::udev_assign_seat` and
+ `Libinput::resume`, and `DeviceRemoved` after `Libinput::suspend`. Previously these waited for the next
+diff --git a/src/input/keyboard/mod.rs b/src/input/keyboard/mod.rs
+index b82ab710..f606fe79 100644
+--- a/src/input/keyboard/mod.rs
++++ b/src/input/keyboard/mod.rs
+@@ -32,6 +32,9 @@ pub use modifiers_state::{ModifiersState, SerializedMods};
+ mod xkb_config;
+ pub use xkb_config::XkbConfig;
+ 
++#[cfg(test)]
++mod tests;
++
+ /// Trait representing object that can receive keyboard interactions
+ pub trait KeyboardTarget<D>: IsAlive + fmt::Debug + Send
+ where
+@@ -1370,13 +1373,14 @@ impl<D: SeatHandler + 'static> KeyboardHandle<D> {
+ 
+             let serialized = mods_state.serialize_back(state);
+ 
++            // `ModifiersState` doesn't select a layout, so keep the current one.
+             let modifiers_changed = state.update_mask(
+                 serialized.depressed,
+                 serialized.latched,
+                 serialized.locked,
+-                serialized.layout_effective & xkb::STATE_LAYOUT_DEPRESSED,
+-                serialized.layout_effective & xkb::STATE_LAYOUT_LATCHED,
+-                serialized.layout_effective & xkb::STATE_LAYOUT_LOCKED,
++                state.serialize_layout(xkb::STATE_LAYOUT_DEPRESSED),
++                state.serialize_layout(xkb::STATE_LAYOUT_LATCHED),
++                state.serialize_layout(xkb::STATE_LAYOUT_LOCKED),
+             );
+ 
+             // Return early it nothing changed.
+diff --git a/src/input/keyboard/tests.rs b/src/input/keyboard/tests.rs
+new file mode 100644
+index 00000000..1c063384
+--- /dev/null
++++ b/src/input/keyboard/tests.rs
+@@ -0,0 +1,106 @@
++use super::{KeyboardHandle, KeyboardTarget, KeysymHandle, Layout, ModifiersState, XkbConfig};
++use crate::{
++    backend::input::{InputTime, KeyState},
++    input::{
++        Seat, SeatHandler, SeatState,
++        pointer::{
++            AxisFrame, ButtonEvent, GestureHoldBeginEvent, GestureHoldEndEvent, GesturePinchBeginEvent,
++            GesturePinchEndEvent, GesturePinchUpdateEvent, GestureSwipeBeginEvent, GestureSwipeEndEvent,
++            GestureSwipeUpdateEvent, MotionEvent, PointerTarget, RelativeMotionEvent,
++        },
++        touch::{self, DownEvent, FrameMarker, OrientationEvent, ShapeEvent, TouchTarget, UpEvent},
++    },
++    utils::{IsAlive, Serial},
++};
++
++/// A focus that ignores everything.
++#[derive(Debug, Clone, PartialEq)]
++struct Focus;
++
++impl IsAlive for Focus {
++    fn alive(&self) -> bool {
++        true
++    }
++}
++
++impl KeyboardTarget<State> for Focus {
++    fn enter(&self, _: &Seat<State>, _: &mut State, _: Vec<KeysymHandle<'_>>, _: Serial) {}
++    fn leave(&self, _: &Seat<State>, _: &mut State, _: Serial) {}
++    fn key(&self, _: &Seat<State>, _: &mut State, _: KeysymHandle<'_>, _: KeyState, _: Serial, _: InputTime) {
++    }
++    fn modifiers(&self, _: &Seat<State>, _: &mut State, _: ModifiersState, _: Serial) {}
++}
++
++impl PointerTarget<State> for Focus {
++    fn enter(&self, _: &Seat<State>, _: &mut State, _: &MotionEvent) {}
++    fn motion(&self, _: &Seat<State>, _: &mut State, _: &MotionEvent) {}
++    fn relative_motion(&self, _: &Seat<State>, _: &mut State, _: &RelativeMotionEvent) {}
++    fn button(&self, _: &Seat<State>, _: &mut State, _: &ButtonEvent) {}
++    fn axis(&self, _: &Seat<State>, _: &mut State, _: AxisFrame) {}
++    fn frame(&self, _: &Seat<State>, _: &mut State) {}
++    fn gesture_swipe_begin(&self, _: &Seat<State>, _: &mut State, _: &GestureSwipeBeginEvent) {}
++    fn gesture_swipe_update(&self, _: &Seat<State>, _: &mut State, _: &GestureSwipeUpdateEvent) {}
++    fn gesture_swipe_end(&self, _: &Seat<State>, _: &mut State, _: &GestureSwipeEndEvent) {}
++    fn gesture_pinch_begin(&self, _: &Seat<State>, _: &mut State, _: &GesturePinchBeginEvent) {}
++    fn gesture_pinch_update(&self, _: &Seat<State>, _: &mut State, _: &GesturePinchUpdateEvent) {}
++    fn gesture_pinch_end(&self, _: &Seat<State>, _: &mut State, _: &GesturePinchEndEvent) {}
++    fn gesture_hold_begin(&self, _: &Seat<State>, _: &mut State, _: &GestureHoldBeginEvent) {}
++    fn gesture_hold_end(&self, _: &Seat<State>, _: &mut State, _: &GestureHoldEndEvent) {}
++    fn leave(&self, _: &Seat<State>, _: &mut State, _: Serial, _: InputTime) {}
++}
++
++impl TouchTarget<State> for Focus {
++    fn down(&self, _: &Seat<State>, _: &mut State, _: &DownEvent) {}
++    fn up(&self, _: &Seat<State>, _: &mut State, _: &UpEvent) {}
++    fn motion(&self, _: &Seat<State>, _: &mut State, _: &touch::MotionEvent) {}
++    fn frame(&self, _: &Seat<State>, _: &mut State, _: FrameMarker) {}
++    fn cancel(&self, _: &Seat<State>, _: &mut State, _: FrameMarker) {}
++    fn shape(&self, _: &Seat<State>, _: &mut State, _: &ShapeEvent) {}
++    fn orientation(&self, _: &Seat<State>, _: &mut State, _: &OrientationEvent) {}
++    fn last_frame(&self, _: &Seat<State>, _: &mut State) -> Option<FrameMarker> {
++        None
++    }
++}
++
++struct State {
++    seat_state: SeatState<State>,
++}
++
++impl SeatHandler for State {
++    type KeyboardFocus = Focus;
++    type PointerFocus = Focus;
++    type TouchFocus = Focus;
++
++    fn seat_state(&mut self) -> &mut SeatState<Self> {
++        &mut self.seat_state
++    }
++}
++
++fn active_layout(keyboard: &KeyboardHandle<State>, state: &mut State) -> Layout {
++    keyboard.with_xkb_state(state, |context| context.xkb().lock().unwrap().active_layout())
++}
++
++#[test]
++fn set_modifier_state_keeps_layout() {
++    let mut state = State {
++        seat_state: SeatState::new(),
++    };
++    let mut seat = state.seat_state.new_seat("seat-0");
++    let config = XkbConfig {
++        layout: "us,de",
++        ..Default::default()
++    };
++    let keyboard = seat.add_keyboard(config, 200, 25).unwrap();
++
++    keyboard.with_xkb_state(&mut state, |mut context| context.set_layout(Layout(1)));
++    assert_eq!(active_layout(&keyboard, &mut state), Layout(1));
++
++    let caps_lock = ModifiersState {
++        caps_lock: true,
++        ..keyboard.modifier_state()
++    };
++    assert_ne!(keyboard.set_modifier_state(caps_lock), 0);
++    assert!(keyboard.modifier_state().caps_lock);
++    assert_eq!(keyboard.modifier_state().serialized.layout_effective, 1);
++    assert_eq!(active_layout(&keyboard, &mut state), Layout(1));
++}
