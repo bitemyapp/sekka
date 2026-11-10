@@ -67,6 +67,7 @@
   tzdata,
   workspace,
   yukimi,
+  sdl_gamecontrollerdb,
   version ? "0.1.0",
   rev ? null,
 }:
@@ -253,6 +254,8 @@ let
         ${testEnvironment}
         ${test} --no-run -p aizome-kit --lib
         ${test} --no-run -p aizome-sys -p aizome-shell -p aizome-hako --lib
+        ${test} --no-run -p aizome-chanoma --lib
+        ${test} --no-run -p aizome-gamepad -p aizome-sofa -p aizome-greeter --lib
         ${cargo}/bin/cargo test --offline --target ${target} --release --no-run -p aizome-comp-process-tests --lib
         runHook postCheck
       '';
@@ -266,6 +269,12 @@ rustPlatform.buildRustPackage (
   // {
     pname = "aizome";
     src = source;
+    # Chanoma, the television, only where it's turned on
+    # (programs.aizome.chanoma).
+    outputs = [
+      "out"
+      "chanoma"
+    ];
 
     preBuild = workspace.sameEnvironment + workspace.restoreTarget dependencies;
     # Only Aizome's own crates may compile here (workspace.nix).
@@ -289,6 +298,14 @@ rustPlatform.buildRustPackage (
       # shipped shell on process outcomes and its failure/details interface.
       # One run: dependencies built once for all three packages.
       ${test} -p aizome-sys -p aizome-shell -p aizome-hako --lib --test file_manager
+      # Chanoma: its rules, controllers and frontend, and whole evenings
+      # played through a core of its tests' own (tests/chanoma.rs).
+      ${test} -p aizome-chanoma --lib --test chanoma
+      # Controllers and the login screen with one: layouts, the PIN's ten
+      # digits and chords, common pads through SDL's own database, and the
+      # greeter's screens.
+      AIZOME_GAMECONTROLLERDB=${sdl_gamecontrollerdb}/share/gamecontrollerdb.txt \
+        ${test} -p aizome-gamepad -p aizome-sofa -p aizome-greeter --lib --test real_pads --test screens
       runHook postCheck
     '';
 
@@ -343,6 +360,10 @@ rustPlatform.buildRustPackage (
       mv $out/bin/aizome-nisshi-helper $out/libexec/
       substitute apps/nisshi/data/org.aizome.Nisshi.policy.in $out/share/polkit-1/actions/org.aizome.Nisshi.policy \
         --subst-var-by helper $out/libexec/aizome-nisshi-helper
+      # The TV account's helper (Settings › Users & Groups), likewise.
+      mv $out/bin/aizome-tv-account $out/libexec/
+      substitute apps/settei/data/org.aizome.TvAccount.policy.in $out/share/polkit-1/actions/org.aizome.TvAccount.policy \
+        --subst-var-by helper $out/libexec/aizome-tv-account
       install -Dm644 apps/hotaru/data/org.aizome.Hotaru.svg $out/share/icons/hicolor/scalable/apps/org.aizome.Hotaru.svg
       install -Dm644 ${ghosttyLicense} $out/share/licenses/hotaru/Ghostty-MIT.txt
       install -m644 crates/hotaru-link-regex/vendor/oniguruma/LICENSE $out/share/licenses/hotaru/Oniguruma-BSD-2-Clause.txt
@@ -365,15 +386,29 @@ rustPlatform.buildRustPackage (
       ln -s ${yukimi}/bin/aizome-yukimi $out/bin/aizome-yukimi
       ln -sf ${yukimi}/share/applications/org.aizome.Yukimi.desktop $out/share/applications/
       ln -sf ${yukimi}/share/icons/hicolor/scalable/apps/org.aizome.Yukimi.svg $out/share/icons/hicolor/scalable/apps/
+      mkdir -p $chanoma/bin $chanoma/share/applications $chanoma/share/icons/hicolor/scalable/apps
+      mv $out/bin/aizome-chanoma $chanoma/bin/
+      mv $out/share/applications/org.aizome.Chanoma.desktop $chanoma/share/applications/
+      mv $out/share/icons/hicolor/scalable/apps/org.aizome.Chanoma.svg $chanoma/share/icons/hicolor/scalable/apps/
+      # The TV account's session: the compositor alone with Chanoma.
+      install -Dm755 apps/chanoma/data/aizome-chanoma-session $chanoma/bin/aizome-chanoma-session
+      substituteInPlace $chanoma/bin/aizome-chanoma-session \
+        --subst-var-by aizome $out/bin/aizome \
+        --subst-var-by chanoma $chanoma/bin/aizome-chanoma
       runHook postInstall
     '';
 
     postFixup = ''
-      for bin in $out/bin/*; do
+      for bin in $out/bin/* $chanoma/bin/*; do
         if [ ! -L "$bin" ] && isELF "$bin"; then
           patchelf --add-rpath ${lib.makeLibraryPath runtimeLibs} "$bin"
         fi
       done
+      # SDL's controller database, for the buttons of controllers whose
+      # drivers name them their own way (crates/aizome-gamepad/src/mapping.rs).
+      wrapProgram $chanoma/bin/aizome-chanoma \
+        --set-default AIZOME_FONT_DIR ${fonts} \
+        --set-default AIZOME_GAMECONTROLLERDB ${sdl_gamecontrollerdb}/share/gamecontrollerdb.txt
       wrapProgram $out/bin/aizome-hotaru \
         --set-default AIZOME_FONT_DIR ${fonts} \
         --set-default HOTARU_FONT_DIR ${hotaruFonts} \

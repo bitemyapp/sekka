@@ -153,10 +153,34 @@ impl CompositorHandler for State {
 
         self.commit_layer(surface);
         self.commit_misc(surface);
+        self.point_at_new_surface();
     }
 }
 
 impl State {
+    /// Something drawn under a pointer resting on nothing (a login screen
+    /// or a kiosk's program as it starts) hears the pointer now, not at its
+    /// next move: its own cursor shows (or none, if it hides it).
+    fn point_at_new_surface(&mut self) {
+        if !self.az.pointer_resting {
+            return;
+        }
+        let Some(pointer) = self.az.seat.get_pointer() else { return };
+        if pointer.current_focus().is_some() || pointer.is_grabbed() {
+            return;
+        }
+        let pos = self.az.pointer_pos;
+        if crate::fallback::surface_at(self, pos).is_none() {
+            return;
+        }
+        let time = self.az.start.elapsed().as_millis() as u32;
+        if self.lg.healthy() {
+            self.lg_call((), |vt, st| (vt.pointer_motion)(st, pos, time));
+        } else {
+            crate::fallback::pointer_motion(self, pos, time);
+        }
+    }
+
     fn commit_unmapped(&mut self, i: usize) {
         let window = self.az.unmapped[i].window.clone();
         let toplevel = window.toplevel().expect("toplevel").clone();

@@ -332,3 +332,26 @@ fn menus_show_above_every_window_and_layer_surface() {
     motion(&c, 400.0, 400.0);
     shell.wait("the pointer on the desktop's menu", |s| s.pointer.as_deref() == Some("dmenu"));
 }
+
+/// A window that appears under a pointer that hasn't moved since the
+/// compositor started (a login screen, a kiosk's program) has the pointer
+/// at once, not at its next move, so the cursor it sets (or hides) shows.
+#[test]
+fn a_window_under_a_resting_pointer_has_it_at_once() {
+    let c = Compositor::start(Options::default());
+    let input = || {
+        let aizome_ipc::Response::InputState { state } = c.request(Request::InputState) else { panic!() };
+        state
+    };
+    assert_eq!(input().pointer_focus, None, "nothing under it yet");
+    let mut spec = Spec::new("test.resting", 0x2266cc);
+    spec.fullscreen = true;
+    let _a = c.client(spec);
+    c.wait_window("test.resting");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while input().pointer_focus.is_none() && std::time::Instant::now() < deadline {
+        c.settle();
+    }
+    let focus = input().pointer_focus;
+    assert!(focus.as_deref().is_some_and(|f| f.contains("test.resting")), "{focus:?}");
+}

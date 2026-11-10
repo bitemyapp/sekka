@@ -1,0 +1,14 @@
+[package]
+name = "aizome-gamepad"
+description = "Game controllers for Aizome's apps and login screen: read from their event devices on a thread of their own, buttons named by where they are whatever the maker prints, through SDL's database"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde.workspace = true
+log.workspace = true
+# Event devices through ioctl, inotify and poll.
+libc = "0.2"

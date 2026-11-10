@@ -290,6 +290,7 @@ impl State {
         let pos = self.clamp_to_outputs(pos);
         let old = self.az.pointer_pos;
         self.az.pointer_pos = pos;
+        self.az.pointer_resting = false;
         if crate::recovery::pointer_moved(self, old, pos, time) {
             return;
         }
@@ -431,8 +432,10 @@ impl State {
         let keycode = Keycode::new(code + 8);
         let state = if pressed { KeyState::Pressed } else { KeyState::Released };
         let serial = SERIAL_COUNTER.next_serial();
+        // The window with the keys, for keys an app catches over it.
+        let over = keyboard.current_focus().and_then(|f| self.az.window_for_surface(&f.0));
         let (decision, mods_changed) = keyboard.input_intercept(self, keycode, state, |state, mods, handle| {
-            state.decide_key(keycode, pressed, mods, &handle)
+            state.decide_key(keycode, pressed, mods, &handle, over)
         });
         match decision {
             Decision::Forward => keyboard.input_forward(self, keycode, state, serial, time, mods_changed),
@@ -454,6 +457,7 @@ impl State {
         pressed: bool,
         mods: &ModifiersState,
         handle: &KeysymHandle<'_>,
+        over: Option<WinId>,
     ) -> Decision {
         let mut syms: Vec<Keysym> = Vec::new();
         if let Some(s) = handle.raw_latin_sym_or_raw_current_sym() {
@@ -477,6 +481,20 @@ impl State {
             && !self.az.lock.is_locked()
             && let Some((tag, conn)) = self.az.keyboards.catch.take()
             && self.az.ipc.is_subscribed(conn)
+        {
+            self.az.suppressed_keys.insert(keycode);
+            let keyboard = self.az.keyboards.sending();
+            self.az.ipc.emit_to(conn, &aizome_ipc::Event::KeyCaught { tag, code: keycode.raw() - 8, keyboard });
+            return Decision::Swallow;
+        }
+        // A key an app keeps over a window it opened (Chanoma's Home key
+        // over its browser), for that app alone; with ⌃, ⌥ or ❖ held, the
+        // system's chords go on as ever.
+        if pressed
+            && !self.az.lock.is_locked()
+            && !(mods.ctrl || mods.alt || mods.logo)
+            && let Some(win) = over
+            && let Some((conn, tag)) = self.caught_over(win, keycode.raw() - 8)
         {
             self.az.suppressed_keys.insert(keycode);
             let keyboard = self.az.keyboards.sending();
@@ -507,6 +525,18 @@ impl State {
             KeyDecision::Swallow => Decision::Swallow,
             KeyDecision::Act => Decision::Logic,
         }
+    }
+
+    /// Which connection keeps key `code` over window `win`, and the tag it
+    /// asked with; what connections since gone asked for is let go.
+    fn caught_over(&mut self, win: WinId, code: u32) -> Option<(u64, String)> {
+        let az = &mut self.az;
+        az.keyboards.catch_over.retain(|conn, _| az.ipc.is_subscribed(*conn));
+        az.keyboards
+            .catch_over
+            .iter()
+            .find(|(_, c)| c.windows.contains(&win) && c.keys.contains(&code))
+            .map(|(conn, c)| (*conn, c.tag.clone()))
     }
 
     /// Runs one of the core's own keys.

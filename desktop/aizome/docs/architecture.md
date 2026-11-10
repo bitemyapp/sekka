@@ -19,8 +19,12 @@ boards' exact CSS. This document is the contract between the parts.
 | Config | `crates/aizome-config` | — | `~/.config/aizome/settings.toml`: schema, defaults, load/save, change notification |
 | Kit | `crates/aizome-kit` | — | Widget kit on sidestep-ui in Aizome's look: layout, controls, lists, text fields, menus (published to the global menu bar), sidebars, sheets, icons |
 | System | `crates/aizome-sys` | — | System services over D-Bus and the kernel: NetworkManager, BlueZ, PipeWire volume, UPower, brightness, power profiles, timedate/locale/hostname, AccountsService, CUPS, logind, MPRIS, disks (UDisks2) |
+| Media controls | `crates/aizome-mpris` | — | A player's side of MPRIS 2 (the menu bar's media widget and the media keys follow players through `aizome-sys`): Utsushi and Chanoma serve it |
 | Apps index | `crates/aizome-apps` | — | Installed applications without D-Bus: desktop entries, the index of them, `Exec` lines, icons, default apps and the default terminal (Settei shows it, ❖Return starts it); `aizome-sys` re-exports it as `apps` and adds launching |
 | Search | `crates/aizome-search` | — | Fuzzy matching and the file index behind the palette and Find |
+| Files index | `crates/aizome-index` | — | What's in folders and drives, shared by every app in one SQLite database; a second look lists only folders whose time changed (`docs/files-index.md`): Chanoma finds games with it |
+| Game controllers | `crates/aizome-gamepad` | — | Controllers from their event devices on a thread of their own: buttons by where they are (SDL's database, the kernel's layout), which button says yes, which buttons a controller has, menus' repeating directions, rumble: Chanoma and the login screen read them |
+| From the sofa | `crates/aizome-sofa` | — | Aizome's look at twice its size on a 1920 × 1080 design scaled to the screen, a controller's buttons drawn as its maker prints them, the on-screen keyboard and the PIN pad (ten digits, chords for a controller short of buttons): Chanoma's and the login screen's |
 | Portal | `crates/aizome-portal` | `aizome-portal` | The xdg-desktop-portal backend `org.freedesktop.impl.portal.desktop.aizome`: file choosers (Open and Save) for every app that asks the portal, each a window of its own over the app that asked (`docs/apps.md`, "The file chooser") |
 | Apps | `apps/*` | one each | Settei (Settings), Yukimi, Soroban, Koyomi, Tokei, Fusen, Sumi, Tenki, Tansu, Kura, Hako, Myaku |
 

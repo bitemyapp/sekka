@@ -415,6 +415,24 @@ pub enum Request {
         #[serde(default)]
         tag: Option<String>,
     },
+    /// Catches these keys while one of these windows has the keyboard:
+    /// each press (with no ⌃, ⌥ or ❖ held, so the system's chords stay
+    /// the system's) is swallowed, its release too, and told to the
+    /// connection that asked alone by [`Event::KeyCaught`] with this
+    /// `tag`; the window hears nothing of it. For an app that opens
+    /// another program's window and keeps a way back out of it: Chanoma
+    /// keeps its Home key over the browser it started. Keys by name, as
+    /// [`Synthetic::Key`] takes them, or evdev code. The asking connection
+    /// must have subscribed ([`Events::request`]); the keys are caught
+    /// while it stays open, until it asks again (with no keys or no
+    /// windows, to stop). Answered at once with `ok`.
+    CatchKeys {
+        tag: String,
+        #[serde(default)]
+        keys: Vec<String>,
+        #[serde(default)]
+        windows: Vec<WindowId>,
+    },
     /// Blocks the compositor's main loop for a while (at most 60 s), to
     /// try the watchdog: nothing draws or answers meanwhile.
     DebugStall {
@@ -1004,9 +1022,10 @@ pub enum Event {
     KeyboardAdded {
         keyboard: KeyboardInfo,
     },
-    /// The key a [`Request::CatchKey`] caught, sent to the connection that
-    /// asked alone: its evdev code, the same whatever the keymap makes of
-    /// the key, and the keyboard that typed it (none for a key from IPC).
+    /// The key a [`Request::CatchKey`] (or [`Request::CatchKeys`]) caught,
+    /// sent to the connection that asked alone: its evdev code, the same
+    /// whatever the keymap makes of the key, and the keyboard that typed it
+    /// (none for a key from IPC).
     KeyCaught {
         tag: String,
         code: u32,
@@ -1172,6 +1191,15 @@ mod tests {
         assert_eq!(r, Request::CatchKey { tag: Some("setup".into()) });
         let r: Request = serde_json::from_str(r#"{"request":"catch-key"}"#).unwrap();
         assert_eq!(r, Request::CatchKey { tag: None });
+        let r: Request =
+            serde_json::from_str(r#"{"request":"catch-keys","tag":"home","keys":["home","f1"],"windows":[7]}"#)
+                .unwrap();
+        assert_eq!(
+            r,
+            Request::CatchKeys { tag: "home".into(), keys: vec!["home".into(), "f1".into()], windows: vec![7] }
+        );
+        let r: Request = serde_json::from_str(r#"{"request":"catch-keys","tag":"home"}"#).unwrap();
+        assert_eq!(r, Request::CatchKeys { tag: "home".into(), keys: Vec::new(), windows: Vec::new() });
         let k = KeyboardInfo {
             name: "Magic Keyboard".into(),
             id: "004c:029c".into(),

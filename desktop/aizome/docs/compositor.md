@@ -351,6 +351,17 @@ Notes for client authors:
   That matters when logind doesn't suspend on the lid (Keep Awake,
   docked); a panel another output mirrors stays on, since its frames
   drive the mirror's. `powered` in the IPC's outputs says which are off.
+  The lid is known as the session starts: what libinput queued as it
+  took the seat (its devices, and a closed lid as the switch's device
+  comes) is handled before any display is set up, and again on coming
+  back from another VT (`drain_libinput` in `backend/udev.rs`). libinput's
+  fd tells only of what the kernel sends after, so those used to wait for
+  the first key or movement: a docked start lit the panel behind the lid,
+  and the TV account's Chanoma, driven by a game controller libinput
+  doesn't hear, stayed on that panel. Starting docked with the lid
+  closed, other displays are set up first and the panel is left dark (no
+  modeset, a second or two on some panels), as opening the lid lights it;
+  if no other display comes on, it does.
 - **Night Light**: `[night_light]` `enabled`, `temperature` (K, default
   4000), `schedule` (`sunset`: from sunset to sunrise where the computer
   is, which is `latitude` and `longitude` when set by hand, else
@@ -449,7 +460,7 @@ connections and the way out depend on.
 | `thumbs.rs` | Under pixman, thumbnails (the overview's, the switcher's) kept as pictures at their size, scaled again only where their window drew |
 | `blur.rs` | Under GLES, the blur behind a scene's `Blur` items (dual Kawase, masked by the surface's own alpha), taken again only when what's under it changed |
 | `ghosts.rs` | Layer surfaces' last frames, kept for the logic to move away as they go |
-| `input.rs`, `focus.rs` | Input from libinput, winit or IPC; the core's keys (VT switching, ⌃❖R, Ctrl+Alt+Del) before the logic's, and a key `catch-key` waits for; keyboard focus, popup grabs, grab wrappers |
+| `input.rs`, `focus.rs` | Input from libinput, winit or IPC; the core's keys (VT switching, ⌃❖R, Ctrl+Alt+Del) before the logic's, a key `catch-key` waits for, and those `catch-keys` keeps over a window; keyboard focus, popup grabs, grab wrappers |
 | `keyboards.rs` | The keyboards that type, who each is, and the keymap of the one typing (its own keys from `[[input.keyboards]]`) |
 | `shell.rs`, `handlers.rs`, `popups.rs` | Surfaces, xdg-shell, layer shell, session lock and the smaller protocols; the window registry |
 | `protocols/` | wlr-screencopy and ext-image-copy-capture with its output and window sources (`capture`: the streams and copies they share, wl_shm and dmabuf, per-stream damage; an output's copy draws the logic's scene), wlr foreign toplevel management, wlr output management, wlr gamma control, xdg-toplevel-icon |

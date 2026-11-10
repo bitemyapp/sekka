@@ -40,7 +40,7 @@ fn wallpaper() -> Option<PathBuf> {
 }
 
 fn greeter() -> (Harness<Greeter>, WindowKey) {
-    let user = |n: &str, r: &str, uid| User { name: n.into(), real_name: r.into(), uid, icon: None };
+    let user = |n: &str, r: &str, uid| User { name: n.into(), real_name: r.into(), uid, icon: None, tv: None };
     let session = |id: &str, name: &str| Session {
         id: id.into(),
         name: name.into(),

@@ -142,8 +142,8 @@ pub struct Udev {
     /// channel order.
     thumbs: crate::thumbs::ThumbCache,
     devices: HashMap<DrmNode, Device>,
-    // Kept so the context lives as long as the backend.
-    #[allow(dead_code)]
+    /// The context, for what it queued while not being watched
+    /// ([`drain_libinput`]).
     libinput: Libinput,
     input_devices: Vec<libinput::Device>,
     /// Outputs turned off, by name: the device, connector and CRTC kept
@@ -181,38 +181,7 @@ impl Udev {
         let backend = LibinputInputBackend::new(libinput.clone());
         event_loop
             .handle()
-            .insert_source(backend, |event, _, state: &mut State| {
-                if let InputEvent::DeviceAdded { device } = &event {
-                    let mut d = device.clone();
-                    if let crate::backend::Backend::Udev(u) = &mut state.backend {
-                        apply_device_settings(&mut d, &state.az.settings.input);
-                        if d.has_capability(DeviceCapability::Keyboard)
-                            && let Some(kb) = state.az.seat.get_keyboard()
-                        {
-                            d.led_update(kb.led_state().into());
-                        }
-                        u.input_devices.push(d.clone());
-                    }
-                    // One that types (a space bar and letters), not a power
-                    // button.
-                    if d.has_capability(DeviceCapability::Keyboard)
-                        && crate::keyboards::types(|k| d.keyboard_has_key(k) == Ok(true))
-                    {
-                        let bustype = smithay::backend::input::Device::syspath(&d)
-                            .and_then(|p| std::fs::read_to_string(p.join("device/id/bustype")).ok())
-                            .and_then(|s| u16::from_str_radix(s.trim(), 16).ok());
-                        let bus = crate::keyboards::bus(bustype, d.id_vendor());
-                        let k = crate::keyboards::Keyboard::new(d.name(), d.id_vendor(), d.id_product(), bus);
-                        state.keyboard_added(d.sysname().to_owned(), k);
-                    }
-                } else if let InputEvent::DeviceRemoved { device } = &event {
-                    if let crate::backend::Backend::Udev(u) = &mut state.backend {
-                        u.input_devices.retain(|d| d != device);
-                    }
-                    state.keyboard_removed(device.sysname());
-                }
-                state.process_input(event);
-            })
+            .insert_source(backend, |event, _, state: &mut State| libinput_event(state, event))
             .map_err(|e| e.to_string())?;
 
         let li = libinput.clone();
@@ -264,6 +233,8 @@ impl Udev {
                         state.az.queue_redraw_all();
                         // Another session may have left its own gamma.
                         state.update_night_light(true);
+                        // The devices back, and the lid as it is now.
+                        drain_libinput(state);
                     }
                 }
             })
@@ -285,6 +256,9 @@ impl Udev {
     /// Opens every GPU, sets up the outputs connected now, the dmabuf
     /// global, and watches for hotplug.
     pub fn init(state: &mut State) {
+        // The input devices and the lid first: a panel behind a closed lid
+        // needn't be lit (`connector_connected_as`).
+        drain_libinput(state);
         let crate::backend::Backend::Udev(u) = &mut state.backend else { return };
         let udev = match UdevBackend::new(&u.seat) {
             Ok(b) => b,
@@ -846,9 +820,13 @@ fn device_changed(state: &mut State, node: DrmNode) {
         .map(|(_, c)| *c)
         .collect();
     infos.retain(|(i, _)| i.state() == connector::State::Connected);
-    // Try a panel's first tile before its siblings, but never evict a
-    // working sibling merely to attempt a full-panel modeset.
-    infos.sort_by_key(|(_, t)| t.is_some_and(|t| t.single_monitor && !t.first()));
+    // Other displays before a laptop's panel, so a panel behind a closed lid
+    // can be left dark when one of them is lit. Try a panel's first tile
+    // before its siblings, but never evict a working sibling merely to
+    // attempt a full-panel modeset.
+    infos.sort_by_key(|(i, t)| {
+        (crate::power::is_laptop_panel(&connector_name(i)), t.is_some_and(|t| t.single_monitor && !t.first()))
+    });
     // Finish cleanup before assigning any freed CRTC: disconnect also
     // removes its connector mapping, including for disabled outputs.
     for crtc in gone {
@@ -1138,9 +1116,28 @@ fn connector_connected_as(
     output.user_data().insert_if_missing(|| OutputSerial(serial.clone()));
     let wl_mode = WlMode::from(drm_mode);
     output.change_current_state(Some(wl_mode), None, None, None);
-    if off {
+    // A laptop's panel behind its closed lid, with another display lit:
+    // left dark from the start, as the lid's layout would turn it off a
+    // moment later (`power.rs`), without the second or two of its modeset.
+    // Opening the lid lights it.
+    let behind_lid = !force_on
+        && !off
+        && state.az.power.lid_closed
+        && crate::power::is_laptop_panel(&name)
+        && state.az.outputs.iter().any(|o| !crate::power::is_laptop_panel(&o.name()));
+    if off || behind_lid {
         // Known, so Settings can turn it on, but not driven.
-        info!("{name} is off in the settings");
+        if behind_lid {
+            info!("{name} stays dark behind the closed lid");
+            state.az.power.lid_disabled.retain(|saved| saved.name != name);
+            state.az.power.lid_disabled.push(OutputChange {
+                name: name.clone(),
+                enabled: Some(true),
+                ..Default::default()
+            });
+        } else {
+            info!("{name} is off in the settings");
+        }
         device.connectors.insert(info.handle(), crtc);
         u.disabled.insert(name.clone(), (node, info.handle(), crtc));
         state.az.disabled_outputs.retain(|o| o.name() != name);
@@ -1292,6 +1289,67 @@ fn device_scroll(input: &aizome_config::Input, touchpad: bool) -> DeviceScroll {
 
 /// Pointer acceleration, scrolling, tapping and the rest, from the
 /// settings.
+/// One of libinput's events: a device's settings and keyboard noted as it
+/// comes, then the event handled as any backend's.
+fn libinput_event(state: &mut State, event: InputEvent<LibinputInputBackend>) {
+    if let InputEvent::DeviceAdded { device } = &event {
+        let mut d = device.clone();
+        if let crate::backend::Backend::Udev(u) = &mut state.backend {
+            apply_device_settings(&mut d, &state.az.settings.input);
+            if d.has_capability(DeviceCapability::Keyboard)
+                && let Some(kb) = state.az.seat.get_keyboard()
+            {
+                d.led_update(kb.led_state().into());
+            }
+            u.input_devices.push(d.clone());
+        }
+        // One that types (a space bar and letters), not a power button.
+        if d.has_capability(DeviceCapability::Keyboard)
+            && crate::keyboards::types(|k| d.keyboard_has_key(k) == Ok(true))
+        {
+            let bustype = smithay::backend::input::Device::syspath(&d)
+                .and_then(|p| std::fs::read_to_string(p.join("device/id/bustype")).ok())
+                .and_then(|s| u16::from_str_radix(s.trim(), 16).ok());
+            let bus = crate::keyboards::bus(bustype, d.id_vendor());
+            let k = crate::keyboards::Keyboard::new(d.name(), d.id_vendor(), d.id_product(), bus);
+            state.keyboard_added(d.sysname().to_owned(), k);
+        }
+    } else if let InputEvent::DeviceRemoved { device } = &event {
+        if let crate::backend::Backend::Udev(u) = &mut state.backend {
+            u.input_devices.retain(|d| d != device);
+        }
+        state.keyboard_removed(device.sysname());
+    }
+    state.process_input(event);
+}
+
+/// What libinput queued as it took the seat or came back to it: the
+/// devices, and the lid's state (it says a closed lid as the switch's
+/// device comes). Its fd tells only of what the kernel sends after, so
+/// these used to wait for the first key or movement: a session started
+/// with the lid closed lit the panel behind it, and the TV account's
+/// Chanoma, driven by a game controller that libinput doesn't hear, stayed
+/// on that panel rather than the television. Without `dispatch`, the queue
+/// holds nothing else (but a tablet's pen held near it).
+fn drain_libinput(state: &mut State) {
+    use smithay::reexports::input::event::{DeviceEvent, EventTrait, SwitchEvent, TabletToolEvent};
+    let crate::backend::Backend::Udev(u) = &mut state.backend else { return };
+    let mut li = u.libinput.clone();
+    for event in &mut li {
+        let event = match event {
+            libinput::Event::Device(DeviceEvent::Added(e)) => InputEvent::DeviceAdded { device: e.device() },
+            libinput::Event::Device(DeviceEvent::Removed(e)) => InputEvent::DeviceRemoved { device: e.device() },
+            libinput::Event::Switch(SwitchEvent::Toggle(event)) => InputEvent::SwitchToggle { event },
+            libinput::Event::Tablet(TabletToolEvent::Proximity(event)) => InputEvent::TabletToolProximity { event },
+            _ => {
+                warn!("libinput queued an unexpected event before its first dispatch; dropped");
+                continue;
+            }
+        };
+        libinput_event(state, event);
+    }
+}
+
 fn apply_device_settings(d: &mut libinput::Device, input: &aizome_config::Input) {
     use aizome_config::{AccelProfile, ClickMethod};
     let touchpad = d.config_tap_finger_count() > 0;

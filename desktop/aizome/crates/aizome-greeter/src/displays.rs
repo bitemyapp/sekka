@@ -69,8 +69,8 @@ mod tests {
 
     #[test]
     fn uses_the_last_person_or_the_only_person() {
-        let alice = User { name: "alice".into(), uid: 1000, real_name: "Alice".into(), icon: None };
-        let bob = User { name: "bob".into(), uid: 1001, real_name: "Bob".into(), icon: None };
+        let alice = User { name: "alice".into(), uid: 1000, real_name: "Alice".into(), icon: None, tv: None };
+        let bob = User { name: "bob".into(), uid: 1001, real_name: "Bob".into(), icon: None, tv: None };
         let users = [alice, bob];
         assert!(user(&State::default(), &users).is_none());
         assert_eq!(user(&State::default(), &users[..1]).unwrap().uid, 1000);

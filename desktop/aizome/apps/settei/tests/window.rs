@@ -291,3 +291,23 @@ fn removing_a_user_names_their_home_and_fixed_accounts_keep_their_type() {
     let (kind, _) = row_of(&h, "Standard").expect("Guest's account type");
     assert!(kind.disabled, "the account type can be changed though the configuration fixes it");
 }
+
+#[test]
+fn the_tv_account_is_set_up_and_stays_out_of_the_other_users() {
+    let (mut h, _) = common::open("tv", "users.tv");
+    let w = h.window();
+    assert!(h.texts(w).iter().any(|t| t == "TV account"), "{:?}", h.texts(w));
+    assert!(h.click_text(w, "Set Up…"));
+    let s = h.program().sheet_window().expect("the sheet");
+    assert!(h.texts(s).iter().any(|t| t == "Set Up the TV Account"));
+    h.save_png(s, common::shots_dir().join("tv-account-sheet.png"), 1.0);
+    // Signing in with nothing: no PIN or password to type.
+    assert!(h.click_text(s, "Set Up"));
+    assert_eq!(h.program().sheet_window(), None);
+    // The helper answers on a thread.
+    h.settle(std::time::Duration::from_millis(500), |_| false);
+    let texts = h.texts(w);
+    assert!(texts.iter().any(|t| t == "TV signs in with"), "{texts:?}");
+    assert!(texts.iter().any(|t| t == "Remove TV Account…"), "{texts:?}");
+    h.save_png(w, common::shots_dir().join("tv-account.png"), 1.0);
+}

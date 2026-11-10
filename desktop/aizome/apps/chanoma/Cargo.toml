@@ -1,0 +1,68 @@
+[package]
+name = "aizome-chanoma"
+description = "Chanoma 茶の間 (TV), Aizome's living-room app: streaming services, films and games, all from a controller, with a grown-up's PIN on what the kids may do"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "aizome_chanoma"
+path = "src/lib.rs"
+
+[[bin]]
+name = "aizome-chanoma"
+path = "src/main.rs"
+
+[dependencies]
+aizome-kit.workspace = true
+# The mark, and the clock as the menu bar sets it.
+aizome-theme.workspace = true
+aizome-config.workspace = true
+aizome-ipc.workspace = true
+# Controllers, and the keyboard and PIN pad drawn for the sofa, which the
+# login screen shares.
+aizome-gamepad.workspace = true
+aizome-sofa.workspace = true
+# Pairing controllers through BlueZ, as Settei does.
+aizome-sys = { workspace = true, features = ["pam"] }
+# Films and episodes from the disk play through Utsushi's engine.
+aizome-media = { path = "../../crates/aizome-media" }
+# Films on the desktop's media controls and the media keys (MPRIS), as
+# Utsushi is.
+aizome-mpris = { path = "../../crates/aizome-mpris" }
+# Finding games in big collections and on drives: the files index the apps
+# share, which reads again only folders that changed.
+aizome-index = { path = "../../crates/aizome-index" }
+serde.workspace = true
+serde_json.workspace = true
+log.workspace = true
+env_logger.workspace = true
+# Controllers through evdev, cores through dlopen, shared memory for frames.
+libc = "0.2"
+libloading.workspace = true
+# Games' sound: a short-cycle stream of its own (aizome-media's is for
+# films, in long cycles). The same version and features as aizome-media's.
+pipewire = { version = "0.10.1", features = ["v1_2_0"] }
+# The PIN's hash (PBKDF2 over HMAC-SHA-256, written out here).
+sha2 = "0.10"
+# Zipped games: unpacked for their cores, and their CRCs checked (and
+# compared with the games' databases). Already built for the PNG decoder.
+miniz_oxide = "0.8"
+crc32fast = "1"
+# Box art and posters, decoded off the interface thread. The same version
+# and features as Shashin's, so nothing is built twice.
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp", "tiff", "ico"] }
+# Box art fetched from libretro-thumbnails, as Tenki fetches the weather.
+ureq = "3"
+# What EmulationStation's and Batocera's `gamelist.xml` say a game's
+# pictures are, as aizome-sys reads BlueZ's introspection.
+roxmltree = "0.21"
+# Which system's a CHD disc is (a Saturn's, a PlayStation's), from its
+# first sectors: CHD's codecs in Rust, the encoders left out.
+chd = { version = "0.4", default-features = false, features = ["std", "fast_lzma"] }
+
+[build-dependencies]
+# The cores' log function, in C (src/retro/log.c).
+cc = "1"

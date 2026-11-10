@@ -1,0 +1,140 @@
+//! Where Chanoma keeps things:
+//!
+//! - `$XDG_CONFIG_HOME/aizome/chanoma.json`: the grown-ups' settings and
+//!   rules (the PIN's hash, what kids may open, time limits, folders);
+//! - `$XDG_STATE_HOME/aizome/chanoma/`: today's minutes (`usage.json`),
+//!   wrong PINs (`lockout.json`), what was played lately (`recent.json`)
+//!   and controllers' button layouts set up here (`controllers.json`);
+//! - `$XDG_DATA_HOME/aizome/chanoma/`: games' saves (`saves/`), where they
+//!   were left (`states/`), each service's browser profile (`browser/`)
+//!   and BIOS files cores ask for (`system/`; `system-free/` when only
+//!   the free ones are offered).
+//! - `$XDG_CACHE_HOME/aizome/chanoma/unzipped/`: the last few zipped games
+//!   played, unpacked for their cores.
+//! - `$XDG_CACHE_HOME/aizome/chanoma/art/`: games' box art fetched from
+//!   libretro-thumbnails, by system (`art/snes/Game (USA).png`), and a
+//!   `.none` beside where one wasn't found.
+//!
+//! Every file is written whole and renamed over the old one.
+
+use std::path::{Path, PathBuf};
+
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Dirs {
+    /// Holds `chanoma.json`.
+    pub config: PathBuf,
+    pub state: PathBuf,
+    pub data: PathBuf,
+    /// The files index Aizome's apps share (`aizome_index`).
+    pub index: PathBuf,
+    /// What can be made again: zipped games unpacked (`unzipped/`), box
+    /// art fetched (`art/`).
+    pub cache: PathBuf,
+}
+
+fn xdg(var: &str, fallback: &str) -> PathBuf {
+    std::env::var_os(var)
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(fallback)))
+        .unwrap_or_else(|| PathBuf::from("/tmp"))
+}
+
+impl Dirs {
+    /// The shared files index, or one of its own (a temporary one) if it
+    /// can't be opened.
+    pub fn open_index(&self) -> aizome_index::Index {
+        aizome_index::Index::open_at(&self.index).unwrap_or_else(|e| {
+            log::warn!("chanoma: the files index: {e}; keeping one of its own");
+            let own = std::env::temp_dir().join(format!("chanoma-index-{}.sqlite", std::process::id()));
+            aizome_index::Index::open_at(&own).expect("a temporary files index")
+        })
+    }
+
+    /// The XDG places.
+    pub fn standard() -> Dirs {
+        Dirs {
+            config: xdg("XDG_CONFIG_HOME", ".config").join("aizome"),
+            state: xdg("XDG_STATE_HOME", ".local/state").join("aizome/chanoma"),
+            data: xdg("XDG_DATA_HOME", ".local/share").join("aizome/chanoma"),
+            index: xdg("XDG_CACHE_HOME", ".cache").join("aizome/index/files.sqlite"),
+            cache: xdg("XDG_CACHE_HOME", ".cache").join("aizome/chanoma"),
+        }
+    }
+
+    /// Everything under `root` (tests).
+    pub fn under(root: &Path) -> Dirs {
+        Dirs {
+            config: root.join("config"),
+            state: root.join("state"),
+            data: root.join("data"),
+            index: root.join("cache/index.sqlite"),
+            cache: root.join("cache/chanoma"),
+        }
+    }
+
+    pub fn settings(&self) -> PathBuf {
+        self.config.join("chanoma.json")
+    }
+
+    pub fn saves(&self) -> PathBuf {
+        self.data.join("saves")
+    }
+
+    pub fn states(&self) -> PathBuf {
+        self.data.join("states")
+    }
+
+    pub fn system(&self) -> PathBuf {
+        self.data.join("system")
+    }
+
+    /// The cores' system folder when they're offered only free BIOS
+    /// images (`Config::free_bios`).
+    pub fn free_system(&self) -> PathBuf {
+        self.data.join("system-free")
+    }
+
+    pub fn browser(&self) -> PathBuf {
+        self.data.join("browser")
+    }
+
+    pub fn unzipped(&self) -> PathBuf {
+        self.cache.join("unzipped")
+    }
+
+    /// Box art fetched, by system.
+    pub fn art(&self) -> PathBuf {
+        self.cache.join("art")
+    }
+}
+
+/// `path` as JSON, or the default where it's missing or unreadable.
+pub fn read<T: for<'de> Deserialize<'de> + Default>(path: &Path) -> T {
+    std::fs::read(path).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default()
+}
+
+/// `path` as JSON, if it's there and reads.
+pub fn read_opt<T: for<'de> Deserialize<'de>>(path: &Path) -> Option<T> {
+    std::fs::read(path).ok().and_then(|b| serde_json::from_slice(&b).ok())
+}
+
+/// Write `value` to `path` whole: a sibling file renamed over it.
+pub fn write<T: Serialize>(path: &Path, value: &T) -> std::io::Result<()> {
+    let bytes = serde_json::to_vec_pretty(value).map_err(std::io::Error::other)?;
+    write_bytes(path, &bytes)
+}
+
+/// Write `bytes` to `path` whole.
+pub fn write_bytes(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    let dir = path.parent().unwrap_or(Path::new("."));
+    std::fs::create_dir_all(dir)?;
+    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let tmp = dir.join(format!(".{name}.tmp"));
+    std::fs::write(&tmp, bytes)?;
+    std::fs::rename(&tmp, path).inspect_err(|_| {
+        let _ = std::fs::remove_file(&tmp);
+    })
+}
