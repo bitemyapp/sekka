@@ -593,6 +593,10 @@ a connection of its own to the compositor (`idle.rs`, with Keep Awake's
 - An app that leaves the bus, quitting or killed, lets go of all it held.
   VLC often leaves that way between one file and the next. One that asks
   and leaves at once ends with none, whichever the shell reads first.
+  The shell records the hold before checking that the caller is still on
+  the bus, and removes it if the check fails (including a timeout). This
+  also covers calls delayed past any number of other connections leaving;
+  no disconnect history is kept.
 - Cookies begin somewhere different each time the service starts. An app
   keeps the ones the shell before gave it and gives them back to the
   next, where they name none of its holds.
@@ -622,8 +626,10 @@ What it doesn't do:
   is left at `ignore`), so there's no idle sleep for a video to hold off.
   Sleep asked for otherwise isn't these apps' to block: that's Keep Awake.
 
-`cargo test -p aizome-sys screensaver` checks the holds against callers on
-a private bus: their cookies and whose they are, callers that send and
+`cargo test -p aizome-sys --lib screensaver` checks the holds, including a
+call delayed until its caller and 512 later connections have left, and
+cleanup when checking the caller fails. `cargo test -p aizome-sys --test
+screensaver` checks callers on a private bus: their cookies and whose they are, callers that send and
 leave without their answer, a cookie from the service before, and a
 connection that takes too many. `nix build .#aizome-checks.idle-inhibit`
 plays a looping video in Utsushi, mpv and VLC in a VM whose session locks

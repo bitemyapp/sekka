@@ -78,3 +78,10 @@ pub mod users;
 pub use bus::{Bus, Takeover};
 pub use error::{Error, Result};
 pub use service::{Task, Wake};
+
+// Share the private-bus fixture with tests of internal served interfaces.
+#[cfg(test)]
+extern crate self as aizome_sys;
+#[cfg(test)]
+#[path = "../tests/common/mod.rs"]
+mod test_bus;

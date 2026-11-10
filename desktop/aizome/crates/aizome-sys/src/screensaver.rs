@@ -17,6 +17,11 @@
 //! while there are any. If another service takes the name, the holds are
 //! forgotten: apps would give their cookies back to that one.
 //!
+//! A hold is recorded before checking whether its caller still owns its
+//! unique bus name. A disconnect already consumed by the watcher is then
+//! caught by the check; one arriving later removes the recorded hold. No
+//! history of departed connections is needed, even for delayed calls.
+//!
 //! Cookies begin somewhere different each time the service starts. An app
 //! keeps its cookies when the shell starts again and gives them back to
 //! the new service, where they must name none of its holds. A connection
@@ -31,11 +36,11 @@
 //! give it up (or isn't ours to replace, [`Takeover`]),
 //! [`ScreenSaver::available`] is false and there are no holds.
 
-use crate::bus::{self, Bus, Takeover};
+use crate::bus::{self, Bus, Opts, Takeover};
 use crate::error::{Error, Result};
 use crate::service::{Model, Stop, Wake, lock, service_handle};
 use futures_lite::StreamExt;
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::BTreeMap;
 use std::num::NonZeroU32;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
@@ -51,11 +56,6 @@ const DBUS: &str = "org.freedesktop.DBus";
 /// name going to another service.
 const OWNER_RULE: &str = "type='signal',sender='org.freedesktop.DBus',interface='org.freedesktop.DBus',\
                           member='NameOwnerChanged'";
-
-/// How many connections are remembered as having left. The bus never
-/// gives a unique name twice, and a call is read within moments of its
-/// connection's leaving, so the last few are enough.
-const LEFT_KEPT: usize = 256;
 
 /// How many holds one connection may have at once. A player has one or
 /// two; the GTK portal holds for every app that asks it, on its one
@@ -125,8 +125,6 @@ impl ScreenSaverState {
 /// Why a hold wasn't given.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Refused {
-    /// The connection had already left the bus: nobody would ever let go.
-    Gone,
     /// The connection has as many holds as one may.
     TooMany,
 }
@@ -137,10 +135,6 @@ pub enum Refused {
 pub struct Holds {
     last: u32,
     held: BTreeMap<Cookie, Hold>,
-    /// The connections last seen leaving. Calls and the bus's word of a
-    /// connection's leaving are read apart, so an app that takes a hold
-    /// and leaves at once may be seen leaving first.
-    left: VecDeque<Peer>,
 }
 
 impl Holds {
@@ -154,9 +148,6 @@ impl Holds {
 
     /// `peer` takes a hold, and gets it as it's kept.
     pub fn take(&mut self, peer: Peer, app: &str, reason: &str) -> Result<Hold, Refused> {
-        if self.left.contains(&peer) {
-            return Err(Refused::Gone);
-        }
         if self.held.values().filter(|h| h.peer == peer).count() >= MAX_HOLDS_PER_PEER {
             return Err(Refused::TooMany);
         }
@@ -177,13 +168,10 @@ impl Holds {
         if self.held.get(&cookie).is_some_and(|h| h.peer == *peer) { self.held.remove(&cookie) } else { None }
     }
 
-    /// `peer` left the bus: its holds go with it, and it takes no more.
+    /// `peer` left the bus: its holds go with it. The served interface
+    /// checks the bus for callers whose disconnect preceded their call.
     pub fn peer_left(&mut self, peer: Peer) -> Vec<Hold> {
         let cookies: Vec<Cookie> = self.held.values().filter(|h| h.peer == peer).map(|h| h.cookie).collect();
-        if self.left.len() == LEFT_KEPT {
-            self.left.pop_front();
-        }
-        self.left.push_back(peer);
         cookies.iter().filter_map(|c| self.held.remove(c)).collect()
     }
 
@@ -239,20 +227,43 @@ fn caller(header: &zbus::message::Header<'_>) -> fdo::Result<Peer> {
 
 #[zbus::interface(name = "org.freedesktop.ScreenSaver")]
 impl Server {
-    fn inhibit(
+    async fn inhibit(
         &self,
         application_name: String,
         reason_for_inhibit: String,
         #[zbus(header)] header: zbus::message::Header<'_>,
+        #[zbus(connection)] connection: &zbus::Connection,
     ) -> fdo::Result<u32> {
         let peer = caller(&header)?;
         let taken = self.0.change(|holds| holds.take(peer, &application_name, &reason_for_inhibit));
         let hold = taken.map_err(|refused| match refused {
-            Refused::Gone => fdo::Error::Failed("the caller has left the bus".into()),
             Refused::TooMany => fdo::Error::LimitsExceeded(format!(
                 "this connection has {MAX_HOLDS_PER_PEER} holds already: give one back with UnInhibit"
             )),
         })?;
+        // Register first, then check: checking before registration would
+        // let a disconnect between the two leave an orphaned hold. Unique
+        // names are never reused. A failed/timed-out check fails closed.
+        let bus = Bus::from_connection(connection.clone());
+        let error = match bus
+            .call_async::<_, bool>(
+                Opts::QUERY,
+                DBUS,
+                "/org/freedesktop/DBus",
+                DBUS,
+                "NameHasOwner",
+                &(hold.peer.as_str(),),
+            )
+            .await
+        {
+            Ok(true) => None,
+            Ok(false) => Some("the caller has left the bus".to_owned()),
+            Err(error) => Some(format!("could not check the caller: {error}")),
+        };
+        if let Some(error) = error {
+            self.0.change(|holds| holds.release(&hold.peer, hold.cookie));
+            return Err(fdo::Error::Failed(error));
+        }
         log::info!("aizome-sys: {:?} ({}) keeps the screen awake: {:?}", hold.app, hold.peer.as_str(), hold.reason);
         Ok(hold.cookie.get())
     }
@@ -411,6 +422,82 @@ fn follow_owners(bus: Bus, table: Table, stop: Stop) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_bus::{TestBus, eventually};
+
+    #[test]
+    fn a_delayed_call_cannot_outlive_its_caller_after_connection_churn() {
+        let bus = TestBus::start().expect("a private dbus-daemon");
+        let connection = bus.bus();
+        let saver = ScreenSaver::start(&connection, Wake::none(), Takeover::Any).unwrap();
+        let sentinel = bus.builder().build().unwrap();
+        sentinel.call_method(Some(NAME), KDE_PATH, Some(NAME), "Inhibit", &("sentinel", "barrier")).unwrap();
+
+        let iface = zbus::block_on(connection.connection().object_server().interface::<_, Server>(PATH)).unwrap();
+        // Pause only method dispatch, leaving the independent owner watcher
+        // free to consume disconnects while the call waits.
+        let guard = zbus::block_on(iface.get_mut());
+        let app = bus.builder().build().unwrap();
+        let sender = app.unique_name().unwrap().to_owned();
+        let call = zbus::Message::method_call(PATH, "Inhibit")
+            .unwrap()
+            .destination(NAME)
+            .unwrap()
+            .interface(NAME)
+            .unwrap()
+            .build(&("departed caller", "delayed call"))
+            .unwrap();
+        app.send(&call).unwrap();
+        drop(app);
+        let daemon = zbus::blocking::fdo::DBusProxy::new(&sentinel).unwrap();
+        assert!(eventually(|| !daemon.name_has_owner(sender.clone().into()).unwrap()));
+        // More than the former 256-entry disconnect history. Check that each
+        // disconnect has reached the daemon before dropping the sentinel.
+        for _ in 0..512 {
+            let other = bus.builder().build().unwrap();
+            let name = other.unique_name().unwrap().to_owned();
+            drop(other);
+            assert!(eventually(|| !daemon.name_has_owner(name.clone().into()).unwrap()));
+        }
+        drop(daemon);
+        drop(sentinel);
+        // Its hold disappearing proves the owner watcher consumed all the
+        // earlier disconnect signals, including the departed caller's.
+        assert!(eventually(|| !saver.snapshot().held()));
+        let before = saver.generation();
+        drop(guard);
+        assert!(eventually(|| saver.generation() > before), "the queued call never ran");
+        // The handler holds an interface read lock through its async work.
+        // Taking the write lock waits for it to finish, without a sleep.
+        let _finished = zbus::block_on(iface.get_mut());
+        assert!(!saver.snapshot().held(), "a departed caller left a hold: {:?}", saver.snapshot().holds);
+    }
+
+    #[test]
+    fn a_failed_caller_check_releases_the_registered_hold() {
+        let bus = TestBus::start().expect("a private dbus-daemon");
+        let connection = bus.bus();
+        let call = zbus::Message::method_call(PATH, "Inhibit")
+            .unwrap()
+            .sender(connection.unique_name().unwrap())
+            .unwrap()
+            .build(&())
+            .unwrap();
+        let table = Table {
+            holds: Arc::new(Mutex::new(Holds::default())),
+            model: Arc::new(Model::new(ScreenSaverState::default(), Wake::none())),
+        };
+        // No owner watcher in this test: the failed query itself must clean
+        // up, rather than relying on a disconnect signal to do it later.
+        zbus::block_on(connection.connection().clone().close()).unwrap();
+        let result = zbus::block_on(Server(table.clone()).inhibit(
+            "player".into(),
+            "video".into(),
+            call.header(),
+            connection.connection(),
+        ));
+        assert!(result.is_err(), "an unverified caller was accepted");
+        assert!(!table.model.get().held(), "a failed check left a hold");
+    }
 
     fn peer(name: &str) -> Peer {
         Peer::new(name).expect("a unique name")
@@ -488,22 +575,6 @@ mod tests {
         assert_eq!(holds.peer_left(peer(":1.7")).len(), 2);
         assert_eq!(holds.state().holds.iter().map(|h| h.cookie).collect::<Vec<_>>(), [kept]);
         assert!(holds.peer_left(peer(":1.7")).is_empty());
-    }
-
-    #[test]
-    fn a_connection_seen_leaving_first_takes_no_hold() {
-        let mut holds = Holds::default();
-        // Its call is read after the bus's word that it left.
-        holds.peer_left(peer(":1.7"));
-        assert_eq!(holds.take(peer(":1.7"), "a script", "one call"), Err(Refused::Gone));
-        assert!(!holds.state().held());
-        assert!(holds.take(peer(":1.8"), "a player", "").is_ok(), "others still do");
-        // Only the last few are remembered: enough, as no name comes twice.
-        for n in 0..LEFT_KEPT {
-            holds.peer_left(peer(&format!(":2.{n}")));
-        }
-        assert_eq!(holds.left.len(), LEFT_KEPT);
-        assert!(!holds.left.contains(&peer(":1.7")));
     }
 
     #[test]
