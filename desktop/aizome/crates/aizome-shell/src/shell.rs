@@ -1004,15 +1004,35 @@ impl Shell {
 
     pub(crate) fn save_section(&mut self, section: &str) {
         match section {
-            "deskbar" => self.settings.set_shell_section("deskbar", &self.deskbar_cfg),
-            "menubar" => self.settings.set_shell_section("menubar", &self.bar_cfg),
-            "notifications" => self.settings.set_shell_section("notifications", &self.notes_cfg),
+            "deskbar" => {
+                let cfg = self.deskbar_cfg.clone();
+                self.change_settings("the settings", |s| s.set_shell_section("deskbar", &cfg));
+            }
+            "menubar" => {
+                let cfg = self.bar_cfg.clone();
+                self.change_settings("the settings", |s| s.set_shell_section("menubar", &cfg));
+            }
+            "notifications" => {
+                let cfg = self.notes_cfg.clone();
+                self.change_settings("the settings", |s| s.set_shell_section("notifications", &cfg));
+            }
             _ => {}
         }
+    }
+
+    /// Makes a change of this shell's to the settings and writes it to the
+    /// file. The file is read again first and only `change` made to it, so
+    /// what another program wrote since this shell last read it stays (the
+    /// compositor writes the Desks, Settei everything): saved whole from
+    /// the copy here, a Desk added a moment ago would be gone again. The
+    /// copy here takes the same change, and the rest of the file when the
+    /// file's watcher or the compositor says it changed.
+    pub(crate) fn change_settings(&mut self, what: &str, change: impl Fn(&mut Settings)) {
+        change(&mut self.settings);
         if self.opts.live
-            && let Err(e) = self.settings.save()
+            && let Err(e) = save_change(&Settings::path(), &self.settings, &change)
         {
-            log::warn!("saving the settings: {e}");
+            log::warn!("saving {what}: {e}");
         }
     }
 
@@ -1911,12 +1931,9 @@ impl Shell {
     /// Night or Day: written to the settings, which the compositor and every
     /// app follow.
     pub fn set_theme(&mut self, day: bool) {
-        self.settings.appearance.theme =
-            if day { aizome_config::ThemeChoice::Day } else { aizome_config::ThemeChoice::Night };
+        let theme = if day { aizome_config::ThemeChoice::Day } else { aizome_config::ThemeChoice::Night };
+        self.change_settings("the theme", |s| s.appearance.theme = theme);
         if self.opts.live {
-            if let Err(e) = self.settings.save() {
-                log::warn!("saving the theme: {e}");
-            }
             self.ipc.send(Request::ReloadConfig);
         }
         self.theme_changed(day);
@@ -2015,6 +2032,25 @@ impl Shell {
     }
 }
 
+/// Writes `change` to the settings file at `path`: made to the file as it
+/// is now. A file that can't be read (it doesn't parse) is written from
+/// `held` instead, the settings last read from it, which have the change
+/// already.
+fn save_change(
+    path: &std::path::Path,
+    held: &Settings,
+    change: &dyn Fn(&mut Settings),
+) -> Result<(), aizome_config::Error> {
+    let fresh = match Settings::load_from(path) {
+        Ok(mut fresh) => {
+            change(&mut fresh);
+            fresh
+        }
+        Err(_) => held.clone(),
+    };
+    fresh.save_to(path)
+}
+
 /// Whether this shell runs an Aizome session (not a test beside another
 /// desktop): only then does it hold logind's sleep, serve polkit, and lock
 /// for logind.
@@ -2110,6 +2146,43 @@ impl Shell {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The shell's own change goes into the file as the file is now: a Desk
+    /// the compositor wrote after the shell last read the settings stays.
+    #[test]
+    fn a_change_is_saved_into_the_file_as_it_is_now() {
+        let dir = std::env::temp_dir().join(format!("aizome-shell-settings-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("settings.toml");
+        // What this shell read, and what the file holds since: a fifth Desk.
+        let mut held = Settings::from_toml("[appearance]\neffects = \"austere\"\n").unwrap();
+        let mut file = held.clone();
+        file.desks = (1..=5).map(|n| aizome_config::DeskConfig::named(n.to_string())).collect();
+        file.save_to(&path).unwrap();
+        let fold = |s: &mut Settings| {
+            let mut deskbar = s.deskbar_settings();
+            deskbar.collapsed = true;
+            s.set_shell_section("deskbar", &deskbar);
+        };
+        fold(&mut held);
+        save_change(&path, &held, &fold).unwrap();
+        let saved = Settings::load_from(&path).unwrap();
+        assert_eq!(saved.desks, file.desks, "the Desks written meanwhile stay");
+        assert!(saved.deskbar_settings().collapsed, "with the shell's change");
+        assert_eq!(saved.appearance, held.appearance);
+        // A file that doesn't parse can't be changed: what the shell holds
+        // is written, as it always was.
+        std::fs::write(&path, "[appearance\n").unwrap();
+        save_change(&path, &held, &fold).unwrap();
+        assert_eq!(Settings::load_from(&path).unwrap(), held);
+        // No file yet: the defaults, with the change.
+        std::fs::remove_file(&path).unwrap();
+        save_change(&path, &held, &fold).unwrap();
+        let saved = Settings::load_from(&path).unwrap();
+        assert!(saved.deskbar_settings().collapsed && saved.desks.is_empty());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 
     fn running_settings() -> (aizome_kit::testing::Harness<Shell>, std::sync::mpsc::Receiver<(Request, Option<u64>)>) {
         let mut h = aizome_kit::testing::Harness::new(Shell::new(Options::default()));
