@@ -335,10 +335,6 @@ fn lazy_rows_show_what_rows_built_outright_show() {
             send("more room around the rows", Msg::Roomy(true)),
             step("a narrower window", resize(Size::new(470.0, 300.0))),
             send("a message after the resize", Msg::Again),
-            // The focus out of the rows before they scroll: the ring of a
-            // focused field scrolled past its scroll view's edge leaves a
-            // few pixels behind, with or without lazy elements.
-            step("a click in the title", click("title")),
             step("the wheel", wheel(60.0)),
             send("a switch out of sight", Msg::Toggle(1, false)),
             send("a switch in sight", Msg::Toggle(6, true)),

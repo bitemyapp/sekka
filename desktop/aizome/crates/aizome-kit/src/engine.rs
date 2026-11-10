@@ -193,6 +193,9 @@ pub(crate) struct Win {
     /// layout made before holds, so the next view mounts the tree anew
     /// though it keeps nodes.
     mount_anew: bool,
+    /// Where the focus ring was when its place was last followed
+    /// ([`Core::follow_ring`]), if it showed.
+    ring: Option<Rect>,
 }
 
 impl Win {
@@ -239,6 +242,7 @@ impl Win {
             videos: Vec::new(),
             opaque: None,
             mount_anew: false,
+            ring: None,
         }
     }
 
@@ -275,6 +279,19 @@ impl Win {
     /// A live node that may receive input in the current modal scope.
     fn input_node(&self, id: NodeId) -> Option<usize> {
         self.tree.get(id).filter(|&i| self.modal().is_none_or(|m| m == i || self.tree.is_ancestor(m, i)))
+    }
+
+    /// The node the focus ring is drawn around now, if it's drawn: the
+    /// focused one, where its widget shows a ring for how the focus came,
+    /// in a window that has the keyboard.
+    fn ringed(&self) -> Option<usize> {
+        let i = self.focused.and_then(|f| self.tree.get(f))?;
+        let show = match self.tree.nodes[i].widget.focus_ring() {
+            crate::widget::FocusRing::Always => true,
+            crate::widget::FocusRing::Keyboard => self.focus_visible,
+            crate::widget::FocusRing::Never => false,
+        };
+        (show && (self.has_keyboard || self.is_popup())).then_some(i)
     }
 }
 
@@ -838,6 +855,7 @@ impl Core {
             self.restart_ahead(win, platform);
         }
         self.sync_videos(win, platform);
+        self.follow_ring(win, platform);
     }
 
     /// Place the window's videos where its video elements were laid out
@@ -996,6 +1014,7 @@ impl Core {
         }
         self.follow_anchors(win, platform);
         self.sync_videos(win, platform);
+        self.follow_ring(win, platform);
         self.stats.view_layout(started.elapsed());
     }
 
@@ -1043,6 +1062,7 @@ impl Core {
         for (node, key, after) in timers {
             self.widget_timer(win, node, key, after, platform);
         }
+        self.follow_ring(win, platform);
         size
     }
 
@@ -1131,6 +1151,7 @@ impl Core {
         }
         w.tree = tree;
         w.dirty = false;
+        self.follow_ring(win, platform);
     }
 
     /// Move the popovers of `win` whose anchors moved (a list scrolled, a
@@ -1973,6 +1994,7 @@ impl Core {
         let id = id.filter(|id| w.input_node(*id).is_some());
         if w.focused == id {
             w.focus_visible = visible || w.focus_visible;
+            self.follow_ring(win, platform);
             return;
         }
         let old = std::mem::replace(&mut w.focused, id);
@@ -2000,9 +2022,33 @@ impl Core {
             let r = self.wins[&win].tree.nodes[i].rect;
             self.reveal(win, i, r, platform);
         }
+        self.follow_ring(win, platform);
         // Hidden and drawn ahead: drawn again with the focus where it is.
         if self.wins.get(&win).is_some_and(|w| w.hidden && w.ahead.is_some()) {
             self.restart_ahead(win, platform);
+        }
+    }
+
+    /// Have the focus ring drawn where it now is, and what was under it
+    /// drawn where it no longer is.
+    ///
+    /// The ring is drawn over everything, around the focused widget, and
+    /// up to three points past what clips the widget, so a field flush
+    /// with its scroll view's edge shows it whole. The comparison of one
+    /// layout with the next draws a widget again within what clips it, and
+    /// pixels a scroll moves are moved within the scroll view: neither
+    /// reaches the part of the ring outside. So the ring's place is kept
+    /// here, and whenever it may have changed (a layout, the focus or the
+    /// keyboard moving) the old place and the new are drawn again if they
+    /// differ.
+    fn follow_ring(&mut self, win: WinId, platform: &mut dyn Platform) {
+        let Some(w) = self.wins.get_mut(&win) else { return };
+        let ring = w.ringed().map(|i| w.tree.nodes[i].ring_rect()).filter(|r| r.area() > 0.0);
+        if ring != w.ring {
+            for r in [w.ring, ring].into_iter().flatten() {
+                platform.invalidate(win, r);
+            }
+            w.ring = ring;
         }
     }
 
@@ -2437,6 +2483,7 @@ impl Core {
             platform.invalidate(win, w.tree.nodes[i].own_rect().inflate(3.0, 3.0));
             self.send(win, i, &Event::WindowFocus(on), platform);
         }
+        self.follow_ring(win, platform);
     }
 
     pub fn ime(&mut self, win: WinId, ime: Ime, platform: &mut dyn Platform) {
@@ -2915,21 +2962,14 @@ impl Core {
             now: Instant::now(),
         };
         w.tree.paint(canvas, &mut env);
-        // The focus ring, over everything.
-        if let Some(i) = w.focused.and_then(|f| w.tree.get(f)) {
+        // The focus ring, over everything. (Where it's drawn is followed by
+        // `follow_ring`: change the two together.)
+        if let Some(i) = w.ringed() {
             let n = &w.tree.nodes[i];
-            let ring = n.widget.focus_ring();
-            let show = match ring {
-                crate::widget::FocusRing::Always => true,
-                crate::widget::FocusRing::Keyboard => w.focus_visible,
-                crate::widget::FocusRing::Never => false,
-            };
-            if show && (w.has_keyboard || w.is_popup()) {
-                canvas.save();
-                canvas.clip_rect(n.clip.inflate(3.0, 3.0));
-                crate::draw::focus_ring(canvas, n.rect, self.theme.focus());
-                canvas.restore();
-            }
+            canvas.save();
+            canvas.clip_rect(n.ring_clip());
+            crate::draw::focus_ring(canvas, n.rect, self.theme.focus());
+            canvas.restore();
         }
         if crate::inspect::enabled() {
             self.inspect(win);

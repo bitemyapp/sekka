@@ -132,6 +132,25 @@ impl Node {
         let reach = self.widget.overflow().max(if self.widget.focusable() != Focusable::No { 3.0 } else { 0.0 });
         self.rect.inflate(reach, reach).intersect(self.clip)
     }
+
+    /// How far past what clips this node its focus ring may be drawn.
+    const RING_PAST_CLIP: f64 = 3.0;
+
+    /// What clips the focus ring when it's drawn around this node: what
+    /// clips the node, and a little more, so that a field flush with its
+    /// scroll view's edge shows its ring whole.
+    pub fn ring_clip(&self) -> Rect {
+        self.clip.inflate(Node::RING_PAST_CLIP, Node::RING_PAST_CLIP)
+    }
+
+    /// What the focus ring covers when it's drawn around this node (and a
+    /// point more). Part of that is outside what clips the node, and so
+    /// outside [`own_rect`](Self::own_rect), which is what the comparison
+    /// of one layout with the next draws again: the ring's place is
+    /// followed apart from that, by the window.
+    pub fn ring_rect(&self) -> Rect {
+        self.rect.inflate(3.0, 3.0).intersect(self.ring_clip())
+    }
 }
 
 /// A popover found while mounting: its node and its content.
