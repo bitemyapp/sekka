@@ -136,8 +136,9 @@ impl Pane for Trackpad {
         // Off, the rest is greyed and kept for when it's on again.
         let on = t.enabled();
         let mut sections = vec![
-            // No caption, as the switches that lead Bluetooth and Network:
-            // the pane's title names it, and with one the pane is taller
+            // When the trackpad acts at all, on one card without a caption,
+            // as the switches that lead Bluetooth and Network. A section of
+            // the switch's own, with Typing's below, made the pane taller
             // than Settei's window as it opens.
             vcx.section(
                 "",
@@ -147,6 +148,9 @@ impl Pane for Trackpad {
                     } else {
                         "The trackpad is off. The settings below apply when it's on again."
                     }),
+                    row("Ignore the trackpad while typing", toggle(t.disable_while_typing).enabled(on).on_toggle(Msg::WhileTyping))
+                        .entry("disable-while-typing")
+                        .help("A palm brushing the pad while you type doesn't move the pointer or click."),
                 ],
             ),
             vcx.section(
@@ -192,14 +196,6 @@ impl Pane for Trackpad {
                     row("Scrolling speed", speed_slider_enabled(scroll, ValueRange::new(0.2, 3.0).unwrap(), "Slow", "Fast", on, Msg::ScrollSpeed))
                         .entry("scroll-speed")
                         .detail(format!("{scroll:.1}×")),
-                ],
-            ),
-            vcx.section(
-                "Typing",
-                vec![
-                    row("Ignore the trackpad while typing", toggle(t.disable_while_typing).enabled(on).on_toggle(Msg::WhileTyping))
-                        .entry("disable-while-typing")
-                        .help("A palm brushing the pad while you type doesn't move the pointer or click."),
                 ],
             ),
         ];
