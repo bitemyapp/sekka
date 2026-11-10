@@ -169,7 +169,14 @@ which acts through the compositor.
 `aizome-config`. Settings (Settei) writes it and sends `reload-config` to
 the compositor, which applies it and broadcasts `config-changed`; the shell
 and kit apps reload on that event (kit apps also watch the file, so they
-need no socket). Missing keys take defaults; unknown keys are kept.
+need no socket). Settei isn't the only writer: the shell writes what's
+changed from the bar and the Deskbar (the Deskbar's settings, Do Not
+Disturb, the theme and size, Night Light, `location`), Shashin the
+wallpaper, and the login session's compositor its Desks
+(`docs/compositor.md`), saying `config-changed` itself. Each reads the
+file again, makes its change and writes the file whole, so nobody saves
+over another's change from an older copy. Missing keys take defaults;
+unknown keys are kept, comments aren't.
 Sections: `appearance` (theme, follow sunset, focus colour, effects, size,
 reduced motion, wallpaper), `input` (keyboard layouts, repeat, pointer,
 touchpad), `outputs` (by make/model/serial: mode, scale, position,
