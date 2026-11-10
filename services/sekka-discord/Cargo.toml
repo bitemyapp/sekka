@@ -29,3 +29,5 @@ tokio = { version = "=1.54.1", features = ["rt-multi-thread", "net", "time", "sy
 [dev-dependencies]
 http-body = "=1.1.0"
 parking_lot = "=0.12.5"
+# Tests alone pause the runtime's clock, to reach a deadline without waiting.
+tokio = { version = "=1.54.1", features = ["test-util"] }

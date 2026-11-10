@@ -630,6 +630,37 @@ mod tests {
         }
     }
 
+    /// Arrives a frame at a time, as a body read from a connection does, and
+    /// then either ends or sends nothing more.
+    struct Frames {
+        frames: VecDeque<Bytes>,
+        ends: bool,
+    }
+
+    impl HttpBody for Frames {
+        type Data = Bytes;
+        type Error = std::convert::Infallible;
+
+        fn poll_frame(
+            self: Pin<&mut Self>,
+            _: &mut TaskContext<'_>,
+        ) -> Poll<Option<Result<Frame<Bytes>, Self::Error>>> {
+            let body = self.get_mut();
+            match body.frames.pop_front() {
+                Some(frame) => Poll::Ready(Some(Ok(Frame::data(frame)))),
+                None if body.ends => Poll::Ready(None),
+                None => Poll::Pending,
+            }
+        }
+    }
+
+    fn frames(body: &[u8], size: usize, ends: bool) -> Body {
+        Body::new(Frames {
+            frames: body.chunks(size).map(Bytes::copy_from_slice).collect(),
+            ends,
+        })
+    }
+
     #[test]
     fn signature_authenticates_exact_bytes_and_secret() {
         let fixture = Fixture::new();
@@ -652,6 +683,37 @@ mod tests {
         assert_eq!(read(&other, body), Err(StatusCode::UNAUTHORIZED));
         assert!(signature_bytes("sha256=00").is_none());
         assert!(signature_bytes("sha1=0000000000000000000000000000000000000000").is_none());
+    }
+
+    #[test]
+    fn signature_covers_every_frame_of_a_body() {
+        let fixture = Fixture::new();
+        let read = |sent: &[u8], size: usize, signed: &[u8]| {
+            let signature = signature_bytes(&sign(signed)).unwrap();
+            let deadline = Instant::now() + BODY_TIMEOUT;
+            runtime()
+                .block_on(read_body(
+                    &fixture.receiver,
+                    frames(sent, size, true),
+                    &signature,
+                    deadline,
+                ))
+                .map(|held| held.bytes)
+                .map_err(|refused| refused.0)
+        };
+        // A delivery's own bytes are taken however they are cut into frames.
+        for size in [1, 7, PAYLOAD.len() - 1, PAYLOAD.len()] {
+            assert_eq!(read(PAYLOAD, size, PAYLOAD), Ok(PAYLOAD.to_vec()), "{size}");
+        }
+        // A signature for the first frame does not vouch for the frames after
+        // it, and a change in the last frame alone is a change to the body.
+        assert_eq!(
+            read(PAYLOAD, 7, &PAYLOAD[..7]),
+            Err(StatusCode::UNAUTHORIZED)
+        );
+        let mut altered = PAYLOAD.to_vec();
+        *altered.last_mut().unwrap() = b' ';
+        assert_eq!(read(&altered, 7, PAYLOAD), Err(StatusCode::UNAUTHORIZED));
     }
 
     #[test]
@@ -871,6 +933,68 @@ mod tests {
                 SHARED_BODIES
             );
             assert_eq!(probe.drops.load(Ordering::Relaxed), 1);
+        });
+    }
+
+    #[test]
+    fn body_in_many_frames_returns_all_it_took_of_the_shared_allowance() {
+        let fixture = Fixture::new();
+        let shared = &fixture.receiver.shared_bodies;
+        let beyond = 300 * 1024;
+        let mut payload = PAYLOAD.to_vec();
+        payload.resize(UNSHARED_BODY + beyond, b' ');
+        let signature = sign(&payload);
+        let delivery = |ends: bool| {
+            receive(
+                State(fixture.receiver.clone()),
+                request(frames(&payload, 64 * 1024, ends), Some(&signature)),
+            )
+        };
+        runtime().block_on(async {
+            // Stalled after its last frame, it holds what its frames brought
+            // beyond the unshared part, and gives all of it back when it goes.
+            let mut pending = Box::pin(delivery(false));
+            poll_fn(|cx| {
+                assert!(pending.as_mut().poll(cx).is_pending());
+                Poll::Ready(())
+            })
+            .await;
+            assert_eq!(shared.available_permits(), SHARED_BODIES - beyond);
+            drop(pending);
+            assert_eq!(shared.available_permits(), SHARED_BODIES);
+            // Taken whole, it is committed and gives back the same.
+            assert_eq!(delivery(true).await.0, StatusCode::ACCEPTED);
+            assert_eq!(shared.available_permits(), SHARED_BODIES);
+        });
+    }
+
+    #[test]
+    fn body_has_its_own_deadline_ahead_of_the_one_for_the_request() {
+        let fixture = Fixture::new();
+        // On a clock that only moves to the next deadline, so nothing waits.
+        let paused = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .start_paused(true)
+            .build()
+            .unwrap();
+        paused.block_on(async {
+            let probe = Arc::new(BodyProbe::default());
+            let started = Instant::now();
+            let response = receive(
+                State(fixture.receiver.clone()),
+                request(Body::new(PendingBody(probe.clone())), Some(&sign(b""))),
+            )
+            .await;
+            assert_eq!(
+                response,
+                (StatusCode::REQUEST_TIMEOUT, "body read timed out\n")
+            );
+            let waited = started.elapsed();
+            assert!(
+                waited >= BODY_TIMEOUT && waited < BODY_TIMEOUT + Duration::from_secs(1),
+                "{waited:?}"
+            );
+            assert!(BODY_TIMEOUT + Duration::from_secs(1) < REQUEST_TIMEOUT);
         });
     }
 
@@ -1127,8 +1251,13 @@ mod tests {
         }
     }
 
+    /// A connection on which nothing is waited for longer than a test may
+    /// take. If the listener stops accepting and its queue fills, connecting
+    /// fails here after ten seconds, not after the kernel's two minutes of
+    /// retries.
     fn connect(address: SocketAddr) -> std::net::TcpStream {
-        let stream = std::net::TcpStream::connect(address).unwrap();
+        let stream =
+            std::net::TcpStream::connect_timeout(&address, Duration::from_secs(10)).unwrap();
         stream
             .set_read_timeout(Some(Duration::from_secs(30)))
             .unwrap();
@@ -1143,10 +1272,53 @@ mod tests {
     }
 
     /// The status line of the answer; nothing if the connection closed without one.
-    fn answer(mut stream: std::net::TcpStream) -> String {
-        let mut answer = String::new();
-        let _ = stream.read_to_string(&mut answer);
-        answer.lines().next().unwrap_or_default().to_owned()
+    fn answer(stream: std::net::TcpStream) -> String {
+        let answered = answered(stream);
+        answered.lines().next().unwrap_or_default().to_owned()
+    }
+
+    /// All the listener sends before it closes the connection. It serves one
+    /// request on each, so the close follows the answer: a connection left
+    /// open after its answer fails here instead of waiting out a deadline.
+    fn answered(mut stream: std::net::TcpStream) -> String {
+        let mut answered = Vec::new();
+        let mut read = [0; 4096];
+        loop {
+            match stream.read(&mut read) {
+                Ok(0) => break,
+                Ok(count) => {
+                    answered.extend_from_slice(&read[..count]);
+                    stream
+                        .set_read_timeout(Some(Duration::from_secs(5)))
+                        .unwrap();
+                }
+                Err(error) => {
+                    let waited = matches!(
+                        error.kind(),
+                        std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+                    );
+                    assert!(
+                        !waited || answered.is_empty(),
+                        "the connection stayed open after its answer"
+                    );
+                    break;
+                }
+            }
+        }
+        String::from_utf8_lossy(&answered).into_owned()
+    }
+
+    /// Waits for a state the listener is on its way to, and fails if it is not
+    /// reached in a time no test here needs.
+    fn eventually(what: &str, mut reached: impl FnMut() -> bool) {
+        let limit = std::time::Instant::now() + Duration::from_secs(10);
+        while !reached() {
+            assert!(
+                std::time::Instant::now() < limit,
+                "the listener did not get as far as: {what}"
+            );
+            std::thread::sleep(Duration::from_millis(5));
+        }
     }
 
     fn deliver(address: SocketAddr) -> String {
@@ -1158,16 +1330,20 @@ mod tests {
         answer(stream)
     }
 
+    /// Whether the listener still holds this connection, which is set not to block.
+    fn is_open(mut stream: &std::net::TcpStream) -> bool {
+        let waiting = stream.read(&mut [0]);
+        waiting.is_err_and(|error| error.kind() == std::io::ErrorKind::WouldBlock)
+    }
+
     /// How many of these connections, set not to block, the listener still holds.
     fn still_open(streams: &[std::net::TcpStream]) -> usize {
-        streams
-            .iter()
-            .filter(|stream| {
-                let mut stream: &std::net::TcpStream = stream;
-                let waiting = stream.read(&mut [0]);
-                waiting.is_err_and(|error| error.kind() == std::io::ErrorKind::WouldBlock)
-            })
-            .count()
+        streams.iter().filter(|stream| is_open(stream)).count()
+    }
+
+    fn receipts(listening: &Listening) -> u64 {
+        let mut store = listening.fixture.receiver.store.lock().unwrap();
+        store.status().unwrap()["receipts"].as_u64().unwrap()
     }
 
     #[test]
@@ -1242,6 +1418,7 @@ mod tests {
             connection: Duration::from_secs(600),
         };
         let listening = listen(limits);
+        let gate = &listening.gate;
         let workers = Arc::clone(&listening.fixture.receiver.in_flight)
             .try_acquire_many_owned(MAX_IN_FLIGHT as u32)
             .unwrap();
@@ -1249,27 +1426,188 @@ mod tests {
         delivery
             .write_all(head(&sign(PAYLOAD), PAYLOAD.len()).as_bytes())
             .unwrap();
+        // With its body still to come it can only be unverified, so it is seen
+        // on the list before it can leave it. The listener takes a place a
+        // moment before it lists the connection, and "one place taken, nobody
+        // listed" is as true in that moment as once the delivery has verified:
+        // only having seen it listed first tells the two apart.
+        eventually("listing the delivery", || gate.unproven().len() == 1);
         delivery.write_all(PAYLOAD).unwrap();
-        // Once verified it is no longer among the connections that give way.
-        let settled = std::time::Instant::now() + Duration::from_secs(20);
-        while (listening.gate.places.available_permits() != limits.connections - 1
-            || !listening.gate.unproven().is_empty())
-            && std::time::Instant::now() < settled
-        {
-            std::thread::sleep(Duration::from_millis(10));
-        }
-        assert!(listening.gate.unproven().is_empty());
+        // It leaves the list by verifying or by ending, and only a verified
+        // delivery, here waiting for a worker, leaves it with its place.
+        eventually("taking the delivery off the list", || {
+            gate.unproven().is_empty()
+        });
+        assert_eq!(gate.places.available_permits(), limits.connections - 1);
         // Newcomers take the other places and push each other out of them.
         let idle: Vec<_> = (0..40).map(|_| connect(listening.address)).collect();
         for stream in &idle {
             stream.set_nonblocking(true).unwrap();
         }
-        while still_open(&idle) >= limits.connections && std::time::Instant::now() < settled {
-            std::thread::sleep(Duration::from_millis(10));
-        }
+        eventually("closing all but three newcomers", || {
+            still_open(&idle) < limits.connections
+        });
         assert_eq!(still_open(&idle), limits.connections - 1);
         drop(workers);
         assert_eq!(answer(delivery), "HTTP/1.1 202 Accepted");
+    }
+
+    #[test]
+    fn connection_closed_for_a_newcomer_is_the_oldest_unverified_and_is_counted() {
+        let limits = Limits {
+            connections: 4,
+            head: Duration::from_secs(600),
+            connection: Duration::from_secs(600),
+        };
+        let listening = listen(limits);
+        let gate = &listening.gate;
+        let rejections = &listening.fixture.receiver.rejections;
+        // Silent connections, each listed before the next is opened.
+        let silent: Vec<_> = (1..=limits.connections)
+            .map(|held| {
+                let stream = connect(listening.address);
+                stream.set_nonblocking(true).unwrap();
+                eventually("listing a silent connection", || {
+                    gate.unproven().len() == held
+                });
+                stream
+            })
+            .collect();
+        assert_eq!(still_open(&silent), limits.connections);
+        assert_eq!(rejections.load(Ordering::Relaxed), 0);
+        let newcomer = connect(listening.address);
+        newcomer.set_nonblocking(true).unwrap();
+        eventually("closing a connection for the newcomer", || {
+            still_open(&silent) < limits.connections
+        });
+        eventually("listing the newcomer", || {
+            gate.unproven().len() == limits.connections
+        });
+        let open: Vec<_> = silent.iter().map(is_open).collect();
+        assert_eq!(open, [false, true, true, true]);
+        assert!(is_open(&newcomer));
+        assert_eq!(rejections.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn listener_shut_down_while_taking_connections_in_does_not_hang() {
+        // Whether the shutdown meets the listener in the middle of taking a
+        // connection in is a matter of timing, so it is tried several times.
+        for _ in 0..4 {
+            let listening = listen(Limits {
+                connections: 4,
+                head: Duration::from_secs(600),
+                connection: Duration::from_secs(600),
+            });
+            let address = listening.address;
+            let rejections = Arc::clone(&listening.fixture.receiver.rejections);
+            // Connections keep arriving, each closing one that came before it,
+            let stop = Arc::new(AtomicBool::new(false));
+            let stopped = Arc::clone(&stop);
+            let arriving = std::thread::spawn(move || {
+                let mut open = VecDeque::new();
+                while !stopped.load(Ordering::Relaxed) {
+                    let wait = Duration::from_millis(200);
+                    match std::net::TcpStream::connect_timeout(&address, wait) {
+                        Ok(stream) => open.push_back(stream),
+                        Err(_) => std::thread::sleep(Duration::from_millis(1)),
+                    }
+                    if open.len() > 16 {
+                        open.pop_front();
+                    }
+                }
+            });
+            eventually("closing connections for newcomers", || {
+                rejections.load(Ordering::Relaxed) > 100
+            });
+            // and the listener is shut down while it takes them in. A runtime
+            // that is shutting down drops what it is asked to spawn, there and
+            // then, which must not leave the listener waiting for itself.
+            let (done, finished) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                drop(listening);
+                let _ = done.send(());
+            });
+            let finished = finished.recv_timeout(Duration::from_secs(20));
+            stop.store(true, Ordering::Relaxed);
+            arriving.join().unwrap();
+            assert!(
+                finished.is_ok(),
+                "shutting the listener down did not finish"
+            );
+        }
+    }
+
+    #[test]
+    fn connection_is_closed_at_its_deadline_whatever_it_is_waiting_for() {
+        let limits = Limits {
+            connections: 8,
+            head: Duration::from_secs(1),
+            connection: Duration::from_secs(2),
+        };
+        let listening = listen(limits);
+        let started = std::time::Instant::now();
+        let mut stream = connect(listening.address);
+        stream
+            .set_read_timeout(Some(Duration::from_secs(6)))
+            .unwrap();
+        // A whole head, so the head's deadline does not apply, and no body,
+        // which would be waited for until the body's own, later deadline.
+        stream
+            .write_all(head(&sign(PAYLOAD), PAYLOAD.len()).as_bytes())
+            .unwrap();
+        assert_eq!(answer(stream), "");
+        let elapsed = started.elapsed();
+        assert!(
+            elapsed >= limits.connection && elapsed < Duration::from_secs(5),
+            "{elapsed:?}"
+        );
+    }
+
+    #[test]
+    fn request_head_beyond_its_bound_is_refused() {
+        let listening = listen(LIMITS);
+        let deliver_with = |padding: usize| {
+            let padding = format!("\r\nx-padding: {}\r\n", "a".repeat(padding));
+            let padded = head(&sign(PAYLOAD), PAYLOAD.len()).replacen("\r\n", &padding, 1);
+            let mut stream = connect(listening.address);
+            // The listener may refuse and close before it has read all of this.
+            let _ = stream
+                .write_all(padded.as_bytes())
+                .and_then(|()| stream.write_all(PAYLOAD));
+            answer(stream)
+        };
+        // A head within the bound is taken with whatever else it carries, and
+        // one that no pattern of arrival brings within it is refused.
+        assert_eq!(deliver_with(MAX_HEAD / 2), "HTTP/1.1 202 Accepted");
+        assert_eq!(
+            deliver_with(3 * MAX_HEAD),
+            "HTTP/1.1 431 Request Header Fields Too Large"
+        );
+        assert_eq!(receipts(&listening), 1);
+    }
+
+    #[test]
+    fn one_request_is_served_on_each_connection() {
+        let listening = listen(LIMITS);
+        // Two deliveries written together on one connection.
+        let first = head(&sign(PAYLOAD), PAYLOAD.len());
+        let second = first.replace("test-delivery", "second-delivery");
+        let mut both = Vec::new();
+        for delivery in [first, second] {
+            both.extend_from_slice(delivery.as_bytes());
+            both.extend_from_slice(PAYLOAD);
+        }
+        let mut stream = connect(listening.address);
+        let _ = stream.write_all(&both);
+        let sent = answered(stream);
+        assert!(
+            sent.starts_with("HTTP/1.1 202 Accepted\r\n")
+                && sent.contains("\r\nconnection: close\r\n"),
+            "{sent}"
+        );
+        assert_eq!(sent.matches("HTTP/1.1 ").count(), 1, "{sent}");
+        assert_eq!(receipts(&listening), 1);
     }
 
     #[test]
