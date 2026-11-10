@@ -38,7 +38,30 @@ let
     else
       "${cfg.package}/bin/${name}";
   resolver = pkgs.writeText "yuki-resolv.conf" "nameserver 1.1.1.3\noptions timeout:2 attempts:2\n";
+  # IPv4 destinations that are never the public internet.
+  privateNetworks = [
+    "0.0.0.0/8"
+    "10.0.0.0/8"
+    "100.64.0.0/10"
+    "127.0.0.0/8"
+    "169.254.0.0/16"
+    "172.16.0.0/12"
+    "192.0.0.0/24"
+    "192.0.2.0/24"
+    "192.168.0.0/16"
+    "198.18.0.0/15"
+    "198.51.100.0/24"
+    "203.0.113.0/24"
+    "224.0.0.0/3"
+  ];
   sandbox = {
+    # A second line behind the nftables policy below, held by each unit's own
+    # control group, where deleting the table or flushing the ruleset cannot
+    # reach: no packet to or from a private, link-local, reserved or multicast
+    # IPv4 address, and none over IPv6. It is cruder than the policy. Loopback
+    # stays open, because the units reach each other there, and it knows no
+    # ports, identities or public destinations: those are the policy's alone.
+    IPAddressDeny = lib.remove "127.0.0.0/8" privateNetworks ++ [ "::/0" ];
     NoNewPrivileges = true;
     CapabilityBoundingSet = "";
     AmbientCapabilities = "";
@@ -115,7 +138,7 @@ let
         ip daddr 1.1.1.3 udp dport 53 accept
         ip daddr 1.1.1.3 tcp dport 53 accept
         fib daddr type local jump denied
-        ip daddr { 0.0.0.0/8, 10.0.0.0/8, 100.64.0.0/10, 127.0.0.0/8, 169.254.0.0/16, 172.16.0.0/12, 192.0.0.0/24, 192.0.2.0/24, 192.168.0.0/16, 198.18.0.0/15, 198.51.100.0/24, 203.0.113.0/24, 224.0.0.0/3 } jump denied
+        ip daddr { ${lib.concatStringsSep ", " privateNetworks} } jump denied
         # No IPv6 egress: globally addressed LAN peers are not private prefixes.
         meta nfproto ipv6 counter name blocked reject
         meta skuid ${httpsUids} tcp dport 443 accept
