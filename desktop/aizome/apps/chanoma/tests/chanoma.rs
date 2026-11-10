@@ -294,6 +294,7 @@ fn config(dirs: Dirs, cores: PathBuf, clock: ManualClock) -> Config {
         fullscreen: false,
         scan: true,
         core_override: Some(test_core()),
+        free_bios: false,
         signals: false,
         account: ("ann".into(), "Ann".into()),
         authenticator: std::sync::Arc::new(aizome_sys::pam::Fixed("hunter2".into())),

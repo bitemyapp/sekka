@@ -90,6 +90,12 @@ fn files_in(dir: &Path) -> HashMap<String, PathBuf> {
         .unwrap_or_default()
 }
 
+/// A PlayStation 2 BIOS image (or a link to one): 4 MiB, named `.bin`.
+fn ps2_image(p: &Path) -> bool {
+    p.extension().is_some_and(|e| e.eq_ignore_ascii_case("bin"))
+        && std::fs::metadata(p).is_ok_and(|m| m.len() == PS2_BIOS_SIZE)
+}
+
 /// What of `found` (the `bios` folders near a game) goes where in the
 /// cores' system folder.
 pub fn wanted(found: &[PathBuf]) -> Vec<(PathBuf, PathBuf)> {
@@ -114,10 +120,7 @@ pub fn wanted(found: &[PathBuf]) -> Vec<(PathBuf, PathBuf)> {
                 .iter()
                 .filter_map(|sub| listed.get(sub))
                 .flat_map(|files| files.values().cloned())
-                .filter(|p| {
-                    p.extension().is_some_and(|e| e.eq_ignore_ascii_case("bin"))
-                        && std::fs::metadata(p).is_ok_and(|m| m.len() == PS2_BIOS_SIZE)
-                })
+                .filter(|p| ps2_image(p))
                 .collect();
             let rank = |p: &PathBuf| {
                 let name = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
@@ -135,12 +138,14 @@ pub fn wanted(found: &[PathBuf]) -> Vec<(PathBuf, PathBuf)> {
 
 /// Whether `place` (a file in the cores' system folder, or a folder of
 /// them, ending `/`) is there: the grown-up's own in `system`, a
-/// package's in `offered`, or one of `found`'s.
+/// package's in `offered`, or one of `found`'s. A folder counts by a
+/// PlayStation 2 BIOS image in it, not by what its core wrote beside one
+/// (PCSX2's settings for it outlive a drive taken out).
 pub fn has(place: &str, system: &Path, offered: &[PathBuf], found: &[(PathBuf, PathBuf)]) -> bool {
     let here = |dir: &Path| {
         let p = dir.join(place.trim_end_matches('/'));
         if place.ends_with('/') {
-            std::fs::read_dir(&p).is_ok_and(|mut rd| rd.any(|e| e.is_ok_and(|e| e.path().exists())))
+            std::fs::read_dir(&p).is_ok_and(|mut rd| rd.any(|e| e.is_ok_and(|e| ps2_image(&e.path()))))
         } else {
             p.exists()
         }
@@ -248,10 +253,17 @@ mod tests {
         assert_eq!(playable(["pcsx2", "play"], there), ["pcsx2", "play"]);
         assert_eq!(playable(["mednafen_saturn", "yabause"], there), ["mednafen_saturn", "yabause"]);
         assert_eq!(playable(["pcsx2", "play"], |_| false), ["play"]);
-        // The drive taken out: its links go.
+        // What PCSX2 keeps beside the BIOS it played with.
+        std::fs::write(system.join("pcsx2/bios/SCPH-70012.nvm"), b"settings").unwrap();
+        std::fs::write(system.join("pcsx2/bios/SCPH-70012.mec"), b"region").unwrap();
+        // The drive taken out: its links go, and its BIOS's games go to the
+        // core that needs none.
         std::fs::remove_dir_all(&drive).unwrap();
         offer(&[], &system);
         assert!(std::fs::symlink_metadata(system.join("dc/dc_boot.bin")).is_err());
+        let left = |p: &str| has(p, &system, &[], &[]);
+        assert_eq!(playable(["pcsx2", "play"], left), ["play"]);
+        assert_eq!(playable(["mednafen_saturn", "yabause"], left), ["mednafen_saturn", "yabause"]);
         let _ = std::fs::remove_dir_all(&d);
     }
 }

@@ -163,6 +163,17 @@ impl Chanoma {
 
     // Games.
 
+    /// Where `g`'s core finds BIOS images, and those beside the games to
+    /// link in there (`retro::bios`): with only the free ones
+    /// (`Config::free_bios`), a folder of their own and none of the games'.
+    pub(crate) fn bios_for(&self, g: &crate::library::Game) -> (PathBuf, Vec<(PathBuf, PathBuf)>) {
+        if self.config.free_bios {
+            return (self.config.dirs.free_system(), Vec::new());
+        }
+        let near = crate::retro::bios::near(&g.path, &self.settings.folders);
+        (self.config.dirs.system(), crate::retro::bios::wanted(&near))
+    }
+
     pub fn start_game(&mut self, key: &str, cx: &mut Cx<Msg>) {
         let Some(g) = self.library.games.iter().find(|g| g.key == key).cloned() else { return };
         if !self.is_grownup() && !self.settings.game_allowed(key) {
@@ -172,9 +183,8 @@ impl Chanoma {
             return;
         }
         // A BIOS kept by the games may be what the best core needs.
-        let system_dir = self.config.dirs.system();
+        let (system_dir, found_bios) = self.bios_for(&g);
         let packaged = crate::library::bios_dirs();
-        let found_bios = crate::retro::bios::wanted(&crate::retro::bios::near(&g.path, &self.settings.folders));
         let has = |place: &str| crate::retro::bios::has(place, &system_dir, &packaged, &found_bios);
         let Some(core) = self.library.cores.for_game(g.system, has).map(Path::to_path_buf) else {
             self.go(
