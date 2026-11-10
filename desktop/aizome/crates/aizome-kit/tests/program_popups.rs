@@ -4,6 +4,7 @@
 //! menu or a popover is (`menu_dismiss.rs`): the compositor dismisses it
 //! for a press in another program only.
 
+use aizome_kit::column;
 use aizome_kit::prelude::*;
 use aizome_kit::sidestep_ui::PointerButton;
 use aizome_kit::testing::Harness;
@@ -95,7 +96,8 @@ impl Program for Bar {
             return context_menu(text("Wi-Fi"), menu()).into();
         }
         if Some(w) == self.desktop {
-            return text("Desktop").into();
+            let status = if self.panel.is_some() { "Panel open" } else { "Panel closed" };
+            return column![text("Desktop"), text(status)].into();
         }
         // The button opens its panel at the press, as a menu bar's does.
         row![mouse_area(text("Net")).on_press(Msg::Open), spacer(), text("21:42")].into()
@@ -185,6 +187,18 @@ fn a_press_outside_a_grabbing_popup_dismisses_it_wherever_it_lands() {
     assert!(!h.windows().contains(&panel));
     assert!(open_menus(&h).is_empty(), "{:?}", open_menus(&h));
     assert!(h.program().chosen.is_empty(), "and nothing chosen");
+}
+
+#[test]
+fn a_popup_dismissal_refreshes_the_other_windows() {
+    let (mut h, bar, desktop, panel) = with_panel(Bar::grabbing());
+    assert!(h.texts(desktop).iter().any(|t| t == "Panel open"));
+    // The clock sends no message: the close request alone must refresh
+    // views that depend on what the program changes in its close handler.
+    let clock = h.find(bar, "21:42").unwrap().center();
+    h.click(bar, clock);
+    assert_eq!(h.program().closed(), [panel]);
+    assert!(h.texts(desktop).iter().any(|t| t == "Panel closed"));
 }
 
 #[test]

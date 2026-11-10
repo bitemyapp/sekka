@@ -223,6 +223,9 @@ impl<P: Program> Runtime<P> {
                 if self.program.close_requested(key, &mut cx) {
                     self.core.close_key(key, platform);
                 }
+                // The close handler can change shared state (the Shell's
+                // open panel), even when no program message follows.
+                self.core.mark_all_dirty();
             }
             KitMsg::DragStarted { window, drag } => {
                 let mut cx = Cx { core: &mut self.core, platform, pool: &mut self.pool, _m: PhantomData };
@@ -818,8 +821,11 @@ impl<P: Program> sidestep_ui::Handler for Glue<P> {
                 core.pinch(win, position, 1.0 + magnification, phase, &mut p);
             }
             WindowEvent::StateChanged(s) => {
-                let state =
-                    crate::program::WindowState { fullscreen: s.fullscreen, maximized: s.maximized, suspended: s.suspended };
+                let state = crate::program::WindowState {
+                    fullscreen: s.fullscreen,
+                    maximized: s.maximized,
+                    suspended: s.suspended,
+                };
                 rt.window_state(win, state, &mut p);
                 return;
             }

@@ -287,6 +287,25 @@ fn a_panel_the_compositor_dismissed_opens_again_from_its_widget() {
 }
 
 #[test]
+fn dismissal_on_blank_bar_clears_the_widget_highlight() {
+    let mut h = scene(false);
+    h.program_mut().panels_fixture = Some(fixture());
+    let bar = window_titled(&h, "Menu bar");
+    let widget = h.find_id(bar, &aizome_shell::menubar::tray_id(TrayWidget::Network)).unwrap();
+    let blank = Point::new(900.0, 12.0);
+    h.move_to(bar, blank);
+    let closed = h.render_rect(bar, widget, 1.0).to_rgba8().unwrap();
+    press_widget(&mut h, TrayWidget::Network);
+    assert_eq!(showing(&h), Some(TrayWidget::Network));
+    assert!(h.render_rect(bar, widget, 1.0).to_rgba8().unwrap() != closed, "its widget is highlighted");
+    // Empty bar space sends no application message after the close request.
+    h.click(bar, blank);
+    assert_eq!(showing(&h), None);
+    let actual = h.render_rect(bar, widget, 1.0).to_rgba8().unwrap();
+    assert!(actual == closed, "the widget loses its highlight without an unrelated update");
+}
+
+#[test]
 fn a_secured_network_asks_its_password_inline() {
     let mut h = scene(false);
     h.program_mut().panels_fixture = Some(fixture());
