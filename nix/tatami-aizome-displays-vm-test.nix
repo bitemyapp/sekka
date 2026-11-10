@@ -7,7 +7,9 @@
 # the same way: rotated, scaled and arranged as in Aizome, through a reload,
 # and with Aizome's settings as they are when the displays next change. A
 # display then changed in Tatami's Displays window keeps Tatami's own
-# settings, and Aizome keeps its own. Unplugged, a display's rule goes.
+# settings, and Aizome keeps its own. A display unplugged before the
+# helper's watcher has looked, which starts a moment after the session,
+# loses its rule when the watcher does look.
 #
 # Logs in through the login screen, as a person does. The second head is
 # read from QEMU (screendump), so the pictures are what the monitor shows.
@@ -282,19 +284,29 @@ pkgs.testers.runNixOSTest {
         assert aizome_outputs()["Virtual-2"]["transform"] == "90", aizome_outputs()["Virtual-2"]
         log_out()
 
-    with subtest("an unplugged display's rule goes"):
-        # Forced off by the kernel, and announced as a hotplug. (Plugged in
-        # again, virtio's head comes back without its EDID, unlike a monitor,
-        # so the test stops here.)
+    with subtest("a display unplugged before the watcher looks loses its rule when it does"):
+        # The watcher starts a moment after the session has written the
+        # rules, and a display can go in between. Unplugging right after
+        # login met either order, as the timing fell; stopping the watcher
+        # for it makes the order certain. Forced off by the kernel, and
+        # announced as a hotplug. (Plugged in again, virtio's head comes back
+        # without its EDID, unlike a monitor, so the test stops here.)
         log_in("Tatami", "test -S /run/user/1000/hypr/*/.socket.sock")
         both()
         rules = "cat /run/user/1000/tatami/aizome-displays.lua"
         assert "Virtual-2" in demo(rules)
+        watcher = "tatami-display-recovery.service"
+        machine.wait_until_succeeds(
+            f"su - demo -c 'XDG_RUNTIME_DIR=/run/user/1000 systemctl --user is-active {watcher}'", timeout=60)
+        demo(f"systemctl --user stop {watcher}")
         connector = machine.succeed("ls -d /sys/class/drm/card*-Virtual-2").strip()
         card = connector.rsplit("-Virtual-2", 1)[0]
         machine.succeed(f"echo off > {connector}/status")
         machine.succeed(f"echo change $(cat /proc/sys/kernel/random/uuid) HOTPLUG=1 > {card}/uevent")
         until("Tall unplugged", lambda: list(hypr_monitors()) == ["Wide"])
+        # Nothing looks at the displays meanwhile: the rule is as written.
+        assert "Virtual-2" in demo(rules)
+        demo(f"systemctl --user start {watcher}")
         until("Aizome's rules without it", lambda: "Virtual-2" not in demo(rules))
         time.sleep(3)
         wide = hypr_monitors()["Wide"]

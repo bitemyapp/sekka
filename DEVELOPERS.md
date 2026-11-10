@@ -1028,6 +1028,17 @@ between changes. Don't describe it as untested on hardware.
 `nix build .#checks.x86_64-linux.displays-cursor-vm` opens the Displays window
 with `tatami display`, as the bar's icon does, and checks that the cursor stays
 where it was.
+`nix build .#checks.x86_64-linux.tatami-aizome-displays` logs in to Aizome and
+then to Tatami on a system with both, with two monitors on one virtio GPU told
+apart by their EDID names. It checks that a display turned, scaled and placed
+in Aizome's settings comes up the same way in Tatami, through a reload and a
+change of those settings; that settings applied in Tatami then win and last
+through a new login, with Aizome's unchanged; and that a display unplugged
+while the display watcher is stopped loses its rule when the watcher starts.
+It cannot connect a display (a virtio head comes back without its EDID), and
+the recovery policy leaves `Virtual-` connectors alone, so a display connected
+mid-session and recovery with Aizome's settings are not covered. This
+component test does not qualify an ISO.
 
 Displays fits its floating window inside the logical workspace, excluding the
 bar's reserved space, when opened and after monitor layout or scale changes.

@@ -726,11 +726,15 @@ pub fn watch() -> util::Result<()> {
                 if screens.as_ref() != Some(&now) {
                     if screens.is_some() {
                         rescue_until = Instant::now() + Duration::from_secs(3);
-                        // A display connected now, or gone, that Aizome has
-                        // settings for: the configuration loads them again,
-                        // without rules for displays no longer there.
-                        aizome_pending |= aizome_displays::write();
                     }
+                    // A display connected now, or gone, that Aizome has
+                    // settings for: the configuration loads them again,
+                    // without rules for displays no longer there. At the
+                    // first look too: a display may have come or gone since
+                    // the session wrote the rules, before this watcher
+                    // started. Rules that still hold are left, and nothing
+                    // is reloaded.
+                    aizome_pending |= aizome_displays::write();
                     screens = Some(now);
                 }
                 // Until a reload has loaded them: the file is written already.
