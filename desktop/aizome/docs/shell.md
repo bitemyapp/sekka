@@ -555,6 +555,53 @@ mirrors show their source's prompt, and resolution, scale and rotation
 changes reconfigure existing lock surfaces. The compositor keeps the
 session locked even while no outputs are available.
 
+## Staying awake for a video
+
+The compositor counts idleness, and holds it off while any client has a
+Wayland idle inhibitor (`docs/compositor.md`): no `idle` event comes, so
+the screen doesn't lock and the displays stay on. Utsushi and mpv take one
+while a video plays and let it go when it pauses; Keep Awake's service has
+one while it's on (`docs/keep-awake.md`).
+
+Other apps ask the session bus instead, with `Inhibit` and `UnInhibit` of
+`org.freedesktop.ScreenSaver`. VLC does (it's an X11 client here, through
+xwayland-satellite). Firefox asks it before anything else. The GTK portal
+that answers `org.freedesktop.portal.Inhibit` in Aizome sessions asks it
+in turn, and Firefox ends at that portal when nobody serves the screen
+saver, so a video in Firefox depends on it either way. The shell serves
+the interface (`aizome_sys::screensaver`), at
+`/org/freedesktop/ScreenSaver` and at KDE's `/ScreenSaver`, which VLC
+calls. While any app holds, the shell holds an idle inhibitor for them on
+a connection of its own to the compositor (`idle.rs`, with Keep Awake's
+`aizome_awake::IdleInhibitor`), and lets it go with the last hold.
+
+- `Inhibit` gives a cookie for one hold, and `UnInhibit` with it lets go.
+  A cookie is its connection's: another app's call with it changes
+  nothing.
+- An app that leaves the bus, quitting or killed, lets go of all it held.
+  VLC often leaves that way between one file and the next.
+- The shell's log says who holds and why, who let go, and who left
+  holding (`journalctl --user -u aizome | grep screensaver`).
+
+What it doesn't do:
+
+- The holds are the running shell's. A shell that starts again
+  (`aizomectl reload --shell`, a crash) has none, and a player holds
+  again the next time it starts playing.
+- Of the interface only `Inhibit` and `UnInhibit` are served; `GetActive`,
+  `Lock` and the rest answer `UnknownMethod`.
+- Nothing in Aizome puts an idle computer to sleep (logind's `IdleAction`
+  is left at `ignore`), so there's no idle sleep for a video to hold off.
+  Sleep asked for otherwise isn't these apps' to block: that's Keep Awake.
+
+`cargo test -p aizome-sys screensaver` checks the holds (their cookies,
+whose they are, an app leaving at once) against callers on a private bus.
+`nix build .#aizome-checks.idle-inhibit` plays a looping video in Utsushi,
+mpv and VLC in a VM whose session locks and turns its display off after a
+minute: playing, each keeps it awake for longer; paused, it locks and goes
+dark; and so it does when VLC is killed while it plays. Firefox isn't in
+that check.
+
 ## Authentication dialog
 
 The polkit agent (`aizome-sys`) asks the shell: an overlay dialog with the
@@ -589,9 +636,9 @@ them, so it never competes with the real session's agent, holds up the
 real machine's sleep, or locks when the real session does. ⌃❖Q and the
 idle lock still lock it.
 
-The shell's session-bus names, `org.freedesktop.Notifications` and
-`org.kde.StatusNotifierWatcher`, follow the same line (`takeover()` in
-`shell.rs`). The real session's shell takes them from whoever allows it,
+The shell's session-bus names, `org.freedesktop.Notifications`,
+`org.kde.StatusNotifierWatcher` and `org.freedesktop.ScreenSaver`, follow
+the same line (`takeover()` in `shell.rs`). The real session's shell takes them from whoever allows it,
 so a restarted shell replaces the old one without a gap. A headless or
 nested shell shares the person's real session bus, so it takes them only
 while nobody has them, or from the shell it replaces in a restart
