@@ -798,6 +798,54 @@ fn load_face(fcx: &mut FontContext, spec: &FontSpec) -> Face {
     face
 }
 
+/// The ASCII characters each font asked about has glyphs for, by the
+/// font's data and its index in it: what [`covers`] remembers. A thread
+/// lays text out in a handful of fonts.
+#[derive(Default)]
+pub struct Coverage(Vec<((u64, u32), u128)>);
+
+/// Fonts a thread remembers the coverage of before it starts over.
+const COVERED: usize = 32;
+
+/// Whether the font a layout in `face` takes first has a glyph for every
+/// character of `text`, so that the layout needs no family after it.
+///
+/// The collection is asked as parley asks it (the family, then its best
+/// match for the width, style and weight), so the answer is about the font
+/// parley is about to take, whatever was registered since `face` was
+/// resolved. Parley takes the first font that has all of a cluster's
+/// characters, and looks no further for that cluster.
+pub fn covers(fcx: &mut FontContext, seen: &mut Coverage, face: &Face, text: &str) -> bool {
+    let style = if face.italic { FontStyle::Italic } else { FontStyle::Normal };
+    let attributes = Attributes::new(FontWidth::from_ratio(face.stretch), style, FontWeight::new(face.weight));
+    let mut query = fcx.collection.query(&mut fcx.source_cache);
+    query.set_families([QueryFamily::Named(&face.family)]);
+    query.set_attributes(attributes);
+    let mut covered = false;
+    query.matches_with(|font| {
+        covered = (|| {
+            let charmap = font.charmap()?;
+            let has = |c: char| charmap.map(c).is_some_and(|glyph| glyph != 0);
+            let key = (font.blob.id(), font.index);
+            let ascii = match seen.0.iter().find(|(k, _)| *k == key) {
+                Some(&(_, ascii)) => ascii,
+                None => {
+                    let ascii = (0..128u8).filter(|&b| has(char::from(b))).fold(0u128, |set, b| set | 1 << b);
+                    if seen.0.len() >= COVERED {
+                        seen.0.clear();
+                    }
+                    seen.0.push((key, ascii));
+                    ascii
+                }
+            };
+            Some(text.chars().all(|c| if c.is_ascii() { ascii >> (c as u32) & 1 == 1 } else { has(c) }))
+        })()
+        .unwrap_or(false);
+        QueryStatus::Stop
+    });
+    covered
+}
+
 /// The face of a font file the collection wouldn't take (one without a
 /// character map): its metrics and glyphs are there, but text laid out in
 /// it falls back on the system's faces.

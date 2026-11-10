@@ -1229,8 +1229,16 @@ pub(super) fn build(
     // strong text before it (the bidi algorithm's rules W2, W7, N0 and N1
     // look back to it), unless the first already says as much. Marks are
     // invisible and take no room; their glyphs are dropped (`extract`).
+    //
+    // Text that runs left to right whatever is around it needs no mark to
+    // say so: parley takes left to right from its first strong character,
+    // or from there being none. Most text is that, and a mark costs it a
+    // copy of the text, a cluster of its own and, as few fonts have a glyph
+    // for one, a search through the families after the text's for one that
+    // does.
     let mark = match (settings.direction, settings.context) {
         (Direction::Natural, _) => "",
+        (Direction::LeftToRight, None | Some(Strong::Left)) if one_way(text, false) => "",
         (Direction::LeftToRight, Some(Strong::Right)) => "\u{200E}\u{200F}",
         (Direction::LeftToRight, Some(Strong::Arabic)) => "\u{200E}\u{61C}",
         (Direction::LeftToRight, _) => "\u{200E}",
@@ -1346,12 +1354,25 @@ pub(super) fn build(
         })
         .collect();
     let own_emoji = settings.own_emoji;
+    // Text whose own family has every character is laid out in that family
+    // alone: the same font takes each cluster either way. Parley's font
+    // query makes an entry for every family it's given before it looks at
+    // any, and again around each cluster it takes for an emoji, which the
+    // digits are; fontconfig's sans-serif list runs to a hundred families
+    // and more, and filling it in was most of what a short label cost.
+    let lone: Vec<bool> = used
+        .iter()
+        .map(|&(i, kind, _)| {
+            kind == Piece::Text && fonts::covers(&mut ctx.fcx, &mut ctx.covered, &attrs[i as usize].font.face, full)
+        })
+        .collect();
     let mut builder = ctx.lcx.style_run_builder(&mut ctx.fcx, full, 1.0, false);
     builder.reserve(used.len(), pieces.len());
     let styles: Vec<u16> = used
         .iter()
         .zip(features.iter().zip(&families).zip(&variations))
-        .map(|(&(i, kind, _), ((features, families), variations))| {
+        .zip(&lone)
+        .map(|((&(i, kind, _), ((features, families), variations)), &lone)| {
             let a = &attrs[i as usize];
             let settings = (features.as_slice(), variations.as_slice(), settings);
             match kind {
@@ -1360,7 +1381,8 @@ pub(super) fn build(
                 // Fontconfig's generic stack also covers symbols that neither
                 // font has, such as the disclosure triangles ▸ and ▾.
                 Piece::Text => {
-                    builder.push_style(text_style(a, i, FontFamily::List(Cow::Borrowed(&families[1..])), settings))
+                    let list = if lone { &families[1..2] } else { &families[1..] };
+                    builder.push_style(text_style(a, i, FontFamily::List(Cow::Borrowed(list)), settings))
                 }
                 // Emoji look for a color emoji face first, as on macOS,
                 // where they'd otherwise take the text's face's plain
