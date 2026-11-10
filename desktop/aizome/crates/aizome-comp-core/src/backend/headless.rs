@@ -1,9 +1,9 @@
 //! Outputs that exist only in memory: frames render offscreen with GLES
-//! (EGL on a DRM render node through GBM) or pixman, paced by a 60 Hz
-//! timer that runs only while something is damaged.
+//! (EGL on a DRM render node through GBM) or pixman, paced by a timer at
+//! the output's refresh rate (60 Hz by default), only while damaged.
 
 use std::collections::HashMap;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use smithay::backend::allocator::Fourcc;
 use smithay::backend::allocator::dmabuf::Dmabuf;
@@ -163,10 +163,17 @@ impl Headless {
             }
             return Ok(());
         }
-        if let Some((w, h, _)) = change.mode {
-            let mode = Mode { size: (w, h).into(), refresh: 60_000 };
+        if let Some((w, h, refresh)) = change.mode {
+            let refresh = refresh.unwrap_or_else(|| output.current_mode().map(|m| m.refresh).unwrap_or(60_000));
+            if refresh <= 0 {
+                return Err("headless output refresh must be positive".into());
+            }
+            let mode = Mode { size: (w, h).into(), refresh };
             output.add_mode(mode);
             output.change_current_state(Some(mode), None, None, None);
+            if let Some(os) = az.out.get_mut(&output) {
+                os.refresh = Duration::from_nanos(1_000_000_000_000 / refresh as u64);
+            }
         }
         if off {
             if change.enabled != Some(true) {

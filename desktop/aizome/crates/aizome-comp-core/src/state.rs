@@ -140,8 +140,11 @@ pub struct OutputState {
     pub powered: bool,
     /// Frames rendered, for presentation sequence numbers.
     pub frame_seq: u64,
-    /// Frames that drew something (screencopy waits on these).
+    /// Frames that drew something on the output.
     pub damaged_frames: u64,
+    /// Possible scene changes, including commits before the next display
+    /// refresh. Capture has its own damage tracker and need not wait for vblank.
+    pub capture_revision: u64,
     pub last_frame: Option<Instant>,
     /// When the display last showed a frame (its vblank, on the monotonic
     /// clock), where it says: the next frames' times count from it.
@@ -171,6 +174,7 @@ impl OutputState {
             powered: true,
             frame_seq: 0,
             damaged_frames: 0,
+            capture_revision: 0,
             last_frame: None,
             presented: None,
             refresh,
@@ -740,12 +744,14 @@ impl Aizome {
     pub fn queue_redraw(&mut self, output: &Output) {
         if let Some(o) = self.out.get_mut(output) {
             o.redraw_queued = true;
+            o.capture_revision = o.capture_revision.wrapping_add(1);
         }
     }
 
     pub fn queue_redraw_all(&mut self) {
         for o in self.out.values_mut() {
             o.redraw_queued = true;
+            o.capture_revision = o.capture_revision.wrapping_add(1);
         }
     }
 

@@ -293,6 +293,30 @@ fn output_stream_under_gles() {
     output_stream("gles");
 }
 
+/// Capture renders the latest committed scene, not the last display buffer.
+/// Three commits can all be captured before a 1 Hz output redraw is due.
+#[test]
+fn output_capture_does_not_wait_for_display_refresh() {
+    for renderer in ["pixman", "gles"] {
+        let c = start(renderer);
+        let (client, r) = window(&c, "org.test.capture");
+        c.slow_output();
+        let mut cap = Capturer::new(&c);
+        let session = cap.output_session();
+        let frame = cap.start(&session);
+        cap.finish(&frame, Duration::from_secs(5)).expect("the first frame");
+        for color in [ORANGE, GREEN, BLUE] {
+            let frame = cap.start(&session);
+            assert!(cap.finish(&frame, Duration::from_millis(30)).is_none(), "an unchanged frame");
+            client.send(Cmd::Color(color));
+            let pic = cap
+                .finish(&frame, Duration::from_millis(300))
+                .unwrap_or_else(|| panic!("{renderer}: capture waited for display refresh"));
+            assert!(near(pic.px((r.x + 150) as u32, (r.y + 100) as u32), rgb(color)));
+        }
+    }
+}
+
 /// A window's stream: its content alone, at its size; new constraints
 /// when it's resized (a frame waiting with the old buffer fails, the next
 /// comes at once); stopped when it closes.

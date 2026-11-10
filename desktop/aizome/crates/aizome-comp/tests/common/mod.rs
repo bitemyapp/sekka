@@ -205,6 +205,21 @@ impl Compositor {
         std::thread::sleep(Duration::from_millis(120));
     }
 
+    /// A deliberately slow virtual display distinguishes capture's scene
+    /// invalidation from output redraws without sub-frame timing assertions.
+    pub fn slow_output(&self) {
+        self.ok(Request::OutputConfig {
+            name: "HEADLESS-1".into(),
+            mode: Some("1280x800@1".into()),
+            scale: None,
+            position: None,
+            transform: None,
+            enabled: None,
+        });
+        let Response::Outputs { outputs } = self.request(Request::Outputs) else { panic!("no outputs") };
+        assert_eq!(outputs[0].current_mode.as_ref().unwrap().refresh, 1_000);
+    }
+
     pub fn client(&self, spec: Spec) -> TestClient {
         TestClient::spawn(&self.dir.join(&self.socket), spec)
     }

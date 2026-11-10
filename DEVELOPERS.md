@@ -1217,6 +1217,32 @@ nix develop .#aizome
 nix build .#aizome-checks.session -L
 ```
 
+Output capture tracks committed scene changes independently of display redraws.
+Both `ext-image-copy-capture` and `wlr-screencopy.copy_with_damage` render the
+latest scene into their own targets; waiting for the display's next refresh adds
+unnecessary remote-desktop latency. Their existing damage trackers still suppress
+unchanged captures. Headless output configuration honors `WxH@Hz` refresh rates;
+the initial `--headless-output WxH@scale` argument keeps its existing meaning.
+
+The `image_copy_capture` and `screencopy` component suites test three updates on a
+1 Hz virtual display, with a generous 300 ms deadline per capture. Both tests
+fail against the former display-frame gating. Run them with `nix develop
+.#aizome -c cargo test --release --locked --manifest-path
+desktop/aizome/Cargo.toml -p aizome-comp --test image_copy_capture --test screencopy
+--test displays -- --test-threads=1 --nocapture`. Linear CPU-mapped DMA-BUF
+readback fixtures explicitly skip on drivers that cannot allocate those buffers;
+that is not GPU capture certification. Voxl's separate GPU/native-viewer suite
+exercises advertised non-linear modifiers on NVIDIA.
+
+In two controlled 12-second runs per configuration on RTX 5090/615.78.08,
+Voxl NVENC/CUDA's capture-visible scene age changed from median 12 ms/p95
+19–20 ms to 4/5 ms at 1080p, and from 15–16/23 ms to 7/8 ms at 4K. Both
+compositor builds used the same checkout/toolchain and differed only in capture
+invalidation; the streaming binaries and workload were identical. This is
+private headless component evidence, not physical display latency or ISO
+qualification. The Voxl fork keeps the benchmark harness and raw measurement
+index; capture fences and the display's own frame callbacks are unchanged.
+
 The shell observes application launch attempts through `aizome-sys`:
 process creation and exit are separate events, and only a compositor window
 event confirms that a window opened. D-Bus acceptance and successful

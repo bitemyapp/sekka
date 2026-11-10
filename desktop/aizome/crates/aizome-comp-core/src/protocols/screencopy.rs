@@ -65,7 +65,7 @@ struct Pending {
     frame: Frame,
     buffer: WlBuffer,
     with_damage: bool,
-    /// The output's damaged-frame count when last found unchanged (`None`:
+    /// The output's scene revision when last found unchanged (`None`:
     /// not looked at yet).
     since: Option<u64>,
 }
@@ -268,9 +268,9 @@ pub fn flush_pending(state: &mut State) {
             p.frame.failed();
             continue;
         }
-        let drawn = state.az.out.get(&output).map(|o| o.damaged_frames).unwrap_or(0);
-        if p.with_damage && p.since == Some(drawn) {
-            // Nothing drew since it was last found unchanged.
+        let revision = state.az.out.get(&output).map(|o| o.capture_revision).unwrap_or(0);
+        if p.with_damage && p.since == Some(revision) {
+            // No possible scene change since it was last found unchanged.
             state.az.screencopy.pending.push(p);
             continue;
         }
@@ -282,7 +282,7 @@ pub fn flush_pending(state: &mut State) {
         state.az.screencopy.streams.push(job.stream);
         match result {
             Ok(Outcome::Unchanged) => {
-                p.since = Some(drawn);
+                p.since = Some(revision);
                 state.az.screencopy.pending.push(p);
             }
             Ok(Outcome::Copied { damage, fence }) => {

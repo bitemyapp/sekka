@@ -142,12 +142,12 @@ pub fn dmabuf_target<R: Bind<Dmabuf>>(device: u64, renderer: &R) -> Option<Dmabu
 }
 
 /// A number that changes whenever what a source shows may have: an
-/// output's count of frames that drew something; a hash of a window's
+/// output's scene revision (independent of display refresh); a hash of a window's
 /// surfaces' commits (its popups' too), its size and its scale. `None`
 /// once the source is gone.
 pub fn source_serial(az: &Aizome, source: &Source) -> Option<u64> {
     match source {
-        Source::Output(output) => az.out.get(output).map(|o| o.damaged_frames),
+        Source::Output(output) => az.out.get(output).map(|o| o.capture_revision),
         Source::Window(id) => {
             let m = az.windows.get(id)?;
             let (size, scale) = window_size(az, *id)?;

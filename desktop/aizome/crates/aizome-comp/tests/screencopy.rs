@@ -234,6 +234,31 @@ fn copies_with_damage_wait_for_a_change() {
     assert!(!copier.heard.damage.is_empty());
 }
 
+#[test]
+fn copies_with_damage_do_not_wait_for_display_refresh() {
+    for renderer in ["pixman", "gles"] {
+        let c = start(renderer);
+        let (client, (x, y)) = window(&c);
+        c.slow_output();
+        let mut copier = Copier::new(&c);
+        let region = Some((x - 50, y - 50, 100, 100));
+        let frame = copier.frame(region);
+        copier.copy_shm(&frame, true, Duration::from_secs(5)).expect("the first frame");
+        frame.destroy();
+        for color in [ORANGE, BLUE, ORANGE] {
+            let frame = copier.frame(region);
+            copier.start_shm(&frame, true);
+            assert!(copier.finish_shm(Duration::from_millis(30)).is_none(), "an unchanged frame");
+            client.send(Cmd::Color(color));
+            let pic = copier
+                .finish_shm(Duration::from_millis(300))
+                .unwrap_or_else(|| panic!("{renderer}: capture waited for display refresh"));
+            assert!(near(pic.px(50, 50), rgb(color)));
+            frame.destroy();
+        }
+    }
+}
+
 /// The GLES renderer's dmabufs, when the test machine has a render node:
 /// offered, rendered into on the GPU, and upright.
 #[test]
@@ -259,9 +284,15 @@ fn dmabuf_copies_under_gles() {
     let file = std::fs::OpenOptions::new().read(true).write(true).open(&node).unwrap();
     let device = gbm::Device::new(file).unwrap();
     let format = gbm::Format::try_from(fourcc).unwrap();
-    let bo = device
-        .create_buffer_object::<()>(w, h, format, gbm::BufferObjectFlags::RENDERING | gbm::BufferObjectFlags::LINEAR)
-        .unwrap();
+    let Ok(bo) = device.create_buffer_object::<()>(
+        w,
+        h,
+        format,
+        gbm::BufferObjectFlags::RENDERING | gbm::BufferObjectFlags::LINEAR,
+    ) else {
+        eprintln!("no CPU-mappable linear capture target on {}: skipping this readback fixture", node.display());
+        return;
+    };
     let params = copier.dmabuf.as_ref().expect("linux-dmabuf").create_params(&copier.qh, ());
     let modifier: u64 = bo.modifier().into();
     params.add(
