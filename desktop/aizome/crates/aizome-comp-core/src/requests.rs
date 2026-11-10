@@ -32,6 +32,8 @@ impl State {
             Request::Outputs => Response::Outputs { outputs: crate::outputs::all_info(&self.az) },
             Request::Keyboards => Response::Keyboards { keyboards: self.az.keyboards.info() },
             Request::CatchKey { .. } => return Err("the connection that waits for the key asks".into()),
+            Request::IdleInhibitors => Response::IdleInhibitors { inhibitors: self.idle_inhibitors() },
+            Request::KeepAwake => return Err("the connection that holds as Keep Awake asks".into()),
             Request::Spawn { argv, cwd, in_desk_folder } => {
                 let cwd = cwd.map(|c| aizome_config::expand_home(&c)).or_else(|| {
                     if in_desk_folder { self.az.view.desk_folder.clone().filter(|p| p.is_dir()) } else { None }
@@ -247,6 +249,7 @@ impl State {
                 self.key_from(Some(&format!("synthetic:{keyboard}")));
                 self.keyboard_key(key_code(&key)?, pressed, time);
             }
+            Synthetic::Idle { seconds } => self.synthesize_idle(std::time::Duration::from_secs(seconds.into())),
         }
         Ok(())
     }

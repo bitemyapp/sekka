@@ -331,8 +331,8 @@ pub struct Aizome {
     pub translated_keys: HashSet<Keycode>,
     /// The keyboards that type, and whose keymap is in force.
     pub keyboards: crate::keyboards::Keyboards,
-    /// Surfaces that keep the screen awake (idle-inhibit).
-    pub idle_inhibitors: HashSet<WlSurface>,
+    /// Surfaces that keep the screen awake (idle-inhibit): apps' holds.
+    pub idle_inhibitors: crate::idle::IdleInhibitors,
     /// Activation tokens that may move focus.
     pub valid_tokens: HashSet<String>,
     pub idle: crate::idle::IdleState,
@@ -557,7 +557,7 @@ impl State {
             suppressed_keys: HashSet::new(),
             translated_keys: HashSet::new(),
             keyboards,
-            idle_inhibitors: HashSet::new(),
+            idle_inhibitors: Default::default(),
             valid_tokens: HashSet::new(),
             idle: Default::default(),
             power: Default::default(),
