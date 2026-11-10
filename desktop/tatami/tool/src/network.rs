@@ -525,10 +525,30 @@ fn run(mut command: Command, secret: Option<&Secret>) -> Result<(), String> {
 struct Secret(String);
 
 impl Secret {
-    /// None for a key with a line break, which would end the line early.
+    /// The line nmcli reads back as exactly `password`. Reading a key, nmcli
+    /// takes a backslash as the start of an escape and drops whitespace at
+    /// either end, so backslashes are doubled and whitespace at the ends is
+    /// written as escapes. None for a key with a line break, which would end
+    /// the line early.
     fn new(password: &str) -> Option<Secret> {
-        (!password.contains('\n'))
-            .then(|| Secret(format!("802-11-wireless-security.psk:{password}\n")))
+        if password.contains(['\n', '\r']) {
+            return None;
+        }
+        let dropped = |c: char| matches!(c, ' ' | '\t' | '\x0b' | '\x0c');
+        let leading = password.len() - password.trim_start_matches(dropped).len();
+        let trailing = password.trim_end_matches(dropped).len();
+        let mut line = String::from("802-11-wireless-security.psk:");
+        for (at, c) in password.char_indices() {
+            match c {
+                '\\' => line.push_str(r"\\"),
+                c if dropped(c) && (at < leading || at >= trailing) => {
+                    line.push_str(&format!(r"\{:03o}", u32::from(c)));
+                }
+                c => line.push(c),
+            }
+        }
+        line.push('\n');
+        Some(Secret(line))
     }
 }
 
@@ -965,5 +985,31 @@ mod tests {
         );
         assert!(Secret::new("two\nlines").is_none());
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_key_line_is_read_back_as_the_key() {
+        let line = |key: &str| Secret::new(key).map(|secret| secret.0);
+        let written = |key: &str| Some(format!("802-11-wireless-security.psk:{key}\n"));
+        // As typed, when nmcli would change nothing: inner spaces, and the
+        // colons and equals signs that end only the setting's name.
+        assert_eq!(line("correct horse"), written("correct horse"));
+        assert_eq!(line("pass: word=#1"), written("pass: word=#1"));
+        // A backslash starts an escape for nmcli.
+        assert_eq!(line(r"back\slash1"), written(r"back\\slash1"));
+        assert_eq!(line(r"ends\"), written(r"ends\\"));
+        // Whitespace at either end is dropped unless escaped.
+        assert_eq!(line(" leading1"), written(r"\040leading1"));
+        assert_eq!(line("trailing1 "), written(r"trailing1\040"));
+        assert_eq!(line(" both ends "), written(r"\040both ends\040"));
+        assert_eq!(
+            line("  tab\tinside\t "),
+            written("\\040\\040tab\tinside\\011\\040")
+        );
+        assert_eq!(line(r" \ "), written(r"\040\\\040"));
+        assert_eq!(line("   "), written(r"\040\040\040"));
+        // A line break would end the line.
+        assert_eq!(line("two\nlines"), None);
+        assert_eq!(line("carriage\rreturn"), None);
     }
 }
