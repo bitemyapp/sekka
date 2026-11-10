@@ -419,6 +419,60 @@ mod tests {
     }
 
     #[test]
+    fn missing_and_invalid_delivery_and_event_headers_never_poll_body() {
+        let fixture = Fixture::new();
+        let signature = sign(PAYLOAD);
+        let long_delivery = "d".repeat(129);
+        let long_event = "e".repeat(65);
+        let cases = [
+            (None, Some("ping")),
+            (Some("test-delivery"), None),
+            (Some(""), Some("ping")),
+            (Some("two words"), Some("ping")),
+            (Some("../delivery"), Some("ping")),
+            (Some(long_delivery.as_str()), Some("ping")),
+            (Some("test-delivery"), Some("")),
+            (Some("test-delivery"), Some("Push")),
+            (Some("test-delivery"), Some(long_event.as_str())),
+        ];
+        runtime().block_on(async {
+            for (delivery, event) in cases {
+                let probe = Arc::new(BodyProbe::default());
+                let mut request = request(Body::new(PendingBody(probe.clone())), Some(&signature));
+                for (name, value) in [("x-github-delivery", delivery), ("x-github-event", event)] {
+                    request.headers_mut().remove(name);
+                    if let Some(value) = value {
+                        request.headers_mut().insert(name, value.parse().unwrap());
+                    }
+                }
+                assert_eq!(
+                    receive(State(fixture.receiver.clone()), request).await.0,
+                    StatusCode::BAD_REQUEST,
+                    "{delivery:?} {event:?}"
+                );
+                assert_eq!(probe.polls.load(Ordering::Relaxed), 0);
+            }
+            assert_eq!(
+                fixture.receiver.rejections.swap(0, Ordering::Relaxed),
+                cases.len() as u64
+            );
+            // The longest identifiers the receiver takes still pass.
+            let mut accepted = request(Body::from(PAYLOAD), Some(&signature));
+            let longest = [
+                ("x-github-delivery", "d".repeat(128)),
+                ("x-github-event", "e".repeat(64)),
+            ];
+            for (name, value) in longest {
+                accepted.headers_mut().insert(name, value.parse().unwrap());
+            }
+            assert_eq!(
+                receive(State(fixture.receiver.clone()), accepted).await.0,
+                StatusCode::ACCEPTED
+            );
+        });
+    }
+
+    #[test]
     fn overload_is_immediate_and_does_not_poll_body() {
         let fixture = Fixture::new();
         let _permits = fixture

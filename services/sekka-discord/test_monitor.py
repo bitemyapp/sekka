@@ -273,6 +273,17 @@ class MonitorTests(unittest.TestCase):
                         self.fail("second process lock should not be acquired")
             self.assertFalse(any(path.name.startswith(".state-") for path in Path(directory).iterdir()))
 
+    def test_token_file_must_not_be_world_accessible(self):
+        with tempfile.TemporaryDirectory() as directory:
+            token = Path(directory) / "token"
+            token.write_text("token-never-log\n")
+            token.chmod(0o640)
+            self.assertEqual(monitor.read_token(token), "token-never-log")
+            for mode in (0o644, 0o602):
+                token.chmod(mode)
+                with self.assertRaises(monitor.MonitorError, msg=oct(mode)):
+                    monitor.read_token(token)
+
     def test_invalid_state_is_not_silently_reinitialized(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "state.json"
