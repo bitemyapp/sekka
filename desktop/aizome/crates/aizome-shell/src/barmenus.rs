@@ -49,7 +49,9 @@ impl Shell {
 
     /// A press on a title whose menu that very press closed (a press in
     /// the bar closes its menus first, so the closing comes right before
-    /// the press, in the same moment): the menu stays closed.
+    /// the press, in the same moment): the menu stays closed. The same for
+    /// a systray widget and its panel
+    /// ([`panel_dismissed`](Shell::panel_dismissed)).
     pub(crate) fn pressed_to_close(&mut self, bar: WindowKey, slot: Slot) -> bool {
         matches!(self.just_closed.take(), Some((b, s, at)) if b == bar && s == slot && at.elapsed() < Duration::from_millis(50))
     }

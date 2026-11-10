@@ -1,11 +1,16 @@
 //! The systray's panels, headless: each opens under its widget with its
-//! controls, and draws as the boards' panels do.
+//! controls, closes at a press outside it, and draws as the boards' panels
+//! do.
 
 mod common;
 
+use std::time::Duration;
+
+use aizome_ipc::Event;
 use aizome_kit::prelude::*;
 use aizome_shell::agenda::{EventRow, ZoneRow};
 use aizome_shell::clock::Local;
+use aizome_shell::ipc::IpcEvent;
 use aizome_shell::menubar::{BarMsg, Slot, TrayWidget};
 use aizome_shell::shell::Msg;
 use aizome_shell::systray::panels::*;
@@ -136,6 +141,149 @@ fn a_panel_opens_under_its_widget_and_toggles() {
 fn open_again(h: &mut aizome_kit::testing::Harness<aizome_shell::shell::Shell>, w: TrayWidget) {
     let bar = window_titled(h, "Menu bar");
     h.send(Msg::Bar(bar, BarMsg::Press(Slot::Tray(w), Rect::new(1300.0, 0.0, 1315.0, 24.0))));
+}
+
+/// A click on a systray widget, where the bar shows it.
+fn press_widget(h: &mut aizome_kit::testing::Harness<aizome_shell::shell::Shell>, w: TrayWidget) {
+    let bar = window_titled(h, "Menu bar");
+    let at = h.find_id(bar, &aizome_shell::menubar::tray_id(w)).expect("the widget in the bar").center();
+    h.click(bar, at);
+}
+
+/// The widget whose panel the shell has open.
+fn showing(h: &aizome_kit::testing::Harness<aizome_shell::shell::Shell>) -> Option<TrayWidget> {
+    h.program().panel.as_ref().map(|p| p.widget)
+}
+
+/// The panels' windows that are open, by title (a panel's is its widget's
+/// name).
+fn panel_windows(h: &aizome_kit::testing::Harness<aizome_shell::shell::Shell>) -> Vec<String> {
+    h.windows().into_iter().map(|k| h.title(k)).filter(|t| TrayWidget::named(t).is_some()).collect()
+}
+
+/// A press outside a panel closes it, in whichever of the shell's surfaces
+/// it lands: the compositor closes it for a press in another app only, and
+/// leaves one on the shell's own surfaces to the shell (#207).
+#[test]
+fn a_press_outside_a_panel_closes_it() {
+    let mut h = scene(false);
+    h.program_mut().panels_fixture = Some(fixture());
+    let bar = window_titled(&h, "Menu bar");
+    let desktop = window_titled(&h, "Desktop");
+    let deskbar = window_titled(&h, "Deskbar");
+
+    // On the desktop.
+    press_widget(&mut h, TrayWidget::Network);
+    assert_eq!(showing(&h), Some(TrayWidget::Network));
+    h.click(desktop, Point::new(900.0, 500.0));
+    assert_eq!(showing(&h), None, "a press on the desktop closes it");
+    assert!(panel_windows(&h).is_empty(), "{:?}", panel_windows(&h));
+    let screen = h.program().screens[0].clone();
+    assert_eq!(h.program().bar_model(&screen).open, None, "and its widget isn't lit");
+
+    // On the Deskbar.
+    press_widget(&mut h, TrayWidget::Sound);
+    assert_eq!(showing(&h), Some(TrayWidget::Sound));
+    let row = h.find(deskbar, "Editor").expect("Editor's row").center();
+    h.click(deskbar, row);
+    assert_eq!(showing(&h), None, "a press on the Deskbar closes it");
+    assert!(panel_windows(&h).is_empty(), "{:?}", panel_windows(&h));
+
+    // Elsewhere on the bar: a title's press closes it, and opens the
+    // title's menu.
+    press_widget(&mut h, TrayWidget::Clock);
+    assert_eq!(showing(&h), Some(TrayWidget::Clock));
+    let file = h.find(bar, "File").expect("the File title").center();
+    h.click(bar, file);
+    assert_eq!(showing(&h), None, "a press elsewhere on the bar closes it");
+    assert!(panel_windows(&h).is_empty(), "{:?}", panel_windows(&h));
+    assert_eq!(h.popups(bar).len(), 1, "and the title's menu opens");
+}
+
+/// A panel's own widget pressed again closes it, and it stays closed: the
+/// press closes the panel as any press outside it does, and then reaches
+/// the widget. Another widget's press opens that widget's panel instead.
+#[test]
+fn a_panels_widget_closes_it_and_another_widget_opens_its_own() {
+    let mut h = scene(false);
+    h.program_mut().panels_fixture = Some(fixture());
+    press_widget(&mut h, TrayWidget::Network);
+    assert_eq!(showing(&h), Some(TrayWidget::Network));
+    press_widget(&mut h, TrayWidget::Network);
+    assert_eq!(showing(&h), None, "pressed again, it closes and stays closed");
+    assert!(panel_windows(&h).is_empty(), "{:?}", panel_windows(&h));
+    // Pressed once more, it opens.
+    press_widget(&mut h, TrayWidget::Network);
+    assert_eq!(showing(&h), Some(TrayWidget::Network));
+
+    press_widget(&mut h, TrayWidget::Sound);
+    assert_eq!(showing(&h), Some(TrayWidget::Sound));
+    assert_eq!(panel_windows(&h), ["sound"], "one panel at a time");
+    press_widget(&mut h, TrayWidget::Clock);
+    assert_eq!(showing(&h), Some(TrayWidget::Clock));
+    assert_eq!(panel_windows(&h), ["clock"]);
+}
+
+#[test]
+fn a_press_inside_a_panel_leaves_it_open() {
+    let mut h = scene(false);
+    h.program_mut().panels_fixture = Some(fixture());
+    press_widget(&mut h, TrayWidget::Network);
+    let p = window_titled(&h, "network");
+    // The connected network's row: nothing to do.
+    assert!(h.click_text(p, "kestrel"));
+    assert_eq!(showing(&h), Some(TrayWidget::Network));
+    // A secured one's: its password is asked for, in the panel.
+    assert!(h.click_text(p, "NETGEAR-5G"));
+    assert_eq!(showing(&h), Some(TrayWidget::Network));
+    assert_eq!(h.program().panel_ui.asking.as_ref().map(|a| a.0.as_str()), Some("NETGEAR-5G"));
+    assert_eq!(panel_windows(&h), ["network"]);
+}
+
+/// One at a time: a menu opening closes the panel wherever it opens, and a
+/// widget pressed while a menu is open closes the menu and opens its panel.
+#[test]
+fn a_panel_makes_way_for_a_menu_and_a_menu_for_a_panel() {
+    let mut h = scene(false);
+    h.program_mut().panels_fixture = Some(fixture());
+    let bar = window_titled(&h, "Menu bar");
+    press_widget(&mut h, TrayWidget::Network);
+    assert_eq!(showing(&h), Some(TrayWidget::Network));
+    // The menu at the pointer comes by the compositor's binding: no press
+    // reaches the shell to close the panel.
+    h.send(Msg::Ipc(IpcEvent::Event(Event::Binding {
+        action: "app-menu".into(),
+        pointer: Some((600.0, 300.0)),
+        output: Some("eDP-1".into()),
+    })));
+    // Services wait for the selected text, at most 150 ms.
+    h.advance(Duration::from_millis(200));
+    assert_eq!(showing(&h), None, "the menu at the pointer closes it");
+    assert!(panel_windows(&h).is_empty(), "{:?}", panel_windows(&h));
+    assert_eq!(h.popups(bar).len(), 1, "and is open");
+
+    press_widget(&mut h, TrayWidget::Sound);
+    assert!(h.popups(bar).is_empty(), "a widget's press closes the menu");
+    assert_eq!(showing(&h), Some(TrayWidget::Sound));
+}
+
+/// Dismissed by the compositor (a press in another app), a panel is
+/// forgotten, and its widget opens it again.
+#[test]
+fn a_panel_the_compositor_dismissed_opens_again_from_its_widget() {
+    let mut h = scene(false);
+    h.program_mut().panels_fixture = Some(fixture());
+    press_widget(&mut h, TrayWidget::Network);
+    let p = window_titled(&h, "network");
+    // The shell hears of the compositor's dismissal as a close request.
+    h.request_close(p);
+    assert_eq!(showing(&h), None);
+    assert!(panel_windows(&h).is_empty(), "{:?}", panel_windows(&h));
+    // A moment later (a press right as a panel closes is taken for the
+    // press that closed it), its widget opens it again.
+    std::thread::sleep(Duration::from_millis(60));
+    press_widget(&mut h, TrayWidget::Network);
+    assert_eq!(showing(&h), Some(TrayWidget::Network));
 }
 
 #[test]

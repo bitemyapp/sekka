@@ -94,7 +94,11 @@ Aizome's look.
 
 Each systray widget opens a panel (a popup under it, `raised`, hard 3pt
 shadow, 320pt wide) of quick controls, and its last row opens the matching
-Settei pane (`aizome-settei --pane <name>`):
+Settei pane (`aizome-settei --pane <name>`). A panel closes at Escape, at
+a press on its widget, and at a press anywhere else outside it: in another
+app, on the desktop, the Deskbar or the rest of the bar (where the press
+then does what it does: another widget's opens that widget's panel). A
+menu opening closes it too. The panels:
 
 - **Network**: Wi-Fi switch; networks by strength with lock and signal
   glyphs, the connected one checked; picking a secured one asks for the
