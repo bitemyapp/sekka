@@ -177,10 +177,11 @@ impl Known<'_> {
         let entry = window
             .and_then(|w| self.entry_of_window(w))
             .or_else(|| self.entry_of_program(said))
-            .or_else(|| program.as_deref().and_then(|p| self.entry_of_program(p)))
-            // Not a program's name: a desktop ID, as a sandboxed app's
-            // portal gives it.
-            .or_else(|| self.apps?.match_window_identity(said));
+            // Not a program's name: a desktop ID, as the portal gives a
+            // sandboxed app's. Before the caller's own program, which is
+            // then the portal's backend, with a desktop entry of its own.
+            .or_else(|| self.apps?.match_window_identity(said))
+            .or_else(|| program.as_deref().and_then(|p| self.entry_of_program(p)));
         let window_app = window.map(|w| w.app_id.as_str()).filter(|a| !a.is_empty());
         let (key, name) = match (entry, window_app) {
             (Some(entry), _) => (HolderKey::Entry(entry.id.clone()), entry.name.clone()),
@@ -508,8 +509,9 @@ mod tests {
     use aizome_sys::apps::{Locale, XdgDirs};
     use aizome_sys::screensaver::Holds;
 
-    /// Desktop entries as Nixpkgs ships them for these apps, and a
-    /// sandboxed one with a reverse-DNS ID.
+    /// Desktop entries as Nixpkgs ships them for these apps, a sandboxed
+    /// one with a reverse-DNS ID, and the GTK portal backend's own (it
+    /// has one, hidden from menus, for its dialogs' windows).
     fn apps() -> AppIndex {
         use std::sync::atomic::{AtomicUsize, Ordering};
         static NEXT: AtomicUsize = AtomicUsize::new(0);
@@ -529,6 +531,12 @@ mod tests {
             ("google-chrome", "Google Chrome", "/nix/store/abc-google-chrome-157/bin/google-chrome-stable %U", ""),
             ("org.aizome.Utsushi", "Utsushi", "aizome-utsushi %U", ""),
             ("org.example.Talk", "Talk", "flatpak run org.example.Talk", ""),
+            (
+                "xdg-desktop-portal-gtk",
+                "Portal",
+                "/nix/store/abc-xdg-desktop-portal-gtk-1.15/libexec/xdg-desktop-portal-gtk",
+                "NoDisplay=true\n",
+            ),
         ] {
             std::fs::write(
                 dir.join(format!("{id}.desktop")),
@@ -696,12 +704,13 @@ mod tests {
     fn the_portal_names_the_app_it_asks_for_or_itself() {
         let wm = wm(Vec::new());
         // For a sandboxed app the portal's backend gives the app's ID; for
-        // one that isn't, nothing, and then the backend is who holds.
+        // one that isn't, nothing, and then the backend is who holds. The
+        // backend's program has a desktop entry too ("Portal"): the app's
+        // ID goes before it, or every sandboxed app would be the portal.
         let holds = bus(&[(":1.80", 2500, "org.example.Talk", "In a call"), (":1.80", 2500, "", "a film")]);
-        assert_eq!(
-            rows(&merged(&wm, &[], &holds)),
-            [row("Talk", "In a call"), row("xdg-desktop-portal-gtk", "a film")]
-        );
+        let holders = merged(&wm, &[], &holds);
+        assert_eq!(rows(&holders), [row("Portal", "a film"), row("Talk", "In a call")]);
+        assert_eq!(holders[1].key, HolderKey::Entry("org.example.Talk.desktop".into()));
         // Nothing said and no process known: still a row, and its own.
         let nameless = merged(&wm, &[], &bus(&[(":1.81", 0, "", ""), (":1.82", 0, "", "")]));
         assert_eq!(rows(&nameless), [row("An app", ""), row("An app", "")]);

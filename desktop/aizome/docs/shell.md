@@ -658,10 +658,14 @@ isn't a row either.
 A holder is named by its desktop entry where one is found, looked for in
 this order: the app ID of a window of the holding process; the name it
 gave the bus, as a program (Chromium gives its program's path, so
-`/nix/store/…/chromium` is Chromium); the program of its process
-(`/proc/PID/exe`, NixOS's `.name-wrapped` undone); the name it gave as a
-desktop ID, as the portal gives a sandboxed app's. Failing all of those
-it goes by its window's app ID or its program's file name, never a path.
+`/nix/store/…/chromium` is Chromium); the name it gave as a desktop ID,
+as the portal gives a sandboxed app's; the program of its process
+(`/proc/PID/exe`, NixOS's `.name-wrapped` undone). The name given goes
+before the process's program because the portal's backend, which is the
+process then, has a desktop entry of its own ("Portal"): an app that
+isn't sandboxed gives the portal no name, and is listed as that. Failing
+all of those it goes by its window's app ID or its program's file name,
+never a path.
 Two holds with the same desktop entry are one row, so an app that asks
 both ways (Chrome, with the keys) is listed once, with the reason it gave
 the bus; a Wayland inhibitor gives no reason, and its row says which
