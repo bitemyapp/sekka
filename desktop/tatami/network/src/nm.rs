@@ -197,11 +197,36 @@ impl Secret {
     /// `setting` is the secret's property, such as
     /// `802-11-wireless-security.psk`.
     pub fn new(setting: &str, value: &str) -> Result<Secret, String> {
-        if value.contains('\n') {
-            return Err("A password cannot contain a line break".into());
-        }
-        Ok(Secret(format!("{setting}:{value}\n")))
+        passwd_line(setting, value)
+            .map(Secret)
+            .ok_or_else(|| "A password cannot contain a line break".into())
     }
+}
+
+/// A line of nmcli's passwd-file that nmcli reads back as exactly `value`.
+/// Reading a value, nmcli takes a backslash as the start of an escape and
+/// drops whitespace at either end, so backslashes are doubled and whitespace
+/// at the ends is written as escapes. None for a value with a line break,
+/// which would end the line.
+fn passwd_line(setting: &str, value: &str) -> Option<String> {
+    if value.contains(['\n', '\r']) {
+        return None;
+    }
+    let dropped = |c: char| matches!(c, ' ' | '\t' | '\x0b' | '\x0c');
+    let leading = value.len() - value.trim_start_matches(dropped).len();
+    let trailing = value.trim_end_matches(dropped).len();
+    let mut line = format!("{setting}:");
+    for (at, c) in value.char_indices() {
+        match c {
+            '\\' => line.push_str(r"\\"),
+            c if dropped(c) && (at < leading || at >= trailing) => {
+                line.push_str(&format!(r"\{:03o}", u32::from(c)));
+            }
+            c => line.push(c),
+        }
+    }
+    line.push('\n');
+    Some(line)
 }
 
 pub const PSK: &str = "802-11-wireless-security.psk";
@@ -403,5 +428,39 @@ pub fn stop_monitor() {
     {
         let _ = child.kill();
         let _ = child.wait();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn line(password: &str) -> Option<String> {
+        passwd_line(PSK, password)
+    }
+
+    #[test]
+    fn a_passwd_file_line_is_read_back_as_the_password() {
+        let written = |value: &str| Some(format!("802-11-wireless-security.psk:{value}\n"));
+        // As typed, when nmcli would change nothing: inner spaces, and the
+        // colons and equals signs that end only the setting's name.
+        assert_eq!(line("correct horse"), written("correct horse"));
+        assert_eq!(line("pass: word=#1"), written("pass: word=#1"));
+        // A backslash starts an escape for nmcli.
+        assert_eq!(line(r"back\slash1"), written(r"back\\slash1"));
+        assert_eq!(line(r"ends\"), written(r"ends\\"));
+        // Whitespace at either end is dropped unless escaped.
+        assert_eq!(line(" leading1"), written(r"\040leading1"));
+        assert_eq!(line("trailing1 "), written(r"trailing1\040"));
+        assert_eq!(line(" both ends "), written(r"\040both ends\040"));
+        assert_eq!(
+            line("  tab\tinside\t "),
+            written("\\040\\040tab\tinside\\011\\040")
+        );
+        assert_eq!(line(r" \ "), written(r"\040\\\040"));
+        assert_eq!(line("   "), written(r"\040\040\040"));
+        // A line break would end the line.
+        assert_eq!(line("two\nlines"), None);
+        assert_eq!(line("carriage\rreturn"), None);
     }
 }

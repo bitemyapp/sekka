@@ -18,6 +18,12 @@ let
         ssid = "Home";
         password = "correct horse";
       }
+      # A password nmcli's passwd-file rewrites unless it is escaped: a
+      # backslash, and a space at either end.
+      {
+        ssid = "Annex";
+        password = " back\\slash ";
+      }
       {
         ssid = "Back Room";
         password = "backroom-pass";
@@ -119,6 +125,12 @@ pkgs.testers.runNixOSTest {
         wait_active("Home")
         time.sleep(3)
         machine.screenshot("joined")
+
+    with subtest("A password with a backslash and spaces at its ends joins as typed"):
+        window("--join Annex")
+        time.sleep(3)
+        machine.send_chars(" back\\slash \n")
+        wait_active("Annex")
 
     with subtest("Joining a hidden network by name"):
         # A second start reaches the open window, which asks for the
