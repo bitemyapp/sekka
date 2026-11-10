@@ -41,6 +41,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+pub(crate) use raster::export_masks;
 pub use raster::{Glyphs, draw_glyphs};
 
 /// What parley carries per style: the index of the run's attributes, which

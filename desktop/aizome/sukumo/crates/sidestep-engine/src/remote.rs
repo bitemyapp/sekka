@@ -123,12 +123,18 @@ fn local_paint(p: &wire::Paint) -> p::Paint {
 #[derive(Clone, Default)]
 pub struct Exporter {
     serial: u32,
+    font_transfer: bool,
     fonts: HashSet<u32>,
+    masks: HashMap<(u32, u32, u32), u32>,
     images: HashMap<(u64, u64), u64>,
     asset_bytes: usize,
     next_image: u64,
 }
 impl Exporter {
+    /// Preserve whole-font transfer for baseline comparisons and diagnostics.
+    pub fn font_transfer() -> Self {
+        Self { font_transfer: true, ..Self::default() }
+    }
     pub fn frame(
         &mut self,
         width: u32,
@@ -148,7 +154,11 @@ impl Exporter {
         full: bool,
         batches: &[(&[p::Rect], &[p::Op])],
     ) -> Result<Vec<u8>, String> {
-        let mut next = if full { Self { serial: self.serial, ..Self::default() } } else { self.clone() };
+        let mut next = if full {
+            Self { serial: self.serial, font_transfer: self.font_transfer, ..Self::default() }
+        } else {
+            self.clone()
+        };
         next.serial = next.serial.wrapping_add(1);
         let mut frame = wire::Frame {
             version: wire::VERSION,
@@ -160,15 +170,20 @@ impl Exporter {
             batches: Vec::new(),
             fonts: Vec::new(),
             images: Vec::new(),
+            masks: Vec::new(),
         };
         for (damage, ops) in batches {
             let mut batch = wire::Batch { damage: damage.iter().map(rect).collect(), ops: Vec::new() };
             for op in *ops {
-                batch.ops.push(next.op(op, &mut frame.fonts, &mut frame.images)?);
+                batch.ops.push(next.op(op, scale, &mut frame.fonts, &mut frame.images, &mut frame.masks)?);
             }
             frame.batches.push(batch);
         }
-        if next.asset_bytes > wire::MAX_ASSET_BYTES || next.fonts.len() > 256 || next.images.len() > 1024 {
+        if next.asset_bytes > wire::MAX_ASSET_BYTES
+            || next.fonts.len() > 256
+            || next.images.len() > 1024
+            || next.masks.len() > wire::MAX_OPS
+        {
             return Err("retained asset dictionary is full".into());
         }
         let bytes = frame.encode()?;
@@ -178,8 +193,10 @@ impl Exporter {
     fn op(
         &mut self,
         op: &p::Op,
+        scale: f32,
         fonts: &mut Vec<wire::Font>,
         images: &mut Vec<wire::Image>,
+        masks: &mut Vec<wire::Mask>,
     ) -> Result<wire::Op, String> {
         Ok(match op {
             p::Op::Fill { rect: r, color } => {
@@ -198,6 +215,29 @@ impl Exporter {
                 draw: draw(d)?,
             },
             p::Op::Glyphs(g) => {
+                if !self.font_transfer
+                    && let Some(glyphs) = crate::text::export_masks(g, scale)
+                {
+                    let mut placements = Vec::with_capacity(glyphs.len());
+                    for glyph in glyphs {
+                        let id = if let Some(id) = self.masks.get(&glyph.key) {
+                            *id
+                        } else {
+                            let id = self.masks.len() as u32 + 1;
+                            self.asset_bytes += glyph.alpha.len();
+                            masks.push(wire::Mask {
+                                id,
+                                width: glyph.width,
+                                height: glyph.height,
+                                alpha: glyph.alpha.to_vec(),
+                            });
+                            self.masks.insert(glyph.key, id);
+                            id
+                        };
+                        placements.push((id, glyph.x, glyph.y));
+                    }
+                    return Ok(wire::Op::MaskGlyphs { glyphs: placements, color: g.color, clip: rect(&g.clip) });
+                }
                 if self.fonts.insert(g.font) {
                     let f = fonts::face_data(g.font).ok_or("missing local font")?;
                     let data = f.font.data.data().to_vec();
@@ -321,6 +361,7 @@ pub struct Player {
     serial: Option<u32>,
     fonts: HashMap<u32, u32>,
     images: HashMap<u64, Arc<p::ImageData>>,
+    masks: HashMap<u32, Arc<p::AlphaMask>>,
     asset_bytes: usize,
     glyphs: raster::Glyphs,
 }
@@ -366,12 +407,41 @@ impl Player {
                 }),
             );
         }
-        if self.asset_bytes > wire::MAX_ASSET_BYTES || self.fonts.len() > 256 || self.images.len() > 1024 {
+        for mask in &frame.masks {
+            if self.masks.contains_key(&mask.id) {
+                return Err("duplicate retained mask asset".into());
+            }
+            self.asset_bytes += mask.alpha.len();
+            let image =
+                p::AlphaMask::new(mask.width, mask.height, mask.alpha.clone()).ok_or("invalid retained glyph mask")?;
+            self.masks.insert(mask.id, Arc::new(image));
+        }
+        if self.asset_bytes > wire::MAX_ASSET_BYTES
+            || self.fonts.len() > 256
+            || self.images.len() > 1024
+            || self.masks.len() > wire::MAX_OPS
+        {
             return Err("retained dictionary budget exceeded".into());
         }
         self.damage.clear();
         for batch in &frame.batches {
-            let ops = batch.ops.iter().map(|op| self.op(op)).collect::<Result<Vec<_>, String>>()?;
+            let mut ops = Vec::new();
+            for op in &batch.ops {
+                if let wire::Op::MaskGlyphs { glyphs, color, clip } = op {
+                    for (id, x, y) in glyphs {
+                        let mask = self.masks.get(id).ok_or("missing retained glyph mask")?.clone();
+                        let dst = p::Rect::new(
+                            *x as f32 / self.scale,
+                            *y as f32 / self.scale,
+                            (*x as f32 + mask.width() as f32) / self.scale,
+                            (*y as f32 + mask.height() as f32) / self.scale,
+                        );
+                        ops.push(p::Op::AlphaMask { mask, dst, clip: local_rect(clip), color: *color });
+                    }
+                } else {
+                    ops.push(self.op(op)?);
+                }
+            }
             let damage: Vec<_> = batch.damage.iter().map(local_rect).collect();
             let mut canvas = raster::Canvas::new(&mut self.pixels, self.width, self.height, 0.0, self.scale);
             self.damage.extend(damage.iter().filter_map(|r| {
@@ -386,6 +456,7 @@ impl Player {
         raster::images::forget(&self.images.values().map(|i| i.key).collect::<Vec<_>>());
         self.images.clear();
         self.fonts.clear();
+        self.masks.clear();
         self.asset_bytes = 0;
         self.serial = None;
         self.glyphs = raster::Glyphs::default();
@@ -447,6 +518,7 @@ impl Player {
             },
             wire::Op::BeginGroup { alpha, draw } => p::Op::BeginGroup { alpha: *alpha, draw: local_draw(draw)? },
             wire::Op::EndGroup => p::Op::EndGroup,
+            wire::Op::MaskGlyphs { .. } => return Err("cached glyph run requires expansion".into()),
         })
     }
 }
@@ -459,6 +531,175 @@ impl Drop for Player {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn glyph_cache_distinguishes_variations_and_preserves_color_font_fallback() {
+        use crate::text::fonts::{Design, Family, FontSpec, Synth};
+        use skrifa::MetadataProvider;
+        let run = |font, id| p::GlyphRun {
+            font,
+            size: 32.0,
+            x: 3.25,
+            y: 40.0,
+            glyphs: Arc::from([p::Glyph { id, x: 0.0, y: 0.0 }]),
+            color: [0.7, 0.1, 0.3, 0.8],
+            clip: p::Rect::new(0.0, 0.0, 80.0, 64.0),
+        };
+        for (family, ch) in [("IBM Plex Sans Var", 'W'), ("Noto Color Emoji", '😀')] {
+            let spec = FontSpec { family: Family::Named(family.into()), ..FontSpec::system(Design::Default, 0.0) };
+            let face = fonts::resolve(&spec);
+            if &*face.family != family {
+                eprintln!("optional font {family} not installed");
+                continue;
+            }
+            let font = face.font.as_ref().unwrap();
+            let parsed = skrifa::FontRef::from_index(font.data.data(), font.index).unwrap();
+            let glyph = parsed.charmap().map(ch).unwrap().to_u32();
+            if ch == 'W' {
+                assert!(!parsed.axes().is_empty());
+                let a = run(fonts::register(font, &[0], Synth::default()), glyph);
+                let b = run(fonts::register(font, &[8192], Synth::default()), glyph);
+                let ma = crate::text::export_masks(&a, 1.25).unwrap();
+                let mb = crate::text::export_masks(&b, 1.25).unwrap();
+                assert_ne!(ma[0].key, mb[0].key);
+                assert_ne!(ma[0].alpha, mb[0].alpha, "variation must change glyph ink");
+                let mut exporter = Exporter::default();
+                let mut player = Player::default();
+                for (i, run) in [a, b].into_iter().enumerate() {
+                    let clip = run.clip;
+                    let ops =
+                        [p::Op::FillWith { rect: clip, color: [1.0; 4], blend: p::Blend::Copy }, p::Op::Glyphs(run)];
+                    let bytes = exporter.frame(100, 80, 1.25, i == 0, &[clip], &ops).unwrap();
+                    assert!(!wire::Frame::parse(&bytes).unwrap().masks.is_empty());
+                    player.frame(&bytes).unwrap();
+                    let mut expected = vec![0; 100 * 80];
+                    raster::paint(
+                        &mut raster::Canvas::new(&mut expected, 100, 80, 0.0, 1.25),
+                        &mut raster::Glyphs::default(),
+                        &[clip],
+                        &ops,
+                    );
+                    assert_eq!(player.pixels, expected);
+                }
+            } else {
+                let run = run(fonts::register(font, &[], Synth::default()), glyph);
+                assert!(crate::text::export_masks(&run, 1.25).is_none(), "color glyphs retain their font replay path");
+            }
+        }
+    }
+
+    #[test]
+    fn cached_glyphs_match_font_replay_with_fractional_positions_clips_and_groups() {
+        use crate::text::fonts::{Design, Family, FontSpec, Synth};
+        use skrifa::MetadataProvider;
+        let spec = FontSpec { family: Family::Named("DejaVu Sans".into()), ..FontSpec::system(Design::Default, 0.0) };
+        let face = fonts::resolve(&spec);
+        assert_eq!(&*face.family, "DejaVu Sans", "test font must be installed");
+        let font = face.font.as_ref().unwrap();
+        let parsed = skrifa::FontRef::from_index(font.data.data(), font.index).unwrap();
+        let glyphs: Arc<[p::Glyph]> = "Agj é W"
+            .chars()
+            .enumerate()
+            .map(|(i, c)| p::Glyph {
+                id: parsed.charmap().map(c).unwrap().to_u32(),
+                x: i as f32 * 19.37,
+                y: (i % 2) as f32 * 0.23,
+            })
+            .collect::<Vec<_>>()
+            .into();
+        let all = p::Rect::new(0.0, 0.0, 192.0, 96.0);
+        for synth in [Synth::default(), Synth { embolden: true, skew: 12.0, stroke: 0.025 }] {
+            let font_id = fonts::register(font, &[], synth);
+            for scale in [1.0, 1.25, 1.3333334, 1.5, 1.75, 2.0] {
+                let (width, height) = ((192.0 * scale) as u32, (96.0 * scale) as u32);
+                let clip = p::Rect::new(2.3, 3.7, 150.6, 84.2);
+                let ops = vec![
+                    p::Op::FillWith { rect: all, color: [0.2, 0.3, 0.4, 1.0], blend: p::Blend::Copy },
+                    p::Op::BeginGroup {
+                        alpha: 0.71,
+                        draw: p::Draw {
+                            xf: tiny_skia::Transform::identity(),
+                            blend: p::Blend::SourceOver,
+                            aa: true,
+                            clip,
+                            mask: None,
+                            shadow: Some(Arc::new(p::ShadowSpec {
+                                dx: 1.25,
+                                dy: -2.7,
+                                blur: 3.5,
+                                color: [0.1, 0.2, 0.3, 0.6],
+                                only: false,
+                            })),
+                        },
+                    },
+                    p::Op::Glyphs(p::GlyphRun {
+                        font: font_id,
+                        size: 23.5,
+                        x: -1.17,
+                        y: 36.3,
+                        glyphs: glyphs.clone(),
+                        color: [0.9, 0.1, 0.4, 0.63],
+                        clip,
+                    }),
+                    p::Op::Glyphs(p::GlyphRun {
+                        font: font_id,
+                        size: 17.0,
+                        x: 4.65,
+                        y: 71.9,
+                        glyphs: glyphs.clone(),
+                        color: [0.1, 0.8, 0.9, 1.0],
+                        clip,
+                    }),
+                    p::Op::EndGroup,
+                ];
+                let mut direct = vec![0; (width * height) as usize];
+                let mut cache = raster::Glyphs::default();
+                raster::paint(
+                    &mut raster::Canvas::new(&mut direct, width, height, 0.0, scale),
+                    &mut cache,
+                    &[all],
+                    &ops,
+                );
+                let mut exporter = Exporter::default();
+                let mut player = Player::default();
+                let full = exporter.frame(width, height, scale, true, &[all], &ops).unwrap();
+                let parsed = wire::Frame::parse(&full).unwrap();
+                assert!(parsed.fonts.is_empty() && !parsed.masks.is_empty());
+                player.frame(&full).unwrap();
+                let difference = player.pixels.iter().zip(&direct).enumerate().find(|(_, (a, b))| a != b);
+                assert!(difference.is_none(), "cached full scale={scale}: {difference:?}");
+                let font_full = Exporter::font_transfer().frame(width, height, scale, true, &[all], &ops).unwrap();
+                assert!(full.len() * 8 < font_full.len(), "glyph cache should avoid the font dictionary");
+                let mut font_player = Player::default();
+                font_player.frame(&font_full).unwrap();
+                assert_eq!(font_player.pixels, direct);
+                let mut ops = ops.clone();
+                for op in &mut ops {
+                    if let p::Op::Glyphs(run) = op {
+                        run.color = [0.7, 0.9, 0.1, 0.39];
+                    }
+                }
+                let damage = [p::Rect::new(4.7, 20.2, 47.8, 63.6), p::Rect::new(41.3, 39.8, 125.7, 80.1)];
+                let delta = exporter.frame(width, height, scale, false, &damage, &ops).unwrap();
+                assert!(wire::Frame::parse(&delta).unwrap().masks.is_empty(), "reuse glyphs across damage");
+                player.frame(&delta).unwrap();
+                raster::paint(
+                    &mut raster::Canvas::new(&mut direct, width, height, 0.0, scale),
+                    &mut cache,
+                    &damage,
+                    &ops,
+                );
+                let difference = player.pixels.iter().zip(&direct).enumerate().find(|(_, (a, b))| a != b);
+                assert!(difference.is_none(), "cached damage scale={scale}: {difference:?}");
+                let mut missing = parsed.clone();
+                missing.masks.clear();
+                assert!(Player::default().frame(&missing.encode().unwrap()).is_err());
+                let mut duplicate = parsed.clone();
+                duplicate.masks.push(parsed.masks[0].clone());
+                assert!(Player::default().frame(&duplicate.encode().unwrap()).is_err());
+            }
+        }
+    }
     #[test]
     fn replay_is_exact_and_deltas_require_contiguous_state() {
         let all = p::Rect::new(0.0, 0.0, 128.0, 96.0);

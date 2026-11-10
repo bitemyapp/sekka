@@ -7,6 +7,14 @@ use aizome_remote_protocol::client::{
 use std::io::Write;
 use std::os::fd::AsFd;
 
+fn exporter() -> crate::remote::Exporter {
+    if std::env::var("AIZOME_REMOTE_GLYPHS").as_deref() == Ok("font") {
+        crate::remote::Exporter::font_transfer()
+    } else {
+        crate::remote::Exporter::default()
+    }
+}
+
 pub(super) struct Export {
     object: Surface,
     active: bool,
@@ -20,14 +28,14 @@ impl Export {
             object: manager.get_surface(surface, qh, window),
             active: false,
             full: true,
-            exporter: Default::default(),
+            exporter: exporter(),
             serial: 0,
         }
     }
     fn unsupported(&mut self) {
         self.object.unsupported();
         self.full = true;
-        self.exporter = Default::default();
+        self.exporter = exporter();
         self.serial = 0;
     }
 }
@@ -112,7 +120,7 @@ impl Dispatch<Surface, WindowId> for State {
         remote.active = enabled != 0;
         remote.full = true;
         remote.serial = 0;
-        remote.exporter = Default::default();
+        remote.exporter = exporter();
         if remote.active && win.configured {
             let rects = vec![Rect::new(0.0, 0.0, win.width as f32, win.height as f32)];
             let _ = state.to_main.send(FromRender::Repaint { window: *window, target: Target::Root, rects });

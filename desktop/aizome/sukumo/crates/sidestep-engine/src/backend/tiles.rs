@@ -905,6 +905,10 @@ pub(super) fn missed<'a>(stale: &'a [Rect], dirty: &'a [Rect]) -> impl Iterator<
     stale.iter().chain(dirty.iter().filter(|d| !stale.iter().any(|s| s.intersect(d) == **d)))
 }
 
+pub(super) fn is_empty(layers: &Layers) -> bool {
+    layers.layers.is_empty()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1200,8 +1204,4 @@ mod tests {
         // Past eight, their bounds.
         assert_eq!(dirty, [Rect::new(0.0, 0.0, 165.0, 10.0)]);
     }
-}
-
-pub(super) fn is_empty(layers: &Layers) -> bool {
-    layers.layers.is_empty()
 }

@@ -1652,6 +1652,16 @@ commits. Smithay caches and applies that state with synchronized subsurfaces and
 fences. A full state must replace its entire canvas. Unsupported drawing keeps
 ordinary pixels available.
 
+Outline text normally exports immutable coverage from the actual glyph cache,
+keyed by registered face/variation, pixel size and quarter-pixel phase. The viewer
+reuses masks with integer physical positions and paint colors, using Sukumo's
+same Alpha8 blending. This avoids sending an entire font to paint a short label.
+Color glyphs and unusual ink bounds preserve full-font replay; setting
+`AIZOME_REMOTE_GLYPHS=font` in the source app selects that baseline for all text.
+The cached masks share the 64 MiB asset budget, and expanded placements count
+toward the 8,192-operation limit. The extension remains bounded drawing data;
+older renderers reject it and select the ordinary video fallback.
+
 The private `remote-scene` IPC subscription requires an existing, live,
 cursor-free ext-image-copy-capture output session. Its resource ID and output
 must match a Wayland client with the IPC socket peer's PID. Events go only to the

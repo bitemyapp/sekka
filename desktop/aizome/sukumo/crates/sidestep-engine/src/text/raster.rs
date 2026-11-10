@@ -105,7 +105,7 @@ struct Image {
 
 enum Pixels {
     /// Coverage, one byte per pixel.
-    Mask(Box<[u8]>),
+    Mask(Arc<[u8]>),
     /// Premultiplied, as canvases hold pixels.
     Color(Box<[u32]>),
 }
@@ -127,6 +127,81 @@ fn cost(image: &Option<Arc<Image>>) -> usize {
 /// A glyph image's key across threads: face, pixel size (bits), and the
 /// glyph and its offset as a strike keys them.
 type SharedKey = (u32, u32, u32);
+
+/// One immutable final-scale coverage image. Color glyphs keep the full-font
+/// replay path so their premultiplied compositing is never approximated.
+pub(crate) struct MaskGlyph {
+    pub key: (u32, u32, u32),
+    pub width: u32,
+    pub height: u32,
+    pub alpha: Arc<[u8]>,
+    pub x: i32,
+    pub y: i32,
+}
+
+fn position(bitmaps_only: bool, x: f32) -> (f32, u32) {
+    if bitmaps_only {
+        (x.round(), 0)
+    } else {
+        let px = x.floor();
+        match ((x - px) * SUBPIXEL).round() as u32 {
+            bin if bin as f32 >= SUBPIXEL => (px + 1.0, 0),
+            bin => (px, bin),
+        }
+    }
+}
+
+/// Reuse the exact images used by local drawing, including variation/synthetic
+/// face identity and quarter-pixel phase. Missing entries warm the shared cache
+/// for the source's following normal buffer paint as well.
+pub(crate) fn export_masks(run: &GlyphRun, scale: f32) -> Option<Vec<MaskGlyph>> {
+    let size = run.size * scale;
+    if !(size > 0.0 && size < 4096.0) {
+        return None;
+    }
+    let mut context = ScaleContext::new();
+    let face = Face::load(&mut context, run.font)?;
+    let mut scaler = None;
+    let mut context = Some(&mut context);
+    let mut out = Vec::new();
+    for g in run.glyphs.iter() {
+        let (px, bin) = position(face.bitmaps_only, run.x * scale + g.x * scale);
+        let y = (run.y * scale + g.y * scale).round();
+        let key = (run.font, size.to_bits(), g.id.wrapping_mul(SUBPIXEL as u32) + bin);
+        let image = match Shared::get(key) {
+            Some(image) => image,
+            None => {
+                if scaler.is_none() {
+                    scaler = Some(face.scaler(context.take()?, size));
+                }
+                let image = render(scaler.as_mut()?, &face.data, size, g.id, bin as f32 / SUBPIXEL).map(Arc::new);
+                Shared::put(key, image.clone());
+                image
+            }
+        };
+        let Some(image) = image else { continue };
+        let Pixels::Mask(alpha) = &image.pixels else { return None };
+        // The normal rasterizer culls by this conservative reach. Unusually
+        // large ink must retain that exact behavior through full-font replay.
+        let reach = size * 2.0;
+        if (image.left as f32) < -reach
+            || (image.left as f32 + image.width as f32) > reach
+            || image.top as f32 > reach
+            || (image.height as f32 - image.top as f32) > reach
+        {
+            return None;
+        }
+        out.push(MaskGlyph {
+            key,
+            width: image.width,
+            height: image.height,
+            alpha: alpha.clone(),
+            x: px as i32 + image.left,
+            y: y as i32 - image.top,
+        });
+    }
+    Some(out)
+}
 
 /// Glyph images every thread's cache shares, in two generations as each
 /// cache keeps its own: a glyph one thread rasterized, another finds here
@@ -198,15 +273,7 @@ pub fn draw_glyphs(canvas: &mut Canvas, cache: &mut Glyphs, run: &GlyphRun, clip
         if x + reach < cx0 as f32 || x - reach > cx1 as f32 || y + reach < cy0 as f32 || y - reach > cy1 as f32 {
             continue;
         }
-        let (px, bin) = if face.bitmaps_only {
-            (x.round(), 0)
-        } else {
-            let px = x.floor();
-            match ((x - px) * SUBPIXEL).round() as u32 {
-                bin if bin as f32 >= SUBPIXEL => (px + 1.0, 0),
-                bin => (px, bin),
-            }
-        };
+        let (px, bin) = position(face.bitmaps_only, x);
         let glyph_key = g.id.wrapping_mul(SUBPIXEL as u32) + bin;
         let image = match strike.glyphs.entry(glyph_key) {
             Entry::Occupied(e) => e.into_mut(),

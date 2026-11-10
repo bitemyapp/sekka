@@ -21,6 +21,9 @@ pub struct Frame {
     pub batches: Vec<Batch>,
     pub fonts: Vec<Font>,
     pub images: Vec<Image>,
+    /// Final-scale glyph coverage, cached independently of paint color.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub masks: Vec<Mask>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Batch {
@@ -46,6 +49,14 @@ pub struct Image {
     /// Premultiplied RGBA, with exactly width * height * 4 bytes.
     #[serde(with = "blob")]
     pub rgba: Vec<u8>,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Mask {
+    pub id: u32,
+    pub width: u32,
+    pub height: u32,
+    #[serde(with = "blob")]
+    pub alpha: Vec<u8>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Segment {
@@ -116,6 +127,12 @@ pub enum Op {
         size: f32,
         origin: [f32; 2],
         glyphs: Vec<(u32, f32, f32)>,
+        color: Color,
+        clip: Rect,
+    },
+    /// Cached coverage ids and integer physical-pixel top-left positions.
+    MaskGlyphs {
+        glyphs: Vec<(u32, i32, i32)>,
         color: Color,
         clip: Rect,
     },
@@ -214,9 +231,19 @@ impl Frame {
                 .batches
                 .iter()
                 .all(|b| !b.damage.is_empty() && b.damage.len() <= 256 && b.damage.iter().all(|r| real(r)))
-            && self.batches.iter().map(|b| b.ops.len()).sum::<usize>() <= MAX_OPS
+            && self
+                .batches
+                .iter()
+                .flat_map(|b| &b.ops)
+                .map(|op| match op {
+                    Op::MaskGlyphs { glyphs, .. } => glyphs.len().max(1),
+                    _ => 1,
+                })
+                .sum::<usize>()
+                <= MAX_OPS
             && self.fonts.len() <= 64
-            && self.images.len() <= 256;
+            && self.images.len() <= 256
+            && self.masks.len() <= MAX_OPS;
         if !valid {
             return Err("invalid retained frame geometry/version/counts".into());
         }
@@ -230,8 +257,13 @@ impl Frame {
         {
             return Err("full retained frame does not cover its canvas".into());
         }
-        let asset_bytes: usize =
-            self.fonts.iter().map(|f| f.data.len()).chain(self.images.iter().map(|i| i.rgba.len())).sum();
+        let asset_bytes: usize = self
+            .fonts
+            .iter()
+            .map(|f| f.data.len())
+            .chain(self.images.iter().map(|i| i.rgba.len()))
+            .chain(self.masks.iter().map(|m| m.alpha.len()))
+            .sum();
         if asset_bytes > MAX_ASSET_BYTES {
             return Err("retained asset budget exceeded".into());
         }
@@ -250,6 +282,12 @@ impl Frame {
             let pixels = u64::from(i.width) * u64::from(i.height);
             if pixels == 0 || pixels > MAX_PIXELS || pixels * 4 != i.rgba.len() as u64 {
                 return Err("invalid retained image".into());
+            }
+        }
+        for m in &self.masks {
+            let pixels = u64::from(m.width) * u64::from(m.height);
+            if pixels == 0 || pixels > 4 * 1024 * 1024 || pixels != m.alpha.len() as u64 {
+                return Err("invalid retained glyph mask".into());
             }
         }
         for batch in &self.batches {
@@ -275,6 +313,13 @@ impl Frame {
                             && real(origin)
                             && glyphs.len() <= 65_536
                             && glyphs.iter().all(|(id, x, y)| *id <= 65_535 && real(&[*x, *y]))
+                            && color(c)
+                            && real(clip)
+                    }
+                    Op::MaskGlyphs { glyphs, color: c, clip } => {
+                        glyphs
+                            .iter()
+                            .all(|(_, x, y)| (-262_144..=262_144).contains(x) && (-262_144..=262_144).contains(y))
                             && color(c)
                             && real(clip)
                     }
@@ -373,6 +418,7 @@ mod tests {
             full: true,
             fonts: vec![],
             images: vec![],
+            masks: vec![],
             batches: vec![Batch {
                 damage: vec![[0.0, 0.0, 1920.0, 1080.0]],
                 ops: vec![Op::Fill { rect: [0.0, 0.0, 1920.0, 1080.0], color: [1.0, 1.0, 1.0, 1.0], blend: 1 }],
@@ -398,6 +444,12 @@ mod tests {
         let mut bad = f.clone();
         bad.version = VERSION + 1;
         assert!(bad.validate().is_err());
+        let mut bad = f.clone();
+        bad.masks.push(Mask { id: 1, width: 3, height: 2, alpha: vec![0; 5] });
+        assert!(bad.validate().is_err());
+        let mut bad = f.clone();
+        bad.batches[0].ops.push(Op::MaskGlyphs { glyphs: vec![(1, 0, 0); MAX_OPS], color: [1.0; 4], clip: [0.0; 4] });
+        assert!(bad.validate().is_err(), "expanded glyph work must stay bounded");
         assert!(Frame::parse(b"{\"version\":1}").is_err());
     }
 }
