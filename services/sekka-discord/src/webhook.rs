@@ -22,7 +22,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 use tokio::net::TcpStream;
-use tokio::sync::{OwnedSemaphorePermit, Semaphore};
+use tokio::sync::{OwnedSemaphorePermit, Semaphore, oneshot};
 use tokio::task::AbortHandle;
 use tokio::time::{Instant, timeout_at};
 
@@ -234,11 +234,22 @@ async fn serve(
             head: AtomicBool::new(false),
             _place: place,
         });
-        let connection = connection(stream, service.clone(), place, receiver.clone(), limits);
-        // Listed under the lock, so the connection cannot leave the list
-        // before it is on it.
-        let mut unproven = gate.unproven();
-        unproven.push_back((id, tokio::spawn(connection).abort_handle()));
+        // A connection is handed its place only once it is listed, so it cannot
+        // leave the list before it is on it. Nothing is spawned or dropped
+        // under the list's lock: a runtime that is shutting down drops what it
+        // is asked to spawn there and then, and a place dropped by the thread
+        // that holds the lock would wait for that lock for ever.
+        let (listed, place_when_listed) = oneshot::channel();
+        let (service, receiver) = (service.clone(), receiver.clone());
+        let task = tokio::spawn(async move {
+            if let Ok(place) = place_when_listed.await {
+                connection(stream, service, place, receiver, limits).await;
+            }
+        });
+        gate.unproven().push_back((id, task.abort_handle()));
+        // A task that is already gone hands the place straight back, and
+        // dropping it here takes the connection off the list again.
+        let _ = listed.send(place);
     }
 }
 
