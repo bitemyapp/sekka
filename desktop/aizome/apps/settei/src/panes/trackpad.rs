@@ -136,8 +136,11 @@ impl Pane for Trackpad {
         // Off, the rest is greyed and kept for when it's on again.
         let on = t.enabled();
         let mut sections = vec![
+            // No caption, as the switches that lead Bluetooth and Network:
+            // the pane's title names it, and with one the pane is taller
+            // than Settei's window as it opens.
             vcx.section(
-                "Trackpad",
+                "",
                 vec![
                     row("Use the trackpad", toggle(on).on_toggle(Msg::Enabled)).entry("enabled").help(if on {
                         "When off, the trackpad doesn't move the pointer, click or scroll."
