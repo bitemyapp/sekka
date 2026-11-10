@@ -188,7 +188,7 @@ pub fn set_wifi(on: bool) -> Result<(), String> {
     change(&["radio", "wifi", if on { "on" } else { "off" }])
 }
 
-/// A secret for `nmcli … passwd-file`, a line of that file. It is only
+/// A secret for `nmcli … passwd-file`, as lines of that file. It is only
 /// ever written to a pipe nmcli reads (`change_with`): a file would stay
 /// behind, password and all, when this program ends before nmcli does.
 pub struct Secret(String);
@@ -200,6 +200,15 @@ impl Secret {
         passwd_line(setting, value)
             .map(Secret)
             .ok_or_else(|| "A password cannot contain a line break".into())
+    }
+
+    /// An enterprise network's password, with its username beside it: asked
+    /// for the password, nmcli answers only when the file gives the identity
+    /// too, though the connection already has it.
+    pub fn enterprise(identity: &str, password: &str) -> Result<Secret, String> {
+        let identity =
+            passwd_line(EAP_IDENTITY, identity).ok_or("A username cannot contain a line break")?;
+        Ok(Secret(identity + &Secret::new(EAP_PASSWORD, password)?.0))
     }
 }
 
@@ -231,6 +240,7 @@ fn passwd_line(setting: &str, value: &str) -> Option<String> {
 
 pub const PSK: &str = "802-11-wireless-security.psk";
 pub const EAP_PASSWORD: &str = "802-1x.password";
+const EAP_IDENTITY: &str = "802-1x.identity";
 
 /// Bring a connection up, on `device` when given, with a secret when given.
 /// Waits for the outcome, up to 45 seconds.
@@ -343,7 +353,10 @@ pub fn join(
                     ]);
                 }
             }
-            Some(Secret::new(EAP_PASSWORD, password.unwrap_or_default())?)
+            Some(Secret::enterprise(
+                &enterprise.identity,
+                password.unwrap_or_default(),
+            )?)
         }
     };
     let args: Vec<&str> = args.iter().map(String::as_str).collect();
@@ -361,7 +374,22 @@ pub fn rejoin(
     password: &str,
     device: Option<&str>,
 ) -> Result<(), String> {
-    let secret = Secret::new(setting, password)?;
+    let secret = if setting == EAP_PASSWORD {
+        // The saved username goes beside the new password (Secret::enterprise).
+        let identity = output(&[
+            "--escape",
+            "no",
+            "-g",
+            EAP_IDENTITY,
+            "connection",
+            "show",
+            "uuid",
+            uuid,
+        ])?;
+        Secret::enterprise(identity.trim_end_matches('\n'), password)?
+    } else {
+        Secret::new(setting, password)?
+    };
     connect(uuid, device, Some(&secret))
 }
 
@@ -462,5 +490,16 @@ mod tests {
         // A line break would end the line.
         assert_eq!(line("two\nlines"), None);
         assert_eq!(line("carriage\rreturn"), None);
+    }
+
+    #[test]
+    fn an_enterprise_secret_gives_the_username_beside_the_password() {
+        let secret = Secret::enterprise(r"EXAMPLE\ada", "trailing1 ").unwrap();
+        assert_eq!(
+            secret.0,
+            "802-1x.identity:EXAMPLE\\\\ada\n802-1x.password:trailing1\\040\n"
+        );
+        assert!(Secret::enterprise("two\nlines", "password").is_err());
+        assert!(Secret::enterprise("ada", "two\nlines").is_err());
     }
 }
