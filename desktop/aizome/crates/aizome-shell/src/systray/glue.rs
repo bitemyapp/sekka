@@ -10,7 +10,7 @@ use super::panels::{
     self, AwakePanel, BatteryPanel, BtDevice, BtPanel, ClockPanel, DisplayPanel, NetPanel, NetRow, Panel, PanelMsg,
     SoundPanel,
 };
-use crate::menubar::TrayWidget;
+use crate::menubar::{Slot, TrayWidget};
 use crate::shell::{Msg, Shell, Surface};
 
 /// A panel showing.
@@ -225,6 +225,18 @@ impl Shell {
         if let Some(p) = self.panel.take() {
             cx.close_window(p.window);
             self.surfaces.remove(&p.window);
+        }
+    }
+
+    /// The panel in `window` was dismissed by a press outside it: in
+    /// another app (the compositor closed it) or anywhere else in the shell
+    /// (the kit did). If that press is on the panel's own widget, the
+    /// widget hears it next: remembered as a bar menu's closing is, the
+    /// panel stays closed (see
+    /// [`pressed_to_close`](Shell::pressed_to_close)).
+    pub(crate) fn panel_dismissed(&mut self, window: WindowKey) {
+        if let Some(p) = self.panel.take_if(|p| p.window == window) {
+            self.just_closed = Some((p.bar, Slot::Tray(p.widget), std::time::Instant::now()));
         }
     }
 

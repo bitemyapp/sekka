@@ -233,10 +233,16 @@ pub enum WindowKind {
     /// A popup of the program's own over `parent` (a panel under a
     /// menu bar's button), `anchor` a rectangle of `parent` it opens
     /// against as `placement` says; with `grab` it takes the keyboard and
-    /// pointer while open and closes when clicked outside, which the
-    /// program hears as [`Program::close_requested`](crate::Program::close_requested)
-    /// (it closes whatever that answers). It is the spec's size and draws
-    /// its own ground, shadow and all.
+    /// pointer while open and closes when clicked outside (in another
+    /// program, or anywhere else in this one: another of its windows, the
+    /// rest of `parent`) or when a menu opens elsewhere in the program,
+    /// which the program hears as
+    /// [`Program::close_requested`](crate::Program::close_requested) (it
+    /// closes whatever that answers). A press on what opened it closes it
+    /// like any other outside it, and the program hears of the closing
+    /// before the press's own message: a button that toggles it tells from
+    /// that not to open it again. It is the spec's size and draws its own
+    /// ground, shadow and all.
     Popup { parent: WindowKey, anchor: Rect, placement: crate::widgets::menus::MenuPlacement, grab: bool },
 }
 

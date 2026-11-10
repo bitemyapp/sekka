@@ -344,7 +344,8 @@ pub struct Shell {
     /// The bar menu open (its title lit).
     pub bar_menu: Option<crate::barmenus::BarMenu>,
     pub(crate) menu_gen: u64,
-    /// The bar menu that closed last, and when (a press on its title closed it).
+    /// The bar menu or systray panel that closed last, and when (a press on
+    /// its title or widget closed it).
     pub(crate) just_closed: Option<(WindowKey, Slot, std::time::Instant)>,
     /// Koyomi's next events and Tokei's world clocks, for the clock's panel.
     pub agenda: crate::agenda::Agenda,
@@ -1496,7 +1497,8 @@ impl Program for Shell {
     }
 
     fn update(&mut self, msg: Msg, cx: &mut Cx<Msg>) {
-        // A menu's closing counts as a press's doing only right before it.
+        // A menu's or a panel's closing counts as a press's doing only right
+        // before it.
         if !matches!(msg, Msg::Bar(_, BarMsg::Press(..))) {
             self.just_closed = None;
         }
@@ -1704,9 +1706,7 @@ impl Program for Shell {
         if self.startup.window == Some(window) {
             self.startup.window = None;
         }
-        if self.panel.as_ref().is_some_and(|p| p.window == window) {
-            self.panel = None;
-        }
+        self.panel_dismissed(window);
         // A layer the compositor took away (its output went): forget it; it's
         // opened again when the outputs change.
         if let Some(s) = self.surfaces.remove(&window) {

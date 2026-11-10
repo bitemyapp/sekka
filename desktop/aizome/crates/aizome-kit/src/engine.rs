@@ -1157,7 +1157,8 @@ impl Core {
     /// ([`dismiss_outside`](Self::dismiss_outside)).
     pub fn popup_dismissed(&mut self, win: WinId, platform: &mut dyn Platform) {
         // A popup of the program's own is gone: the program hears it as a
-        // close request (whatever it answers).
+        // close request (whatever it answers), ahead of what the press
+        // that dismissed it goes on to send.
         if let Some(WinKind::App { key, .. }) = self.wins.get(&win).map(|w| &w.kind) {
             let key = *key;
             self.close_key(key, platform);
@@ -1181,13 +1182,28 @@ impl Core {
         matches!(self.wins.get(&win).map(|w| &w.kind), Some(WinKind::Popup { kind: PopupKind::Menu { .. }, .. }))
     }
 
-    /// Whether `win` is a popup that holds a grab: a menu or a popover. A
-    /// press outside it dismisses it, wherever in the app the press lands.
+    /// Whether `win` is a popup that holds a grab: a menu, a popover, or a
+    /// popup of the program's own opened with `grab` (the Shell's systray
+    /// panels). A press outside it dismisses it, wherever in the app the
+    /// press lands.
     fn grabs(&self, win: WinId) -> bool {
-        matches!(
-            self.wins.get(&win).map(|w| &w.kind),
-            Some(WinKind::Popup { kind: PopupKind::Menu { .. } | PopupKind::Popover { .. }, .. })
-        )
+        match self.wins.get(&win).map(|w| &w.kind) {
+            Some(WinKind::Popup { kind, .. }) => matches!(kind, PopupKind::Menu { .. } | PopupKind::Popover { .. }),
+            Some(WinKind::App { spec, .. }) => matches!(spec.kind, WindowKind::Popup { grab: true, .. }),
+            None => false,
+        }
+    }
+
+    /// The window popup `win` is open over: a menu's or a popover's owner,
+    /// the parent of a popup of the program's own.
+    fn popup_parent(&self, win: WinId) -> Option<WinId> {
+        match &self.wins.get(&win)?.kind {
+            WinKind::Popup { owner, .. } => Some(*owner),
+            WinKind::App { spec, .. } => match &spec.kind {
+                WindowKind::Popup { parent, .. } => self.window_of(*parent),
+                _ => None,
+            },
+        }
     }
 
     /// The window `win`'s menus hang from: itself, or the first window
@@ -1199,30 +1215,28 @@ impl Core {
         win
     }
 
-    /// The grabbing popups (menus, popovers) a press in `win` is outside
-    /// of: those over `win`, and those hanging from the app's other windows,
-    /// each chain by its root (closing it closes what's over it). The
-    /// compositor dismisses them for a press in another app only; one in
-    /// another window of this app (the Shell opens the desktop's menu over
-    /// the bar) is the app's to answer (#207).
+    /// The grabbing popups (menus, popovers, the program's own) a press in
+    /// `win` is outside of: those over `win`, and those hanging from the
+    /// app's other windows, each chain by its root (closing it closes what's
+    /// over it). The compositor dismisses them for a press in another app
+    /// only; one in another window of this app (the Shell opens the
+    /// desktop's menu, and a systray panel, over the bar) is the app's to
+    /// answer (#207).
     fn popups_outside(&self, win: WinId) -> Vec<WinId> {
         // `win` and the windows under it, out to the first that isn't a
-        // grabbing popup: a press in a submenu is inside its menu.
+        // grabbing popup: a press in a submenu is inside its menu, and one
+        // in a menu over a panel is inside the panel.
         let mut chain = vec![win];
-        while let Some(WinKind::Popup { owner, .. }) =
-            self.wins.get(chain.last().unwrap()).filter(|w| self.grabs(w.id)).map(|w| &w.kind)
-        {
-            chain.push(*owner);
+        while let Some(under) = chain.last().filter(|&&w| self.grabs(w)).and_then(|&w| self.popup_parent(w)) {
+            chain.push(under);
         }
         self.wins
-            .iter()
-            .filter_map(|(&id, w)| match &w.kind {
-                WinKind::Popup { owner, kind: PopupKind::Menu { .. } | PopupKind::Popover { .. } }
-                    if *owner == win || (!self.grabs(*owner) && !chain.contains(&id)) =>
-                {
-                    Some(id)
-                }
-                _ => None,
+            .keys()
+            .copied()
+            .filter(|&id| self.grabs(id))
+            .filter(|&id| {
+                let parent = self.popup_parent(id);
+                parent == Some(win) || (!parent.is_some_and(|p| self.grabs(p)) && !chain.contains(&id))
             })
             .collect()
     }
@@ -1230,8 +1244,9 @@ impl Core {
     /// A press in `win`, or a menu opening over it, dismisses the grabbing
     /// popups it's outside of ([`popups_outside`](Self::popups_outside)) as
     /// the compositor does for a press in another app: a menu closes, a
-    /// popover tells its program. `keep` stays open: the popover whose
-    /// anchor the press is on.
+    /// popover tells its program, a popup of the program's own closes and
+    /// its program hears a close request. `keep` stays open: the popover
+    /// whose anchor the press is on.
     fn dismiss_outside(&mut self, win: WinId, keep: Option<WinId>, platform: &mut dyn Platform) {
         for p in self.popups_outside(win) {
             if Some(p) != keep {
@@ -1295,8 +1310,9 @@ impl Core {
         mapper: Option<Mapper>,
         platform: &mut dyn Platform,
     ) -> WinId {
-        // One menu at a time: the app's other menus (and popovers) make
-        // way, in whichever of its windows they're open.
+        // One menu at a time: the app's other menus (and popovers, and
+        // popups of its own that hold a grab) make way, in whichever of its
+        // windows they're open.
         self.dismiss_outside(win, None, platform);
         self.settle_menu(&mut spec);
         let root = MenuView::element(spec.clone(), look.clone());
@@ -2194,9 +2210,13 @@ impl Core {
         let mods = self.mods;
         if pressed {
             // A press dismisses the grabbing popups it's outside of: the
-            // menus and popovers over this window, and those open elsewhere
-            // in the app (the compositor sees to a press in another app).
-            // A popover's own anchor pressed is its program's to answer.
+            // menus, popovers and the program's own popups over this window,
+            // and those open elsewhere in the app (the compositor sees to a
+            // press in another app). A popover's own anchor pressed is its
+            // program's to answer. A popup of the program's own has no such
+            // widget (it opens against a rectangle), so it goes whatever of
+            // its parent is pressed: its program hears the close request
+            // before anything the press itself sends.
             let keep = self.popover_anchored_at(win, p);
             self.dismiss_outside(win, keep, platform);
             self.update_hot(win, p, platform);
