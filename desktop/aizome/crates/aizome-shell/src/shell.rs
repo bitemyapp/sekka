@@ -87,6 +87,8 @@ pub enum Msg {
     Note(crate::notifications::server::NoteEvent),
     /// What the shell this one replaces held last (a restart).
     Carried(Box<crate::carry::Carried>),
+    /// The shell this one replaces has gone (a restart's end).
+    ShellBeforeGone,
     /// Idle after starting: warm the palette.
     WarmPalette,
     /// Draw the palette ahead again, if it was asked for last (the ask's
@@ -411,7 +413,9 @@ pub struct Shell {
     pub(crate) holders_stale: bool,
     /// The shell this one replaces, in a restart: until the compositor
     /// stops it, the inhibitor it held for its bus's holds is still in the
-    /// compositor's list, and is nobody's row either.
+    /// compositor's list, and is nobody's row either. Forgotten once that
+    /// shell has gone ([`Msg::ShellBeforeGone`]), so that a process given
+    /// its ID later isn't hidden.
     pub(crate) shell_before: Option<crate::holders::Pid>,
     /// Processes' programs by process ID, for tests (the running shell
     /// reads `/proc`).
@@ -1255,7 +1259,8 @@ impl Shell {
         }
         // In a restart, take in what the old shell got after this one read
         // its state: it writes its last word as it loses the bus name to
-        // this one (or, without a bus, as it stops).
+        // this one (or, without a bus, as it stops). Then it goes, and its
+        // process ID is forgotten (`holders.rs`).
         if let Some(previous) = previous {
             let tx = tx.clone();
             std::thread::Builder::new()
@@ -1263,6 +1268,8 @@ impl Shell {
                 .spawn(move || {
                     let c = crate::carry::wait_for_last(previous).unwrap_or_default();
                     tx.send(Msg::Carried(Box::new(c)));
+                    crate::carry::wait_until_gone(previous, crate::carry::GONE_WITHIN);
+                    tx.send(Msg::ShellBeforeGone);
                 })
                 .ok();
         }
@@ -1739,6 +1746,7 @@ impl Program for Shell {
                 }
                 self.carry_ready = true;
             }
+            Msg::ShellBeforeGone => self.shell_before_gone(),
             Msg::BannerDone(id) => self.banner_done(id, cx),
             Msg::Recording(serial, e) => self.recording_event(serial, e, cx),
             Msg::RecordTick(serial, tick) => self.record_tick(serial, tick, cx),

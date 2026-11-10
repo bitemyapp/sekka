@@ -404,6 +404,15 @@ impl Shell {
         self.holders_stale |= !self.inhibitors.is_empty() || !self.screen_holds.is_empty();
     }
 
+    /// The shell this one replaced in a restart has gone, and with it the
+    /// inhibitor it held: its process ID is nobody's now, and whoever gets
+    /// it next is a holder like any other.
+    pub(crate) fn shell_before_gone(&mut self) {
+        if self.shell_before.take().is_some() {
+            self.holders_may_be_renamed();
+        }
+    }
+
     /// Merges the holders anew when what they're merged from changed, and
     /// starts the timers that asks for.
     pub(crate) fn sync_holders(&mut self, cx: &mut Cx<Msg>) {
@@ -730,6 +739,37 @@ mod tests {
         assert_eq!(rows(&restarted), [row("mpv Media Player", "Test Pattern - mpv")]);
         // To a shell that replaced nobody, that process is some client.
         assert_eq!(merged(&wm, &inhibitors, &[]).len(), 2);
+    }
+
+    #[test]
+    fn the_shell_before_is_forgotten_once_it_has_gone_so_its_process_id_hides_nobody_after() {
+        const BEFORE: u32 = 650;
+        let mut h = aizome_kit::testing::Harness::new(Shell::new(crate::shell::Options::default()));
+        let listed = |h: &aizome_kit::testing::Harness<Shell>| h.program().holders.listed().len();
+        let says = |h: &mut aizome_kit::testing::Harness<Shell>, inhibitors: Vec<IdleInhibitorInfo>| {
+            h.program_mut().idle_inhibitors_changed(inhibitors);
+            h.send(Msg::Nothing);
+        };
+        h.program_mut().shell_before = Pid::new(BEFORE);
+        // The restart: the shell before still holds its inhibitor.
+        says(&mut h, vec![inhibitor(None, BEFORE as i32)]);
+        assert_eq!(listed(&h), 0);
+        // It goes, and its inhibitor with it.
+        says(&mut h, Vec::new());
+        h.send(Msg::ShellBeforeGone);
+        assert_eq!(h.program().shell_before, None);
+        // Whoever is given that process ID later is a holder like any.
+        says(&mut h, vec![inhibitor(None, BEFORE as i32)]);
+        assert_eq!(listed(&h), 1);
+
+        // Told that it has gone while the compositor still lists the
+        // inhibitor (it wasn't gone in time): then it's shown, as held.
+        let mut h = aizome_kit::testing::Harness::new(Shell::new(crate::shell::Options::default()));
+        h.program_mut().shell_before = Pid::new(BEFORE);
+        says(&mut h, vec![inhibitor(None, BEFORE as i32)]);
+        assert_eq!(listed(&h), 0);
+        h.send(Msg::ShellBeforeGone);
+        assert_eq!(listed(&h), 1);
     }
 
     fn holder(name: &str) -> Holder {

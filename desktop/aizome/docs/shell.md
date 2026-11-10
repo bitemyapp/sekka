@@ -650,8 +650,10 @@ makes one list of the two ways an app asks:
 The shell's own inhibitor is in the compositor's list, by the shell's
 process: it stands for the bus's holds and is nobody's row. Neither, for
 the seconds a restart takes, is the one the shell before still holds
-(the compositor gives a restarted shell that shell's process). Keep
-Awake's hold is marked as Keep Awake's there and isn't a row either.
+(the compositor gives a restarted shell that shell's process, which is
+forgotten once that shell has gone, so a process given its ID later
+isn't hidden). Keep Awake's hold is marked as Keep Awake's there and
+isn't a row either.
 
 A holder is named by its desktop entry where one is found, looked for in
 this order: the app ID of a window of the holding process; the name it
