@@ -5,19 +5,27 @@
 # workflow runs it for every push to main, the nightly workflow for every
 # revision it publishes.
 { pkgs }:
+let
+  preparation = pkgs.runCommand "sekka-cache-preparation" { } ''
+    mkdir -p $out
+    cp ${../scripts/prepare_cache.py} $out/prepare_cache.py
+    cp ${../scripts/check_cache_coverage.py} $out/check_cache_coverage.py
+  '';
+in
 pkgs.writeShellApplication {
   name = "sekka-push-cache";
   # Building and signing use the caller's own Nix and daemon.
   runtimeInputs = [
     pkgs.awscli2
     pkgs.python3
+    pkgs.zstd
   ];
   text = ''
     flake=''${1:-.}
     config=''${SEKKA_CACHE_CONFIG:-''${XDG_CONFIG_HOME:-$HOME/.config}/sekka-cache}
     key=$config/cache.sekka.computer-1.sec
     endpoint=''${SEKKA_CACHE_ENDPOINT:-https://c408b91e58b3aa56c4f71046fcd416b6.r2.cloudflarestorage.com}
-    bucket=sekka-cache
+    bucket=''${SEKKA_CACHE_BUCKET:-sekka-cache}
     profile=''${SEKKA_CACHE_PROFILE:-sekka-cache}
     if [[ ! -r $key ]]; then
       echo "sekka-push-cache: signing key $key is missing" >&2
@@ -47,43 +55,33 @@ pkgs.writeShellApplication {
     fi
     mapfile -t outputs <<< "$build_outputs"
 
-    # Nix only adds a path to a binary cache that already holds its
-    # references, so sign and compress the complete closure locally first.
+    # Query caches before exporting anything. Stage only missing paths, with
+    # Nix's signatures; references already served upstream need no archive
+    # here. The workflow's separate coverage gate still checks the closure.
+    # SEKKA_CACHE_URL is where the bucket is read from; set with
+    # SEKKA_CACHE_BUCKET for a test cache, as the two must be the same one or
+    # paths the bucket lacks look published.
     stage=$(mktemp -d)
     trap 'rm -rf "$stage"' EXIT
-    nix copy --to "file://$stage/all?compression=zstd&secret-key=$key" "''${outputs[@]}"
+    destination=()
+    if [[ -n ''${SEKKA_CACHE_URL:-} ]]; then
+      destination=(--destination "$SEKKA_CACHE_URL")
+    fi
+    python3 ${preparation}/prepare_cache.py --stage "$stage/upload" --key-file "$key" \
+      "''${destination[@]}" "''${outputs[@]}"
 
-    # Publish only what no cache Sekka systems use already serves:
-    # cache.nixos.org, Determinate's (its Nix) and numtide's (the AI
-    # applications). Clients substitute each reference separately, from
-    # whichever cache has it. Determinate Nixd comes from Determinate alone
-    # (FlakeHub's cache, or the installation media); it is theirs to publish.
-    mapfile -t closure < <(nix path-info --recursive "''${outputs[@]}")
-    own=("''${closure[@]}")
-    for upstream in https://cache.nixos.org https://install.determinate.systems https://cache.numtide.com; do
-      mapfile -t own < <(nix-store --store "$upstream" --check-validity --print-invalid "''${own[@]}")
-    done
-    mapfile -t own < <(printf '%s\n' "''${own[@]}" | grep -v -e '-determinate-nixd-' -e '^$' || true)
-    mkdir -p "$stage/upload/nar"
-    for path in "''${own[@]}"; do
-      name=''${path#/nix/store/}
-      narinfo=''${name%%-*}.narinfo
-      nar=$(sed -n 's/^URL: //p' "$stage/all/$narinfo")
-      ln -f "$stage/all/$narinfo" "$stage/upload/$narinfo"
-      ln -f "$stage/all/$nar" "$stage/upload/$nar"
-    done
-
-    # Archives before the narinfos that point to them. Store paths never
-    # change, so objects already in the bucket are skipped.
-    s3 sync --size-only --no-progress --content-type application/x-nix-nar \
+    # All archives before any narinfos. Only missing/broken paths were staged;
+    # copying those directly avoids listing the whole bucket and also repairs
+    # existing narinfos even when the new metadata has the same byte length.
+    s3 cp --recursive --no-progress --content-type application/x-nix-nar \
       "$stage/upload/nar" "s3://$bucket/nar"
-    s3 sync --size-only --no-progress --content-type text/x-nix-narinfo \
+    s3 cp --recursive --no-progress --content-type text/x-nix-narinfo \
       --exclude '*' --include '*.narinfo' "$stage/upload" "s3://$bucket"
     # Nix writes only StoreDir when it creates a cache; without a priority the
     # cache would be asked before cache.nixos.org (40).
     printf 'StoreDir: /nix/store\nWantMassQuery: 1\nPriority: 50\n' |
       s3 cp - "s3://$bucket/nix-cache-info" --content-type text/x-nix-cache-info
-    echo "Published ''${#own[@]} of ''${#closure[@]} paths; the other caches serve the rest"
+    echo "Published the staged paths; the workflow verifies complete runtime coverage next"
   '';
   meta.description = "Upload Sekka's own packages to https://cache.sekka.computer";
 }

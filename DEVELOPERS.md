@@ -1303,19 +1303,28 @@ nix run .#push-cache
 
 It builds `genkan`, `tatami`, `displays`, `wallpapers`, `yukimi`, `kakehashi`, `uta`,
 `uta.source` (Uta's GPL-3.0-only build's sources, published beside it),
-`aquamarine`, `hyprland`, `cargo-geiger`, `tools` and `installed-systems`, and signs their
-complete runtime closures into a temporary local cache: Nix only adds a path to
-a binary cache that already holds its references. `installed-systems` is an
+`aquamarine`, `hyprland`, `cargo-geiger`, `tools` and `installed-systems`, then
+checks their runtime closures against the upstream caches and Sekka's cache
+before creating any archives. `installed-systems` is an
 installed system for each desktop the media offers (`respin.referenceDesktops`),
 one with all of those desktops together, and one with every free catalog
 application, so everything Sekka's modules
 change and every application one can choose is covered without a list to
 keep up:
 Hyprland and what uses its patched Hyprtoolkit (hyprlauncher among them),
-Elephant, the wallpapers. It then uploads just the paths that none of
-cache.nixos.org, Determinate's cache and numtide's cache serve (about 0.8 GiB),
-archives before the narinfos that point to them, and skips objects already in
-the bucket. Determinate Nixd is left to Determinate. Clients substitute each
+Elephant, the wallpapers. Only paths absent from cache.nixos.org, Determinate's
+cache, numtide's cache and Sekka's cache are exported and compressed. Existing
+Sekka archives are checked for availability and advertised size; missing or
+truncated archives are staged again. A published path that differs from the
+local build (one that is not reproducible) stays as published, with a note.
+Cache-query failures stop preparation.
+`scripts/prepare_cache.py` streams each missing path's canonical NAR through
+zstd, checks its hash and size against the local store, and uses Nix to sign
+the resulting narinfo. It stages no archives for a fully cached closure.
+All staged archives are uploaded before any of their narinfos, without listing
+the whole bucket. Determinate Nixd remains excluded: its exact derivation can
+assemble it from Determinate's download, and the separate coverage gate checks
+that fallback and affected cached ancestors need no compiler. Clients substitute each
 reference separately, so the shared libraries come from cache.nixos.org; the
 Sekka cache is incomplete on its own, and `nix copy --from` it alone fails.
 All of these are evaluated refusing unfree packages (`installed-systems`
@@ -1324,6 +1333,16 @@ and one added to a desktop makes the push fail rather than publish it.
 Installed systems at the same lock use the identical store paths.
 The command also writes `nix-cache-info` with priority 50, so Nix asks
 cache.nixos.org (40) first.
+
+The main/nightly update-download gate still verifies complete runtime coverage
+after publication. `nix build .#checks.x86_64-linux.cache-publication` tests
+selective exports, warm and one-output-changed publication, archive repair,
+a published path built differently, content-addressed metadata, an HTTP
+destination, failure propagation, Nix signatures and fresh substitution across
+multiple disposable caches. `SEKKA_CACHE_URL` and `SEKKA_CACHE_BUCKET` point a test
+publication at an alternate cache and the bucket behind it (with
+`SEKKA_CACHE_ENDPOINT` and `SEKKA_CACHE_PROFILE` for the account); they must
+name the same cache, or paths the bucket lacks look published.
 
 The push needs two credentials, neither of which belongs in the repository:
 
