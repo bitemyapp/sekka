@@ -137,8 +137,13 @@ has to set a password first), greetd exits with status 1 before noting that
 run. The module's unit then marks the run file whenever greetd stops and
 starts greetd again after that exit, so the login screen comes up instead;
 after a logout, or when the greeter dies, the login screen comes back and
-nobody is logged in again. The keyring isn't unlocked by an automatic login:
-the first program that wants a saved password asks for the password then.
+nobody is logged in again. That holds for an initial session set as
+greetd's own (`services.greetd.settings.initial_session`) too. With an
+initial session the unit also stops after five starts in three minutes: a
+greeter that can't start leaves it failed, and a text console usable,
+instead of being started without end. The keyring isn't unlocked by an
+automatic login: the first program that wants a saved password asks for the
+password then.
 AccountsService's automatic-login flag only reaches GDM, so on Sekka the
 setting is `calamares.autoLogin`, which Settei's Users & Groups proposes in
 Yukimi (see [apps.md](apps.md)).

@@ -133,8 +133,9 @@ palette. Search filters the sidebar and highlights options.
   a password to set at their first login (Yukimi's helper refuses them,
   and a locked or expired account), and
   removing the person it names waits until it has been turned off, which
-  the remove sheet proposes in Yukimi. Elsewhere on NixOS, and under greetd
-  anywhere, only the
+  the remove sheet proposes in Yukimi (the choice is read again when Remove
+  is pressed, so one made in Yukimi meanwhile counts). Elsewhere on NixOS,
+  and under greetd anywhere, only the
   configuration sets it, so the row shows it without changing it (greetd's
   `[initial_session]` from the active service's configuration, including
   NixOS's store path). Only other systems use AccountsService's flag

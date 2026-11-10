@@ -1146,8 +1146,10 @@ value for no one, written as `""`, or a name the helper checks against
 `/etc/passwd` as it writes it: an account from uid 1000 to 59999 with a login
 shell, so people added in Settei after installing count. It also reads
 `/etc/shadow` and refuses an account that can't open a session with nobody
-asked anything, by pam_unix's account rules: an expired account, or a
-password that has to be set at the next login (a person added without one).
+asked anything, by pam_unix's account rules (`check_shadow_expiry`): an
+expired account, or a password that has to be set at the next login (a
+person added without one) or changed (`chage -d 0`, or one as old as the
+account's maximum, from that day on; one with no last change doesn't age).
 It refuses a locked password too (`!` before a hash: `passwd -l`, and
 AccountsService's `SetLocked`), though PAM's account check passes it and an
 automatic login would open that session: an account locked after it was
@@ -1170,23 +1172,40 @@ password, so a locked or expired one is left to the helper to refuse), and
 re-reads `system.json` every two seconds while a proposal waits in Yukimi.
 It doesn't remove the person the choice names: the remove sheet offers to
 turn automatic login off in Yukimi first, and removes them once the next
-start's choice no longer names them.
+start's choice no longer names them. It reads the choice again when Remove
+is pressed, so one applied in Yukimi while the pane stayed open counts.
 On Aizome's login screen the choice is greetd's initial session
 (`desktop/aizome/nix/greeter.nix`). greetd exits with status 1 when that
-session can't start, before it notes its first run, so with automatic login
-the unit marks the run file whenever greetd stops and restarts it after that
-exit (and after a clean one, as NixOS does without an initial session): the
-login screen comes up instead, and no restart logs anyone in again.
-`checks.x86_64-linux.aizome-automatic-login` boots that: an account that is
-gone, one that has to set a password, then one that can log in.
-Plasma Login shows its login screen for each of those by itself. GDM does
-only for an account that is gone: for one that has expired or has a password
-to set, its automatic login fails and no login screen follows. So under GDM
-the display manager's `preStart` (`installer/genkan/rust/system/desktops.nix`)
-reads `/etc/shadow` by the same rules and, for such an account, turns
-automatic login off for that start in GDM's runtime configuration
-(`gdm-runtime-config`, `/run/gdm/custom.conf`). No check boots GDM or Plasma
-Login this way; they were run by hand in disposable VMs. On standalone
+session can't start, before it notes its first run. So whenever greetd has
+an initial session (from this choice, from
+`services.displayManager.autoLogin`, or set as greetd's own
+`settings.initial_session`), the unit marks greetd's run file whenever
+greetd stops and restarts it after that exit (and after a clean one, as
+NixOS does without an initial session): the login screen comes up instead,
+and no restart logs anyone in again. Those units also stop after five starts
+in three minutes (the greeter waits up to 20 s for its compositor before it
+gives up), so a greeter that can't start leaves the unit failed and a text
+console usable, where restarting without end would take the console back
+each time. The live image's greetd unit is one of them: it logs in by
+itself. A unit without an initial session is as NixOS makes it.
+`checks.x86_64-linux.aizome-automatic-login` boots the fallback: an account
+that is gone, one that has to set a password, then one that can log in.
+The other two login screens show themselves for some of these and not for
+others. GDM does only for an account that is gone: for one that has expired
+or has a password to set or change, its automatic login fails and no login
+screen follows. Plasma Login does for one that is gone or has expired, and
+for a password to set where there is none; where a password exists and has
+to be changed, its automatic login waits for the old one, which nobody is
+asked for, and no login screen follows either. So each of their units'
+`preStart` (`installer/genkan/rust/system/desktops.nix`, `canLogInByItself`)
+reads `/etc/shadow` by the helper's account rules and, for such an account,
+turns automatic login off for that start: in GDM's runtime configuration
+(`gdm-runtime-config`, `/run/gdm/custom.conf`), and for Plasma Login, which
+reads no settings from `/run`, through the last of its drop-ins
+(`/etc/plasmalogin.conf.d/zz-this-start.conf`, a link to
+`/run/plasmalogin-this-start.conf`). Keep that script and
+`yukimi_system::people::blocked` alike. No check boots GDM or Plasma Login
+this way; they were run in disposable VMs. On standalone
 Aizome, Settei queries the active greetd service through systemd and reads
 the configuration named by its `ExecStart` arguments, including NixOS's
 store path. Under greetd, and on NixOS under any login screen (NixOS writes
