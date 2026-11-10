@@ -1,8 +1,9 @@
 //! Apps keeping the screen awake over a private bus: one calling KDE's
 //! path and leaving without a word, as VLC does when it's killed; one
 //! calling the specification's path and giving its cookie back, as
-//! Chromium does; a cookie that isn't the caller's; and who may take the
-//! name.
+//! Chromium does; callers that send and leave without their answer; a
+//! cookie that isn't the caller's, or is from the service before; a
+//! connection that takes too many; and who may take the name.
 
 mod common;
 
@@ -82,7 +83,7 @@ fn an_app_that_leaves_the_bus_takes_its_holds_with_it() {
     let mpv_like = app(&bus);
     inhibit(&mpv_like, PATH, "another player", "playing");
     assert!(eventually(|| saver.snapshot().holds.len() == 2));
-    assert_eq!(saver.snapshot().holds[0].cookie.get(), cookie);
+    assert!(saver.snapshot().holds.iter().any(|h| h.app == "vlc" && h.cookie.get() == cookie));
 
     // Killed, it says nothing: its connection just goes.
     drop(vlc);
@@ -92,17 +93,88 @@ fn an_app_that_leaves_the_bus_takes_its_holds_with_it() {
 }
 
 #[test]
-fn an_app_that_takes_a_hold_and_leaves_at_once_leaves_none() {
+fn an_app_that_asks_and_leaves_without_its_answer_leaves_no_hold() {
     let bus = test_bus!();
     let saver = ScreenSaver::start(&bus.bus(), Wake::none(), Takeover::Any).expect("serve the screen saver");
-    // The call and the connection's leaving reach the service on separate
-    // queues: whichever it sees first, no hold may stay.
-    for _ in 0..50 {
+    // Each sends its call and goes without reading the reply, as a script's
+    // one `dbus-send` does. The call and the bus's word that the connection
+    // left reach the service on separate queues, so it may read either
+    // first: a hold taken and then dropped, or a caller already seen
+    // leaving and refused. Whichever way each goes, no hold may stay.
+    for _ in 0..100 {
         let app = app(&bus);
-        inhibit(&app, PATH, "a script", "one call");
+        let call = zbus::Message::method_call(PATH, "Inhibit")
+            .and_then(|call| call.destination(NAME))
+            .and_then(|call| call.interface(NAME))
+            .and_then(|call| call.build(&("a script", "one call")))
+            .expect("an Inhibit call");
+        app.send(&call).expect("send it");
         drop(app);
     }
-    assert!(eventually(|| !saver.snapshot().held()), "holds without an app: {:?}", apps(&saver));
+    // A caller that stays: once its hold shows, the calls before it were
+    // read.
+    let last = app(&bus);
+    let cookie = inhibit(&last, PATH, "the last", "after the rest");
+    assert!(eventually(|| apps(&saver) == ["the last"]), "holds without an app: {:?}", apps(&saver));
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    assert_eq!(apps(&saver), ["the last"], "a hold came back for an app that left");
+    uninhibit(&last, PATH, cookie);
+    assert!(eventually(|| !saver.snapshot().held()));
+}
+
+#[test]
+fn a_cookie_from_the_shell_before_gives_back_nothing_of_the_next() {
+    let bus = test_bus!();
+    let old = ScreenSaver::start(&bus.bus(), Wake::none(), Takeover::Any).expect("serve the screen saver");
+    // Firefox's two holds, from the shell that is about to start again.
+    let firefox = app(&bus);
+    let audio = inhibit(&firefox, PATH, "firefox", "Playing audio");
+    let video = inhibit(&firefox, PATH, "firefox", "Playing video");
+    assert!(eventually(|| old.snapshot().holds.len() == 2));
+    let next = aizome_sys::Bus::at(&bus.address).unwrap();
+    let new = ScreenSaver::start(&next, Wake::none(), Takeover::Any).expect("take over");
+    assert!(eventually(|| !old.snapshot().held()));
+    drop(old);
+
+    // The video pauses and plays again: its old cookie back, and a hold
+    // from the new service, whose cookies begin somewhere else.
+    uninhibit(&firefox, PATH, video);
+    let again = inhibit(&firefox, PATH, "firefox", "Playing video");
+    assert!(again != audio && again != video, "the new service gave an old cookie again: {again}");
+    assert!(eventually(|| new.snapshot().held()));
+    // The sound stops while the video plays on: the old audio cookie comes
+    // back, and must not take the video's hold with it.
+    uninhibit(&firefox, PATH, audio);
+    let after = inhibit(&firefox, PATH, "firefox", "after the old cookie");
+    assert!(eventually(|| new.snapshot().holds.len() == 2), "{:?}", new.snapshot().holds);
+    let mut reasons: Vec<String> = new.snapshot().holds.iter().map(|h| h.reason.clone()).collect();
+    reasons.sort();
+    assert_eq!(reasons, ["Playing video", "after the old cookie"], "an old cookie let a new hold go");
+    uninhibit(&firefox, PATH, after);
+    uninhibit(&firefox, PATH, again);
+    assert!(eventually(|| !new.snapshot().held()));
+}
+
+#[test]
+fn a_connection_is_refused_past_its_share_of_holds() {
+    let bus = test_bus!();
+    let saver = ScreenSaver::start(&bus.bus(), Wake::none(), Takeover::Any).expect("serve the screen saver");
+    let greedy = app(&bus);
+    let mut given = 0;
+    let refusal = loop {
+        match greedy.call_method(Some(NAME), PATH, Some(NAME), "Inhibit", &("greedy", "again")) {
+            Ok(_) => given += 1,
+            Err(error) => break error.to_string(),
+        }
+        assert!(given <= 100_000, "never refused");
+    };
+    assert!(refusal.contains("LimitsExceeded"), "{refusal}");
+    assert!(eventually(|| saver.snapshot().holds.len() == given));
+    // Another app still gets its hold, and the greedy one's all go with it.
+    let player = app(&bus);
+    inhibit(&player, KDE_PATH, "a player", "playing");
+    drop(greedy);
+    assert!(eventually(|| apps(&saver) == ["a player"]), "{} holds left", saver.snapshot().holds.len());
 }
 
 #[test]
