@@ -4,7 +4,10 @@
 # its desktop entry starts it, and a page's video in Chromium: as it starts
 # here, when the video starts by itself with the person in another window,
 # and as an X11 client. Paused, each lets the session go idle again, and so
-# does VLC killed while it plays (vm-idle-inhibit-test.py).
+# does VLC killed while it plays (vm-idle-inhibit-test.py). While each
+# plays, the cup in the menu bar shows for it and its panel names it; and
+# locked by hand with mpv or VLC playing, the session turns its displays
+# off on their minute all the same.
 #
 # The VM's GPU has no 3D, so the players decode and draw in software. What
 # keeps the session awake doesn't depend on that: a Wayland idle inhibitor
@@ -63,7 +66,8 @@ let
 in
 pkgs.testers.runNixOSTest {
   name = "aizome-idle-inhibit";
-  globalTimeout = 1800;
+  # It takes about twenty minutes on a host with other work to do.
+  globalTimeout = 2400;
   nodes.machine =
     { lib, ... }:
     {
