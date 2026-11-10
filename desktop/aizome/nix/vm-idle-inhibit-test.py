@@ -211,11 +211,18 @@ def stays_lit_locked(what):
 
 def holds_again_unlocked(what, still_playing):
     """A key and the password bring the session back, and with someone
-    watching again the video holds the displays on: well past a few looks
-    at the idle clock, nothing has locked or gone dark."""
+    watching again the video holds the displays on. The compositor is told
+    nobody has touched anything for an hour and reads its idle clock at
+    once, as its timer would: with nothing holding, that locks the session
+    and turns the displays off on the spot (the idle minute is long past),
+    and this fails; with the video's hold counting again, nothing happens."""
     wake()
-    time.sleep(12)
-    assert displays_on() and not locked() and still_playing(), f"{what}: it didn't hold again once unlocked"
+    assert still_playing(), f"{what}: it wasn't playing once unlocked"
+    user("aizomectl input idle 3600")
+    time.sleep(3)
+    if locked() or not displays_on():
+        fail(f"{what}: it didn't hold again once unlocked (locked: {locked()}, displays on: {displays_on()})")
+    print(f"{what}: unlocked, it held through an hour without input")
 
 
 def wake():
