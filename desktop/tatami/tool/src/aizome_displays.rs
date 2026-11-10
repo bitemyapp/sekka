@@ -12,11 +12,13 @@
 //! connector.
 //!
 //! The rules go to $XDG_RUNTIME_DIR/tatami/aizome-displays.lua, written as
-//! the session starts, before Hyprland does, and again before each reload
-//! and when displays come or go. The configuration loads that file before
-//! Tatami's own display settings (displays.rs), and of the rules naming a
-//! display the last loaded wins: once a display is set up in the Displays
-//! window or with Super+/, Tatami's settings are the ones it keeps.
+//! the session starts, before Hyprland does, and again as the display
+//! watcher starts, before each reload and when displays come or go. The
+//! configuration loads that file before Tatami's own display settings
+//! (displays.rs), and of the rules naming a display the last loaded wins:
+//! a display Tatami keeps settings for (every display that is on when a
+//! change is applied in the Displays window, and the one Super+/ scales)
+//! shows with Tatami's.
 use crate::{hypr, window};
 use std::{fs, path::Path, path::PathBuf};
 

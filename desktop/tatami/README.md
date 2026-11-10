@@ -228,12 +228,15 @@ arrangement and mirroring from `~/.config/aizome/settings.toml`. Tatami
 recognizes it from its EDID as Aizome does, by make, model and serial or by
 connector. The helper writes rules for those displays to
 `aizome-displays.lua` in the session's runtime directory as the session
-starts, before each reload and when a display is connected or removed, and
-the configuration loads them before `displays.lua`. Once a display is
-changed here, in the Displays window or with Super+/, Tatami keeps its own
-settings for it, and a later change in Aizome no longer reaches Tatami.
-Aizome's main display is not followed, and neither is a display Aizome keeps
-off: Tatami turns it on at login, beside the others.
+starts, as its display watcher starts, before each reload and when a display
+is connected or removed, and the configuration loads them before
+`displays.lua`. A change applied in the Displays window keeps Tatami's own
+settings for every display that is on at the time, and Super+/ for the
+display it scales: a later change in Aizome no longer reaches those displays
+in Tatami. Aizome's main display is not followed, and neither is a display
+Aizome keeps off: Tatami turns it on at login, beside the others. A settings
+file whose `[[outputs]]` Aizome's own reader refuses is not followed at all,
+as Aizome then starts from its defaults.
 
 It has Tatami's look, Tokyo Night in JetBrainsMono Nerd Font with square
 corners, from `config/tatami-displays/style-dark.css`

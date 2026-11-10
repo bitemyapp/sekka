@@ -159,8 +159,9 @@ window to the screen you are using.
 
 A display you set up in Aizome's Settings, such as one turned to portrait,
 comes up the same way in Tatami: its resolution, scale, rotation and place in
-the arrangement follow Aizome until you change that display in Tatami. From
-then on each desktop keeps its own settings for it.
+the arrangement follow Aizome. Once you apply a change in **Displays**, every
+display that is on at the time keeps its own settings in Tatami from then on,
+and so does a display you scale with **Super + /**.
 
 [![The Displays window](docs/images/sekka/displays.png)](docs/images/sekka/displays.png)
 
