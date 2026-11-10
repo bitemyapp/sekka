@@ -92,6 +92,9 @@ pub(crate) struct Tree {
     pub local_damage: Vec<(usize, Rect)>,
     /// Content widgets scrolled while laid out.
     pub scrolls: Vec<Scrolled>,
+    /// The topmost modal node (a sheet), as of the last layout: the last
+    /// one painted. Nodes come and go only while laid out.
+    modal: Option<usize>,
 }
 
 /// A node as last drawn, kept from one build to the next for the diff:
@@ -125,9 +128,13 @@ pub(crate) struct Moved {
 }
 
 impl Tree {
-    /// A tree of `root`, under the id `base`.
-    pub fn new(root: RawElement, base: NodeId) -> Tree {
+    /// A tree of `root`, under the id `base`, with room for `nodes` nodes
+    /// to begin with: as many as the tree it takes over from had, since
+    /// most views change little from one build to the next.
+    pub fn new(root: RawElement, base: NodeId, nodes: usize) -> Tree {
         let mut t = Tree::default();
+        t.nodes.reserve(nodes);
+        t.by_id.reserve(nodes);
         let r = t.mount_under(root, None, 0, base);
         t.root = Some(r);
         t
@@ -227,6 +234,7 @@ impl Tree {
         }
         self.by_id = self.nodes.iter().enumerate().map(|(i, n)| (n.id, i)).collect();
         self.root = self.root.map(|r| map[r]);
+        self.modal = self.modal.map(|m| map[m]).filter(|m| *m != usize::MAX);
         self.popovers.retain_mut(|p| {
             p.node = map[p.node];
             p.node != usize::MAX
@@ -274,6 +282,7 @@ impl Tree {
         self.layout(root, Constraints::tight(size), env);
         self.nodes[root].local = Point::ZERO;
         let window = Rect::from_origin_size(Point::ZERO, size);
+        self.modal = None;
         self.finish(root, Point::ZERO, window, env.theme.generation);
     }
 
@@ -342,12 +351,13 @@ impl Tree {
         let root = self.root();
         let size = self.layout(root, Constraints::loose(max), env);
         let window = Rect::from_origin_size(Point::ZERO, size);
+        self.modal = None;
         self.finish(root, Point::ZERO, window, env.theme.generation);
         size
     }
 
     /// Absolute rectangles, clips, hashes and paint bounds, from `idx`
-    /// down.
+    /// down, in the order nodes are painted; and which node is modal.
     fn finish(&mut self, idx: usize, origin: Point, clip: Rect, generation: u64) -> (Rect, Rect) {
         let node = &mut self.nodes[idx];
         let at = origin + node.local.to_vec2();
@@ -363,6 +373,9 @@ impl Tree {
         let mut bounds = node.own_rect();
         let reach = node.widget.overflow();
         let mut covers = node.rect.inflate(reach, reach).intersect(clip);
+        if !node.dead && node.widget.modal() {
+            self.modal = Some(idx);
+        }
         let join = |a: Rect, b: Rect| {
             if b.area() <= 0.0 {
                 a
@@ -372,7 +385,11 @@ impl Tree {
                 a.union(b)
             }
         };
-        for k in node.children.clone() {
+        // By place rather than over a copy of the list: this runs for every
+        // node of every build, and nothing below changes who its children
+        // are.
+        for i in 0..self.nodes[idx].children.len() {
+            let k = self.nodes[idx].children[i];
             let (b, c) = self.finish(k, at, inner, generation);
             bounds = join(bounds, b);
             covers = join(covers, c);
@@ -382,13 +399,14 @@ impl Tree {
         (bounds, covers)
     }
 
-    /// Every live node's place and drawing.
-    pub fn snapshot(&self) -> Snapshot {
-        let mut s = Snapshot::with_capacity_and_hasher(self.nodes.len(), Default::default());
+    /// Every live node's place and drawing, in place of what `s` held: a
+    /// window's snapshot keeps its room from one build to the next.
+    pub fn snapshot_into(&self, s: &mut Snapshot) {
+        s.clear();
+        s.reserve(self.nodes.len());
         for n in self.nodes.iter().filter(|n| !n.dead) {
             s.insert(n.id, Drawn { clip: n.own_rect(), hash: n.hash, rect: n.rect });
         }
-        s
     }
 
     /// What changed since `before` (the rectangles of nodes that moved,
@@ -525,23 +543,11 @@ impl Tree {
         }
     }
 
-    /// The topmost modal node (a sheet), if any.
+    /// The topmost modal node (a sheet), if any: the last modal painted
+    /// owns input. Found as the tree is laid out (`finish`), since every
+    /// pointer event asks.
     pub fn modal(&self) -> Option<usize> {
-        let mut found = None;
-        let mut stack = vec![self.root()];
-        while let Some(i) = stack.pop() {
-            let n = &self.nodes[i];
-            if n.dead {
-                continue;
-            }
-            if n.widget.modal() {
-                found = Some(i);
-            }
-            // Visit in paint order: the last modal painted owns input.
-            // The stack pops its last item, so push children backwards.
-            stack.extend(n.children.iter().rev().copied());
-        }
-        found
+        self.modal
     }
 
     pub fn get(&self, id: NodeId) -> Option<usize> {
