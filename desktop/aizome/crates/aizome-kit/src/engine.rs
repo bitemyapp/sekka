@@ -917,7 +917,7 @@ impl Core {
             on_selection: false,
         };
         w.tree.layout_window(size, &mut env);
-        let dead = w.tree.nodes.iter().filter(|n| n.dead).count();
+        let dead = w.tree.dead();
         if dead > 256 && dead > w.tree.nodes.len() / 2 {
             w.tree.compact();
         }

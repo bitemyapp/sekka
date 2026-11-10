@@ -96,6 +96,9 @@ pub(crate) struct Tree {
     /// The topmost modal node (a sheet), as of the last layout: the last
     /// one painted. Nodes come and go only while laid out.
     modal: Option<usize>,
+    /// How many of `nodes` are dead, counted as they die: a pass that lays
+    /// the tree out again asks, and mustn't read every node to learn it.
+    dead: usize,
 }
 
 /// A node as last drawn, kept from one build to the next for the diff:
@@ -221,12 +224,18 @@ impl Tree {
         }
     }
 
+    /// How many nodes are dead and still take room ([`compact`](Self::compact)
+    /// drops them).
+    pub fn dead(&self) -> usize {
+        self.dead
+    }
+
     /// Drop the dead nodes, renumbering the live ones.
     pub fn compact(&mut self) {
-        let live = self.nodes.iter().filter(|n| !n.dead).count();
-        if live == self.nodes.len() {
+        if self.dead == 0 {
             return;
         }
+        self.dead = 0;
         let mut map = vec![usize::MAX; self.nodes.len()];
         let mut next = 0;
         for (i, n) in self.nodes.iter().enumerate() {
@@ -253,7 +262,10 @@ impl Tree {
     /// Take a node and its children out.
     pub fn kill(&mut self, idx: usize) {
         let n = &mut self.nodes[idx];
-        n.dead = true;
+        if !n.dead {
+            n.dead = true;
+            self.dead += 1;
+        }
         if self.by_id.get(&n.id) == Some(&idx) {
             self.by_id.remove(&n.id);
         }
