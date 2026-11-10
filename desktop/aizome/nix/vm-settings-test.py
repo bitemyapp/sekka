@@ -1174,16 +1174,18 @@ def keyboard_setup():
     S.wait(contains="Beside the space bar: ⌥ Alt")
     typed_on = [n for n in names if S.find(text=n)]
     assert typed_on, (names, S.texts())
-    assert S.wait(name="setup-modifiers").get("value") == "Swap Alt and Super"
+    # The left keys alone: right Alt (AltGr) stays for accents and symbols.
+    suggested = S.wait(name="setup-modifiers").get("value")
+    assert suggested == "Swap left Alt and Super", suggested
     S.press("Save")
     S.gone("the sheet to go", text="Set Up a Keyboard")
     own = until("keys of its own", lambda: setting("input.keyboards"))
     print("set up:", own)
-    assert own[0]["name"] == typed_on[0] and own[0]["options"] == "altwin:swap_alt_win", own
+    assert own[0]["name"] == typed_on[0] and own[0]["options"] == "altwin:swap_lalt_lwin", own
     assert "altwin" not in str(setting("input.keyboard.options")), "other keyboards' stay as they were"
 
-    # That keyboard's Alt is ❖ now: ❖A selects all. (aizomectl's keys
-    # come from no keyboard, so they keep the keymap it left.)
+    # That keyboard's left Alt is ❖ now: ❖A selects all. (aizomectl's
+    # keys come from no keyboard, so they keep the keymap it left.)
     S.reveal(name="entry:keyboard.repeat-rate")
     S.click(S.beside("Try it", "textinput"))
     type_text("xy")
