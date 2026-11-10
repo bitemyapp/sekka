@@ -195,6 +195,9 @@ let
         exit 0
       }' /etc/shadow
   '';
+  # Plasma Login's settings for this start alone: the target of its last
+  # drop-in (/etc/plasmalogin.conf.d), which only the unit below writes.
+  plasmaLoginThisStart = "/run/plasmalogin-this-start.conf";
 in
 {
   # Tatami's module comes from its own repository (the flake's tatami
@@ -428,8 +431,27 @@ in
     # condition on the value alone would still define an empty one, whose
     # PATH changes with coreutils and the like, and Yukimi would wait for a
     # restart to apply them.
+    #
+    # Plasma Login shows its login screen by itself when the account it logs
+    # in is gone or has expired, or has a password to set where there is
+    # none yet. Where there is a password that has to be changed (chage -d 0,
+    # or one as old as the account allows), its automatic login waits for
+    # the old password, which nobody is asked for, and no login screen
+    # follows. So such an account turns automatic login off for this start
+    # here too. Plasma Login reads no settings from /run, so the last of its
+    # drop-ins (the later one wins) is a link to a file there, which only
+    # this writes and which is gone at the next start.
     systemd.services.plasmalogin = lib.mkIf plasmaLogin {
       environment.XDG_DATA_DIRS = lib.mkForce "${loginSessions}/share";
+      preStart = lib.mkIf automatic ''
+        if ! ${canLogInByItself}; then
+          # Never in Plasma Login's way: at worst it starts as it would have.
+          ${pkgs.coreutils}/bin/printf '[Autologin]\nUser=\n' > ${plasmaLoginThisStart} || true
+        fi
+      '';
+    };
+    environment.etc."plasmalogin.conf.d/zz-this-start.conf" = lib.mkIf (plasmaLogin && automatic) {
+      source = plasmaLoginThisStart;
     };
     systemd.user.services.plasma-login = lib.mkIf plasmaLogin {
       environment.XDG_DATA_DIRS = lib.mkForce "${loginSessions}/share";
