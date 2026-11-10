@@ -97,7 +97,18 @@ lto = "thin"
 #
 # simdutf8 from Hotaru's audited copy, which includes the upstream AVX2
 # prefetch pointer repair, so transitive users resolve to it too.
+#
+# parley and fontique from bitemyapp/parley's branch sekka-0.11.1: the
+# published 0.11.1 with two changes that only save work, so that a digit in
+# text nothing has laid out costs what a letter does. Parley takes each
+# digit for an emoji and set its font query's families again around it, and
+# Fontique made an entry for every one of those families (fontconfig's
+# generic families run past a hundred) before it looked at any. Every
+# cluster gets the font it got before (DEVELOPERS.md says how that was
+# checked, and when the patch can go).
 [patch.crates-io]
 moxcms = { git = "https://github.com/bitemyapp/moxcms", rev = "b63298023362c19b0ea5499c2c8d35802fc1adac" }
 zune-core = { git = "https://github.com/bitemyapp/zune-image", branch = "scaled-idct" }
 simdutf8 = { path = "../../apps/hotaru/vendor/simdutf8" }
+parley = { git = "https://github.com/bitemyapp/parley", rev = "0746e802f5dcc4c19807f801242b4a7af0156a87" }
+fontique = { git = "https://github.com/bitemyapp/parley", rev = "0746e802f5dcc4c19807f801242b4a7af0156a87" }

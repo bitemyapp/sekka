@@ -744,9 +744,16 @@ the damage, offscreen):
 
 Handling grows with the widgets, whatever changed and wherever it is: a
 row costs half a microsecond. A row out of sight costs nothing to draw,
-and a label nothing has shown costs 5 to 16 µs to lay out, the more digits
-it has the more (parley takes each for an emoji and sets its font query's
-families again), on as many threads as there are labels for.
+and a label nothing has shown costs a few microseconds to lay out, on as
+many threads as there are labels for: 4 µs for `item 00012` and 5.5 µs for
+`item 00012 · 0034` on one core of another machine (a workstation with a
+Threadripper PRO 9985WX), the same as for letters in their place. Parley
+takes each digit for an emoji, which with the published Parley and
+Fontique made those 9 and 15 µs; the workspace builds both with two
+changes that leave the font query alone around a digit
+([DEVELOPERS.md](../../../DEVELOPERS.md)). The table's "every label" rows
+were measured before those changes, which on the workstation took the
+same rows from 3.6, 12 and 47 ms to 2.6, 8.9 and 36.
 
 To drive a running app from outside (the NixOS VM test of Settings clicks
 and types through `aizomectl input`), set `AIZOME_KIT_INSPECT` to a
