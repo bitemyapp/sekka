@@ -1144,7 +1144,15 @@ strings or a boolean as declared (a `boolean` choice's options are `true` and
 A `people` choice (`calamares.autoLogin`, who logs in by themselves) takes no
 value for no one, written as `""`, or a name the helper checks against
 `/etc/passwd` as it writes it: an account from uid 1000 to 59999 with a login
-shell, so people added in Settei after installing count. The helper builds
+shell, so people added in Settei after installing count. It also reads
+`/etc/shadow` and refuses an account that can't open a session with nobody
+asked anything, by pam_unix's account rules: an expired account, or a
+password that has to be set at the next login (a person added without one).
+It refuses a locked password too (`!` before a hash: `passwd -l`, and
+AccountsService's `SetLocked`), though PAM's account check passes it and an
+automatic login would open that session: an account locked after it was
+chosen still logs in by itself. A bare `!`, as NixOS writes an account
+declared without a password, is taken. The helper builds
 once with the rest of the change, so choosing
 Aizome's login screen is a click and a password, with the same switch-or-boot
 planning and Restart button as an update. A changed login screen always stages
@@ -1155,9 +1163,30 @@ effective display-manager setting. Selecting a person or no one explicitly
 overrides ordinary definitions of that setting (priority 90), including
 disabling an existing automatic login; `mkForce` policy still wins.
 Settei offers only the accounts the helper takes (local, uid 1000 to 59999,
-a `useradd`-style name, a login shell; an empty shell field is `/bin/sh`),
-re-reads `system.json` every two seconds while a proposal waits in Yukimi,
-and proposes no one when the person it names is removed. On standalone
+a `useradd`-style name, a login shell; an empty shell field is `/bin/sh`;
+with no password still to set, naming whoever that leaves out;
+AccountsService's `Locked` is also true of an account declared without a
+password, so a locked or expired one is left to the helper to refuse), and
+re-reads `system.json` every two seconds while a proposal waits in Yukimi.
+It doesn't remove the person the choice names: the remove sheet offers to
+turn automatic login off in Yukimi first, and removes them once the next
+start's choice no longer names them.
+On Aizome's login screen the choice is greetd's initial session
+(`desktop/aizome/nix/greeter.nix`). greetd exits with status 1 when that
+session can't start, before it notes its first run, so with automatic login
+the unit marks the run file whenever greetd stops and restarts it after that
+exit (and after a clean one, as NixOS does without an initial session): the
+login screen comes up instead, and no restart logs anyone in again.
+`checks.x86_64-linux.aizome-automatic-login` boots that: an account that is
+gone, one that has to set a password, then one that can log in.
+Plasma Login shows its login screen for each of those by itself. GDM does
+only for an account that is gone: for one that has expired or has a password
+to set, its automatic login fails and no login screen follows. So under GDM
+the display manager's `preStart` (`installer/genkan/rust/system/desktops.nix`)
+reads `/etc/shadow` by the same rules and, for such an account, turns
+automatic login off for that start in GDM's runtime configuration
+(`gdm-runtime-config`, `/run/gdm/custom.conf`). No check boots GDM or Plasma
+Login this way; they were run by hand in disposable VMs. On standalone
 Aizome, Settei queries the active greetd service through systemd and reads
 the configuration named by its `ExecStart` arguments, including NixOS's
 store path. Under greetd, and on NixOS under any login screen (NixOS writes
@@ -1238,7 +1267,7 @@ changing the host desktop.
 helper in a rootless bubblewrap namespace. It covers migration, repeat updates,
 following Sekka and the new system's caches, a Nixpkgs of the system's own,
 early updates and the system's declared choices (and refusing undeclared
-ones), refusing to start without room, failed builds, cancellation, concurrent operations, closed progress pipes, unsafe
+ones), who logs in automatically (and refusing someone whose account can't), refusing to start without room, failed builds, cancellation, concurrent operations, closed progress pipes, unsafe
 explicit switches and rollbacks, and UWSM session identity. Nix and
 systemd actions are stubbed; also evaluate/build a copy of the installed host
 flake to check actual module and dependency compatibility before deployment.
@@ -1701,7 +1730,8 @@ manager cannot run the launcher's cleanup trap.
 `aizome-checks` holds the 24 VM checks Aizome's flake had, under the names it
 gave them. They are in `legacyPackages`, not `checks`, so `nix flake check` and
 CI don't run them, just as they didn't run in Aizome's repository. Sekka's own
-Aizome checks (`aizome-login`, `aizome-greeter-desktops`, `aizome-ibus`,
+Aizome checks (`aizome-login`, `aizome-automatic-login`,
+`aizome-greeter-desktops`, `aizome-ibus`,
 `aizome-ibus-policy`) still run with the others.
 
 The package version is a plain `0.1.0`. Aizome's flake added its own revision

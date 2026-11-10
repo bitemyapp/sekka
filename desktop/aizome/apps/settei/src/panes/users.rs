@@ -66,12 +66,13 @@ pub fn greetd_initial_user(config: &str) -> Option<String> {
 
 /// Who may be chosen to log in by themselves, by account and as shown:
 /// everyone AccountsService lists (under Sekka's choice, those Yukimi
-/// takes), and whoever the choice or the configuration names besides.
+/// takes who have no password still to set), and whoever the choice or
+/// the configuration names besides.
 fn auto_login_people(how: &AutoLogin, users: &[User]) -> Vec<(String, String)> {
     let choice = matches!(how, AutoLogin::Choice(_));
     let mut people: Vec<(String, String)> = users
         .iter()
-        .filter(|u| !choice || yukimi_takes(u))
+        .filter(|u| !choice || (yukimi_takes(u) && !must_set_a_password(u)))
         .map(|u| (u.name.clone(), u.display_name().to_owned()))
         .collect();
     let named: Vec<&String> = match how {
@@ -100,10 +101,34 @@ fn yukimi_takes(u: &User) -> bool {
         && !matches!(shell, "nologin" | "false")
 }
 
+/// Whether `u` still has a password to set at their next login, as a
+/// person added here without one has. Logging in by itself can't do that
+/// for them (the login screen shows instead), so Yukimi's helper refuses
+/// them when it writes the choice; leaving them out here spares that
+/// refusal. The helper also refuses an expired account and one whose
+/// password was locked, which only root can tell: AccountsService's
+/// `Locked` is as true of an account declared without a password, which
+/// the helper takes.
+fn must_set_a_password(u: &User) -> bool {
+    u.password_mode == PasswordMode::SetAtLogin
+}
+
+/// The people Sekka's choice would take once they have set a password, as
+/// shown.
+fn cannot_log_in_by_themselves(users: &[User]) -> Vec<String> {
+    users.iter().filter(|u| yukimi_takes(u) && must_set_a_password(u)).map(|u| u.display_name().to_owned()).collect()
+}
+
 /// What the login row says under Sekka's choice: whom Settei proposed in
 /// Yukimi while that waits to be applied, who it is from the next start
-/// while a change waits for one, and what it does.
-fn choice_help(c: &choices::Now<String>, proposed: Option<&str>, people: &[(String, String)]) -> String {
+/// while a change waits for one, what it does, and who can't be chosen yet
+/// (`cannot`).
+fn choice_help(
+    c: &choices::Now<String>,
+    proposed: Option<&str>,
+    people: &[(String, String)],
+    cannot: &[String],
+) -> String {
     let what = "The computer starts straight into this account, without asking for a password. Yukimi makes the \
                 change, which asks for an administrator password, and it applies from the next start.";
     let shown = |name: &str| -> String {
@@ -120,6 +145,12 @@ fn choice_help(c: &choices::Now<String>, proposed: Option<&str>, people: &[(Stri
         lines.push(format!("From the next start: {}.", shown(&c.next)));
     }
     lines.push(what.to_owned());
+    if !cannot.is_empty() {
+        lines.push(format!(
+            "{} can't be chosen yet: an account that still has to set its password can't log in by itself.",
+            cannot.join(", ")
+        ));
+    }
     lines.join(" ")
 }
 
@@ -191,10 +222,11 @@ pub enum Msg {
     AutoLoginConfirmed(Option<String>),
     AutoLoginRead(AutoLogin),
     AutoLoginCheck,
+    /// Turn automatic login off (in Yukimi) before removing who it is for.
+    AutoLoginOffFirst,
     Remove(String),
     DeleteFiles(bool),
     RemoveConfirmed,
-    Removed(String, Result<(), String>),
     Done(&'static str, Result<(), String>),
 }
 
@@ -290,6 +322,12 @@ impl Users {
         }
     }
 
+    /// Whether Sekka's choice starts the computer straight into `user`'s
+    /// account from the next start.
+    fn starts_into(&self, user: &str) -> bool {
+        matches!(&self.auto_login, Some(AutoLogin::Choice(c)) if c.next == user)
+    }
+
     fn sheet_view(&self, sheet: &Sheet) -> Element<Msg> {
         let buttons = |label: &'static str, ok: bool, msg: Msg, destructive: bool| -> Element<Msg> {
             let b = button(label).default().enabled(ok).on_press(msg);
@@ -339,26 +377,32 @@ impl Users {
             .spacing(10.0)
             .width(420.0)
             .into(),
+            // The computer starts straight into their account: that goes
+            // first, so it never starts for an account that isn't there.
+            Sheet::Remove { user, .. } if self.starts_into(user) => column![
+                text(format!("Turn off automatic login before removing {user}")).size(15.0).weight(650.0),
+                form::note(
+                    "The computer starts straight into their account. Turn that off first: Yukimi makes the \
+                     change, which asks for an administrator password. Then remove them here."
+                ),
+                buttons("Turn Off in Yukimi…", true, Msg::AutoLoginOffFirst, false),
+            ]
+            .spacing(12.0)
+            .width(420.0)
+            .into(),
             Sheet::Remove { user, home, delete_files } => {
-                let starts_into = match &self.auto_login {
-                    Some(AutoLogin::Choice(c)) if c.next == *user => Some(
-                        "The computer starts straight into their account. Once they're removed, Yukimi offers to \
-                         log no one in by themselves, which asks for an administrator password.",
-                    ),
-                    Some(AutoLogin::Configuration(Some(who))) if who == user => Some(
-                        "The system's configuration starts the computer straight into their account \
-                         (services.displayManager.autoLogin): change it there too.",
-                    ),
-                    _ => None,
-                };
                 let mut sheet = column![
                     text(format!("Remove {user}?")).size(15.0).weight(650.0),
                     form::note("They won't be able to log in any more."),
                 ]
                 .spacing(12.0)
                 .width(420.0);
-                if let Some(why) = starts_into {
-                    sheet = sheet.push(form::note(why));
+                if matches!(&self.auto_login, Some(AutoLogin::Configuration(Some(who))) if who == user) {
+                    sheet = sheet.push(form::note(
+                        "The system's configuration starts the computer straight into their account \
+                         (services.displayManager.autoLogin): change it there too, or the login screen shows at \
+                         each start instead.",
+                    ));
                 }
                 sheet
                     .push(checkbox(remove_files_words(home), *delete_files).on_toggle(Msg::DeleteFiles))
@@ -600,7 +644,7 @@ impl Pane for Users {
                 match &who {
                     Some(name) => cx.confirm(Confirm::new(
                         format!("Log in as {name} without a password?"),
-                        "Anyone who turns this computer on can use it as them. The lock screen still asks for the password after sleep.",
+                        "Anyone who turns this computer on can use it as them. The lock screen still asks for the password after sleep, and their saved passwords (the keyring) stay locked until it is typed once.",
                         "Turn On",
                         Msg::AutoLoginConfirmed(who.clone()),
                     )),
@@ -644,24 +688,24 @@ impl Pane for Users {
                     *delete_files = on;
                 }
             }
+            Msg::AutoLoginOffFirst => {
+                self.sheet = None;
+                cx.close_sheet();
+                self.propose_auto_login("", cx);
+            }
             Msg::RemoveConfirmed => {
                 let Some(Sheet::Remove { user, delete_files, .. }) = self.sheet.take() else { return };
                 cx.close_sheet();
+                // Never while the computer still starts straight into their
+                // account, nor into one made later with its name: the sheet
+                // offers to turn that off instead.
+                if self.starts_into(&user) {
+                    return;
+                }
                 let Some(u) = Self::user(cx, &user) else { return };
                 let task = cx.sys().accounts.delete_user(&u, delete_files);
-                cx.wait(task, move |r| Msg::Removed(user, r.map_err(|e| e.to_string())));
+                cx.wait(task, |r| Msg::Done("Removed the user", r.map_err(|e| e.to_string())));
             }
-            Msg::Removed(user, Ok(())) => {
-                cx.say("Removed the user");
-                // Nobody should start into an account that's gone, nor into
-                // one made later with its name.
-                if let Some(AutoLogin::Choice(c)) = &self.auto_login
-                    && c.next == user
-                {
-                    self.propose_auto_login("", cx);
-                }
-            }
-            Msg::Removed(_, Err(e)) => cx.failed("Removed the user", e),
             Msg::Done(what, Ok(())) => cx.say(what),
             Msg::Done(what, Err(e)) => cx.failed(what, e),
         }
@@ -814,9 +858,11 @@ impl Pane for Users {
         let plain = "The computer starts straight into this account, without asking for a password.";
         let (auto, enabled, help) = match &self.auto_login {
             None => (at(flagged()), false, plain.to_owned()),
-            Some(AutoLogin::Choice(c)) => {
-                (at(Some(c.next.as_str())), true, choice_help(c, self.proposed.as_deref(), &people))
-            }
+            Some(AutoLogin::Choice(c)) => (
+                at(Some(c.next.as_str())),
+                true,
+                choice_help(c, self.proposed.as_deref(), &people, &cannot_log_in_by_themselves(&snap.users)),
+            ),
             Some(AutoLogin::Accounts) => (at(flagged()), !fixed, plain.to_owned()),
             Some(AutoLogin::Configuration(who)) => (
                 at(who.as_deref().or_else(flagged)),
@@ -906,17 +952,46 @@ mod tests {
     }
 
     #[test]
+    fn the_choice_leaves_out_people_with_a_password_still_to_set() {
+        let users = [
+            person(1000, "adama", "William Adama", "/bin/sh"),
+            // Added here without a password: one is chosen at the first login.
+            User { password_mode: PasswordMode::SetAtLogin, ..person(1001, "hera", "Hera Agathon", "/bin/sh") },
+            // AccountsService calls an account locked when its password is,
+            // and when it was declared without one (as NixOS may), which
+            // the helper takes. Only the helper can tell them apart.
+            User { locked: true, ..person(1002, "kiosk", "Kiosk", "/bin/sh") },
+            // Not one of Yukimi's people at all: not worth a word.
+            User { password_mode: PasswordMode::SetAtLogin, ..person(900, "daemon", "Daemon", "/bin/sh") },
+        ];
+        let names = |how: &AutoLogin| auto_login_people(how, &users).into_iter().map(|(n, _)| n).collect::<Vec<_>>();
+        assert_eq!(names(&now("", "")), ["adama", "kiosk"]);
+        assert_eq!(cannot_log_in_by_themselves(&users), ["Hera Agathon"]);
+        // Whoever is chosen already still shows, as the choice has them.
+        assert_eq!(names(&now("", "hera")), ["adama", "kiosk", "hera"]);
+        // The row says who, and why.
+        let AutoLogin::Choice(none) = now("", "") else { unreachable!() };
+        let help = choice_help(&none, None, &[], &cannot_log_in_by_themselves(&users));
+        assert!(help.ends_with(
+            "Hera Agathon can't be chosen yet: an account that still has to set its password can't log in by itself."
+        ));
+        assert!(!choice_help(&none, None, &[], &[]).contains("can't be chosen"));
+    }
+
+    #[test]
     fn a_change_waiting_for_the_next_start_says_so() {
         let people = [("adama".to_owned(), "William Adama".to_owned())];
         let AutoLogin::Choice(same) = now("adama", "adama") else { unreachable!() };
-        assert!(choice_help(&same, None, &people).starts_with("The computer starts straight"));
+        assert!(choice_help(&same, None, &people, &[]).starts_with("The computer starts straight"));
         let AutoLogin::Choice(on) = now("", "adama") else { unreachable!() };
-        assert!(choice_help(&on, None, &people).starts_with("From the next start: William Adama."));
+        assert!(choice_help(&on, None, &people, &[]).starts_with("From the next start: William Adama."));
         let AutoLogin::Choice(off) = now("adama", "") else { unreachable!() };
-        assert!(choice_help(&off, None, &people).starts_with("From the next start: no one."));
+        assert!(choice_help(&off, None, &people, &[]).starts_with("From the next start: no one."));
         // Proposed in Yukimi, not yet applied; and once it is.
         let AutoLogin::Choice(none) = now("", "") else { unreachable!() };
-        assert!(choice_help(&none, Some("adama"), &people).starts_with("Proposed in Yukimi: William Adama. Apply"));
-        assert_eq!(choice_help(&on, Some("adama"), &people), choice_help(&on, None, &people));
+        assert!(
+            choice_help(&none, Some("adama"), &people, &[]).starts_with("Proposed in Yukimi: William Adama. Apply")
+        );
+        assert_eq!(choice_help(&on, Some("adama"), &people, &[]), choice_help(&on, None, &people, &[]));
     }
 }

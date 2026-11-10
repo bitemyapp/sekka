@@ -270,9 +270,12 @@ one, as an update does.
 To have the computer start straight into someone's account without asking
 for a password, pick them under **Log in automatically as** in Aizome's
 **Settei → Users & Groups**. Anyone with an account can be picked, including
-people you added after installing. Yukimi makes the change, which asks for an
-administrator password, and it applies from the next start, whichever login
-screen you use.
+people you added after installing; someone added without a password has to
+set one first. Yukimi makes the change, which asks for an administrator
+password, and it applies from the next start, whichever login screen you use.
+Their saved passwords (the keyring) stay locked until their password is typed
+once. If the account can't be logged in to when the computer starts, the
+login screen shows instead.
 
 ## Questions, bugs, and contributions
 

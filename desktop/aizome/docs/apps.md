@@ -129,8 +129,12 @@ palette. Search filters the sidebar and highlights options.
   login. On Sekka automatic login is the system's `calamares.autoLogin`,
   which every login screen it offers reads: Settei proposes it in Yukimi
   (`aizome-yukimi --choose calamares.autoLogin=NAME`, or empty for no one),
-  and it applies from the next start; removing that person proposes no
-  one. Elsewhere on NixOS, and under greetd anywhere, only the
+  and it applies from the next start. It leaves out people who still have
+  a password to set at their first login (Yukimi's helper refuses them,
+  and a locked or expired account), and
+  removing the person it names waits until it has been turned off, which
+  the remove sheet proposes in Yukimi. Elsewhere on NixOS, and under greetd
+  anywhere, only the
   configuration sets it, so the row shows it without changing it (greetd's
   `[initial_session]` from the active service's configuration, including
   NixOS's store path). Only other systems use AccountsService's flag
