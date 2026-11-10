@@ -354,6 +354,17 @@ pub trait Widget: std::any::Any {
         None
     }
 
+    /// What the tree does with it as it's mounted, asked of every widget
+    /// once. Not for widgets outside the kit: its type can't be named
+    /// there.
+    #[doc(hidden)]
+    fn at_mount(&mut self) -> crate::lazy::AtMount<'_> {
+        match self.take_popover() {
+            Some(content) => crate::lazy::AtMount::Popover(content),
+            None => crate::lazy::AtMount::Plain,
+        }
+    }
+
     /// The text it holds, for type-select and tests.
     fn text(&self) -> Option<&str> {
         None

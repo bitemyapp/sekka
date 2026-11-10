@@ -263,6 +263,69 @@ keeps it); `.selected(ids)`, `.on_select`, `.on_activate`, `.multiple()`,
 moves to its parent, and its triangle opens and closes it. Rows are built
 only while they show.
 
+### Lazy elements
+
+`lazy(value, build)` is what `build` makes of `value`, kept for as long as
+the view gives an equal value in the same place. While it's kept `build`
+isn't called, and the kit keeps what it has for the subtree: its nodes,
+their layout, what was drawn, the widgets and their state. A message then
+costs what changed and the lazy elements looked at, not every widget of the
+window.
+
+```rust
+#[derive(Clone, PartialEq)]
+struct Task { id: u64, name: String, done: bool }
+
+fn task(t: &Task) -> Element<Msg> {
+    let id = t.id;
+    row![toggle(t.done).on_toggle(move |on| Msg::Done(id, on)), text(t.name.clone())].spacing(8.0).into()
+}
+
+// in view:
+column(self.tasks.iter().map(|t| lazy(t.clone(), task).key(t.id)).collect())
+```
+
+`build` is a function, or a closure that captures nothing: a
+`fn(&D) -> Element<Msg>`. So what a lazy element shows can come only from
+its value, and the value `build` reads is the one the kit compares (with
+`==`): there is no separate key to leave a field out of. A closure that
+reads anything else doesn't compile.
+
+That leaves two things to the program. The value's `==` has to tell apart
+any two values that would draw differently: a `PartialEq` written by hand
+that skips a field doesn't, nor does a handle to something that changes
+inside (an `Rc<RefCell<…>>`). And `build` must not read what isn't in its
+argument: a static, a clock, a file.
+
+The rest the kit follows itself:
+
+- A lazy element is known by its place among its siblings, or by its
+  `.key(k)`, as any element is: key the ones that come, go and move, and a
+  moved one keeps its nodes. Two with one key are told apart by place.
+- It's sized as its content is (`Fill`, a width, a spacer's stretch) unless
+  given lengths of its own, so it stands in a row or column as its content
+  would. Its name, tooltip, label and `.map(..)` are the view's each time.
+- Kept, it's laid out again when the room it's given changes (the window
+  resized, a pane dragged), and drawn again when hover, focus or its
+  widgets' state change what it shows: none of that calls `build`.
+- A new theme or scale builds every lazy element again.
+- A popover open in a kept subtree stays as it is, and sheets cover kept
+  content as any other.
+- A widget in it that asks for a rebuild (`cx.rebuild()`) has the lazy
+  elements around it built again, once.
+- Its widgets live on from view to view, where widgets outside lazy
+  elements are made anew by each one: a widget written for the kit keeps
+  what must last in `cx.state::<T>()` either way.
+
+A lazy element costs an allocation in the view and a comparison in the
+kit, about a tenth of a microsecond: nothing beside a subtree, and too
+much to pay ten thousand times. Give long runs of them lazy parents (a
+hundred rows to a lazy group, a pane, a section), and share each parent's
+values with the view (`Rc<Vec<Row>>`, changed with `Rc::make_mut`), so a
+group nobody touched compares by its pointer (when its values are `Eq`).
+`virtual_list` is still what a long list wants: it builds only the rows that
+show.
+
 ### Forms
 
 ```rust
@@ -578,10 +641,23 @@ The budget is 4 ms from an event to its frame drawn, at 2880 × 1800 (scale 2).
   mount, the layout, its hash and the diff. A thousand rows of a box and
   a label are half a millisecond and ten thousand are five (measured at
   the end of this document), which is what `virtual_list` is for.
+- Unless the view says what didn't change. A subtree under a `lazy`
+  element whose value is the same isn't built, mounted, laid out, hashed
+  or compared: the kit keeps its nodes as they are, and a window with lazy
+  elements keeps its tree from one view to the next and works out only
+  what the view changed. The cost left is the elements outside any lazy
+  one and the lazy elements the view makes, each an allocation and a
+  comparison. One row changing among ten thousand lazy rows gathered a
+  hundred to a lazy group is a few hundredths of a millisecond.
+- A window without lazy elements is mounted anew at each view, as before.
+  The keeping adds a flag set on each of its nodes as it's mounted and
+  laid out: half a percent more instructions for a view, and no time that
+  can be measured.
 
 Rules for apps: keep `view` cheap (no I/O, no sorting of big data: sort in
 `update`), share big data with `Rc`/`Arc`, key elements that move, use
-`virtual_list` for anything long, and `spawn` slow work.
+`virtual_list` for anything long, make the parts of a window with hundreds
+of widgets `lazy`, and `spawn` slow work.
 
 The numbers measured on this laptop are at the end of this document.
 
@@ -618,7 +694,8 @@ answer; `fullscreen_asked` says what was asked). `settle(wait, |p| done)`
 handles what `cx.spawn` and streams send until the program says it's
 done (a folder read, a scan finished), for up to `wait`. Looking: `find(text)`,
 `find_id(name)`, `texts()`, `semantics()`, `selection()`,
-`focused_name()`, `popups()`, `take_damage()`, `title()`, `stats()`.
+`focused_name()`, `popups()`, `take_damage()`, `title()`, `stats()`,
+`lazies()` (how many lazy elements were built, and how many kept instead).
 `check_frame(window)` makes the window's next frame as a compositor's
 buffer gets it (the last frame's pixels moved as scrolls asked, then the
 damage drawn) and compares it with the window drawn whole: `differs` is 0
@@ -747,6 +824,50 @@ row costs half a microsecond. A row out of sight costs nothing to draw,
 and a label nothing has shown costs 5 to 16 µs to lay out, the more digits
 it has the more (parley takes each for an emoji and sets its font query's
 families again), on as many threads as there are labels for.
+
+The same rows with `lazy`, three ways: built outright at every view (as
+above), each row a lazy element kept by what it shows, and those lazy rows
+a hundred to a lazy group that shares its rows' values with the view. On
+another machine, wx-workstation (a Threadripper PRO 9985WX that other
+builds share: each figure is the least of four runs' medians, with the
+test pinned to a core), in the same harness and window. Handling, in
+milliseconds:
+
+| Window | Change | Built outright | Each row lazy | Lazy rows in lazy hundreds |
+|---|---|---|---|---|
+| 1,000 rows | one label | 0.55 | 0.10 | 0.03 |
+| 1,000 rows | one fill | 0.53 | 0.08 | 0.01 |
+| 1,000 rows | every label | 17.8 | 16.7 | 17.8 |
+| 3,000 rows | one label | 1.63 | 0.27 | 0.03 |
+| 3,000 rows | one fill | 1.62 | 0.24 | 0.01 |
+| 3,000 rows | every label | 54 | 49 | 54 |
+| 10,000 rows | one label | 8.6 | 0.79 | 0.04 |
+| 10,000 rows | one fill | 8.7 | 0.78 | 0.02 |
+| 10,000 rows | every label | 179 | 185 | 182 |
+| 10,000 rows | every fill | 9.3 | 10.6 | 11.0 |
+| 10,000 rows | a turn of the wheel | 1.4 | 2.1 | 2.3 |
+| 10,000 rows | one label, after all of the above | 11.3 | 0.83 | 0.04 |
+
+(This machine is the slower of the two at this: a row built outright costs
+it 0.86 µs where the desktop's costs 0.5.) A lazy row that's kept costs
+0.08 µs, for its allocation in the view, its comparison, and its place in
+the column's layout, which is laid out again around the one that changed.
+In a group that didn't change it costs nothing: the hundred groups are
+compared by their pointers, one is built, and its hundred rows are
+compared. When every row changes its fill, the lazy elements are so many
+more widgets to mount (a lazy element is a node of its own): the same at
+a thousand rows, a seventh dearer at ten thousand. A turn of the wheel,
+which moves every row and calls no view, costs half again as much for the
+same reason. And a window that has lived a while costs more to build
+outright than it did (its widgets' memory is scattered by the builds
+before: 11.3 ms from 8.6), where kept nodes stay as they were.
+
+A window without lazy elements costs what it did. The interactions in the
+first table, on this second machine before the kit kept anything and
+after (median, ms): hovering a button 0.009 and 0.009, a switch 0.035 and
+0.034, a character in a text field 0.066 and 0.063, one in the 2,000-line
+editor 0.251 and 0.244, the list scrolled a notch 0.142 and 0.134, its
+selection moved 0.100 and 0.095.
 
 To drive a running app from outside (the NixOS VM test of Settings clicks
 and types through `aizomectl input`), set `AIZOME_KIT_INSPECT` to a

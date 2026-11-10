@@ -46,6 +46,7 @@ pub mod hash;
 pub mod icons;
 pub mod inspect;
 pub mod layout;
+mod lazy;
 pub mod menu;
 pub mod platform;
 pub mod program;
@@ -66,6 +67,7 @@ pub use editor::{EditorAction, EditorContent, Granularity, Highlighter, LineStyl
 pub use element::{Element, Layoutable, children};
 pub use icons::{Icon, icon};
 pub use layout::{Align, Constraints, Length, Padding, Point, Rect, Size, Vec2};
+pub use lazy::lazy;
 pub use menu::{Menu, MenuBar, MenuItem, MenuRole, Shortcut, ShortcutKey};
 pub use program::{ActivationRequest, Anchors, DragId, KeyboardInteractivity, Layer, LayerOptions, Margins, Output};
 pub use program::{AppInfo, Program, WindowKey, WindowKind, WindowSpec, WindowState};
@@ -107,7 +109,7 @@ pub mod prelude {
         Menu, MenuBar, MenuItem, MenuPlacement, MenuRole, MenuStyle, Padding, Point, PositiveStep, Program, Rect, Role,
         Shortcut, ShortcutKey, Sides, Size, Span, Theme, TimerHandle, Tone, TreeItem, ValueRange, Vec2, WindowKey,
         WindowKind, WindowSpec, badge, button, canvas, caption, checkbox, container, context_menu, divider, dropdown,
-        form_row, form_section, icon, icon_button, image, keycap, list, menu_view, meter, mouse_area, popover,
+        form_row, form_section, icon, icon_button, image, keycap, lazy, list, menu_view, meter, mouse_area, popover,
         progress, progress_indeterminate, radio, rich_text, scroll, search_field, segmented, segmented_icons,
         sidebar_item, sidebar_layout, slider, space, spacer, split, status_bar, status_text, stepper, table, text,
         text_editor, text_field, toggle, toolbar, toolbar_separator, tooltip, tree, video_surface, virtual_list,
