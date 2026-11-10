@@ -40,6 +40,7 @@ fn turning_the_trackpad_off_greys_its_other_settings() {
         assert_eq!(disabled, !on_master_row, "only the switch itself stays usable");
     }
     assert!(h.texts(w).iter().any(|t| t.starts_with("The trackpad is off.")), "{:?}", h.texts(w));
+    h.program().shared.flush();
     let saved = std::fs::read_to_string(&path).expect("settings written");
     assert!(saved.contains("enabled = false"), "{saved}");
 }
