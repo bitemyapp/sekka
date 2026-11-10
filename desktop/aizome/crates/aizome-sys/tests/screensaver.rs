@@ -52,6 +52,8 @@ fn a_hold_lasts_until_its_app_gives_the_cookie_back() {
     assert_eq!(state.holds[0].cookie.get(), cookie);
     assert_eq!(state.holds[0].peer.as_str(), chromium.unique_name().unwrap().as_str());
     assert_eq!((state.holds[0].app.as_str(), state.holds[0].reason.as_str()), ("chromium", "Video playback"));
+    // Whose connection it is, as the bus says: this test's process here.
+    assert_eq!(state.holds[0].pid, Some(std::process::id()), "the caller's process");
     assert!(woken.load(Ordering::SeqCst) >= 1, "the shell wasn't woken for the hold");
 
     // A second video in the same app: its own hold.
