@@ -787,6 +787,10 @@
           inherit pkgs;
           desktopsModule = inputs.calamares.nixosModules.desktops;
         };
+        aizome-automatic-login = import ./nix/aizome-automatic-login-vm-test.nix {
+          inherit pkgs;
+          desktopsModule = inputs.calamares.nixosModules.desktops;
+        };
         aizome-greeter-desktops = import ./nix/aizome-greeter-desktops-vm-test.nix {
           inherit pkgs;
           desktopsModule = inputs.calamares.nixosModules.desktops;

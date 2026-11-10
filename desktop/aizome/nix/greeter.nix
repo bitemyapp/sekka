@@ -60,6 +60,10 @@ let
     // lib.optionalAttrs (cfg.wallpapers.day != null) { wallpaper_day = "${cfg.wallpapers.day}"; }
   );
   autoLogin = config.services.displayManager.autoLogin;
+  automatic = autoLogin.enable && autoLogin.user != null;
+  # Where greetd notes that it has started once since boot (its default,
+  # named here so the unit below marks the same file).
+  runFile = "/run/greetd.run";
 in
 {
   options.programs.aizome.greeter = {
@@ -121,12 +125,30 @@ in
       };
       # Logging in by itself at boot: straight into the default session,
       # without the greeter (greetd's initial session).
-      settings.initial_session = lib.mkIf (autoLogin.enable && autoLogin.user != null) {
+      settings.initial_session = lib.mkIf automatic {
         command = "/run/current-system/sw/bin/aizome-greeter --session ${
           if g.defaultSession != null then g.defaultSession else "aizome"
         }";
         inherit (autoLogin) user;
       };
+      settings.general = lib.mkIf automatic { runfile = runFile; };
+      # NixOS stops restarting greetd once there is an initial session, from
+      # when a restart logged the person in again. greetd starts it only on
+      # its first run since boot (the run file), so with it greetd is
+      # restarted as it is without: after the greeter dies, the login screen
+      # comes back, and nobody is logged in again.
+      restart = lib.mkIf automatic true;
+    };
+    # The login screen always comes up. When the initial session can't
+    # start (the account is gone, expired, or has to set a password first),
+    # greetd exits with status 1 before it has noted its first run, and
+    # would try the same session at every start. So whenever greetd stops,
+    # its first run is over, and after that exit it is started again: the
+    # second start shows the login screen. Only with automatic login, so
+    # every other system's unit stays as it was.
+    systemd.services.greetd.serviceConfig = lib.mkIf automatic {
+      RestartForceExitStatus = 1;
+      ExecStopPost = "${pkgs.coreutils}/bin/touch ${runFile}";
     };
     services.xserver.displayManager.startx.enable = lib.mkIf g.x11 true;
     # Who logged in last and each person's session (nothing secret).

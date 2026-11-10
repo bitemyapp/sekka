@@ -358,6 +358,33 @@ in
     '';
     services.xserver.enable = true;
     services.displayManager.gdm.enable = gdm;
+    # GDM shows no login screen when the account it logs in by itself can't
+    # open a session with nothing asked: one that has expired, or has a
+    # password to set at its next login (as a person added in Settei without
+    # one has). Its automatic login fails and nothing follows. So before GDM
+    # starts, such an account turns automatic login off for this start, in
+    # GDM's runtime configuration (/run/gdm/custom.conf, gone at the next).
+    # The rules are pam_unix's, as yukimi-helper checks them when it writes
+    # the choice (yukimi_system::people). An account that is gone needs
+    # nothing: GDM shows its login screen for that itself, as Plasma Login
+    # does for all of these, and Aizome's since greetd is started again.
+    systemd.services.display-manager.preStart =
+      lib.mkIf (gdm && autoLogin.enable && autoLogin.user != null)
+        (
+          lib.mkAfter ''
+            today=$(( $(${pkgs.coreutils}/bin/date +%s) / 86400 ))
+            if ! ${pkgs.gawk}/bin/awk -F: -v user=${lib.escapeShellArg autoLogin.user} -v today="$today" '
+              $1 == user {
+                if ($8 != "" && today >= $8) exit 1
+                if ($3 == "0") exit 1
+                if ($3 != "" && $5 != "" && today >= $3 && today - $3 > $5) exit 1
+              }' /etc/shadow; then
+              # Never in GDM's way: at worst it starts as it would have.
+              ${pkgs.coreutils}/bin/mkdir -p /run/gdm || true
+              ${pkgs.gdm}/libexec/gdm-runtime-config set daemon AutomaticLoginEnable false || true
+            fi
+          ''
+        );
     # Otherwise Plasma Login Manager, NixOS's default for graphical systems: a
     # Wayland login screen (KWin) that lights whichever GPU the displays are
     # on, and that also starts X11 sessions. SDDM's X11 greeter needs a fixed
