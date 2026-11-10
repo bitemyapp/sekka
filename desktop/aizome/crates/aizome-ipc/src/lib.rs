@@ -448,13 +448,15 @@ pub enum Request {
     /// (a video player; the shell, for apps that ask the session bus) and
     /// Keep Awake. → [`Response::IdleInhibitors`].
     IdleInhibitors,
-    /// Holds idleness off as the user's own Keep Awake, for as long as the
-    /// connection that asks stays open. Unlike an app's idle inhibitor it
-    /// still holds once the session is locked. Answered at once with `ok`.
+    /// Holds idleness off as the user's own Keep Awake does, for as long
+    /// as the connection that asks stays open. Unlike an app's idle
+    /// inhibitor it still holds once the session is locked. Answered at
+    /// once with `ok`. Keep Awake's service asks it; any program of the
+    /// session can, and is listed as the holder it is.
     KeepAwake,
 }
 
-/// Whose a hold on idleness is.
+/// What kind of hold on idleness one is.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum IdleHolder {
@@ -462,8 +464,9 @@ pub enum IdleHolder {
     /// lock and the displays' turning off until the session is locked.
     #[default]
     App,
-    /// Keep Awake's ([`Request::KeepAwake`]): the user's own switch, which
-    /// holds while the session is locked too.
+    /// Asked for with [`Request::KeepAwake`], as the user's own Keep Awake
+    /// asks for its hold: it holds while the session is locked too. Whose
+    /// it is, its process says.
     KeepAwake,
 }
 

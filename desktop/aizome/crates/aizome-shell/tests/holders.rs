@@ -31,6 +31,11 @@ const SATELLITE: i32 = 900;
 const MPV: i32 = 2600;
 const VLC: u32 = 2100;
 const CHROME: i32 = 2400;
+/// Keep Awake's service's process.
+const SERVICE: u32 = 1500;
+/// A script of the person's own that asks the compositor to hold as Keep
+/// Awake does.
+const SCRIPT: u32 = 2800;
 
 /// The players' desktop entries, as Nixpkgs ships them.
 fn players() -> AppIndex {
@@ -55,7 +60,8 @@ fn players() -> AppIndex {
 }
 
 /// The boards' scene with three players' windows open, their desktop
-/// entries installed and their programs known.
+/// entries installed and their programs known, and Keep Awake's service
+/// in its unit.
 fn theatre(day: bool) -> Harness<Shell> {
     let mut h = scene(day);
     {
@@ -64,7 +70,11 @@ fn theatre(day: bool) -> Harness<Shell> {
         s.programs_fixture = Some(HashMap::from([
             (VLC, "/nix/store/abc-vlc-3.0.21/bin/.vlc-wrapped".to_owned()),
             (CHROME as u32, "/nix/store/abc-google-chrome-157/share/google/chrome/chrome".to_owned()),
+            (SERVICE, "/nix/store/abc-aizome-0.1.0/bin/aizome-awake".to_owned()),
+            (SCRIPT, "/home/ada/bin/stay-up".to_owned()),
         ]));
+        s.units_fixture =
+            Some(HashMap::from([(SERVICE, aizome_awake::UNIT.to_owned()), (SCRIPT, "session-3.scope".to_owned())]));
     }
     for (id, app, title, pid) in [
         (20, "mpv", "Test Pattern - mpv", MPV),
@@ -123,15 +133,40 @@ fn says(h: &Harness<Shell>, window: WindowKey, text: &str) -> bool {
     h.texts(window).iter().any(|t| t == text)
 }
 
+/// A hold of the compositor's `keep-awake` kind, by the process that
+/// asked for it.
+fn keep_awake_hold(pid: u32) -> IdleInhibitorInfo {
+    IdleInhibitorInfo { kind: IdleHolder::KeepAwake, pid: Some(pid as i32), ..Default::default() }
+}
+
+/// What the compositor lists while the three play: mpv's and Chrome's
+/// windows' inhibitors, and the shell's own for the bus's holds.
+fn three_playing() -> Vec<IdleInhibitorInfo> {
+    let shells_own = IdleInhibitorInfo { pid: Some(std::process::id() as i32), ..Default::default() };
+    vec![inhibitor(20, MPV), inhibitor(22, CHROME), shells_own]
+}
+
 /// mpv plays (a Wayland inhibitor on its window), VLC plays (the bus; the
 /// shell holds its own inhibitor for it), and Chrome plays with the keys
-/// (both ways). Keep Awake's hold is in the compositor's list too.
+/// (both ways).
 fn three_play(h: &mut Harness<Shell>) {
     let chrome = "/nix/store/abc-google-chrome-157/share/google/chrome/chrome";
     bus_holds(h, &[(":1.40", VLC, "vlc", "Playing some media."), (":1.61", CHROME as u32, chrome, "Video Wake Lock")]);
-    let shells_own = IdleInhibitorInfo { pid: Some(std::process::id() as i32), ..Default::default() };
-    let keep_awake = IdleInhibitorInfo { kind: IdleHolder::KeepAwake, pid: Some(1500), ..Default::default() };
-    inhibitors(h, vec![inhibitor(20, MPV), inhibitor(22, CHROME), shells_own, keep_awake]);
+    inhibitors(h, three_playing());
+}
+
+/// Keep Awake goes on beside what the compositor `listed`: logind lists
+/// its locks, and its service holds at the compositor as Keep Awake.
+fn keep_awake_goes_on(h: &mut Harness<Shell>, listed: Vec<IdleInhibitorInfo>) {
+    h.send(Msg::Awake(Status::On));
+    inhibitors(h, listed.into_iter().chain([keep_awake_hold(SERVICE)]).collect());
+}
+
+/// The rows the shell has, as `aizome-shell msg state` gives them.
+fn rows(h: &Harness<Shell>) -> Vec<(String, String)> {
+    let state = h.program().awake_json();
+    let rows = state["holders"].as_array().expect("holders");
+    rows.iter().map(|r| (r["name"].as_str().unwrap().to_owned(), r["detail"].as_str().unwrap().to_owned())).collect()
 }
 
 #[test]
@@ -256,14 +291,16 @@ fn keep_awake_keeps_its_amber_cup_and_its_panel_shows_the_apps_as_well() {
     h.advance(SHOWS_AFTER);
     assert_eq!(h.program().cup(), Some(Cup::Apps(3)));
 
-    // The user's own switch: its cup, whatever apps hold.
-    h.send(Msg::Awake(Status::On));
+    // The user's own switch: its cup, whatever apps hold. Its service's
+    // hold is in the compositor's list now, and is nobody's row.
+    keep_awake_goes_on(&mut h, three_playing());
     assert_eq!(h.program().cup(), Some(Cup::KeepAwake));
     assert!(h.find(bar, "Keep Awake is on").is_some(), "{:?}", h.texts(bar));
     let p = open_panel(&mut h);
     let texts = h.texts(p);
     assert!(texts.iter().any(|t| t.starts_with("Won't sleep, lock or turn the displays off")), "{texts:?}");
     assert!(says(&h, p, "VLC media player: Playing some media."), "{texts:?}");
+    assert_eq!(rows(&h).len(), 3, "{:?}", rows(&h));
     assert!(
         says(&h, p, "These apps keep the screen on and unlocked. They don't hold off sleep or the lid."),
         "{texts:?}"
@@ -275,8 +312,10 @@ fn keep_awake_keeps_its_amber_cup_and_its_panel_shows_the_apps_as_well() {
     assert_eq!(h.program().cup(), Some(Cup::Unprotected));
     assert!(h.texts(p).iter().any(|t| t.starts_with("Not working")), "{:?}", h.texts(p));
 
-    // Turned off from the panel while apps hold: the cup changes back to
+    // Turned off from the panel while apps hold (its service stops, and
+    // its hold at the compositor goes with it): the cup changes back to
     // theirs and the panel stays, saying what's still held.
+    inhibitors(&mut h, three_playing());
     h.send(Msg::Panel(PanelMsg::KeepAwake(false)));
     assert_eq!(h.program().awake, Status::Off);
     assert_eq!(h.program().cup(), Some(Cup::Apps(3)));
@@ -286,15 +325,60 @@ fn keep_awake_keeps_its_amber_cup_and_its_panel_shows_the_apps_as_well() {
     // With Keep Awake on, a hold that has only just begun is listed in
     // the panel at once: the wait is the cup's.
     let mut fresh = theatre(false);
-    fresh.send(Msg::Awake(Status::On));
-    inhibitors(&mut fresh, vec![inhibitor(20, MPV)]);
+    keep_awake_goes_on(&mut fresh, vec![inhibitor(20, MPV)]);
     let p = open_panel(&mut fresh);
     assert!(says(&fresh, p, "mpv Media Player: Test Pattern - mpv"), "{:?}", fresh.texts(p));
     // And off with nothing held long enough for a cup of its own, the
     // panel goes with Keep Awake's cup, as before.
+    inhibitors(&mut fresh, vec![inhibitor(20, MPV)]);
     fresh.send(Msg::Panel(PanelMsg::KeepAwake(false)));
     assert!(fresh.program().panel.is_none());
     assert!(cup(&fresh).is_none());
+}
+
+#[test]
+fn a_hold_as_keep_awake_is_hidden_only_when_it_is_keep_awakes_own() {
+    // A script asks the compositor to hold as Keep Awake does (any
+    // program of the session may), and Keep Awake is off. The screen
+    // stays on, locked or not: the cup must show for it, and its panel
+    // must not say the displays turn off as usual.
+    let mut h = theatre(false);
+    let bar = window_titled(&h, "Menu bar");
+    inhibitors(&mut h, vec![keep_awake_hold(SCRIPT)]);
+    assert_eq!(rows(&h), [("stay-up".to_owned(), "Also while the screen is locked".to_owned())]);
+    h.advance(SHOWS_AFTER);
+    assert_eq!(h.program().cup(), Some(Cup::Apps(1)));
+    assert!(h.find(bar, "An app is keeping the screen on").is_some(), "{:?}", h.texts(bar));
+    let p = open_panel(&mut h);
+    let texts = h.texts(p);
+    assert!(says(&h, p, "stay-up: Also while the screen is locked"), "{texts:?}");
+    assert!(says(&h, p, "Off: the computer can sleep as usual. The app below keeps its screen on."), "{texts:?}");
+    assert!(!texts.iter().any(|t| t.contains("turns the displays off as usual")), "{texts:?}");
+    // Its row leads to Myaku at its process, as any row does.
+    assert!(h.find(p, "Show stay-up in Myaku").is_some(), "{texts:?}");
+
+    // Keep Awake goes on beside it: Keep Awake's cup, its own service's
+    // hold nobody's row, and the script's still listed.
+    keep_awake_goes_on(&mut h, vec![keep_awake_hold(SCRIPT)]);
+    assert_eq!(h.program().cup(), Some(Cup::KeepAwake));
+    assert_eq!(rows(&h), [("stay-up".to_owned(), "Also while the screen is locked".to_owned())]);
+    // The script ends: only Keep Awake is left, with no rows.
+    inhibitors(&mut h, vec![keep_awake_hold(SERVICE)]);
+    h.advance(LINGERS);
+    assert!(rows(&h).is_empty(), "{:?}", rows(&h));
+    assert_eq!(h.program().cup(), Some(Cup::KeepAwake));
+
+    // The service's hold while the menu bar says Keep Awake is off (its
+    // setting gone, its service still running) is shown like anyone's.
+    let mut stray = theatre(false);
+    inhibitors(&mut stray, vec![keep_awake_hold(SERVICE)]);
+    assert_eq!(rows(&stray), [("aizome-awake".to_owned(), "Also while the screen is locked".to_owned())]);
+    stray.advance(SHOWS_AFTER);
+    assert_eq!(stray.program().cup(), Some(Cup::Apps(1)));
+    // Told that Keep Awake is on after all, it's Keep Awake's.
+    stray.send(Msg::Awake(Status::On));
+    stray.advance(LINGERS);
+    assert!(rows(&stray).is_empty(), "{:?}", rows(&stray));
 }
 
 #[test]
@@ -365,9 +449,16 @@ fn pictures_of_the_cup_and_its_panel() {
         let p = open_panel(&mut h);
         h.save_png(p, shots().join(format!("panel-cup-apps-{tone}.png")), 2.0);
         // Keep Awake on as well: its amber cup.
-        h.send(Msg::Awake(Status::On));
+        keep_awake_goes_on(&mut h, three_playing());
         h.save_png(p, shots().join(format!("panel-cup-keep-awake-and-apps-{tone}.png")), 2.0);
         h.send(Msg::Panel(PanelMsg::Close));
         h.save_png(bar, shots().join(format!("bar-cup-keep-awake-{tone}.png")), 2.0);
+        // A program that holds as Keep Awake does, beside a player, with
+        // Keep Awake off.
+        let mut h = theatre(day);
+        inhibitors(&mut h, vec![inhibitor(20, MPV), keep_awake_hold(SCRIPT)]);
+        h.advance(SHOWS_AFTER);
+        let p = open_panel(&mut h);
+        h.save_png(p, shots().join(format!("panel-cup-locked-too-{tone}.png")), 2.0);
     }
 }

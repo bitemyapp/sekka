@@ -77,6 +77,14 @@ keeping the screen on: its name, and why in the app's own words ("Playing
 video", "Video Wake Lock") or, where it gave none, which of its windows
 holds. An app that asks in two ways at once, as Chrome does, is one row.
 
+A program can also ask the compositor for the very hold Keep Awake takes
+there (`keep-awake` on its IPC, `docs/ipc.md`): a script of your own,
+say. It isn't Keep Awake and switched nothing on in the menu bar, so it
+is listed with the apps, and its row says what sets it apart: "Also while
+the screen is locked". It holds the screen, and nothing more: sleep and
+the lid go on as usual. Only Keep Awake's own service, while Keep Awake
+is on, is left out of the list.
+
 - **A click on a row** brings that app's window forward.
 - **The button at its right** opens Myaku at the app's process. Quitting
   it, with Myaku's confirmation, is how to end a hold the app won't let

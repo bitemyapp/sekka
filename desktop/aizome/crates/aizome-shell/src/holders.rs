@@ -14,11 +14,17 @@
 //! own switch: neither is listed. An app that asks both ways, as Chrome
 //! does, is one holder.
 //!
+//! Keep Awake's hold is one of the compositor's `keep-awake` kind, which
+//! any program of the session may ask for. It is left out only when it is
+//! Keep Awake's: its process runs in Keep Awake's service, and Keep Awake
+//! is on. Any other hold of that kind is a holder like the rest, and its
+//! row says what sets it apart: it holds while the screen is locked too.
+//!
 //! These holds keep the screen on and unlocked. They don't stop sleep or
 //! the lid (Keep Awake does), and once the session is locked the
-//! compositor stops counting them. Nothing here lets go of one: the app
-//! would only take it again, and a Wayland inhibitor isn't the shell's to
-//! release.
+//! compositor stops counting an app's. Nothing here lets go of one: the
+//! app would only take it again, and a Wayland inhibitor isn't the
+//! shell's to release.
 //!
 //! The cup waits [`SHOWS_AFTER`] before it shows for apps and stays
 //! [`LINGERS`] after the last lets go ([`Showing`]), so a hold dropped and
@@ -47,6 +53,10 @@ pub const SHOWS_AFTER: Duration = Duration::from_secs(3);
 /// about 60 ms apart, and a browser at each pause and play: within this
 /// they never left.
 pub const LINGERS: Duration = Duration::from_secs(2);
+
+/// What a row says of a holder whose hold counts behind a lock as well
+/// (the compositor's `keep-awake` kind, held by another than Keep Awake).
+pub const LOCKED_TOO: &str = "Also while the screen is locked";
 
 /// A process, by its ID.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -112,12 +122,23 @@ pub struct Holder {
     pub title: Option<String>,
     /// A process of its, for Myaku.
     pub pid: Option<Pid>,
+    /// It holds as Keep Awake does, without being Keep Awake: its hold
+    /// counts while the session is locked too.
+    pub locked_too: bool,
 }
 
 impl Holder {
-    /// What goes under its name: why it holds, else which window does.
+    /// What goes under its name: that it holds behind a lock too, when it
+    /// does (no other holder does, so that comes first); else why it
+    /// holds, else which window does.
     pub fn detail(&self) -> String {
-        if self.reasons.is_empty() { self.title.clone().unwrap_or_default() } else { self.reasons.join(", ") }
+        if self.locked_too {
+            LOCKED_TOO.to_owned()
+        } else if self.reasons.is_empty() {
+            self.title.clone().unwrap_or_default()
+        } else {
+            self.reasons.join(", ")
+        }
     }
 
     /// Another hold of the same app's.
@@ -132,6 +153,7 @@ impl Holder {
             self.title = more.title;
         }
         self.pid = self.pid.or(more.pid);
+        self.locked_too |= more.locked_too;
     }
 }
 
@@ -149,6 +171,19 @@ pub struct Known<'a> {
     /// The shell this one replaces, in a restart. It holds its own such
     /// inhibitor until the compositor stops it, seconds later.
     pub shell_before: Option<Pid>,
+    /// The systemd unit a process runs in, where that can be read.
+    pub unit: &'a dyn Fn(Pid) -> Option<String>,
+    /// Keep Awake is on, or the shell is turning it on or off just now:
+    /// only then is its service's hold Keep Awake's, and no row.
+    pub keep_awake_on: bool,
+}
+
+/// The systemd unit a process runs in, from its `/proc/PID/cgroup`: the
+/// last part of its control group's path, which systemd names for the
+/// unit (`0::/user.slice/…/session.slice/aizome-keep-awake.service`).
+pub fn unit_of_cgroup(cgroup: &str) -> Option<&str> {
+    let path = cgroup.lines().find_map(|line| line.strip_prefix("0::"))?;
+    path.trim_end().rsplit('/').next().filter(|unit| !unit.is_empty())
 }
 
 impl Known<'_> {
@@ -215,23 +250,36 @@ impl Known<'_> {
             window: window.map(|w| w.id),
             title: window.map(|w| w.title.trim().to_owned()).filter(|t| !t.is_empty()),
             pid,
+            locked_too: false,
         }
     }
 
-    /// The app behind one of the compositor's idle inhibitors; none for
-    /// Keep Awake's hold and for a shell's inhibitor: this one's, or in a
-    /// restart the one's it replaces.
+    /// Whether a hold of the `keep-awake` kind is Keep Awake's own: its
+    /// process runs in Keep Awake's service (any program of the session
+    /// may ask for that kind), and Keep Awake is on.
+    fn is_keep_awakes(&self, pid: Option<Pid>) -> bool {
+        self.keep_awake_on && pid.and_then(|p| (self.unit)(p)).as_deref() == Some(aizome_awake::UNIT)
+    }
+
+    /// The app behind one of the compositor's holds. None for a shell's
+    /// inhibitor (this one's, or in a restart the one's it replaces), and
+    /// none for Keep Awake's own hold. Any other hold of Keep Awake's kind
+    /// is somebody's, and counts while the session is locked too.
     fn of_inhibitor(&self, inhibitor: &IdleInhibitorInfo) -> Option<Holder> {
         let pid = inhibitor.pid.and_then(Pid::from_ipc);
-        let a_shells = pid.is_some_and(|p| p == self.shell || Some(p) == self.shell_before);
-        if inhibitor.kind != IdleHolder::App || a_shells {
-            return None;
-        }
+        let locked_too = match inhibitor.kind {
+            IdleHolder::App if pid.is_some_and(|p| p == self.shell || Some(p) == self.shell_before) => return None,
+            IdleHolder::App => false,
+            IdleHolder::KeepAwake if self.is_keep_awakes(pid) => return None,
+            IdleHolder::KeepAwake => true,
+        };
         // The window the compositor names, as the shell knows it now;
-        // else one of the process's (the inhibitor is on another surface).
+        // else one of the process's (the hold is on another surface, or
+        // on none).
         let window =
             inhibitor.window.and_then(|id| self.wm.windows.get(&id)).or_else(|| pid.and_then(|p| self.window_of(p)));
-        Some(self.holder(window, "", pid, pid.map_or(HolderKey::Surface, HolderKey::Process)))
+        let holder = self.holder(window, "", pid, pid.map_or(HolderKey::Surface, HolderKey::Process));
+        Some(Holder { locked_too, ..holder })
     }
 
     /// The app behind one of the session bus's holds.
@@ -399,8 +447,9 @@ impl Shell {
         }
     }
 
-    /// What holders are named by changed (a window, the installed apps):
-    /// their rows are made again, if there are any.
+    /// What holders are named by changed (a window, the installed apps),
+    /// or what decides whose a hold is (Keep Awake going on or off): their
+    /// rows are made again, if there are any.
     pub(crate) fn holders_may_be_renamed(&mut self) {
         self.holders_stale |= !self.inhibitors.is_empty() || !self.screen_holds.is_empty();
     }
@@ -431,12 +480,30 @@ impl Shell {
             }
             None => None,
         };
+        let units = self.units_fixture.as_ref();
+        let unit = |pid: Pid| match units {
+            Some(units) => units.get(&pid.get()).cloned(),
+            None if live => {
+                let cgroup = std::fs::read_to_string(format!("/proc/{}/cgroup", pid.get())).ok()?;
+                unit_of_cgroup(&cgroup).map(str::to_owned)
+            }
+            None => None,
+        };
+        // On by the watcher's word, or while this shell switches it. The
+        // watcher looks every two seconds and the service holds at once,
+        // so with a hold of that kind listed the setting is read as it is
+        // now: Keep Awake turned on in a terminal is no row meanwhile.
+        let keep_awake_on = self.awake != aizome_awake::Status::Off
+            || self.awake_changing
+            || (live && self.inhibitors.iter().any(|i| i.kind == IdleHolder::KeepAwake) && aizome_awake::requested());
         let known = Known {
             wm: &self.wm,
             apps: self.apps.as_deref(),
             program: &program,
             shell: Pid::of_shell(),
             shell_before: self.shell_before,
+            unit: &unit,
+            keep_awake_on,
         };
         let holding = merge(&self.inhibitors, &self.screen_holds, &known);
         for (delay, due) in self.holders.update(holding) {
@@ -484,6 +551,7 @@ impl Shell {
                     "reasons": h.reasons,
                     "window": h.window,
                     "pid": h.pid.map(Pid::get),
+                    "locked_too": h.locked_too,
                 })
             })
             .collect();
@@ -592,14 +660,39 @@ mod tests {
                 2400 => "/nix/store/abc-google-chrome-157/share/google/chrome/chrome",
                 2500 => "/nix/store/abc-xdg-desktop-portal-gtk-1.15/libexec/xdg-desktop-portal-gtk",
                 2600 => "/nix/store/abc-mpv-0.40/bin/.mpv-wrapped",
+                SERVICE => "/nix/store/abc-aizome-0.1.0/bin/aizome-awake",
+                2800 => "/home/ada/bin/stay-up",
                 _ => return None,
             }
             .to_owned(),
         )
     }
 
+    /// Keep Awake's service's process.
+    const SERVICE: u32 = 1500;
+
+    fn units(pid: Pid) -> Option<String> {
+        Some(
+            match pid.get() {
+                SERVICE => aizome_awake::UNIT,
+                2600 => "app-mpv-4d2f.scope",
+                2800 => "session-3.scope",
+                _ => return None,
+            }
+            .to_owned(),
+        )
+    }
+
+    /// What a test's shell knows besides the windows and the apps.
+    #[derive(Clone, Copy, Default)]
+    struct Told {
+        /// The shell it replaced, in a restart.
+        shell_before: Option<u32>,
+        keep_awake_on: bool,
+    }
+
     fn merged(wm: &Wm, inhibitors: &[IdleInhibitorInfo], holds: &[Hold]) -> Vec<Holder> {
-        merged_after(None, wm, inhibitors, holds)
+        merged_as(Told::default(), wm, inhibitors, holds)
     }
 
     /// As a shell that replaced `shell_before` merges them.
@@ -609,13 +702,19 @@ mod tests {
         inhibitors: &[IdleInhibitorInfo],
         holds: &[Hold],
     ) -> Vec<Holder> {
+        merged_as(Told { shell_before, ..Told::default() }, wm, inhibitors, holds)
+    }
+
+    fn merged_as(told: Told, wm: &Wm, inhibitors: &[IdleInhibitorInfo], holds: &[Hold]) -> Vec<Holder> {
         let apps = apps();
         let known = Known {
             wm,
             apps: Some(&apps),
             program: &programs,
             shell: Pid::new(SHELL).unwrap(),
-            shell_before: shell_before.and_then(Pid::new),
+            shell_before: told.shell_before.and_then(Pid::new),
+            unit: &units,
+            keep_awake_on: told.keep_awake_on,
         };
         merge(inhibitors, holds, &known)
     }
@@ -717,16 +816,20 @@ mod tests {
         assert_ne!(nameless[0].key, nameless[1].key);
     }
 
+    fn keep_awake_hold(pid: u32) -> IdleInhibitorInfo {
+        IdleInhibitorInfo { kind: IdleHolder::KeepAwake, pid: Some(pid as i32), ..Default::default() }
+    }
+
     #[test]
     fn the_shells_own_inhibitor_and_keep_awakes_hold_are_nobodys_row() {
         let wm = wm(vec![window(3, "vlc", "Test Pattern - VLC media player", SATELLITE)]);
+        let on = Told { keep_awake_on: true, ..Told::default() };
         // While VLC holds on the bus the shell holds an inhibitor for it,
-        // and Keep Awake is on besides.
-        let keep_awake = IdleInhibitorInfo { kind: IdleHolder::KeepAwake, pid: Some(1500), ..Default::default() };
-        let inhibitors = [inhibitor(None, SHELL as i32), keep_awake];
-        let holders = merged(&wm, &inhibitors, &bus(&[(":1.40", 2100, "vlc", "Playing some media.")]));
+        // and Keep Awake is on besides: its service holds as Keep Awake.
+        let inhibitors = [inhibitor(None, SHELL as i32), keep_awake_hold(SERVICE)];
+        let holders = merged_as(on, &wm, &inhibitors, &bus(&[(":1.40", 2100, "vlc", "Playing some media.")]));
         assert_eq!(rows(&holders), [row("VLC media player", "Playing some media.")]);
-        assert!(merged(&wm, &inhibitors, &[]).is_empty());
+        assert!(merged_as(on, &wm, &inhibitors, &[]).is_empty());
         // Another client's bare surface is somebody's, though: named by
         // its program.
         assert_eq!(rows(&merged(&wm, &[inhibitor(None, 2600)], &[])), [row("mpv Media Player", "")]);
@@ -734,6 +837,59 @@ mod tests {
         let unnamed = merged(&wm, &[inhibitor(None, 4000)], &[]);
         assert_eq!(rows(&unnamed), [row("An app", "")]);
         assert_eq!(unnamed[0].key, HolderKey::Process(Pid::new(4000).unwrap()));
+    }
+
+    #[test]
+    fn a_hold_as_keep_awake_by_anyone_but_keep_awake_is_a_row_that_says_it_holds_locked_too() {
+        let wm = wm(vec![window(1, "mpv", "Test Pattern - mpv", 2600)]);
+        let on = Told { keep_awake_on: true, ..Told::default() };
+        let off = Told::default();
+        // Any program of the session may ask the compositor for
+        // `keep-awake`. One that isn't Keep Awake's service is somebody
+        // holding the screen on, behind a lock too: a row, and it says so,
+        // whether Keep Awake is on or not.
+        for told in [on, off] {
+            let script = merged_as(told, &wm, &[keep_awake_hold(2800)], &[]);
+            assert_eq!(rows(&script), [row("stay-up", LOCKED_TOO)]);
+            assert!(script[0].locked_too);
+            assert_eq!((script[0].pid, script[0].window), (Pid::new(2800), None));
+        }
+        // Beside Keep Awake's own, which stays out of the list.
+        let both = merged_as(on, &wm, &[keep_awake_hold(SERVICE), keep_awake_hold(2800)], &[]);
+        assert_eq!(rows(&both), [row("stay-up", LOCKED_TOO)]);
+        // The service's hold with Keep Awake off is nobody's switch: the
+        // menu bar says Keep Awake is off, so the hold is shown.
+        let stray = merged_as(off, &wm, &[keep_awake_hold(SERVICE)], &[]);
+        assert_eq!(rows(&stray), [row("aizome-awake", LOCKED_TOO)]);
+        // An app with a window is named as ever; what it's told apart by
+        // goes before its window's title, and before a reason it gave.
+        let player = merged_as(on, &wm, &[keep_awake_hold(2600)], &[]);
+        assert_eq!(rows(&player), [row("mpv Media Player", LOCKED_TOO)]);
+        assert_eq!(player[0].window, Some(1));
+        // Holding both ways it's one row still, and still says so.
+        let twice = merged_as(on, &wm, &[inhibitor(Some(1), 2600), keep_awake_hold(2600)], &[]);
+        assert_eq!(rows(&twice), [row("mpv Media Player", LOCKED_TOO)]);
+        // An app's own inhibitor never says it.
+        let plain = merged_as(on, &wm, &[inhibitor(Some(1), 2600)], &[]);
+        assert_eq!(rows(&plain), [row("mpv Media Player", "Test Pattern - mpv")]);
+        assert!(!plain[0].locked_too);
+        // A holder the socket couldn't name the process of.
+        let unnamed = IdleInhibitorInfo { kind: IdleHolder::KeepAwake, ..Default::default() };
+        assert_eq!(rows(&merged_as(on, &wm, &[unnamed], &[])), [row("An app", LOCKED_TOO)]);
+    }
+
+    #[test]
+    fn a_process_is_in_the_unit_its_control_group_is_named_for() {
+        let service = "0::/user.slice/user-1000.slice/user@1000.service/session.slice/aizome-keep-awake.service\n";
+        assert_eq!(unit_of_cgroup(service), Some(aizome_awake::UNIT));
+        assert_eq!(
+            unit_of_cgroup("0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-mpv-4d2f.scope\n"),
+            Some("app-mpv-4d2f.scope")
+        );
+        // Nothing to go by: the root group, an empty file, another layout.
+        assert_eq!(unit_of_cgroup("0::/\n"), None);
+        assert_eq!(unit_of_cgroup(""), None);
+        assert_eq!(unit_of_cgroup("1:name=systemd:/user.slice/x.service\n"), None);
     }
 
     #[test]
@@ -790,6 +946,7 @@ mod tests {
             window: None,
             title: None,
             pid: None,
+            locked_too: false,
         }
     }
 

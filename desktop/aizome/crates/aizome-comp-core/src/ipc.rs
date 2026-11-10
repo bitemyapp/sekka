@@ -34,6 +34,14 @@ struct KeepAwake {
     pid: Option<i32>,
 }
 
+impl KeepAwake {
+    /// Who asked, for the log: any program of the session may, not only
+    /// Keep Awake's service.
+    fn who(self) -> String {
+        self.pid.map_or_else(|| "a process the socket doesn't name".to_owned(), |pid| format!("process {pid}"))
+    }
+}
+
 #[derive(Default)]
 pub struct IpcServer {
     pub path: Option<PathBuf>,
@@ -78,7 +86,10 @@ impl IpcServer {
     /// Forgets connection `id`, and what it held.
     fn close(&mut self, id: u64) -> Option<Conn> {
         let conn = self.conns.remove(&id)?;
-        self.keep_awake_changed |= conn.keep_awake.is_some();
+        if let Some(hold) = conn.keep_awake {
+            info!("the keep-awake connection of {} closed: its hold on idleness goes with it", hold.who());
+            self.keep_awake_changed = true;
+        }
         Some(conn)
     }
 
@@ -230,7 +241,6 @@ impl State {
         // Keep Awake's connection closed (its service stopped, or died):
         // idleness comes again.
         if self.az.ipc.take_keep_awake_changed() {
-            info!("Keep Awake's connection closed: its hold on idleness goes with it");
             self.idle_holds_changed();
         }
         action
@@ -299,8 +309,9 @@ impl State {
                     if let Some(c) = self.az.ipc.conns.get_mut(&id)
                         && c.keep_awake.is_none()
                     {
-                        c.keep_awake = Some(KeepAwake { pid: peer_pid(&c.stream) });
-                        info!("Keep Awake holds idleness off");
+                        let hold = KeepAwake { pid: peer_pid(&c.stream) };
+                        c.keep_awake = Some(hold);
+                        info!("{} asked for keep-awake: idleness is held off, locked or not", hold.who());
                         self.idle_holds_changed();
                     }
                     Response::Ok

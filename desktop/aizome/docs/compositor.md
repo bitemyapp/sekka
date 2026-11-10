@@ -258,7 +258,10 @@ Notes for client authors:
   open, so it goes with its service however that ends), and that hold
   counts locked or not. Asking by a request of its own is what tells it
   from an app's: nothing is read from a client's name, and only programs
-  of the session reach the IPC socket. ext-idle-notify's clients are told
+  of the session reach the IPC socket. Any of them may ask, so the
+  compositor logs which process did, and lists the hold with it; the
+  shell shows every such hold that isn't Keep Awake's own
+  (`docs/shell.md`, "Who is holding"). ext-idle-notify's clients are told
   of any hold as before, locked or not. `idle-inhibitors` lists the holds
   (an inhibitor by the window its surface belongs to, with that window's
   app ID and title, and by its client's process), and

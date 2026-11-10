@@ -399,6 +399,10 @@ pub struct Shell {
     pub night: Option<aizome_ipc::NightLightState>,
     /// Keep Awake, as the watcher last saw it (`awake.rs`).
     pub awake: aizome_awake::Status,
+    /// This shell asked for Keep Awake to be turned on or off and hasn't
+    /// heard back: its service's hold is Keep Awake's meanwhile, whatever
+    /// the watcher has said so far, and nobody's row (`holders.rs`).
+    pub(crate) awake_changing: bool,
     /// The compositor's idle inhibitor, held while an app on the session
     /// bus keeps the screen awake (`idle.rs`).
     pub(crate) idle_hold: crate::idle::IdleHold,
@@ -420,6 +424,9 @@ pub struct Shell {
     /// Processes' programs by process ID, for tests (the running shell
     /// reads `/proc`).
     pub programs_fixture: Option<HashMap<u32, String>>,
+    /// The systemd units processes run in, by process ID, for tests (the
+    /// running shell reads `/proc`).
+    pub units_fixture: Option<HashMap<u32, String>>,
     /// GeoClue is being asked where the computer is; when it last answered.
     pub(crate) locating: bool,
     pub(crate) located_at: Option<std::time::Instant>,
@@ -541,6 +548,7 @@ impl Shell {
             logind_power_key: None,
             night: None,
             awake: aizome_awake::Status::Off,
+            awake_changing: false,
             idle_hold: Default::default(),
             inhibitors: Vec::new(),
             screen_holds: Vec::new(),
@@ -548,6 +556,7 @@ impl Shell {
             holders_stale: false,
             shell_before: None,
             programs_fixture: None,
+            units_fixture: None,
             locating: false,
             located_at: None,
             recording: None,

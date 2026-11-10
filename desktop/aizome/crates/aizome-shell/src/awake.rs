@@ -29,6 +29,12 @@ impl Shell {
             self.keep_awake_status(if on { Status::On } else { Status::Off }, cx);
             return;
         }
+        // The service takes its hold on the compositor before
+        // `aizome-awake on` comes back, and may still have it as the
+        // watcher sees the setting go: that hold is Keep Awake's all the
+        // while, never somebody's row in between.
+        self.awake_changing = true;
+        self.holders_may_be_renamed();
         cx.spawn(move || {
             let out = std::process::Command::new("aizome-awake").arg(if on { "on" } else { "off" }).output();
             Msg::AwakeSet(match out {
@@ -44,6 +50,8 @@ impl Shell {
 
     /// `aizome-awake` finished.
     pub fn keep_awake_set(&mut self, result: Result<bool, String>, cx: &mut Cx<Msg>) {
+        self.awake_changing = false;
+        self.holders_may_be_renamed();
         match result {
             Ok(on) => self.keep_awake_status(if on { Status::On } else { Status::Off }, cx),
             Err(e) => {
@@ -67,8 +75,11 @@ impl Shell {
             return;
         }
         self.awake = status;
+        // Whether its service's hold is Keep Awake's, or somebody's row,
+        // goes by whether Keep Awake is on (`holders.rs`).
+        self.holders_may_be_renamed();
         // Off, the cup goes with it and so does its panel, unless apps
-        // hold the screen on: then both stay, for them (`holders.rs`).
+        // hold the screen on: then both stay, for them.
         self.cup_changed(cx);
     }
 }

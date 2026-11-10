@@ -71,9 +71,6 @@ session
   stop-share [ID]               stop a share (every one without ID)
   idle-inhibitors               who holds idleness off: apps (a playing
                                 video) by window and process, and Keep Awake
-  keep-awake                    hold idleness off as Keep Awake does, locked
-                                or not, until killed (aizome-awake does this
-                                for the Keep Awake switch)
   action NAME                   run a key-binding action by name
   quit                          end the session
   reload [--logic] [--shell] [--from PATH] [--check] [--offer]
@@ -191,14 +188,6 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    // Keep Awake's hold lasts as long as its connection: stay until
-    // killed, or until the compositor goes.
-    if let (Request::KeepAwake, Response::Ok) = (&request, &response) {
-        let mut stream = client.stream();
-        let _ = std::io::Read::read_to_end(&mut stream, &mut Vec::new());
-        eprintln!("aizomectl: the compositor closed the connection");
-        return ExitCode::FAILURE;
-    }
     if json {
         println!("{}", serde_json::to_string_pretty(&response).unwrap());
         return if matches!(response, Response::Error { .. }) { ExitCode::FAILURE } else { ExitCode::SUCCESS };
@@ -492,7 +481,6 @@ fn parse(command: &str, mut args: Vec<String>) -> Result<Request, String> {
             id: args.first().map(|a| a.parse().map_err(|_| format!("not a share ID: {a}"))).transpose()?,
         },
         "idle-inhibitors" => Request::IdleInhibitors,
-        "keep-awake" => Request::KeepAwake,
         "action" => {
             need(&args, 1, "an action name")?;
             Request::Action { action: args[0].clone() }
@@ -1171,7 +1159,9 @@ mod tests {
     #[test]
     fn parses_and_prints_who_holds_idleness_off() {
         assert_eq!(p("idle-inhibitors", &[]), Request::IdleInhibitors);
-        assert_eq!(p("keep-awake", &[]), Request::KeepAwake);
+        // Holding as Keep Awake is its service's to ask, on a connection
+        // it keeps: no command here takes that hold.
+        assert!(parse("keep-awake", Vec::new()).is_err());
         assert_eq!(
             p("input", &["idle", "900"]),
             Request::Synthesize { events: vec![Synthetic::Idle { seconds: 900 }] }

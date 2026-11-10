@@ -652,8 +652,20 @@ process: it stands for the bus's holds and is nobody's row. Neither, for
 the seconds a restart takes, is the one the shell before still holds
 (the compositor gives a restarted shell that shell's process, which is
 forgotten once that shell has gone, so a process given its ID later
-isn't hidden). Keep Awake's hold is marked as Keep Awake's there and
-isn't a row either.
+isn't hidden).
+
+Keep Awake's hold is in that list too, as one of the `keep-awake` kind,
+and is the user's own switch, not a row. But the compositor gives that
+kind to any program of the session that asks, so the kind alone doesn't
+make a hold Keep Awake's. It is left out only when its process runs in
+Keep Awake's service (the systemd unit its control group is named for,
+`/proc/PID/cgroup`) and Keep Awake is on: by the watcher's word, while
+this shell is switching it, or by its setting read there and then, as
+the service holds a moment before the watcher looks. Any other hold of
+that kind is a holder like the rest, named the same way, and its row
+says "Also while the screen is locked" where another's says its reason:
+the cup would otherwise show nothing for a hold that keeps the screen on
+even behind a lock.
 
 A holder is named by its desktop entry where one is found, looked for in
 this order: the app ID of a window of the holding process; the name it
