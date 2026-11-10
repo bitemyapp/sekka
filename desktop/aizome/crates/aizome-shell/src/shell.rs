@@ -409,6 +409,10 @@ pub struct Shell {
     pub holders: crate::holders::Showing,
     /// Something the holders are merged from has changed since.
     pub(crate) holders_stale: bool,
+    /// The shell this one replaces, in a restart: until the compositor
+    /// stops it, the inhibitor it held for its bus's holds is still in the
+    /// compositor's list, and is nobody's row either.
+    pub(crate) shell_before: Option<crate::holders::Pid>,
     /// Processes' programs by process ID, for tests (the running shell
     /// reads `/proc`).
     pub programs_fixture: Option<HashMap<u32, String>>,
@@ -538,6 +542,7 @@ impl Shell {
             screen_holds: Vec::new(),
             holders: Default::default(),
             holders_stale: false,
+            shell_before: None,
             programs_fixture: None,
             locating: false,
             located_at: None,
@@ -1158,6 +1163,7 @@ impl Shell {
         // What the shell before this one held (a restart, or a crash).
         let previous = crate::carry::previous_shell();
         self.replacing = previous.is_some();
+        self.shell_before = previous.and_then(crate::holders::Pid::new);
         if let Some(c) = crate::carry::load() {
             log::info!("taking up {} notifications from the shell before (pid {})", c.notes.len(), c.pid);
             // In a restart, ids go on well past the last the old shell gave,

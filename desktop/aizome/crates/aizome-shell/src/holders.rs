@@ -146,6 +146,9 @@ pub struct Known<'a> {
     /// The shell's own process, whose inhibitor stands for the bus's
     /// holds.
     pub shell: Pid,
+    /// The shell this one replaces, in a restart. It holds its own such
+    /// inhibitor until the compositor stops it, seconds later.
+    pub shell_before: Option<Pid>,
 }
 
 /// A program's file name, without what NixOS's wrappers add
@@ -225,10 +228,12 @@ impl Known<'_> {
     }
 
     /// The app behind one of the compositor's idle inhibitors; none for
-    /// Keep Awake's hold and for the shell's own inhibitor.
+    /// Keep Awake's hold and for a shell's inhibitor: this one's, or in a
+    /// restart the one's it replaces.
     fn of_inhibitor(&self, inhibitor: &IdleInhibitorInfo) -> Option<Holder> {
         let pid = inhibitor.pid.and_then(Pid::from_ipc);
-        if inhibitor.kind != IdleHolder::App || pid == Some(self.shell) {
+        let a_shells = pid.is_some_and(|p| p == self.shell || Some(p) == self.shell_before);
+        if inhibitor.kind != IdleHolder::App || a_shells {
             return None;
         }
         // The window the compositor names, as the shell knows it now;
@@ -426,7 +431,13 @@ impl Shell {
             }
             None => None,
         };
-        let known = Known { wm: &self.wm, apps: self.apps.as_deref(), program: &program, shell: Pid::of_shell() };
+        let known = Known {
+            wm: &self.wm,
+            apps: self.apps.as_deref(),
+            program: &program,
+            shell: Pid::of_shell(),
+            shell_before: self.shell_before,
+        };
         let holding = merge(&self.inhibitors, &self.screen_holds, &known);
         for (delay, due) in self.holders.update(holding) {
             cx.after(delay, Msg::Holders(due));
@@ -581,8 +592,24 @@ mod tests {
     }
 
     fn merged(wm: &Wm, inhibitors: &[IdleInhibitorInfo], holds: &[Hold]) -> Vec<Holder> {
+        merged_after(None, wm, inhibitors, holds)
+    }
+
+    /// As a shell that replaced `shell_before` merges them.
+    fn merged_after(
+        shell_before: Option<u32>,
+        wm: &Wm,
+        inhibitors: &[IdleInhibitorInfo],
+        holds: &[Hold],
+    ) -> Vec<Holder> {
         let apps = apps();
-        let known = Known { wm, apps: Some(&apps), program: &programs, shell: Pid::new(SHELL).unwrap() };
+        let known = Known {
+            wm,
+            apps: Some(&apps),
+            program: &programs,
+            shell: Pid::new(SHELL).unwrap(),
+            shell_before: shell_before.and_then(Pid::new),
+        };
         merge(inhibitors, holds, &known)
     }
 
@@ -699,6 +726,20 @@ mod tests {
         let unnamed = merged(&wm, &[inhibitor(None, 4000)], &[]);
         assert_eq!(rows(&unnamed), [row("An app", "")]);
         assert_eq!(unnamed[0].key, HolderKey::Process(Pid::new(4000).unwrap()));
+    }
+
+    #[test]
+    fn in_a_restart_the_inhibitor_of_the_shell_before_is_nobodys_row() {
+        // The shell was restarted while VLC held on the bus. The shell
+        // before still runs for a few seconds, with the inhibitor it held
+        // for VLC; mpv plays too.
+        const BEFORE: u32 = 650;
+        let wm = wm(vec![window(1, "mpv", "Test Pattern - mpv", 2600)]);
+        let inhibitors = [inhibitor(None, BEFORE as i32), inhibitor(Some(1), 2600)];
+        let restarted = merged_after(Some(BEFORE), &wm, &inhibitors, &[]);
+        assert_eq!(rows(&restarted), [row("mpv Media Player", "Test Pattern - mpv")]);
+        // To a shell that replaced nobody, that process is some client.
+        assert_eq!(merged(&wm, &inhibitors, &[]).len(), 2);
     }
 
     fn holder(name: &str) -> Holder {
