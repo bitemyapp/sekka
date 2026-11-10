@@ -250,8 +250,10 @@ Notes for client authors:
   an app's, and is for someone at the screen: once the session is locked
   (from the lock being asked for until it's unlocked) inhibitors no
   longer hold off the `idle` events, so `monitors-off` comes after its
-  minutes, counted from the last input, and the displays turn off behind
-  the lock whatever plays. The user's own Keep Awake asks over IPC
+  minutes and the displays turn off behind the lock whatever plays. While
+  a hold counts the idle clock stands at nothing, so those minutes count
+  from the lock (to within the idle timer's five seconds), or from the
+  last input after it. The user's own Keep Awake asks over IPC
   instead (`keep-awake`, held for as long as the asking connection stays
   open, so it goes with its service however that ends), and that hold
   counts locked or not. Asking by a request of its own is what tells it
