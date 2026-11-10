@@ -1,6 +1,7 @@
 //! Keep Awake in the shell (`aizome-awake`; docs/keep-awake.md): its cup
 //! in the systray while it's on, its switch in the cup's panel and the
-//! Battery panel, and the palette's command.
+//! Battery panel, and the palette's command. The cup shows for apps
+//! holding the screen on as well, in another colour (`holders.rs`).
 //!
 //! The shell only asks `aizome-awake` to turn it on or off, and watches
 //! whether logind lists the locks. The locks belong to a user service, so
@@ -12,7 +13,6 @@ use std::time::Duration;
 use aizome_awake::Status;
 use aizome_kit::prelude::*;
 
-use crate::menubar::TrayWidget;
 use crate::shell::{Msg, Shell};
 
 impl Shell {
@@ -67,11 +67,9 @@ impl Shell {
             return;
         }
         self.awake = status;
-        self.tray.awake = (status != Status::Off).then_some(status);
-        // The cup goes with it: so does its panel.
-        if status == Status::Off && self.panel.as_ref().is_some_and(|p| p.widget == TrayWidget::Awake) {
-            self.close_panel(cx);
-        }
+        // Off, the cup goes with it and so does its panel, unless apps
+        // hold the screen on: then both stay, for them (`holders.rs`).
+        self.cup_changed(cx);
     }
 }
 

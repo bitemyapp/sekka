@@ -21,6 +21,11 @@ locks, so the computer may sleep. That happens while the service restarts
 (for a second) or when it can't take them. `systemctl --user status
 aizome-keep-awake` says why; turning it off and on again retries.
 
+The cup has a second meaning, in another colour. With Keep Awake off, a
+cup in the menu bar's own colour (as the widgets beside it) says an app
+is keeping the screen on: a video playing, say. That holds less than Keep
+Awake does. See "Apps that keep the screen on" below.
+
 ## What it blocks
 
 While it's on, logind holds a **block** inhibitor, *Aizome Keep Awake*, on
@@ -52,6 +57,46 @@ Some things still put the computer to sleep, on purpose:
 
 Nothing here prevents a flat battery, or a shutdown by the firmware when
 the machine overheats.
+
+## Apps that keep the screen on
+
+An app can ask for the screen to stay on while it has something to show:
+Utsushi, mpv or VLC playing a video, a browser playing one, a call. While
+one does, the screen doesn't lock or turn off by itself. Nothing was
+switched on, so it's easy not to know why the screen stays lit. The cup
+says so:
+
+| | The cup | Left alone | Sleep and the lid | Locked by hand |
+|---|---|---|---|---|
+| **Keep Awake**, your own switch | amber (red: not working) | no lock, displays stay on | blocked | displays stay on |
+| **An app** holding the screen on | the bar's own colour | no lock, displays stay on | not blocked: Sleep from the menu, the power key and closing the lid do what they usually do | displays turn off on their timer |
+| Both | amber | as Keep Awake | as Keep Awake | as Keep Awake |
+
+Click the cup and its panel lists, under Keep Awake's switch, each app
+keeping the screen on: its name, and why in the app's own words ("Playing
+video", "Video Wake Lock") or, where it gave none, which of its windows
+holds. An app that asks in two ways at once, as Chrome does, is one row.
+
+- **A click on a row** brings that app's window forward.
+- **The button at its right** opens Myaku at the app's process. Quitting
+  it, with Myaku's confirmation, is how to end a hold the app won't let
+  go of.
+- **There's no switch to turn an app's hold off.** The app would take it
+  again the next time it asks, the shell can't let go of a hold an app
+  took from the compositor, and apps aren't told when one is ignored.
+  Pause the video, or quit the app.
+
+The cup comes once apps have held for three seconds, and stays two
+seconds after the last lets go, so a sound that plays for a moment shows
+nothing and a player that lets go and holds again between two files
+doesn't blink. The panel's rows don't wait: open (for Keep Awake), it
+lists a hold as soon as there is one.
+
+**Once the screen is locked, an app's hold stops counting.** Nobody is
+watching what it plays, so the displays turn off after the usual minutes
+(`idle.monitors_off_after_minutes`), counted from the lock or the last
+key or pointer movement since, while the video plays on. Unlock, and it
+holds again. Keep Awake is your own word and still counts, locked or not.
 
 ## How it works
 
@@ -94,6 +139,9 @@ a check that a file exists while it's off. Restarting or reloading the
 shell doesn't touch the locks. Only the real session's shell changes Keep
 Awake. A headless or nested Aizome, or a test, leaves it alone.
 
+The apps' side is `docs/shell.md`, "Staying awake for a video": the two
+ways an app asks, how the shell names who holds, and the cup's waits.
+
 ## Checks
 
 - `cargo test -p aizome-awake`: an inhibitor counts as Keep Awake only as
@@ -109,6 +157,10 @@ Awake. A headless or nested Aizome, or a test, leaves it alone.
   holds idleness off, and tells subscribers when that changes. Locked,
   an app's inhibitor lets the displays turn off on their timer and Keep
   Awake's hold doesn't; unlocked, both hold as before.
+- `cargo test -p aizome-shell --lib holders` and `--test holders`: both
+  ways of asking are one list with one row an app, named by its desktop
+  entry; the shell's own inhibitor and Keep Awake's hold are nobody's row;
+  the cup's two waits; the panel's rows and wording.
 - `cargo test -p aizome-comp --test displays lid`: closing the lid turns
   the laptop's panel off and leaves other monitors on, turning the
   displays on doesn't light the panel behind it, and opening the lid
