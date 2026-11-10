@@ -28,6 +28,12 @@ let
         password = "office-pass";
       }
       { ssid = "Cafe"; }
+      # A password nmcli's passwd-file rewrites unless it is escaped: a
+      # backslash, and a space at its end.
+      {
+        ssid = "Attic";
+        password = "attic\\key ";
+      }
     ];
   };
 in
@@ -148,5 +154,48 @@ pkgs.testers.runNixOSTest {
     with subtest("Passwords never stay on disk"):
         machine.fail("ls /run/user/1000/tatami-network-* 2>/dev/null | grep -q .")
         assert "Back Room" in active(), active()
+
+    with subtest("The Wi-Fi list hands its password to nmcli on a pipe, as typed"):
+        # Super+Ctrl+W opens the Walker list of networks (`tatami network`),
+        # once Super+W has closed the Network window if it is still open.
+        # While the password is typed and the network joined, a loop in the VM
+        # notes ten times a second whether nmcli is joining with its
+        # passwd-file on standard input, any process with the password in its
+        # arguments or its environment, and any password file of the helper's.
+        machine.send_key("meta_l-w")
+        machine.wait_until_fails(
+            "runuser -u demo -- env XDG_RUNTIME_DIR=/run/user/1000 "
+            f"HYPRLAND_INSTANCE_SIGNATURE={signature} hyprctl clients | grep -q org.tatami.Network",
+            timeout=30)
+        machine.succeed(
+            "install -m 600 /dev/null /run/wifi-key",
+            "cat > /run/wifi-key <<'END'\nattic\\key\nEND",
+            "cat > /run/wifi-watch.sh <<'END'\n"
+            "while [ ! -e /run/wifi-watch.stop ]; do\n"
+            "  pgrep -f 'nmcli .*connection up .*passwd-file /dev/stdin' > /dev/null && echo nmcli\n"
+            "  grep -laF -f /run/wifi-key /proc/[0-9]*/cmdline /proc/[0-9]*/environ 2> /dev/null\n"
+            "  ls /run/user/1000/tatami-wifi-* 2> /dev/null\n"
+            "  sleep 0.1\n"
+            "done > /run/wifi-watch.log\n"
+            "END")
+        machine.send_key("meta_l-ctrl-w")
+        machine.wait_until_succeeds(
+            "runuser -u demo -- env XDG_RUNTIME_DIR=/run/user/1000 "
+            f"HYPRLAND_INSTANCE_SIGNATURE={signature} hyprctl layers | grep -q walker",
+            timeout=30)
+        time.sleep(1)
+        machine.send_chars("Attic")
+        time.sleep(1)
+        machine.send_key("ret")
+        machine.wait_until_succeeds("pgrep -u demo -f 'walker.*--passwor[d]'", timeout=30)
+        time.sleep(1)
+        machine.succeed("setsid -f sh /run/wifi-watch.sh > /dev/null 2>&1 < /dev/null")
+        machine.send_chars("attic\\key ")
+        machine.send_key("ret")
+        wait_active("Attic")
+        machine.succeed("touch /run/wifi-watch.stop")
+        seen = set(machine.succeed("cat /run/wifi-watch.log").split())
+        assert "nmcli" in seen, "nmcli was not seen joining Attic"
+        assert seen == {"nmcli"}, f"while nmcli joined Attic, the password was in {sorted(seen - {'nmcli'})}"
   '';
 }
