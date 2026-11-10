@@ -437,6 +437,10 @@ fn run(
                     paused = on;
                     speaker.set_active(!on);
                     live.store(!on, Ordering::Release);
+                    if on {
+                        // SAFETY: not inside a core call.
+                        unsafe { &mut *host_ptr }.still();
+                    }
                     next = Instant::now();
                 }
                 // SAFETY: as above.
@@ -501,6 +505,8 @@ fn run(
     }
 
     speaker.set_active(false);
+    // SAFETY: not inside a core call.
+    unsafe { &mut *host_ptr }.still();
     // A core that threw may have left its memory half done: the saves
     // kept before stay.
     if threw.is_none()
@@ -535,6 +541,8 @@ fn run(
             }
         }
         (*host_ptr).hw = None;
+        // What it set going as it was put away.
+        (*host_ptr).still();
     }
     Host::unregister();
     drop(host);

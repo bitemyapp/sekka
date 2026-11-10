@@ -260,7 +260,9 @@ pausing, saving and leaving are Chanoma's.
 - **Environment**: pixel formats (0RGB1555, RGB565 through a 65,536-entry
   table, XRGB8888), core options in all three forms (with Chanoma's
   preferences over a core's defaults: the Game Boy's green palette),
-  system and save folders, rumble, input bitmasks, geometry and timing
+  system and save folders, rumble, stopped when a game pauses or ends (a
+  controller told to rumble does until told to stop, and a core that
+  isn't running says nothing more), input bitmasks, geometry and timing
   changes, OpenGL (below), and a log: a C function (`retro/log.c`, as
   it takes printf's arguments, which Rust can't) formats each line for
   Chanoma's own, a core's errors as warnings and the rest quieter. Some
@@ -641,7 +643,9 @@ its 31 folders, 4,812 files", from the files index's progress), or that
 its drive isn't plugged in, is being opened, or couldn't be opened.
 
 **A look that takes a while shows on Home too**, quietly, in the header
-before the controllers and the clock: "Reading Extreme Pro", how far
+before the controllers and the clock. Every start looks, for games added
+or taken away since, reading again only the folders that changed, so it
+says so: "Checking Extreme Pro for new games", how far
 through its own folders it is ("12 of 31 folders", and a bar), and how
 many files so far, the number whose climbing says how fast it goes. It
 never guesses how long is left. How far is known because the index reads
@@ -649,7 +653,11 @@ a folder depth first: each of its folders is read whole before the next,
 so the count of them done only grows (`library::Look`, from the index's
 `Report`, which counts files as well as folders). A folder without
 folders of its own shows the count alone. After the reading, "Recognising
-the games" until they show. A look the index answers at once (a folder
+the games" until they show. Then what it found stays for eight seconds
+("Checked Extreme Pro · Nothing new", "3 new games", "1 game gone"), so a
+look that ends while a toast covers it ("Grown-up mode" sits over the
+header's middle) or a screen with a title of its own hides it still says
+it ended. A look the index answers at once (a folder
 read before and unchanged: its only word is that it's over) shows
 nothing, so starting Chanoma doesn't flash it. A folder opens
 a page to look again or remove it (which asks first, *Keep it* ready to
@@ -863,7 +871,17 @@ play, who made it.
   and kept with it): the one a PlayStation's or a PlayStation 2's
   `SYSTEM.CNF` boots (`BOOT = cdrom:\SCUS_949.00;1` is `SCUS-94900`), or
   a Saturn's or a Dreamcast's product number from its system area
-  (`MK-81009`). PBP, CDI and ZSO discs aren't read.
+  (`MK-81009`). Serials are compared as letters and digits, and without
+  Sega's `MK-`, which the database has for some games and not others
+  (`MK-51035` is the entry's `51035`). A Dreamcast CHD's system area
+  isn't read (its track list says it's a GD-ROM), and PBP, CDI and ZSO
+  discs aren't read.
+- **Else by its name with the tags a database adds**: a file named as
+  No-Intro and Redump name them (its region in brackets) matches a name
+  that only adds more after it, as a database adds a release's languages:
+  the Dreamcast's `Crazy Taxi (USA)` is the database's `Crazy Taxi (USA)
+  (En,Ja)`. Of several, the one with fewest; a name without a tag isn't
+  guessed at.
 - A game named twice in a database (a release per disc or revision) takes
   what any of its entries says.
 - **Read once a start, all at once**: the systems' databases are read on
@@ -902,7 +920,10 @@ A game's tile shows the first of these there is:
 - **Its box from libretro-thumbnails** (`art.rs`), as RetroArch fetches
   it: by the name its database knows it by (`Game::known_as`, found by
   its name, CRC or disc serial, so a renamed game's too), from
-  `thumbnails.libretro.com/<database>/Named_Boxarts/<name>.png`, as its
+  `thumbnails.libretro.com/<database>/Named_Boxarts/<name>.png`, else
+  (none there) by its file's name, as the thumbnails sometimes name a
+  game where the database adds its languages (the Dreamcast's `Crazy
+  Taxi (USA)`, `Crazy Taxi (USA) (En,Ja)` in the database), as its
   tile comes near the screen, four at a time, and kept in
   `$XDG_CACHE_HOME/aizome/chanoma/art/<system>/`. One that isn't there
   leaves a `.none` beside where it would be, and isn't asked for again
@@ -1055,9 +1076,12 @@ cargo run --release -p aizome-chanoma --example library -- FOLDER… \
   system's tab, one game for each of the systems Chanoma plays, *All
   games* leading the shelf, RB along them all with the chosen tab whole
   on the screen and named beside the title, LB round to the last, and a
-  tab clicked; a folder being read shown on Home (a look the index
-  answers at once not shown; 12 of 31 folders, 4,812 files and the bar;
-  then recognising the games; gone once they show); time running
+  tab clicked; a folder being checked shown on Home (a look the index
+  answers at once not shown; "Checking Games for new games", 12 of 31
+  folders, 4,812 files and the bar; then recognising the games; then
+  "Checked Games · Nothing new" for eight seconds, and "1 new game" after
+  another look); a game's rumble (the test core rumbles while B is held)
+  stopped as it pauses and as it ends, and started again as it carries on; time running
   out mid-game, with the warning, the game kept, the closed
   screen, and a grown-up's grant; bedtime; a folder added with the
   controller alone (*Suggested* offering a drive's `roms` and home's
@@ -1119,13 +1143,17 @@ cargo run --release -p aizome-chanoma --example library -- FOLDER… \
   apart, dates) and the region a language puts first; Mac resource forks
   not taken for games. Zips are read stored and deflated, checked by
   their CRC (a damaged one refused), unpacked, and the oldest cleared; a
-  database is read and games found in it by name, CRC and serial; a disc
+  database is read and games found in it by name, CRC and serial (Sega's
+  with its `MK-` or without, either way round), and by a name its
+  database adds tags to (the fewest; never another region); a disc
   image (written by the test) says its serial, from a cue sheet and a
   playlist. Folders say what's directly in them, and *Suggested* finds a
   drive's `roms`, home's `Emulation/roms` and `Movies` (not a backup's
   games, deeper); box art's names and addresses are libretro-thumbnails',
   and one is fetched from a server of the test's own (found in the second
   of two databases), a miss marked and an unreachable server not;
+  one missing by its database's name is asked for by its file's, and one
+  the databases don't know isn't asked for;
   `gamelist.xml` says each game's picture, its box first; search ranks
   a name's start, its words' starts and the system's names, accents as
   typed; the PIN pad's foot holds *Forgot it?*.

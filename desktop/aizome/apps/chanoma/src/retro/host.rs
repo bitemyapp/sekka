@@ -498,6 +498,20 @@ impl Host {
         }
         true
     }
+
+    /// Stop every controller rumbling (a game paused or ended): a
+    /// controller told to rumble does until it's told to stop, and a core
+    /// that isn't running says nothing more. Its next ask starts it again.
+    pub fn still(&mut self) {
+        for (port, state) in self.rumble_state.iter_mut().enumerate() {
+            if *state != [0, 0] {
+                *state = [0, 0];
+                if let Some(r) = &self.rumble {
+                    r(port, 0, 0);
+                }
+            }
+        }
+    }
 }
 
 /// Write `value` where `data` points: false for a null pointer.

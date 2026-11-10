@@ -94,7 +94,8 @@ pub struct Activity {
     pub progress: Option<u16>,
 }
 
-/// The header's activity's width.
+/// The header's activity's width: at least this, wider for its words
+/// where the header has room.
 pub const ACTIVITY_W: f64 = 480.0;
 
 /// A count as it's read aloud: 7,549.
@@ -570,9 +571,16 @@ pub fn head_title(c: &mut Canvas, theme: &Theme, title: &str, note: &str) {
 /// the time left and grown-up mode.
 pub const HEAD_RIGHT: f64 = 760.0;
 
-/// The header's activity, its right edge at `right`.
-fn paint_activity(c: &mut Canvas, theme: &Theme, a: &Activity, right: f64) {
-    let r = Rect::new(right - ACTIVITY_W, HEAD_Y - 30.0, right, HEAD_Y + 30.0);
+/// The width the header's activity takes for its icon, its label and
+/// its step whole.
+fn activity_width(theme: &Theme, a: &Activity) -> f64 {
+    let step = if a.step.is_empty() { 0.0 } else { measure(theme, &a.step, mono(CAPTION, REGULAR)).width + 16.0 };
+    52.0 + measure(theme, &a.label, font(SMALL, MEDIUM)).width.ceil() + step.ceil()
+}
+
+/// The header's activity, `width` wide, its right edge at `right`.
+fn paint_activity(c: &mut Canvas, theme: &Theme, a: &Activity, right: f64, width: f64) {
+    let r = Rect::new(right - width, HEAD_Y - 30.0, right, HEAD_Y + 30.0);
     let accent = theme.role(Role::Accent);
     icon(c, Icon::FolderSearch, Point::new(r.x0 + 18.0, HEAD_Y), 32.0, theme.text2());
     let x = r.x0 + 52.0;
@@ -631,10 +639,11 @@ pub fn paint_chrome(c: &mut Canvas, theme: &Theme, ch: &Chrome) {
         right = chip(c, theme, "Grown-up", right - 16.0, HEAD_Y, 18.0).x0;
     }
     // Before the right side, where it leaves room after the left's.
+    let room = right - 40.0 - (left_end + 48.0);
     if let Some(a) = &ch.activity
-        && right - 40.0 - ACTIVITY_W >= left_end + 48.0
+        && room >= ACTIVITY_W
     {
-        paint_activity(c, theme, a, right - 40.0);
+        paint_activity(c, theme, a, right - 40.0, activity_width(theme, a).clamp(ACTIVITY_W, room));
     }
     let mut x = MARGIN;
     for (b, what) in &ch.hints {
