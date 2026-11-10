@@ -170,7 +170,30 @@ pub enum Surface {
 pub struct Screen {
     pub output: Output,
     pub bar: Option<WindowKey>,
-    pub desktop: Option<WindowKey>,
+    pub desktop: DesktopSurface,
+}
+
+/// A screen's desktop surface.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DesktopSurface {
+    /// Not open: not yet, or the compositor took it away (its output went,
+    /// or a newer shell's replaced it in a restart). It's opened when the
+    /// outputs change.
+    Closed,
+    /// Waiting for its wallpaper before it opens (a restart, see
+    /// `desktop_waits`): opened as the wallpaper comes in.
+    Waiting,
+    Open(WindowKey),
+}
+
+impl DesktopSurface {
+    /// Its window, while it's open.
+    pub fn window(self) -> Option<WindowKey> {
+        match self {
+            DesktopSurface::Open(k) => Some(k),
+            DesktopSurface::Closed | DesktopSurface::Waiting => None,
+        }
+    }
 }
 
 impl Screen {
@@ -248,9 +271,16 @@ pub struct Shell {
     /// last word).
     pub carried: Option<u64>,
     pub carry_ready: bool,
-    /// Another shell has taken over (a restart): this one saves nothing
-    /// more and waits to be stopped.
+    /// Another process has taken the notifications' name: a new shell in a
+    /// restart, as a rule, though any notification server may. This shell
+    /// saves nothing more; in a restart the compositor stops it shortly.
+    /// By itself it's no proof of a restart (see `deskbar_replaced_on`).
     pub retiring: bool,
+    /// The output where the compositor closed this shell's Deskbar while
+    /// it was stepping down (`retiring`): a restart, in which the new
+    /// shell's Deskbar replaced it there. None is opened there again
+    /// (`sync_deskbar`).
+    pub(crate) deskbar_replaced_on: Option<u32>,
     /// Apps whose every unread notification shows.
     pub notes_open: Vec<String>,
     pub note_server: Option<crate::notifications::server::NoteServer>,
@@ -417,6 +447,7 @@ impl Shell {
             carried: None,
             carry_ready: false,
             retiring: false,
+            deskbar_replaced_on: None,
             notes_open: Vec::new(),
             note_server: None,
             banner: None,
@@ -577,7 +608,7 @@ impl Shell {
         let gone: Vec<Screen> =
             self.screens.iter().filter(|s| !outputs.iter().any(|o| o.id == s.output.id)).cloned().collect();
         for s in gone {
-            for k in [s.bar, s.desktop].into_iter().flatten() {
+            for k in [s.bar, s.desktop.window()].into_iter().flatten() {
                 cx.close_window(k);
                 self.surfaces.remove(&k);
             }
@@ -586,7 +617,7 @@ impl Shell {
         for o in outputs {
             match self.screens.iter_mut().find(|s| s.output.id == o.id) {
                 Some(s) => s.output = o,
-                None => self.screens.push(Screen { output: o, bar: None, desktop: None }),
+                None => self.screens.push(Screen { output: o, bar: None, desktop: DesktopSurface::Closed }),
             }
         }
         self.sync_lock_surfaces(cx);
@@ -620,11 +651,16 @@ impl Shell {
         cx.reserve_buffers(fresh);
     }
 
-    /// Opens screen `i`'s desktop, unless it has one or waits for its
-    /// wallpaper: the bytes its first frame draws into.
+    /// Opens screen `i`'s desktop, unless it has one or must wait for its
+    /// wallpaper (it's opened as that comes in, by
+    /// `open_waiting_desktops`): the bytes its first frame draws into.
     fn open_desktop(&mut self, i: usize, cx: &mut Cx<Msg>) -> usize {
         let s = &self.screens[i];
-        if s.desktop.is_some() || self.desktop_waits(s) {
+        if matches!(s.desktop, DesktopSurface::Open(_)) {
+            return 0;
+        }
+        if self.desktop_waits(s) {
+            self.screens[i].desktop = DesktopSurface::Waiting;
             return 0;
         }
         let (id, frame, scale) = (s.output.id, s.output.frame.size(), s.output.scale);
@@ -635,17 +671,21 @@ impl Shell {
             .output(id);
         let k = cx.open_window(layer(opts, 0.0, 0.0, "Desktop"));
         self.surfaces.insert(k, Surface::Desktop { output: id });
-        self.screens[i].desktop = Some(k);
+        self.screens[i].desktop = DesktopSurface::Open(k);
         surface_bytes(frame, scale)
     }
 
-    /// The desktops that waited for their wallpapers, now they're in (not
-    /// one closed for a newer shell's).
+    /// The desktops that waited for their wallpapers, now they're in. Only
+    /// those: one the compositor closed (for a newer shell's, in the next
+    /// restart) isn't waiting, and a wallpaper that comes in late doesn't
+    /// open it again.
     fn open_waiting_desktops(&mut self, cx: &mut Cx<Msg>) {
-        if !self.replacing || self.retiring {
-            return;
+        let mut fresh = 0;
+        for i in 0..self.screens.len() {
+            if self.screens[i].desktop == DesktopSurface::Waiting {
+                fresh += self.open_desktop(i, cx);
+            }
         }
-        let fresh: usize = (0..self.screens.len()).map(|i| self.open_desktop(i, cx)).sum();
         if fresh > 0 {
             cx.reserve_buffers(fresh);
         }
@@ -1749,12 +1789,20 @@ impl Program for Shell {
                 if sc.bar == Some(window) {
                     sc.bar = None;
                 }
-                if sc.desktop == Some(window) {
-                    sc.desktop = None;
+                if sc.desktop == DesktopSurface::Open(window) {
+                    sc.desktop = DesktopSurface::Closed;
                 }
             }
             if s == Surface::Deskbar {
                 self.deskbar = None;
+                // Taken by the compositor after another took the
+                // notifications: a restart, and the new shell's Deskbar has
+                // replaced this one on its output. (Losing the name alone
+                // could be to any notification server, and this shell then
+                // goes on showing its Deskbar.)
+                if self.retiring {
+                    self.deskbar_replaced_on = self.deskbar_output;
+                }
                 // A drag of its edge or grip can't end now.
                 self.end_deskbar_drags(cx);
             }

@@ -436,3 +436,73 @@ impl Shell {
             .ok();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use aizome_kit::testing::Harness;
+
+    use super::*;
+    use crate::shell::{DesktopSurface, Options};
+
+    /// A shell started in a restart, with a wallpaper to read first (one
+    /// that won't read: there's no such file), on one display. Nothing has
+    /// been read yet, so its desktop waits.
+    fn restarted() -> Harness<Shell> {
+        let mut h = Harness::new(Shell::new(Options::default()));
+        let s = h.program_mut();
+        s.replacing = true;
+        let file = PathBuf::from("/nonexistent/aizome-shell-test/wallpaper.png");
+        s.wall_paths = [Some(file.clone()), Some(file)];
+        h.set_outputs(vec![aizome_kit::Output {
+            id: 1,
+            name: "eDP-1".into(),
+            connector: Some("eDP-1".into()),
+            frame: Rect::new(0.0, 0.0, 1280.0, 800.0),
+            scale: 1.0,
+            integer_scale: 1,
+            ..Default::default()
+        }]);
+        h
+    }
+
+    fn desktops(h: &Harness<Shell>) -> usize {
+        h.windows().iter().filter(|k| h.title(**k) == "Desktop").count()
+    }
+
+    fn open(s: &Shell) -> bool {
+        matches!(s.screens[0].desktop, DesktopSurface::Open(_))
+    }
+
+    #[test]
+    fn a_restarted_shells_desktop_opens_with_its_wallpaper_whoever_has_the_notifications() {
+        let mut h = restarted();
+        assert_eq!(h.program().screens[0].desktop, DesktopSurface::Waiting);
+        assert_eq!(desktops(&h), 0, "not before its wallpaper");
+        // Another notification server takes the name meanwhile: no restart,
+        // and nothing replaces this shell.
+        h.program_mut().retiring = true;
+        // The read is started, on a thread, and comes back (it failed).
+        h.send(Msg::Nothing);
+        assert!(h.settle(Duration::from_secs(10), open), "the desktop opens once its wallpaper is in");
+        assert_eq!(desktops(&h), 1);
+    }
+
+    #[test]
+    fn a_late_wallpaper_does_not_reopen_a_desktop_the_compositor_closed() {
+        let mut h = restarted();
+        h.send(Msg::Nothing);
+        assert!(h.settle(Duration::from_secs(10), open));
+        // The next restart: the compositor closes this shell's desktop for
+        // the newer shell's.
+        let desktop = h.program().screens[0].desktop.window().unwrap();
+        h.request_close(desktop);
+        assert_eq!(h.program().screens[0].desktop, DesktopSurface::Closed);
+        // A wallpaper's read finishing after that opens nothing: the
+        // desktop isn't waiting for one.
+        let key = h.program().wall_key(&h.program().screens[0]).unwrap();
+        h.send(Msg::Wallpaper(key, None));
+        assert_eq!(desktops(&h), 0);
+    }
+}

@@ -7,7 +7,9 @@
 //! finds the new shell, notifications (on a D-Bus of the test's own)
 //! carry over, and the bar and the desktop, wallpaper and all, never
 //! leave the screen. The restart ends as the new shell's surfaces replace
-//! the old one's even when the old shell opens its Deskbar again.
+//! the old one's even when the old shell opens its Deskbar again; and a
+//! shell that loses the notifications' name with no restart under way
+//! goes on showing its Deskbar.
 //!
 //! The variant is built here, in a target directory of its own
 //! (`target/reload-test`, kept between runs), with the compositor it is
@@ -598,6 +600,15 @@ fn take_notifications(
     zbus::blocking::fdo::DBusProxy::new(bus).unwrap().request_name(name, flags.into()).unwrap()
 }
 
+/// Writes the session's settings, whole: the shell reads them again
+/// within a second or so.
+fn write_settings(c: &Compositor, text: &str) {
+    let path = c.dir.join("config/aizome/settings.toml");
+    let tmp = path.with_extension("toml.new");
+    std::fs::write(&tmp, text).unwrap();
+    std::fs::rename(&tmp, &path).unwrap();
+}
+
 #[test]
 fn restarting_the_shell_keeps_apps_and_notifications() {
     let Some(bus) = private_bus() else {
@@ -832,6 +843,53 @@ fn the_compositor_closes_what_the_old_shell_opens_during_a_restart() {
     let log = c.log_text();
     assert!(!log.contains("shell restart cut short"), "the old shell held the restart open:\n{log}");
     assert_eq!(notifications_owner(&server), Some(std::process::id()), "neither shell took the name");
+}
+
+/// Losing the notifications' name isn't a restart by itself. Another
+/// notification server takes it here, with no restart under way: nothing
+/// replaces the shell and the compositor doesn't stop it, so it goes on,
+/// and its Deskbar, folded into the bar, comes back when it's shown again.
+#[test]
+fn a_shell_that_loses_the_notifications_outside_a_restart_keeps_its_deskbar() {
+    let Some(bus) = private_bus() else {
+        eprintln!("no dbus-daemon; skipping the lost notifications test");
+        return;
+    };
+    let sb = shell_build();
+    let shell_bin = sb.shell.to_string_lossy().into_owned();
+    let env = [
+        ("AIZOME_SHELL_BIN", shell_bin.as_str()),
+        ("DBUS_SESSION_BUS_ADDRESS", bus.address.as_str()),
+        ("DBUS_SYSTEM_BUS_ADDRESS", bus.address.as_str()),
+    ];
+    let c = Compositor::start(Options { args: &["--shell"], env: &env, settings: "", ..Default::default() });
+    let conn = bus_connection(&bus.address);
+    let deskbar = || shell_surfaces(&sb.shell, &c).map(|s| s.iter().any(|s| s == "Deskbar"));
+    wait_for("the shell, its Deskbar and the notifications' name", 60, || {
+        deskbar() == Some(true) && notifications_owner(&conn).is_some()
+    });
+    let shell_pid = notifications_owner(&conn).unwrap();
+
+    // The shell holds the name allowing replacement (for the next shell).
+    let other = bus_connection(&bus.address);
+    let reply = take_notifications(&other, zbus::fdo::RequestNameFlags::ReplaceExisting);
+    assert!(matches!(reply, zbus::fdo::RequestNameReply::PrimaryOwner), "{reply:?}");
+    // It has heard once it has written its last word, as it does when a
+    // new shell takes the name.
+    let carried = c.dir.join(format!("aizome-shell-state.{}.json", c.socket));
+    wait_for("the shell to hear it lost the name", 20, || {
+        std::fs::read(&carried)
+            .ok()
+            .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+            .is_some_and(|state| state["final"] == true)
+    });
+
+    write_settings(&c, "[deskbar]\ncollapsed = true\n");
+    wait_for("the Deskbar to fold into the bar", 20, || deskbar() == Some(false));
+    write_settings(&c, "[deskbar]\ncollapsed = false\n");
+    wait_for("the Deskbar to come back", 20, || deskbar() == Some(true));
+    assert!(pid_alive(shell_pid), "the same shell, still running");
+    assert!(!c.log_text().contains("restarting the shell"), "no restart was under way:\n{}", c.log_text());
 }
 
 /// A spot of the desktop with nothing on it: the screen's bottom-right
