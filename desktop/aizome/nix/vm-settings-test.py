@@ -1165,13 +1165,17 @@ def keyboard():
 def keyboard_setup():
     # QEMU's own keys, through libinput, rather than aizomectl's (which
     # come from no keyboard).
-    names = [k["name"] for k in ipc("keyboards")["keyboards"]]
-    print("keyboards:", names)
-    assert names, "no keyboard that types"
     S.open("keyboard.setup")
     S.wait(text="Waiting for the key…")
     machine.send_key("alt")
     S.wait(contains="Beside the space bar: ⌥ Alt")
+    # Listed after the key: the compositor lists the keyboards that type as
+    # libinput adds them, with its first event. That is this key when the
+    # part runs alone (AIZOME_TEST_ONLY), and otherwise the password typed
+    # at the lock screen.
+    names = [k["name"] for k in ipc("keyboards")["keyboards"]]
+    print("keyboards:", names)
+    assert names, "no keyboard that types"
     typed_on = [n for n in names if S.find(text=n)]
     assert typed_on, (names, S.texts())
     # The left keys alone: right Alt (AltGr) stays for accents and symbols.
