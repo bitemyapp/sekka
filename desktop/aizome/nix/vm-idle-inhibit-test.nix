@@ -1,13 +1,20 @@
 # A video playing holds off the idle lock and the displays' turning off, in
 # a real Aizome session with a minute's idleness set for both: Utsushi
 # (Aizome's player), mpv and VLC as Nixpkgs packages them, each started as
-# its desktop entry starts it. Paused, each lets the session go idle again,
-# and so does VLC killed while it plays (vm-idle-inhibit-test.py).
+# its desktop entry starts it, and a page's video in Chromium: as it starts
+# here, when the video starts by itself with the person in another window,
+# and as an X11 client. Paused, each lets the session go idle again, and so
+# does VLC killed while it plays (vm-idle-inhibit-test.py).
 #
 # The VM's GPU has no 3D, so the players decode and draw in software. What
 # keeps the session awake doesn't depend on that: a Wayland idle inhibitor
-# (Utsushi, mpv), or the session bus's org.freedesktop.ScreenSaver, which
-# the shell serves (VLC, an X11 client here).
+# (Utsushi, mpv, Chromium for a video started in its own window), or the
+# session bus's org.freedesktop.ScreenSaver, which the shell serves (VLC,
+# and Chromium otherwise).
+#
+# Chromium stands for Google Chrome, which did the same in each of these
+# when both were tried by hand. Chrome isn't free software, and this check
+# needs nothing that isn't.
 #
 #     nix build .#aizome-checks.idle-inhibit -L
 {
@@ -16,14 +23,42 @@
   package ? null,
 }:
 let
+  # A page with a video and nothing else. Its keys are a person's: p plays
+  # and pauses, f goes full screen and back, and d plays twelve seconds
+  # later, by which time the person is in another window, as when a
+  # playlist's next video starts. Its title says what the video is doing,
+  # which the test reads from the window.
+  page = pkgs.writeText "video.html" ''
+    <!doctype html>
+    <meta charset="utf-8">
+    <title>loading</title>
+    <style>html,body{margin:0;background:#000;height:100%}video{width:100%;height:100%}</style>
+    <video id="v" src="pattern.webm" loop></video>
+    <script>
+    const v = document.getElementById("v");
+    addEventListener("keydown", e => {
+      if (e.key === "p") { v.paused ? v.play() : v.pause(); }
+      if (e.key === "f") { document.fullscreenElement ? document.exitFullscreen() : v.requestFullscreen(); }
+      if (e.key === "d") { setTimeout(() => v.play(), 12000); }
+    });
+    setInterval(() => {
+      document.title = (v.paused ? "paused" : "playing") + " " + Math.floor(v.currentTime * 10)
+        + (document.fullscreenElement ? " fullscreen" : " windowed");
+    }, 250);
+    </script>
+  '';
   # Generated here, a test card and a tone: 20 seconds, looped by each
-  # player.
+  # player. The page's is WebM, which every Chromium plays.
   media = pkgs.runCommand "idle-inhibit-media" { nativeBuildInputs = [ pkgs.ffmpeg ]; } ''
     mkdir -p "$out"
     ffmpeg -nostdin -loglevel error -f lavfi -i "testsrc2=size=320x180:rate=25:duration=20" \
       -f lavfi -i "sine=frequency=440:sample_rate=48000:duration=20" -ac 2 \
       -c:v libx264 -preset veryfast -g 25 -pix_fmt yuv420p -c:a aac -b:a 64k \
       -metadata title="Test Pattern" -movflags +faststart "$out/pattern.mp4"
+    ffmpeg -nostdin -loglevel error -f lavfi -i "testsrc2=size=320x180:rate=25:duration=20" \
+      -f lavfi -i "sine=frequency=440:sample_rate=48000:duration=20" -ac 2 \
+      -c:v libvpx -b:v 300k -g 25 -c:a libvorbis "$out/pattern.webm"
+    cp ${page} "$out/video.html"
   '';
 in
 pkgs.testers.runNixOSTest {
@@ -98,6 +133,7 @@ pkgs.testers.runNixOSTest {
       environment.systemPackages = [
         pkgs.mpv
         pkgs.vlc
+        pkgs.chromium
         # xdg-open, as the desktop opens a video.
         pkgs.xdg-utils
       ];

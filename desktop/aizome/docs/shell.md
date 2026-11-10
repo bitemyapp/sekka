@@ -561,15 +561,27 @@ The compositor counts idleness, and holds it off while any client has a
 Wayland idle inhibitor (`docs/compositor.md`): no `idle` event comes, so
 the screen doesn't lock and the displays stay on. Utsushi and mpv take one
 while a video plays and let it go when it pauses; Keep Awake's service has
-one while it's on (`docs/keep-awake.md`).
+one while it's on (`docs/keep-awake.md`). Chromium and Google Chrome take
+one too, on their window, from a page's video starting until it pauses, in
+a window or full screen, but not for a video that starts while their
+window has neither the keyboard nor the pointer: one that starts by itself
+with the person in another window, as the next in a playlist does, gets
+none. They are Wayland clients in an Aizome session: they choose that
+themselves, and the session's `NIXOS_OZONE_WL` has Nixpkgs' wrappers ask
+for it besides.
 
 Other apps ask the session bus instead, with `Inhibit` and `UnInhibit` of
 `org.freedesktop.ScreenSaver`. VLC does (it's an X11 client here, through
 xwayland-satellite). Firefox asks it before anything else. The GTK portal
 that answers `org.freedesktop.portal.Inhibit` in Aizome sessions asks it
 in turn, and Firefox ends at that portal when nobody serves the screen
-saver, so a video in Firefox depends on it either way. The shell serves
-the interface (`aizome_sys::screensaver`), at
+saver, so a video in Firefox depends on it either way. Chromium and
+Chrome ask it for every playing video as well, once they find the name
+has an owner, whatever `XDG_CURRENT_DESKTOP` says. It is what holds for
+their video that started with the person in another window, and all of
+theirs that reaches the compositor when they're started as X11 clients
+(`--ozone-platform=x11`): without it they lock a minute into the video in
+both cases. The shell serves the interface (`aizome_sys::screensaver`), at
 `/org/freedesktop/ScreenSaver` and at KDE's `/ScreenSaver`, which VLC
 calls. While any app holds, the shell holds an idle inhibitor for them on
 a connection of its own to the compositor (`idle.rs`, with Keep Awake's
@@ -579,7 +591,13 @@ a connection of its own to the compositor (`idle.rs`, with Keep Awake's
   A cookie is its connection's: another app's call with it changes
   nothing.
 - An app that leaves the bus, quitting or killed, lets go of all it held.
-  VLC often leaves that way between one file and the next.
+  VLC often leaves that way between one file and the next. One that asks
+  and leaves at once ends with none, whichever the shell reads first.
+- Cookies begin somewhere different each time the service starts. An app
+  keeps the ones the shell before gave it and gives them back to the
+  next, where they name none of its holds.
+- A connection may have 256 holds at once and is refused more. An app's
+  name and reason are kept, and logged, to their first 200 characters.
 - The shell's log says who holds and why, who let go, and who left
   holding (`journalctl --user -u aizome | grep screensaver`).
 
@@ -588,19 +606,33 @@ What it doesn't do:
 - The holds are the running shell's. A shell that starts again
   (`aizomectl reload --shell`, a crash) has none, and a player holds
   again the next time it starts playing.
+- It doesn't tell sound from picture: the interface has one kind of hold.
+  Firefox asks for one while it plays sound alone ("Playing audio"), so
+  music in a Firefox tab keeps the screen unlocked and lit as a video
+  does. Nothing is filtered.
+- A hold the desktop portal takes for an app is the portal's to give
+  back, on its own connection. When the app leaves the bus straight after
+  asking, the portal's GTK backend is now and again told to close the
+  request before it has its cookie, and never gives it back (2 of 30
+  callers in a trial): the hold then lasts as long as that backend runs.
 - Of the interface only `Inhibit` and `UnInhibit` are served; `GetActive`,
-  `Lock` and the rest answer `UnknownMethod`.
+  `Lock` and the rest answer `UnknownMethod`. Chromium asks `GetActive`
+  as it starts, and carries on without an answer.
 - Nothing in Aizome puts an idle computer to sleep (logind's `IdleAction`
   is left at `ignore`), so there's no idle sleep for a video to hold off.
   Sleep asked for otherwise isn't these apps' to block: that's Keep Awake.
 
-`cargo test -p aizome-sys screensaver` checks the holds (their cookies,
-whose they are, an app leaving at once) against callers on a private bus.
-`nix build .#aizome-checks.idle-inhibit` plays a looping video in Utsushi,
-mpv and VLC in a VM whose session locks and turns its display off after a
-minute: playing, each keeps it awake for longer; paused, it locks and goes
-dark; and so it does when VLC is killed while it plays. Firefox isn't in
-that check.
+`cargo test -p aizome-sys screensaver` checks the holds against callers on
+a private bus: their cookies and whose they are, callers that send and
+leave without their answer, a cookie from the service before, and a
+connection that takes too many. `nix build .#aizome-checks.idle-inhibit`
+plays a looping video in Utsushi, mpv and VLC in a VM whose session locks
+and turns its display off after a minute: playing, each keeps it awake for
+longer; paused, it locks and goes dark; and so it does when VLC is killed
+while it plays. Chromium plays a page's video there too: in a window and
+full screen, started by itself with another window in use, and as an X11
+client. Chromium stands for Google Chrome, which isn't free software;
+Firefox isn't in that check.
 
 ## Authentication dialog
 

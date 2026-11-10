@@ -4,23 +4,34 @@ The settings lock the screen and turn the displays off after a minute.
 With a looping video playing in Utsushi, in mpv and in VLC, each started
 as its desktop entry starts it, the session does neither for well over
 the minute. Once each is paused it does both, and so it does when VLC is
-killed while it plays.
+killed while it plays. A page's video in Chromium does the same: in a
+window and full screen, when it starts by itself with the person in
+another window, and with Chromium as an X11 client.
 
-Utsushi and mpv hold a Wayland idle inhibitor. VLC, an X11 client here,
-asks org.freedesktop.ScreenSaver on the session bus, which the shell
-serves: its log says who holds, who let go and who left holding. The
-desktop portal's Inhibit, which Firefox ends at when nobody serves the
-screen saver, is asked once to see that it reaches the same place.
+Utsushi, mpv and Chromium hold a Wayland idle inhibitor. VLC, an X11
+client here, asks org.freedesktop.ScreenSaver on the session bus, which
+the shell serves: its log says who holds, who let go and who left
+holding. Chromium asks it as well, and has nothing else as an X11
+client, or for a video that starts while its window has neither the
+keyboard nor the pointer. The desktop portal's Inhibit, which Firefox
+ends at when nobody serves the screen saver, is asked once to see that it
+reaches the same place.
 
 Nothing touches the keyboard or pointer while the session is watched:
 state is read over the compositor's IPC, which isn't input.
 """
 
 import json
+import re
 import shlex
 import time
 
 MEDIA = "/etc/idle-inhibit-media/pattern.mp4"
+PAGE = "file:///etc/idle-inhibit-media/video.html"
+# Chromium past its first run's questions, and without the keyring's.
+CHROMIUM = "chromium --no-first-run --no-default-browser-check --password-store=basic"
+# What Chromium calls itself to the screen saver: its program's path.
+CHROMIUM_NAME = '[^"]*/chromium'
 ENV = (
     "export XDG_RUNTIME_DIR=/run/user/1000; "
     "export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus; "
@@ -52,7 +63,7 @@ def windows():
 
 
 def window(app):
-    return next((w for w in windows() if w["app_id"] == app), None)
+    return next((w for w in windows() if w["app_id"].lower() == app.lower()), None)
 
 
 def locked():
@@ -65,9 +76,9 @@ def displays_on():
 
 def said(app, what):
     """How many times the shell's screen saver has said `what` of the app
-    that calls itself `app`."""
+    that calls itself `app` (a pattern)."""
     lines = machine.succeed("journalctl _UID=1000 --no-pager -o cat").splitlines()
-    return sum(1 for line in lines if f'"{app}" (:' in line and what in line)
+    return sum(1 for line in lines if re.search(f'"{app}" \\(:', line) and what in line)
 
 
 def fail(description):
@@ -146,9 +157,30 @@ def desktop_exec(entry):
 
 def close(app):
     for w in windows():
-        if w["app_id"] == app:
+        if w["app_id"].lower() == app.lower():
             user(f"aizomectl close {w['id']}")
     until(f"{app}'s windows to close", lambda: window(app) is None)
+
+
+def page():
+    """What the page says of its video in Chromium's title: "playing 123
+    windowed", "paused 45 fullscreen"."""
+    return until("Chromium's window", lambda: window("chromium-browser"), timeout=120)["title"]
+
+
+def page_playing():
+    """It says playing, and its clock moves."""
+    before = page()
+    time.sleep(1)
+    after = page()
+    return before.startswith("playing") and after.startswith("playing") and before != after
+
+
+def press(key):
+    """A key to the page, as from the keyboard: p plays and pauses, f goes
+    full screen and back."""
+    chromium = until("Chromium's window", lambda: window("chromium-browser"))
+    user(f"aizomectl focus {chromium['id']} && sleep 0.5 && aizomectl input key {key}")
 
 
 machine.wait_for_unit("multi-user.target")
@@ -234,14 +266,82 @@ with subtest("VLC playing holds idleness off; paused, and killed, it lets it com
     goes_idle("VLC killed while playing")
     wake()
 
+with subtest("Chromium playing a page's video holds idleness off, in a window and full screen, and paused lets it come"):
+    assert desktop_exec("chromium-browser") == "Exec=chromium %U", desktop_exec("chromium-browser")
+    user(f"aizomectl spawn {CHROMIUM} {PAGE}")
+    until("the page", lambda: page().startswith("paused"), timeout=120)
+    # A Wayland client of its own, as it starts in an Aizome session.
+    chromium = until("Chromium's window", lambda: window("chromium-browser"))
+    assert machine.succeed(f"cat /proc/{chromium['pid']}/comm").strip() == "chromium", chromium
+    press("p")
+    until("Chromium playing", page_playing)
+    stays_awake("Chromium playing")
+    assert page_playing(), "Chromium stopped playing"
+    press("f")
+    until("Chromium full screen", lambda: (w := window("chromium-browser")) and w["fullscreen"] and "fullscreen" in w["title"])
+    until("Chromium playing full screen", page_playing)
+    stays_awake("Chromium playing full screen")
+    assert page_playing(), "Chromium stopped playing"
+    machine.screenshot("chromium-playing")
+    press("p")
+    until("Chromium paused", lambda: page().startswith("paused"))
+    goes_idle("Chromium paused")
+    wake()
+
+    # A video that starts by itself while the person is in another window,
+    # as the next in a playlist does: Chromium takes its Wayland inhibitor
+    # only for a window with the keyboard or the pointer, so here the
+    # screen saver is all that holds.
+    press("f")
+    until("Chromium out of full screen", lambda: (w := window("chromium-browser")) and not w["fullscreen"])
+    held, let_go = said(CHROMIUM_NAME, HELD), said(CHROMIUM_NAME, LET_GO)
+    press("d")
+    user("aizomectl spawn foot")
+    foot = until("another window", lambda: window("foot"))
+    middle = f"{foot['geometry']['x'] + foot['geometry']['w'] // 2} {foot['geometry']['y'] + foot['geometry']['h'] // 2}"
+    user(f"aizomectl focus {foot['id']} && aizomectl input motion {middle}")
+    until("Chromium playing by itself", page_playing, timeout=40)
+    focus = ipc("input-state")["state"]
+    assert (focus["keyboard_focus"], focus["pointer_focus"]) == ("foot", "foot"), focus
+    stays_awake("Chromium playing a video that started by itself")
+    assert page_playing(), "Chromium stopped playing"
+    assert said(CHROMIUM_NAME, HELD) > held, "Chromium played on without asking the shell's screen saver"
+    press("p")
+    until("Chromium paused", lambda: page().startswith("paused"))
+    until("Chromium gave its cookie back", lambda: said(CHROMIUM_NAME, LET_GO) > let_go)
+    close("foot")
+    close("chromium-browser")
+    # Gone altogether: a second Chromium would only open a window in the first.
+    machine.wait_until_fails("pgrep -u alice -x chromium", timeout=30)
+
+with subtest("Chromium as an X11 client has only the screen saver to ask, and it holds idleness off"):
+    held, let_go = said(CHROMIUM_NAME, HELD), said(CHROMIUM_NAME, LET_GO)
+    user(f"aizomectl spawn {CHROMIUM} --ozone-platform=x11 {PAGE}")
+    until("the page", lambda: page().startswith("paused"), timeout=120)
+    chromium = until("Chromium's window", lambda: window("chromium-browser"))
+    assert "xwayland-satel" in machine.succeed(f"cat /proc/{chromium['pid']}/comm"), chromium
+    press("p")
+    until("Chromium playing", page_playing)
+    stays_awake("Chromium playing as an X11 client")
+    assert page_playing(), "Chromium stopped playing"
+    assert said(CHROMIUM_NAME, HELD) > held, "Chromium played on without asking the shell's screen saver"
+    # Paused, it gives its cookie back, as VLC does: the session going
+    # idle after that is VLC's part of this check.
+    press("p")
+    until("Chromium paused", lambda: page().startswith("paused"))
+    until("Chromium gave its cookie back", lambda: said(CHROMIUM_NAME, LET_GO) > let_go)
+    close("chromium-browser")
+
 with subtest("an app that asks the desktop portal reaches the same screen saver"):
     # org.freedesktop.portal.Inhibit, for idleness (8): Aizome's sessions
     # answer it with the GTK portal, which asks the session bus's screen
-    # saver in turn, with no name for an app that isn't sandboxed. This
-    # caller leaves at once, and the portal lets go for it.
+    # saver in turn, with no name for an app that isn't sandboxed. Giving
+    # the hold back is the portal's to do when its caller goes. This
+    # caller goes at once, and then the portal now and again doesn't (its
+    # GTK backend is told to close before it has its cookie), so that
+    # isn't asked of it, and this comes last.
     user(
         "busctl --user call org.freedesktop.portal.Desktop /org/freedesktop/portal/desktop "
         "org.freedesktop.portal.Inhibit Inhibit 'sua{sv}' '' 8 1 reason s 'a film'"
     )
     until("the portal's hold", lambda: said("", HELD + ': "a film"') > 0)
-    until("the portal let go", lambda: said("", LET_GO) > 0)
