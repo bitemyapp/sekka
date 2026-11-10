@@ -1138,6 +1138,8 @@ dependencies = [
  "http-body",
  "http-body-util",
  "httpdate",
+ "hyper",
+ "hyper-util",
  "parking_lot",
  "reqwest",
  "serde",
