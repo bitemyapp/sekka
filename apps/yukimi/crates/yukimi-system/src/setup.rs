@@ -94,8 +94,8 @@ pub struct ChoiceOption {
     /// desktops. Yukimi offers it only then.
     #[serde(default)]
     pub needs: Option<String>,
-    /// One of the computer's people, which [`Choice::with_people`] added
-    /// rather than the system declared.
+    /// One of the computer's people (or whoever the system has already),
+    /// which [`Choice::with_people`] added rather than the system declared.
     #[serde(skip)]
     pub person: bool,
 }
@@ -152,6 +152,12 @@ impl Choice {
     /// A `people` choice as Yukimi offers it: no one, its own options, then
     /// each of `people` (by full name, when they have one), in place of
     /// any people offered before. Others as they are.
+    ///
+    /// Whoever the system has already, when they aren't one of those (an
+    /// account the configuration names itself, such as a system account, or
+    /// one removed since), stays as an option too. Left as it is, it isn't
+    /// written again, so it doesn't hold back the other choices; the helper
+    /// wouldn't take it anew.
     pub fn with_people(&self, people: &[crate::people::Person]) -> Choice {
         if !self.people {
             return self.clone();
@@ -173,6 +179,13 @@ impl Choice {
                 Some(full) => option(&p.name, full, Some(p.name.clone()), true),
                 None => option(&p.name, &p.name, None, true),
             });
+        }
+        if let ChoiceValue::One(current) = &self.value
+            && !current.is_empty()
+            && !options.iter().any(|o| &o.id == current)
+        {
+            let detail = "As the configuration has it: not one of the people Yukimi can choose.";
+            options.push(option(current, current, Some(detail.into()), true));
         }
         Choice { options, ..self.clone() }
     }
@@ -512,5 +525,18 @@ mod tests {
         let ids: Vec<&str> = again.options.iter().map(|o| o.id.as_str()).collect();
         assert_eq!(ids, ["", "adama"]);
         assert!(again.allows(&v(&["kara"])).is_err());
+        // Whoever the system has already stays an option when they aren't
+        // one of the people (a system account the configuration names): what
+        // is already so is no problem to leave. Once they are, they show as
+        // anyone does.
+        let kiosk = Choice { value: ChoiceValue::One("kiosk".into()), ..login.clone() };
+        let offered = kiosk.with_people(&people);
+        let ids: Vec<&str> = offered.options.iter().map(|o| o.id.as_str()).collect();
+        assert_eq!(ids, ["", "adama", "kara", "kiosk"]);
+        assert!(offered.allows(&v(&["kiosk"])).is_ok());
+        assert!(kiosk.allows_people(&v(&["kiosk"]), here).is_err(), "the helper wouldn't take it anew");
+        let listed = [people[0].clone(), Person { name: "kiosk".into(), full_name: Some("Kiosk".into()) }];
+        let titles: Vec<String> = offered.with_people(&listed).options.into_iter().map(|o| o.title).collect();
+        assert_eq!(titles, ["No one", "William Adama", "Kiosk"]);
     }
 }
