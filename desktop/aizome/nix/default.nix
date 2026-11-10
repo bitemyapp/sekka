@@ -174,6 +174,10 @@ let
       # Utsushi playing a video opened as the desktop opens one, and a song
       # paused and resumed, through PipeWire (vm-utsushi-test.nix).
       utsushi = import ./vm-utsushi-test.nix { inherit pkgs self; };
+      # A video playing in Utsushi, mpv or VLC holds off the idle lock and
+      # the displays' turning off; paused or gone, it doesn't
+      # (vm-idle-inhibit-test.nix).
+      idle-inhibit = import ./vm-idle-inhibit-test.nix { inherit pkgs self; };
       standard-menu = import ./vm-standard-menu-test.nix { inherit pkgs self; };
       tokei-reorder = import ./vm-tokei-reorder-test.nix { inherit pkgs self; };
       loop-images = import ./vm-loop-images-test.nix { inherit pkgs self; };

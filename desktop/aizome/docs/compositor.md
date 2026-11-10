@@ -238,6 +238,14 @@ Notes for client authors:
 - xdg-activation: a token made from an input event of the client with the
   keyboard or pointer focus moves focus; any other request marks the
   window urgent (IPC `urgent`) instead.
+- idle-inhibit: while any surface has an inhibitor, idleness is held off:
+  no `idle` event (no lock, and the displays stay on) and no `idled` from
+  ext-idle-notify. The surface needn't show (Keep Awake's never does). An
+  inhibitor goes when it's destroyed, and with its surface or its client
+  (`tests/idle_inhibit.rs`). Apps that ask the session bus's
+  `org.freedesktop.ScreenSaver` instead are answered by the shell, which
+  holds an inhibitor for them (`docs/shell.md`, "Staying awake for a
+  video").
 - ext-session-lock: `locked` is sent once every output has drawn a frame
   without the desktop; lock surfaces get the output's size and all input.
   A locker that dies leaves the session locked. Locking closes the

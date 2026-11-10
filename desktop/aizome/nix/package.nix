@@ -287,8 +287,10 @@ rustPlatform.buildRustPackage (
       ${test} -p aizome-kit --lib
       # A successful spawn is not a successful application launch. Gate the
       # shipped shell on process outcomes and its failure/details interface.
-      # One run: dependencies built once for all three packages.
-      ${test} -p aizome-sys -p aizome-shell -p aizome-hako --lib --test file_manager
+      # One run: dependencies built once for all three packages. The screen
+      # saver that keeps the screen awake for a video answers real callers
+      # on a bus of the test's own, as Files' show-in-folder service does.
+      ${test} -p aizome-sys -p aizome-shell -p aizome-hako --lib --test file_manager --test screensaver
       runHook postCheck
     '';
 
