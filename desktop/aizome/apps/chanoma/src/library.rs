@@ -72,6 +72,19 @@ pub const SYSTEMS: &[System] = &[
         prefer: &[],
     },
     System {
+        id: "n64",
+        name: "Nintendo 64",
+        short: "Nintendo 64",
+        folders: &["n64", "nintendo64"],
+        extensions: &["z64", "n64", "v64"],
+        cores: &["mupen64plus_next"],
+        color: 0x339348,
+        players: 4,
+        // GLideN64 uses the frontend's OpenGL context; ParaLLEl-RDP
+        // needs Vulkan, which Chanoma doesn't provide.
+        prefer: &[("mupen64plus-rdp-plugin", "gliden64"), ("mupen64plus-rsp-plugin", "hle")],
+    },
+    System {
         id: "gb",
         name: "Game Boy",
         short: "Game Boy",
@@ -1167,10 +1180,38 @@ mod tests {
         assert_eq!(keys, ["psx/PS1/Disc.cue", "snes/SNES/Kirby (USA).sfc", "gb/GB/Tetris.gb"]);
         assert_eq!(lib.games[1].title, "Kirby");
         assert_eq!(lib.games[1].art.as_deref(), Some(games.join("SNES/media/Kirby (USA).png").as_path()));
-        // The NES game has no core here; the N64 one no system.
-        assert_eq!(lib.unplayable, 1);
+        // The NES and Nintendo 64 games have no cores here.
+        assert_eq!(lib.unplayable, 2);
         assert_eq!(lib.games[0].file_key(), "psx~PS1~Disc.cue");
         let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn nintendo_64_cartridges_and_zips_are_found_with_their_core() {
+        let d = tmp("n64");
+        let cores = d.join("cores");
+        std::fs::create_dir_all(&cores).unwrap();
+        std::fs::write(cores.join("mupen64plus_next_libretro.so"), b"").unwrap();
+        let games = d.join("Games");
+        for f in ["N64/First.z64", "Nintendo 64/Second.v64", "misc/Third.N64"] {
+            let p = games.join(f);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(p, b"cartridge").unwrap();
+        }
+        std::fs::write(games.join("N64/Fourth.zip"), crate::zip::tests::zip(&[("Fourth.z64", b"cartridge")], true))
+            .unwrap();
+        let lib = scan(&mut index(&d), &[games], &[cores], None, &mut Default::default(), true, &|_| {});
+        assert_eq!(lib.games.len(), 4);
+        assert_eq!(lib.unplayable, 0);
+        for g in &lib.games {
+            assert_eq!(g.system.id, "n64");
+            assert_eq!(g.system.players, 4);
+            assert_eq!(crate::metadata::databases(g.system.id), &["Nintendo - Nintendo 64"]);
+        }
+        let zipped = lib.games.iter().find(|g| g.title == "Fourth").unwrap();
+        let unpacked = crate::zip::unpack(&zipped.path, zipped.system.extensions, &d.join("unpacked"), 4).unwrap();
+        assert_eq!(std::fs::read(unpacked).unwrap(), b"cartridge");
+        let _ = std::fs::remove_dir_all(d);
     }
 
     #[test]

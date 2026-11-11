@@ -1144,7 +1144,7 @@ Aizome: `programs.aizome.chanoma.enable` installs it with its game cores
   the foot are buttons to click; and the pointer brings a bar with *Home*
   down from the top of the screen over a game, a film or a page.
 - **Games** play through libretro cores that Chanoma drives itself (the
-  emulators RetroArch uses, without its menus): the NES, Super NES, Game
+  emulators RetroArch uses, without its menus): the NES, Super NES, Nintendo 64, Game
   Boy, Game Boy Color and Advance, Mega Drive, Master System and Game
   Gear, PC Engine, PlayStation, Atari 2600 and Lynx, Neo Geo Pocket and
   WonderSwan. Games are found in the folders by their system's folder
@@ -1155,8 +1155,9 @@ Aizome: `programs.aizome.chanoma.enable` installs it with its game cores
   from libretro-thumbnails by the name its database knows it by and kept
   (a switch turns that off), else where it was left, else a sprite of
   squares in its system's colour made from its title. Y, or typing on a
-  keyboard, on Home or among the games searches the games, films and
-  shows the viewer may open, by the words of their names. A game's own
+  keyboard, searches by name: Home searches games, films and shows;
+  Games searches its current tab's games; films search films and shows.
+  Only titles the viewer may open appear. A game's own
   saves are kept as they change; leaving it keeps exactly where it was,
   and the next start carries on from there. The picture is enlarged with
   square pixels and letterboxed to the console's shape; sound plays with
@@ -1205,8 +1206,8 @@ Aizome: `programs.aizome.chanoma.enable` installs it with its game cores
 - **Films and shows** from the folders: a folder of episodes is a show
   (with its `poster.jpg`, past its seasons' folders), a lone video a
   film; videos in a system's folder (`roms/snes/videos`) are games'
-  clips, and left out. New ones show to kids at once, unless set to wait
-  for a grown-up; each film and show is a switch for kids. They play
+  clips, and left out. New ones wait for a grown-up's approval by default,
+  as games do; each film and show is a switch for kids. They play
   through Utsushi's engine; the confirm button plays and pauses, left
   and right skip ten seconds, the shoulders go to the previous or next
   episode, and the next plays by itself. Where each was left is kept,

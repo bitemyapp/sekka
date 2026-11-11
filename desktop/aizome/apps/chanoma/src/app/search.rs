@@ -2,7 +2,7 @@
 //! what their names start with, typed on Chanoma's keyboard (or a real
 //! one), the results under it as each letter goes in.
 //!
-//! Y (the top face button, Tab) on Home or among the games opens it, as
+//! Y (the top face button, Tab) on Home, among games or films opens it, as
 //! does typing on a keyboard there. While the keyboard shows, the arrows
 //! move between its keys and the confirm button presses one; X (the left
 //! face button, Backspace) takes a letter back, Y types a space, and Start
@@ -27,6 +27,16 @@ pub struct Search {
     pub keys: Option<Keyboard>,
     /// Where search was opened, to go back to.
     pub from: Screen,
+}
+
+impl Search {
+    fn label(&self) -> &'static str {
+        match self.from {
+            Screen::Games => "Search games",
+            Screen::Episodes(_) => "Search films and shows",
+            _ => "Search games, films and shows",
+        }
+    }
 }
 
 /// A result: a game, by key, or a film or show, by its place.
@@ -101,13 +111,19 @@ impl Chanoma {
             return Vec::new();
         }
         let mut hits: Vec<(u8, String, Hit)> = Vec::new();
-        for g in self.playable() {
+        let games = match s.from {
+            Screen::Games => self.games_in_tab(),
+            Screen::Episodes(_) => Vec::new(),
+            _ => self.playable(),
+        };
+        for g in games {
             let also = [g.system.id, g.system.short, g.system.name].iter().flat_map(|n| words(n)).collect::<Vec<_>>();
             if let Some(r) = rank(&q, &words(&g.title), &also) {
                 hits.push((r, g.title.to_lowercase(), Hit::Game(g.key.clone())));
             }
         }
-        for i in self.watchable() {
+        let films = if s.from == Screen::Games { Vec::new() } else { self.watchable() };
+        for i in films {
             let shelf = &self.library.shelves[i];
             if let Some(r) = rank(&q, &words(&shelf.title), &[]) {
                 hits.push((r, shelf.title.to_lowercase(), Hit::Shelf(i)));
@@ -140,13 +156,13 @@ impl Chanoma {
         let query = self.search.as_ref().map_or("", |s| s.query.as_str());
         let tiles: Vec<Tile> = self.search_hits().iter().filter_map(|h| self.hit_tile(h)).collect();
         let subtitle = match (query.trim().is_empty(), tiles.len()) {
-            (true, _) => "Games, films and shows: type a name".to_owned(),
+            (true, _) => "Type a name".to_owned(),
             (false, 0) => format!("Nothing called “{query}”"),
             (false, 1) => format!("“{query}”: 1 found"),
             (false, n) => format!("“{query}”: {n} found"),
         };
         let mut g = Grid {
-            title: "Search".into(),
+            title: self.search.as_ref().map_or("Search", Search::label).into(),
             subtitle,
             tabs: Vec::new(),
             tab: 0,
@@ -173,13 +189,7 @@ impl Chanoma {
             back: self.back_button(family),
             // Typing goes on at the end: the shoulders move nothing here.
             fixed_caret: true,
-            field: Some(Field {
-                label: "Search games, films and shows".into(),
-                text: s.query.clone(),
-                length: n,
-                caret: n,
-                secret: false,
-            }),
+            field: Some(Field { label: s.label().into(), text: s.query.clone(), length: n, caret: n, secret: false }),
             ..keys.clone()
         })
     }

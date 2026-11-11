@@ -531,11 +531,14 @@ Chanoma and Utsushi agree:
   `finished`.
 
 **Which ones kids see** (*Films and shows* in the settings): new ones
-show at once unless set to wait for a grown-up (`new_films`); each film
-and show is a switch, and all of them are, at once. Set to wait, what
-kids could watch stays theirs (`films_allowed`). Kids' Home, *Everything*
-and *Keep playing* hold only theirs. A film or show is known by its
-folder, or its file (`Shelf::key`).
+wait for a grown-up by default (`new_films`), as games do; each film
+and show is a switch, and all of them are, at once. *Show at once* allows
+new titles without approval. Returning to *Wait for you* keeps only
+explicit approvals (`films_allowed`); it does not approve the existing
+library. Saved policies, approvals and exclusions survive upgrades.
+Kids' Home, *Everything*, search and *Keep playing* hold only theirs,
+and playback checks the permission again. A film or show is known by
+its folder, or its file (`Shelf::key`).
 
 **Subtitles and languages.** The engine lists a film's sound and subtitle
 tracks: embedded ones, and subtitle files beside it (`film.srt`,
@@ -947,12 +950,53 @@ A game's tile shows the first of these there is:
   The system's name beside it gives way to its initials (GBA) where the
   name and the corner's *New* don't both fit.
 
+### Nintendo 64
+
+Nintendo 64 cartridges (`.z64`, `.n64`, `.v64`, or a zip in an `n64`
+or `Nintendo 64` folder) use Mupen64Plus-Next, installed by the module's
+default cores ([upstream core documentation](https://docs.libretro.com/library/mupen64plus/)).
+Chanoma selects GLideN64 and the HLE RSP, so rendering
+uses its existing OpenGL host. No console BIOS is needed. Up to four
+controllers use the core's standard RetroPad mapping: the left stick
+steers, the right stick supplies C buttons, and the left trigger is Z.
+The Nintendo 64 database supplies names, player counts and box-art
+lookup through the existing metadata path. Permissions, resume and
+saved games use the same paths as other systems. Before restoring a
+saved state, Chanoma runs one initialization frame: Mupen64Plus-Next
+refuses restoration until its emulation coroutine has started.
+Nintendo 64DD and
+Transfer Pak loading are not offered.
+
+The optional core check takes `CHANOMA_TEST_N64_ROM` and
+`CHANOMA_TEST_CORES` and runs with
+`cargo test -p aizome-chanoma --test cores nintendo_64_draws_and_carries_on -- --ignored --nocapture`.
+It checks a visible rendered frame and saved-state restoration with
+four virtual controllers connected; it does not certify physical
+controller mappings or commercial-game compatibility.
+
+Checked on 2026-11-11 with the root flake's Mupen64Plus-Next
+(`15bada85906593376e8fd697f1b0b3af3a20f512`) and Peter Lemon's
+[public-domain FillRectangle demo](https://github.com/PeterLemon/N64/tree/7085543e4a19d8c539fc9e0a4d2869e788b4ed4b/RDP/16BPP/Rectangle/FillRectangle/FillRectangle320x240):
+rendering and restoring the saved state both passed through Chanoma's
+EGL host, with frames read back. The ROM's SHA-256 was
+`b779379c0030ab4cebff047e828f3072640db578f54dcd957684c85fa3fb6b6d`.
+This was a component check, without a compositor, physical controllers,
+sound, commercial games or a television. The updated app's 71 unit tests,
+28 flows and 4 watcher tests passed, including contextual search,
+default film approval and refusing playback from stale episode screens.
+Clippy reported only the existing `aizome-kit` deprecation; Chanoma's
+formatting passed. The metadata package built and the module evaluated
+with and without unfree packages. The Chanoma VM derivation evaluated;
+the VM, complete Aizome package and ISO were not rebuilt or qualified.
+
 ### Search
 
-Y (the top face button, Tab) on Home or among the games opens search
-(`app/search.rs`), as does typing on a keyboard there: the games and the
-films and shows whoever's watching may open (kids, theirs alone), by
-name. Each word typed must start a word of the name or of its system's
+Y (the top face button, Tab) on Home, among games or films opens search
+(`app/search.rs`), as does typing on a keyboard there. On Home it searches
+games, films and shows; in Games it searches that tab's games only;
+among films and episodes it searches films and shows only. The heading
+and keyboard name the scope. Results include only what the viewer may
+open (kids, theirs alone). Each word typed must start a word of the name or of its system's
 names (`snes mario`), or, three letters and more, be inside the name;
 accents go as typed (`pokemon` finds Pokémon). The name starting so comes
 first. Results change with each letter, above Chanoma's keyboard (on the
@@ -1380,7 +1424,8 @@ before calling any of it tested on hardware.
 - DRM-protected services need Google Chrome; nixpkgs' Chromium has no
   Widevine.
 - No Vulkan cores; no disc swapping for multi-disc games; no touch
-  screens (the DS). The Nintendo 64 and GameCube have no system here.
+  screens (the DS). GameCube has no system here; Nintendo 64DD and
+  Transfer Pak content are not supported.
 - OpenGL cores' frames have been read back in the tests (the tests' own
   core, and seven Dreamcast games through Flycast); sharing them with the
   compositor as dmabufs hasn't been tried in them, nor a PlayStation 2

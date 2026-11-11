@@ -333,6 +333,63 @@ fn stages(var: &str) -> u32 {
     std::env::var(var).ok().and_then(|s| s.parse().ok()).unwrap_or(6)
 }
 
+/// A supplied Nintendo 64 cartridge through the packaged core and
+/// Chanoma's OpenGL host, including saved-state restoration. The fixture
+/// must draw a picture (for example Peter Lemon's FillRectangle demo).
+#[test]
+#[ignore = "needs CHANOMA_TEST_CORES, CHANOMA_TEST_N64_ROM and OpenGL"]
+fn nintendo_64_draws_and_carries_on() {
+    let dir = cores().expect("CHANOMA_TEST_CORES");
+    let game = PathBuf::from(std::env::var_os("CHANOMA_TEST_N64_ROM").expect("CHANOMA_TEST_N64_ROM"));
+    let core = dir.join("mupen64plus_next_libretro.so");
+    let sys = aizome_chanoma::library::system("n64").unwrap();
+    let out = std::env::temp_dir().join(format!("chanoma-n64-{}", std::process::id()));
+    std::fs::create_dir_all(&out).unwrap();
+    for resume in [false, true] {
+        let pads = Arc::new(Shared::default());
+        for port in 0..4 {
+            pads.set(port, true, 0, [0.0; 6]);
+        }
+        let launch = Launch {
+            core: CoreSource::Library(core.clone()),
+            game: game.clone(),
+            save_ram: out.join("game.srm"),
+            state: out.join("game.state"),
+            picture: out.join("game.png"),
+            resume,
+            system_dir: out.join("system"),
+            bios: Vec::new(),
+            found_bios: Vec::new(),
+            save_dir: out.join("saves"),
+            players: sys.players,
+            prefer: sys.prefer.iter().map(|(k, v)| ((*k).into(), (*v).into())).collect(),
+            screen_lines: 1080,
+            silent: true,
+            unpack_dir: out.join("unzipped"),
+            extensions: sys.extensions,
+        };
+        let (tx, rx) = mpsc::channel();
+        let session = Session::start(launch, None, pads, None, move |e| {
+            let _ = tx.send(e);
+        });
+        match rx.recv_timeout(Duration::from_secs(30)) {
+            Ok(Event::Started { resumed, .. }) => assert_eq!(resumed, resume),
+            other => panic!("Nintendo 64 didn't start: {other:?}"),
+        }
+        std::thread::sleep(Duration::from_secs(3));
+        session.stop(true);
+        for event in rx.try_iter() {
+            assert!(!matches!(event, Event::Failed(_) | Event::Stopped(_)), "{event:?}");
+        }
+        assert!(out.join("game.state").metadata().unwrap().len() > 0);
+        let frame = image::open(out.join("game.png")).unwrap().to_rgb8();
+        assert!(frame.width() >= 320 && frame.height() >= 240);
+        assert!(frame.pixels().any(|p| p.0.iter().any(|c| *c > 64)), "a visible picture");
+        assert!(frame.pixels().any(|p| p != frame.get_pixel(0, 0)), "not a blank frame");
+    }
+    println!("Nintendo 64 rendered and resumed: {}", out.display());
+}
+
 /// Games played through PCSX-ReARMed with a system folder (OpenBIOS,
 /// another BIOS, or none for its own stand-in), a picture kept every
 /// eight seconds and its brightness said, Start and the confirm button
