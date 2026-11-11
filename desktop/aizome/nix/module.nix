@@ -303,6 +303,7 @@ in
           [
             mesen
             bsnes
+            mupen64plus
             gambatte
             mgba
             smsplus-gx
@@ -329,10 +330,10 @@ in
             snes9x
             genesis-plus-gx
           ];
-        defaultText = lib.literalExpression "with pkgs.libretro; [ mesen bsnes gambatte mgba smsplus-gx beetle-pce-fast pcsx-rearmed stella handy beetle-ngp beetle-wswan beetle-saturn yabause flycast ] ++ [ play, with the system C++ runtime ] ++ (pcsx2 on x86-64) ++ (snes9x and genesis-plus-gx where unfree packages are allowed)";
+        defaultText = lib.literalExpression "with pkgs.libretro; [ mesen bsnes mupen64plus gambatte mgba smsplus-gx beetle-pce-fast pcsx-rearmed stella handy beetle-ngp beetle-wswan beetle-saturn yabause flycast ] ++ [ play, with the system C++ runtime ] ++ (pcsx2 on x86-64) ++ (snes9x and genesis-plus-gx where unfree packages are allowed)";
         description = ''
           The libretro cores Chanoma plays games with. Cores that draw
-          with OpenGL (the Dreamcast's, the PlayStation 2's) run on the
+          with OpenGL (the Nintendo 64's, Dreamcast's, PlayStation 2's) run on the
           compositor's GPU; those that need Vulkan don't run in Chanoma.
           A system's best core needing the console's BIOS (Beetle Saturn,
           PCSX2) plays only where it's there; otherwise the next does.

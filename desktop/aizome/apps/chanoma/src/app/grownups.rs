@@ -857,19 +857,7 @@ impl Chanoma {
                 self.settings.new_games = cycle(&[NewGames::Ask, NewGames::Allow], self.settings.new_games, forward);
             }
             Act::NewFilms => {
-                let was = self.settings.new_films;
-                self.settings.new_films = cycle(&[NewGames::Allow, NewGames::Ask], was, forward);
-                // Waiting from now on: what kids see now, they keep seeing.
-                if was == NewGames::Allow && self.settings.new_films == NewGames::Ask {
-                    let seen: Vec<String> = self
-                        .library
-                        .shelves
-                        .iter()
-                        .filter(|f| !self.settings.films_hidden.contains(&f.key))
-                        .map(|f| f.key.clone())
-                        .collect();
-                    self.settings.films_allowed.extend(seen);
-                }
+                self.settings.new_films = cycle(&[NewGames::Ask, NewGames::Allow], self.settings.new_films, forward);
             }
             Act::Confirm => {
                 self.settings.confirm =

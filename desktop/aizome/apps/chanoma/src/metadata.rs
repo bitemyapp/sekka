@@ -64,6 +64,7 @@ pub fn databases(system: &str) -> &'static [&'static str] {
     match system {
         "nes" => &["Nintendo - Nintendo Entertainment System"],
         "snes" => &["Nintendo - Super Nintendo Entertainment System"],
+        "n64" => &["Nintendo - Nintendo 64"],
         "gb" => &["Nintendo - Game Boy"],
         "gbc" => &["Nintendo - Game Boy Color"],
         "gba" => &["Nintendo - Game Boy Advance"],

@@ -533,6 +533,9 @@ impl Chanoma {
             Act::Site(i) => self.open_site(i, cx),
             Act::Shelf(i) => {
                 let Some(s) = self.library.shelves.get(i) else { return };
+                if !self.is_grownup() && !self.settings.film_allowed(&s.key) {
+                    return;
+                }
                 if s.videos.len() == 1 {
                     let path = s.videos[0].path.clone();
                     self.play_video(&path, cx);
@@ -599,7 +602,7 @@ impl Chanoma {
         tabs
     }
 
-    fn games_in_tab(&self) -> Vec<&Game> {
+    pub(super) fn games_in_tab(&self) -> Vec<&Game> {
         let games = self.playable();
         match self.game_tabs().get(self.games_tab) {
             Some(GameTab::Together(n)) => games.into_iter().filter(|g| plays_with(g, *n)).collect(),
@@ -755,6 +758,8 @@ impl Chanoma {
             Input::Dir(Dir::Right) => *f = (*f + 1).min(n.saturating_sub(1)),
             Input::Dir(Dir::Up) => *f = f.saturating_sub(cols),
             Input::Dir(Dir::Down) => *f = (*f + cols).min(n.saturating_sub(1)),
+            Input::Alt => return self.open_search(None, cx),
+            Input::Typed(c) => return self.open_search(Some(c), cx),
             Input::Back => return self.go(Screen::Home, cx),
             Input::Ok => {
                 self.episode_focus = self.focus.col;

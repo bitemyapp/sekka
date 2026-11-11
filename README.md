@@ -117,8 +117,8 @@ PlayStation 2's best core needs the console's own BIOS, copied from your
 console into a `bios` folder by the games; without it, fewer games play.
 If a game's emulator crashes, Chanoma starts again by itself and says
 what happened, and a game that fails to start says why rather than
-closing Chanoma. The Nintendo 64, GameCube and later consoles aren't
-supported. See
+closing Chanoma. Nintendo 64 cartridges play through Mupen64Plus-Next,
+with up to four controllers. GameCube and later consoles aren't supported. See
 [docs/chanoma.md](desktop/aizome/docs/chanoma.md).
 
 **Super + Return** opens Hotaru 蛍, Aizome's own terminal, and programs that

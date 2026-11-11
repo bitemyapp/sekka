@@ -863,7 +863,10 @@ fn a_game_slow_to_start_is_asked_about_and_back_or_home_always_stops_it() {
 fn a_film_shows_its_subtitles_and_keeps_the_choice_for_next_time() {
     // The engine's two-second test card, with a SubRip file beside it.
     let videos = std::env::temp_dir().join(format!("chanoma-test-film-{}", std::process::id())).join("Videos");
-    let (dirs, cores) = household("film", |s| s.video_folders = vec![videos.clone()]);
+    let (dirs, cores) = household("film", |s| {
+        s.video_folders = vec![videos.clone()];
+        s.new_films = aizome_chanoma::rules::NewGames::Allow;
+    });
     std::fs::create_dir_all(&videos).unwrap();
     for f in ["clip.mp4", "clip.srt"] {
         std::fs::copy(fixture(f), videos.join(f)).unwrap();
@@ -2070,15 +2073,18 @@ fn films_and_shows_are_kept_from_kids_one_by_one() {
     let clock = ManualClock::at(2026, 10, 31, 17, 0);
     let mut h = harness(config(dirs, cores, clock));
     let titles = |a: &Chanoma| a.watchable().iter().map(|i| a.library.shelves[*i].title.clone()).collect::<Vec<_>>();
-    assert_eq!(titles(h.program()), ["Bluey", "Totoro"], "new ones show at once");
+    assert!(titles(h.program()).is_empty(), "films and shows wait for approval, as games do");
 
-    // Films and shows: Totoro kept from kids.
+    // Films and shows: approve Bluey, keep Totoro from kids.
     into_settings(&mut h);
     for _ in 0..3 {
         input(&mut h, Input::Dir(Dir::Down));
     }
     input(&mut h, Input::Dir(Dir::Right));
+    to_row(&mut h, "Bluey");
+    input(&mut h, Input::Ok);
     to_row(&mut h, "Totoro");
+    input(&mut h, Input::Ok);
     input(&mut h, Input::Ok);
     let page = h.program().grownups_page();
     let row = page.rows.iter().find(|r| r.label == "Totoro").unwrap();
@@ -2088,7 +2094,15 @@ fn films_and_shows_are_kept_from_kids_one_by_one() {
     );
     let bluey = page.rows.iter().find(|r| r.label == "Bluey").unwrap();
     assert_eq!(bluey.detail, "A show of 2 episodes");
-    // New ones wait for a grown-up from now on.
+    // Allowing new ones and returning to approval must not silently
+    // approve films that happened to be present. Explicit choices stay.
+    to_row(&mut h, "New films and shows");
+    input(&mut h, Input::Dir(Dir::Right));
+    assert_eq!(h.program().settings.new_films, aizome_chanoma::rules::NewGames::Allow);
+    std::fs::write(videos.join("Unreviewed.mp4"), b"x").unwrap();
+    to_row(&mut h, "Look again");
+    input(&mut h, Input::Ok);
+    until(&mut h, |a| a.library.shelves.iter().any(|s| s.title == "Unreviewed"));
     to_row(&mut h, "New films and shows");
     input(&mut h, Input::Dir(Dir::Right));
     assert_eq!(h.program().settings.new_films, aizome_chanoma::rules::NewGames::Ask);
@@ -2110,15 +2124,54 @@ fn films_and_shows_are_kept_from_kids_one_by_one() {
 }
 
 #[test]
+fn films_cannot_be_opened_from_stale_episode_lists_after_locking() {
+    let videos = temp("films-lock-videos");
+    for f in ["Show/Show S01E01.mp4", "Show/Show S01E02.mp4"] {
+        std::fs::copy(fixture("clip.mp4"), videos.join(f).tap_parent()).unwrap();
+    }
+    let (dirs, cores) = household("films-lock", |s| s.video_folders = vec![videos]);
+    let clock = ManualClock::at(2026, 10, 31, 17, 0);
+    let mut h = harness(config(dirs, cores, clock));
+    until(&mut h, |a| a.library.shelves.len() == 1);
+    h.program_mut().grownup = Some(Instant::now());
+    let row = h.program().home_view().shelves.iter().position(|s| s.title == "Films and shows").unwrap();
+    h.program_mut().focus.row = row;
+    h.program_mut().focus.col = 0;
+    input(&mut h, Input::Ok);
+    assert_eq!(h.program().screen, Screen::Episodes(0));
+
+    // Idle relocking on the episodes screen returns to kids' Home.
+    h.program_mut().grownup = Some(Instant::now() - Duration::from_secs(16 * 60));
+    h.send(Msg::Tick);
+    assert!(!h.program().is_grownup());
+    assert_eq!(h.program().screen, Screen::Home);
+
+    // Even a stale episode action cannot start playback. Approving its
+    // show allows exactly the same action, through the real player.
+    h.program_mut().screen = Screen::Episodes(0);
+    h.program_mut().focus.col = 0;
+    input(&mut h, Input::Ok);
+    assert!(h.program().film.is_none());
+    let key = h.program().library.shelves[0].key.clone();
+    h.program_mut().settings.films_allowed.insert(key);
+    input(&mut h, Input::Ok);
+    until(&mut h, |a| a.screen == Screen::Film && a.film.as_ref().is_some_and(|f| f.info.is_some()));
+    h.program_mut().shutdown();
+}
+
+#[test]
 fn search_finds_what_names_start_with_and_only_what_kids_may_open() {
     let (dirs, cores) = household("search", |_| {});
     let root = cores.parent().unwrap().to_path_buf();
     std::fs::write(root.join("Games/snes/Kirby Super Star (USA).sfc"), b"x").unwrap();
+    std::fs::write(root.join("Games/n64/Kirby 64 - The Crystal Shards (USA).z64").tap_parent(), b"x").unwrap();
+    std::fs::write(cores.join("mupen64plus_next_libretro.so"), b"").unwrap();
     let videos = root.join("Videos");
     std::fs::write(videos.join("Kirby Right Back at Ya (2001).mp4").tap_parent(), b"x").unwrap();
     let settings = dirs.settings();
     let mut s: Settings = aizome_chanoma::store::read(&settings);
     s.video_folders = vec![videos];
+    s.new_films = aizome_chanoma::rules::NewGames::Allow;
     aizome_chanoma::store::write(&settings, &s).unwrap();
     let clock = ManualClock::at(2026, 10, 31, 17, 0);
     let mut h = harness(config(dirs, cores, clock));
@@ -2163,6 +2216,46 @@ fn search_finds_what_names_start_with_and_only_what_kids_may_open() {
     shot(&mut h, "21b-search-results");
     input(&mut h, Input::Dir(Dir::Up));
     assert!(h.program().search.as_ref().is_some_and(|s| s.keys.is_some()));
+
+    // Games search keeps the game's tab and never returns a film with
+    // the same name. Both opening with Y and typing use that scope.
+    input(&mut h, Input::Back);
+    input(&mut h, Input::Back);
+    h.program_mut().screen = Screen::Games;
+    h.program_mut().games_tab = 1;
+    press(&mut h, Button::North);
+    assert_eq!(h.program().search_keyboard().unwrap().field.unwrap().label, "Search games");
+    for c in "kirby".chars() {
+        input(&mut h, Input::Typed(c));
+    }
+    assert_eq!(hits(h.program()), ["Kirby Super Star"]);
+    input(&mut h, Input::Back);
+    input(&mut h, Input::Back);
+    assert_eq!(h.program().screen, Screen::Games);
+    assert_eq!(h.program().games_tab, 1);
+    input(&mut h, Input::Typed('k'));
+    assert_eq!(hits(h.program()), ["Kirby Super Star"]);
+    shot(&mut h, "21c-search-games");
+    h.program_mut().grownup = None;
+    assert!(hits(h.program()).is_empty(), "a search never bypasses kids' game permissions");
+
+    // The films grid searches only films, with its scope visible, and
+    // Back returns to the grid. Home continues to search both kinds.
+    h.program_mut().screen = Screen::Episodes(usize::MAX);
+    input(&mut h, Input::Typed('k'));
+    assert_eq!(hits(h.program()), ["Kirby Right Back at Ya"]);
+    assert_eq!(h.program().search_view().title, "Search films and shows");
+    shot(&mut h, "21d-search-films");
+    input(&mut h, Input::Back);
+    input(&mut h, Input::Back);
+    assert_eq!(h.program().screen, Screen::Episodes(usize::MAX));
+    h.program_mut().screen = Screen::Home;
+    h.program_mut().grownup = Some(Instant::now());
+    input(&mut h, Input::Typed('k'));
+    assert_eq!(hits(h.program()), ["Kirby 64 - The Crystal Shards", "Kirby Right Back at Ya", "Kirby Super Star"]);
+    h.program_mut().settings.new_films = aizome_chanoma::rules::NewGames::Ask;
+    h.program_mut().grownup = None;
+    assert!(hits(h.program()).is_empty(), "unapproved games and films disappear together");
 }
 
 #[test]

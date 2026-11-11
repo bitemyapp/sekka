@@ -397,13 +397,24 @@ fn run(
         && launch.resume
         && let Ok(bytes) = std::fs::read(&launch.state)
     {
+        // Mupen64Plus-Next creates its emulation coroutine in init, but
+        // only starts it in retro_run. Until then retro_unserialize
+        // returns false (its `initializing` flag). Finish that startup
+        // before restoring; discard the startup frame's audio.
+        if core_name == "Mupen64Plus-Next" {
+            // SAFETY: as in the frame loop below, with no borrowed host.
+            threw = unsafe { guard::call(api.run) }.err();
+            unsafe { &mut *host_ptr }.sound.clear();
+        }
         // SAFETY: the state's bytes, read whole; unserialize's pointer is
         // a const one, called alike.
         let unserialize: unsafe extern "C" fn(*mut std::ffi::c_void, usize) -> bool =
             unsafe { std::mem::transmute(api.unserialize) };
-        match unsafe { guard::state(unserialize, bytes.as_ptr().cast_mut().cast(), bytes.len()) } {
-            Ok(r) => resumed = r,
-            Err(why) => threw = Some(why),
+        if threw.is_none() {
+            match unsafe { guard::state(unserialize, bytes.as_ptr().cast_mut().cast(), bytes.len()) } {
+                Ok(r) => resumed = r,
+                Err(why) => threw = Some(why),
+            }
         }
         if !resumed {
             log::warn!("chanoma: {} couldn't carry on from {}", core_name, launch.state.display());
