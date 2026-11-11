@@ -803,6 +803,19 @@ in
         UMask = "0077";
       };
     };
+    # Panel Self Refresh as chosen in the battery menu (off until turned
+    # on), put back at each start; aizome_sys::panel_refresh.
+    systemd.services.aizome-panel-refresh = {
+      description = "Panel Self Refresh as chosen in Aizome's battery menu";
+      wantedBy = [ "multi-user.target" ];
+      wants = [ "sys-kernel-debug.mount" ];
+      after = [ "sys-kernel-debug.mount" ];
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        ExecStart = "${cfg.package}/libexec/aizome-panel-refresh apply";
+      };
+    };
 
     environment.etc = {
       "xdg/aizome/environment".text = lib.concatStrings (
