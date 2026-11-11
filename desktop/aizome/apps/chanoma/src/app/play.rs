@@ -655,10 +655,13 @@ impl Chanoma {
     // Films.
 
     pub fn play_video(&mut self, path: &Path, cx: &mut Cx<Msg>) {
+        let shelf = self.library.shelves.iter().position(|s| s.videos.iter().any(|v| v.path == path));
+        if !self.is_grownup() && shelf.is_none_or(|i| !self.settings.film_allowed(&self.library.shelves[i].key)) {
+            return;
+        }
         if !self.may_start(cx) {
             return;
         }
-        let shelf = self.library.shelves.iter().position(|s| s.videos.iter().any(|v| v.path == path));
         let title = shelf
             .and_then(|i| {
                 let s = &self.library.shelves[i];

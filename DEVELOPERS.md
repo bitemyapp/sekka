@@ -2072,6 +2072,15 @@ app can share: a second look lists only folders whose modified time
 changed. Its design and measurements are in [the files index's
 notes](desktop/aizome/docs/files-index.md).
 
+Nintendo 64 support uses the default `libretro.mupen64plus` package
+(Mupen64Plus-Next), GLideN64 through Chanoma's OpenGL host, and the pinned
+Nintendo 64 game database. See [the Nintendo 64 notes](desktop/aizome/docs/chanoma.md#nintendo-64)
+for formats, controls, limits and the optional real-core rendering/resume
+check. Search keeps the category it was opened in. Newly found films and
+shows wait for approval by default, as games do; saved policies remain in
+effect. Switching films back to approval does not approve the existing
+library, and playback rechecks the film or show's permission.
+
 What a controller needs is shared with the login screen as two crates:
 `aizome-gamepad` (controllers from evdev, by position, through SDL's
 database) and `aizome-sofa` (the sofa-sized look, the on-screen keyboard

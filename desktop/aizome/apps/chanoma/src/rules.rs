@@ -227,7 +227,7 @@ pub struct Settings {
     pub games_hidden: BTreeSet<String>,
     pub new_games: NewGames,
     /// Films and shows kids may watch, and those kept from them, by key
-    /// (`library::Shelf::key`); new ones show at once unless set to wait.
+    /// (`library::Shelf::key`); new ones wait unless set to show at once.
     pub films_allowed: BTreeSet<String>,
     pub films_hidden: BTreeSet<String>,
     pub new_films: NewGames,
@@ -267,7 +267,7 @@ impl Default for Settings {
             new_games: NewGames::Ask,
             films_allowed: BTreeSet::new(),
             films_hidden: BTreeSet::new(),
-            new_films: NewGames::Allow,
+            new_films: NewGames::Ask,
             systems_off: BTreeSet::new(),
             hide_variants: true,
             one_of_each: true,
@@ -533,9 +533,27 @@ mod tests {
     }
 
     #[test]
+    fn films_wait_for_approval_and_keep_explicit_choices() {
+        let mut s = Settings::default();
+        assert!(!s.film_allowed("film") && s.film_waiting("film"));
+        s.films_allowed.insert("show".into());
+        assert!(s.film_allowed("show") && !s.film_waiting("show"));
+        s.new_films = NewGames::Allow;
+        assert!(s.film_allowed("film"));
+        s.films_hidden.insert("film".into());
+        assert!(!s.film_allowed("film") && !s.film_waiting("film"));
+        let restored: Settings = serde_json::from_str(&serde_json::to_string(&s).unwrap()).unwrap();
+        assert_eq!(restored, s, "a saved allow policy and per-title choices survive an upgrade");
+        s.new_films = NewGames::Ask;
+        assert!(s.film_allowed("show"));
+        assert!(!s.film_allowed("another film") && s.film_waiting("another film"));
+    }
+
+    #[test]
     fn old_settings_files_fill_in_what_they_lack() {
         let s: Settings = serde_json::from_str(r#"{"services":["netflix"],"setup_done":true}"#).unwrap();
         assert_eq!(s.services, vec!["netflix".to_owned()]);
         assert!(s.setup_done && s.pin.is_none() && s.relock_minutes == 15);
+        assert_eq!(s.new_films, NewGames::Ask);
     }
 }

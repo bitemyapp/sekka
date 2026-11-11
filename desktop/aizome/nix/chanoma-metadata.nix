@@ -23,6 +23,7 @@ let
     "Nintendo - Game Boy" = "sha256-9X8xY3MkdwdxNanMwb9T97MG25ZA1OmN0tzjXc88+h4=";
     "Nintendo - Game Boy Advance" = "sha256-Brb1JcYryZ9ieiV51i4DH6WerYvE81qSPNZnxc33KkE=";
     "Nintendo - Game Boy Color" = "sha256-0nyzRoGZPLBX2XEhwvDjHp82xkc49axJpHwGaUMtjo4=";
+    "Nintendo - Nintendo 64" = "sha256-weERva9BtnGsTXZrvhg2TixFXcRtk7JH/lHlhXnR/SU=";
     "Nintendo - Nintendo Entertainment System" = "sha256-UKXX5+n6jcOa+v6Qf0ZxuimIxLvMBpg0/umvLgwU/+E=";
     "Nintendo - Super Nintendo Entertainment System" = "sha256-QGiWHB36p+BZlfJepD53f0iydERGF44J/QYEDoRq4M4=";
     "SNK - Neo Geo Pocket" = "sha256-t2TXSAbEFEbiKd10Agzs8LP0vnt8hazcRjGVfSOG5vQ=";

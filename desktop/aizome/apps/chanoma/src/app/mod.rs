@@ -622,6 +622,18 @@ impl Chanoma {
 
     /// Show `screen`, focus at its start.
     pub fn go(&mut self, screen: Screen, cx: &mut Cx<Msg>) {
+        // Search may return to a show's episodes after grown-up mode
+        // locked while typing. Recheck the destination, as playback does.
+        let screen = match screen {
+            Screen::Episodes(i)
+                if i != usize::MAX
+                    && !self.is_grownup()
+                    && self.library.shelves.get(i).is_none_or(|s| !self.settings.film_allowed(&s.key)) =>
+            {
+                Screen::Home
+            }
+            screen => screen,
+        };
         if screen != self.screen {
             log::info!("chanoma: {screen:?}");
         }
@@ -655,6 +667,12 @@ impl Chanoma {
         self.grownup = None;
         log::info!("chanoma: kids' mode");
         self.toast_note(ui::Note::Kids, "Kids' mode", cx);
+        // An episode list opened by a grown-up may no longer be visible.
+        if let Screen::Episodes(i) = self.screen
+            && self.library.shelves.get(i).is_some_and(|s| !self.settings.film_allowed(&s.key))
+        {
+            self.go(Screen::Home, cx);
+        }
         if matches!(self.screen, Screen::GrownUps | Screen::Pairing | Screen::SetUpPad | Screen::Folders) {
             self.picker = None;
             self.leave_grownups(cx);
@@ -664,7 +682,9 @@ impl Chanoma {
     }
 
     pub fn unlock(&mut self, cx: &mut Cx<Msg>) {
+        let marks = self.home_marks();
         self.grownup = Some(Instant::now());
+        self.restore_home_marks(&marks);
         log::info!("chanoma: grown-up mode");
         self.toast_note(ui::Note::GrownUp, "Grown-up mode", cx);
         let _ = cx;
@@ -1819,7 +1839,9 @@ impl Chanoma {
             }
             Screen::Episodes(s) => {
                 let g = self.episodes_view(*s);
-                self.stage(self.scene(View::Grid(g), Some(self.chrome_titled(self.hints("Watch", Some("Back"))))))
+                let mut hints = self.hints("Watch", Some("Back"));
+                hints.push((Button::North, "Search".into()));
+                self.stage(self.scene(View::Grid(g), Some(self.chrome_titled(hints))))
             }
             Screen::Starting(what) => {
                 let body = match (self.starts.slow(), self.starts.behind()) {
