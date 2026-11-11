@@ -1,0 +1,42 @@
+Subject: [PATCH] wifi: iwlwifi: mld: trace bounded AirPlay monitor trials
+
+Diagnostic build only. Report module identity, monitor channel assignment
+and rate metadata, never packet contents. TX output is rate limited.
+
+--- a/drivers/net/wireless/intel/iwlwifi/mld/mld.c
++++ b/drivers/net/wireless/intel/iwlwifi/mld/mld.c
+@@ -32,6 +32,7 @@
+ MODULE_DESCRIPTION(DRV_DESCRIPTION);
+ MODULE_LICENSE("GPL");
+ MODULE_IMPORT_NS("IWLWIFI");
++MODULE_VERSION("sekka-airplay-rate-trace-1");
+ 
+ static const struct iwl_op_mode_ops iwl_mld_ops;
+ 
+--- a/drivers/net/wireless/intel/iwlwifi/mld/tx.c
++++ b/drivers/net/wireless/intel/iwlwifi/mld/tx.c
+@@ -504,6 +504,12 @@
+ 		rate = iwl_mld_mac80211_rate_idx_to_fw(mld, info, -1) |
+ 		       iwl_mld_get_tx_ant(mld, info, sta, fc);
+ 
++	if (info->control.vif &&
++	    info->control.vif->type == NL80211_IFTYPE_MONITOR)
++		pr_info_ratelimited("iwlmld: Sekka monitor TX band=%u idx=%d flags=%#x rate=%#x\n",
++				    info->band, info->control.rates[0].idx,
++				    info->control.flags, rate);
++
+ 	return cpu_to_le32(rate);
+ }
+ 
+--- a/drivers/net/wireless/intel/iwlwifi/mld/mac80211.c
++++ b/drivers/net/wireless/intel/iwlwifi/mld/mac80211.c
+@@ -1225,6 +1225,9 @@
+ 		iwl_mld_send_ap_tx_power_constraint_cmd(mld, vif, link);
+ 
+ 	if (vif->type == NL80211_IFTYPE_MONITOR) {
++		pr_info("iwlmld: Sekka monitor context frequency=%d band=%d\n",
++			link->chanreq.oper.chan->center_freq,
++			link->chanreq.oper.chan->band);
+ 		ret = iwl_mld_add_mon_sta(mld, vif, link);
+ 		if (ret)
+ 			goto deactivate_link;

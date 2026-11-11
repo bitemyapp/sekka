@@ -1,0 +1,515 @@
+[
+  {
+    "id": "p2p-go",
+    "suites": ["radio"],
+    "driver": "p2p-go",
+    "radio": ["trial", "60", "ibss6-mcs7"],
+    "human": false,
+    "hypothesis": "Owly PR 21: a channel-6 P2P GO context may supply hardware receive ACKs while normal Wi-Fi remains connected.",
+    "instructions": "Experimental stock-driver trial. Compare receive retries and session progress against passive monitor; no IP service is provided on the GO."
+  },
+  {
+    "id": "qos-noack",
+    "suites": ["radio"],
+    "driver": "qos-noack",
+    "radio": ["trial", "60", "m6-mcs7"],
+    "human": false,
+    "hypothesis": "Owly PR 102: set QoS No Ack in the frame because newer Intel TX commands do not propagate the radiotap no-ACK flag.",
+    "instructions": "Compare with baseline-mcs7; use --autonomous for synthetic media and stage evidence."
+  },
+  {
+    "id": "baseline-mcs7",
+    "suites": [
+      "quick",
+      "radio"
+    ],
+    "driver": "stock",
+    "radio": [
+      "trial",
+      "60",
+      "m6-mcs7"
+    ],
+    "human": false,
+    "hypothesis": "Reproduce the current channel-6 path with the original installed driver.",
+    "instructions": "Leave the TV available for AirPlay; discovery and small probes run automatically."
+  },
+  {
+    "id": "legacy-clock",
+    "suites": [
+      "radio"
+    ],
+    "driver": "legacy-clock",
+    "radio": [
+      "trial",
+      "60",
+      "m6-mcs7"
+    ],
+    "human": false,
+    "hypothesis": "Compare old shared-clock scheduling against the peer-clock baseline.",
+    "instructions": "Leave the TV available for AirPlay; discovery and small probes run automatically."
+  },
+  {
+    "id": "m6-12",
+    "suites": [
+      "radio",
+      "quick"
+    ],
+    "driver": "stock",
+    "radio": [
+      "trial",
+      "60",
+      "m6-12"
+    ],
+    "human": false,
+    "hypothesis": "Robust legacy rate versus HT; smaller radio rate is not a video bitrate change.",
+    "instructions": "Leave the TV available for AirPlay; discovery and small probes run automatically."
+  },
+  {
+    "id": "m6-24",
+    "suites": [
+      "radio"
+    ],
+    "driver": "stock",
+    "radio": [
+      "trial",
+      "60",
+      "m6-24"
+    ],
+    "human": false,
+    "hypothesis": "Legacy 24 Mbps versus 12 Mbps.",
+    "instructions": "Leave the TV available for AirPlay; discovery and small probes run automatically."
+  },
+  {
+    "id": "m6-54",
+    "suites": [
+      "radio"
+    ],
+    "driver": "stock",
+    "radio": [
+      "trial",
+      "60",
+      "m6-54"
+    ],
+    "human": false,
+    "hypothesis": "Legacy 54 Mbps versus HT MCS7.",
+    "instructions": "Leave the TV available for AirPlay; discovery and small probes run automatically."
+  },
+  {
+    "id": "m6-mcs0",
+    "suites": [
+      "radio"
+    ],
+    "driver": "stock",
+    "radio": [
+      "trial",
+      "60",
+      "m6-mcs0"
+    ],
+    "human": false,
+    "hypothesis": "More robust HT modulation, keeping the same peer scheduling.",
+    "instructions": "Leave the TV available for AirPlay; discovery and small probes run automatically."
+  },
+  {
+    "id": "m6-mcs3",
+    "suites": [
+      "radio"
+    ],
+    "driver": "stock",
+    "radio": [
+      "trial",
+      "60",
+      "m6-mcs3"
+    ],
+    "human": false,
+    "hypothesis": "Middle HT rate versus the MCS7 baseline.",
+    "instructions": "Leave the TV available for AirPlay; discovery and small probes run automatically."
+  },
+  {
+    "id": "m6-ack",
+    "suites": [
+      "radio"
+    ],
+    "driver": "stock",
+    "radio": [
+      "trial",
+      "60",
+      "m6-ack"
+    ],
+    "human": false,
+    "hypothesis": "Request hardware TX ACK/retries; inspect whether firmware honors it or stalls.",
+    "instructions": "Leave the TV available for AirPlay; discovery and small probes run automatically."
+  },
+  {
+    "id": "m6-amsdu",
+    "suites": [
+      "radio"
+    ],
+    "driver": "stock",
+    "radio": [
+      "trial",
+      "60",
+      "m6-amsdu"
+    ],
+    "human": false,
+    "hypothesis": "Coalesce data packets where the peer supports A-MSDU.",
+    "instructions": "Leave the TV available for AirPlay; discovery and small probes run automatically."
+  },
+  {
+    "id": "m6-near",
+    "suites": [
+      "radio"
+    ],
+    "driver": "stock",
+    "radio": [
+      "trial",
+      "60",
+      "m6-near"
+    ],
+    "human": false,
+    "hypothesis": "Exclude weak peers from election to isolate distant-master influence.",
+    "instructions": "Leave the TV available for AirPlay; discovery and small probes run automatically."
+  },
+  {
+    "id": "m6-quiet",
+    "suites": [
+      "radio"
+    ],
+    "driver": "stock",
+    "radio": [
+      "trial",
+      "60",
+      "m6-quiet"
+    ],
+    "human": false,
+    "hypothesis": "Remove periodic neighbour echo traffic while retaining discovery.",
+    "instructions": "Leave the TV available for AirPlay; discovery and small probes run automatically."
+  },
+  {
+    "id": "m6-mtu1280",
+    "suites": [
+      "radio",
+      "quick"
+    ],
+    "driver": "stock",
+    "radio": [
+      "trial",
+      "60",
+      "m6-mtu1280"
+    ],
+    "human": false,
+    "hypothesis": "Reduce IP packet size to isolate size-dependent loss.",
+    "instructions": "Leave the TV available for AirPlay; discovery and small probes run automatically."
+  },
+  {
+    "id": "pacing-1ms",
+    "suites": [
+      "radio"
+    ],
+    "driver": "paced1",
+    "radio": [
+      "trial",
+      "60",
+      "m6-mcs7"
+    ],
+    "human": false,
+    "hypothesis": "Pace unicast injection every 1 ms so frames do not queue beyond the TV availability window.",
+    "instructions": "Leave the TV available for AirPlay; discovery and small probes run automatically."
+  },
+  {
+    "id": "pacing-2ms",
+    "suites": [
+      "radio"
+    ],
+    "driver": "paced2",
+    "radio": [
+      "trial",
+      "60",
+      "m6-mcs7"
+    ],
+    "human": false,
+    "hypothesis": "Pace unicast injection every 2 ms so frames do not queue beyond the TV availability window.",
+    "instructions": "Leave the TV available for AirPlay; discovery and small probes run automatically."
+  },
+  {
+    "id": "synthetic-low",
+    "suites": [
+      "media"
+    ],
+    "driver": "stock",
+    "radio": [
+      "trial",
+      "300",
+      "m6-mcs7"
+    ],
+    "human": true,
+    "hypothesis": "500 kbps / 15 fps synthetic video without audio: minimum encoder/capture load.",
+    "instructions": "Click Use Direct Wi-Fi, select ONLY the requested TV, enter its PIN in the app, and select a screen if asked. Observe for at least 60 seconds. Close the window to end early; record the TV result in this terminal.",
+    "media": "synthetic-low"
+  },
+  {
+    "id": "synthetic-video",
+    "suites": [
+      "media"
+    ],
+    "driver": "stock",
+    "radio": [
+      "trial",
+      "300",
+      "m6-mcs7"
+    ],
+    "human": true,
+    "hypothesis": "1843 kbps synthetic video without audio: isolate media throughput.",
+    "instructions": "Click Use Direct Wi-Fi, select ONLY the requested TV, enter its PIN in the app, and select a screen if asked. Observe for at least 60 seconds. Close the window to end early; record the TV result in this terminal.",
+    "media": "synthetic-video"
+  },
+  {
+    "id": "synthetic-av",
+    "suites": [
+      "media"
+    ],
+    "driver": "stock",
+    "radio": [
+      "trial",
+      "300",
+      "m6-mcs7"
+    ],
+    "human": true,
+    "hypothesis": "Add synthetic audio to the same synthetic video.",
+    "instructions": "Click Use Direct Wi-Fi, select ONLY the requested TV, enter its PIN in the app, and select a screen if asked. Observe for at least 60 seconds. Close the window to end early; record the TV result in this terminal.",
+    "media": "synthetic-av"
+  },
+  {
+    "id": "screen-low",
+    "suites": [
+      "media"
+    ],
+    "driver": "stock",
+    "radio": [
+      "trial",
+      "300",
+      "m6-mcs7"
+    ],
+    "human": true,
+    "hypothesis": "500 kbps / 15 fps desktop capture: compare the portal with synthetic video.",
+    "instructions": "Click Use Direct Wi-Fi, select ONLY the requested TV, enter its PIN in the app, and select a screen if asked. Observe for at least 60 seconds. Close the window to end early; record the TV result in this terminal.",
+    "media": "screen-low"
+  },
+  {
+    "id": "screen-auto",
+    "suites": [
+      "media"
+    ],
+    "driver": "stock",
+    "radio": [
+      "trial",
+      "300",
+      "m6-mcs7"
+    ],
+    "human": true,
+    "hypothesis": "Normal 30 fps H.264 with audio: required baseline for useful mirroring.",
+    "instructions": "Click Use Direct Wi-Fi, select ONLY the requested TV, enter its PIN in the app, and select a screen if asked. Observe for at least 60 seconds. Close the window to end early; record the TV result in this terminal.",
+    "media": "screen-auto"
+  },
+  {
+    "id": "screen-noaudio",
+    "suites": [
+      "media"
+    ],
+    "driver": "stock",
+    "radio": [
+      "trial",
+      "300",
+      "m6-mcs7"
+    ],
+    "human": true,
+    "hypothesis": "Normal video with audio disabled: isolate RTP/timing/audio overhead.",
+    "instructions": "Click Use Direct Wi-Fi, select ONLY the requested TV, enter its PIN in the app, and select a screen if asked. Observe for at least 60 seconds. Close the window to end early; record the TV result in this terminal.",
+    "media": "screen-noaudio"
+  },
+  {
+    "id": "screen-software",
+    "suites": [
+      "media"
+    ],
+    "driver": "stock",
+    "radio": [
+      "trial",
+      "300",
+      "m6-mcs7"
+    ],
+    "human": true,
+    "hypothesis": "Use software H.264 to isolate VAAPI behavior.",
+    "instructions": "Click Use Direct Wi-Fi, select ONLY the requested TV, enter its PIN in the app, and select a screen if asked. Observe for at least 60 seconds. Close the window to end early; record the TV result in this terminal.",
+    "media": "screen-software"
+  },
+  {
+    "id": "screen-latency",
+    "suites": [
+      "media"
+    ],
+    "driver": "stock",
+    "radio": [
+      "trial",
+      "300",
+      "m6-mcs7"
+    ],
+    "human": true,
+    "hypothesis": "Use 1000 ms playout lead to test receiver timing tolerance.",
+    "instructions": "Click Use Direct Wi-Fi, select ONLY the requested TV, enter its PIN in the app, and select a screen if asked. Observe for at least 60 seconds. Close the window to end early; record the TV result in this terminal.",
+    "media": "screen-latency"
+  },
+  {
+    "id": "screen-hevc",
+    "suites": [
+      "media"
+    ],
+    "driver": "stock",
+    "radio": [
+      "trial",
+      "300",
+      "m6-mcs7"
+    ],
+    "human": true,
+    "hypothesis": "Use HEVC only if receiver negotiation accepts it; compare keyframe size.",
+    "instructions": "Click Use Direct Wi-Fi, select ONLY the requested TV, enter its PIN in the app, and select a screen if asked. Observe for at least 60 seconds. Close the window to end early; record the TV result in this terminal.",
+    "media": "screen-hevc"
+  },
+  {
+    "id": "screen-keyframe-grace",
+    "suites": [
+      "media"
+    ],
+    "driver": "stock",
+    "radio": [
+      "trial",
+      "300",
+      "m6-mcs7"
+    ],
+    "human": true,
+    "hypothesis": "Allow eight seconds for a video write to distinguish startup bursts from a permanently stalled link.",
+    "instructions": "Click Use Direct Wi-Fi, select ONLY the requested TV, enter its PIN in the app, and select a screen if asked. Observe for at least 60 seconds. Close the window to end early; record the TV result in this terminal.",
+    "media": "screen-auto",
+    "sender": "keyframe-grace"
+  },
+  {
+    "id": "screen-send-buffer",
+    "suites": [
+      "media"
+    ],
+    "driver": "stock",
+    "radio": [
+      "trial",
+      "300",
+      "m6-mcs7"
+    ],
+    "human": true,
+    "hypothesis": "Increase TCP send buffer from 64 to 256 KiB; check whether this only hides loss and growing latency.",
+    "instructions": "Click Use Direct Wi-Fi, select ONLY the requested TV, enter its PIN in the app, and select a screen if asked. Observe for at least 60 seconds. Close the window to end early; record the TV result in this terminal.",
+    "media": "screen-auto",
+    "sender": "send-buffer"
+  },
+  {
+    "id": "driver-rate6",
+    "suites": [
+      "driver"
+    ],
+    "driver": "patched",
+    "radio": [
+      "trial",
+      "60",
+      "m6-mcs7"
+    ],
+    "human": false,
+    "hypothesis": "Compare the rate-corrected traced module with the stock module on channel 6.",
+    "instructions": "Leave the TV available for AirPlay; discovery and small probes run automatically."
+  },
+  {
+    "id": "driver-performance",
+    "suites": [
+      "driver"
+    ],
+    "driver": "performance",
+    "radio": [
+      "trial",
+      "60",
+      "m6-mcs7"
+    ],
+    "human": false,
+    "hypothesis": "Disable Intel radio power saving for the bounded trial only.",
+    "instructions": "Leave the TV available for AirPlay; discovery and small probes run automatically."
+  },
+  {
+    "id": "driver-ibss",
+    "suites": [
+      "driver"
+    ],
+    "driver": "patched",
+    "radio": [
+      "trial",
+      "60",
+      "ibss6"
+    ],
+    "human": false,
+    "hypothesis": "Reproduce reception suppression with the normal IBSS receive filter.",
+    "instructions": "Leave the TV available for AirPlay; discovery and small probes run automatically."
+  },
+  {
+    "id": "driver-filter",
+    "suites": [
+      "driver"
+    ],
+    "driver": "filter",
+    "radio": [
+      "trial",
+      "90",
+      "ibss6"
+    ],
+    "human": false,
+    "hypothesis": "Test the opt-in IBSS receive filter; previously reset firmware after ~60 seconds.",
+    "instructions": "Leave the TV available for AirPlay; discovery and small probes run automatically."
+  },
+  {
+    "id": "driver-44",
+    "suites": [
+      "driver"
+    ],
+    "driver": "patched",
+    "radio": [
+      "trial",
+      "60",
+      "m44-12"
+    ],
+    "human": false,
+    "hypothesis": "Check regulated channel 44 setup/TX separately from channel 149.",
+    "instructions": "Leave the TV available for AirPlay; discovery and small probes run automatically."
+  },
+  {
+    "id": "driver-149",
+    "suites": [
+      "driver"
+    ],
+    "driver": "patched",
+    "radio": [
+      "trial",
+      "60",
+      "m149-12"
+    ],
+    "human": false,
+    "hypothesis": "One confirmation of the corrected-rate channel-149 firmware assertion.",
+    "instructions": "Leave the TV available for AirPlay; discovery and small probes run automatically."
+  },
+  {
+    "id": "listen-social",
+    "suites": [
+      "driver"
+    ],
+    "driver": "stock",
+    "radio": [
+      "observe",
+      "60"
+    ],
+    "human": false,
+    "hypothesis": "Receive-only comparison across channels 6, 44 and 149; no AWDL injection.",
+    "instructions": "Leave the TV available; do not start mirroring from another device unless deliberately recording that comparison."
+  }
+]

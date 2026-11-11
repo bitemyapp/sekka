@@ -69,6 +69,8 @@ rec {
         calamares.nixosModules.applications
       ];
       desktops.imports = [
+        (import ../modules/airplay.nix { airplay = aizome.packages.${system}.airplay; })
+        { programs.sekka-airplay.enable = pkgs.lib.mkDefault true; }
         ../installer/genkan/rust/system
         tatami.nixosModules.default
         yukimi.nixosModules.default

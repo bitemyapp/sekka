@@ -234,7 +234,7 @@ let
       jobs=$((jobs > $(nproc) ? $(nproc) : jobs))
       cargo build -j "$jobs" "''${flags[@]}" --profile release-lto --workspace \
         --exclude aizome-comp --exclude aizome-comp-core --exclude aizome-comp-logic \
-        --exclude aizome-yukimi \
+        --exclude aizome-yukimi --exclude aizome-kagami \
         --features aizome-koe/openblas,aizome-koe/vulkan
       runHook postBuild
     '';
@@ -334,6 +334,9 @@ rustPlatform.buildRustPackage (
 
       # Apps: desktop entries and icons.
       for entry in apps/*/data/*.desktop; do
+        # AirPlay is installed by Sekka's optional module, with its focused
+        # package. Do not leave a launcher behind when the module is disabled.
+        case "$entry" in apps/kagami/*) continue ;; esac
         [ -e "$entry" ] && install -Dm644 "$entry" "$out/share/applications/$(basename "$entry")"
       done
       for icon in icons/apps/*.svg; do

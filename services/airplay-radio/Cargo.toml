@@ -1,0 +1,17 @@
+[package]
+name = "sekka-airplay-radio"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+
+[workspace]
+
+[dependencies]
+owly-radio = { git = "https://github.com/t4t5/owly", rev = "6f2e8ea99aed0687558d78a1dd49154ab3a5fa76" }
+serde_json = "1"
+libc = "0.2"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "time", "sync"] }
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt"] }
+
+[dev-dependencies]
+tempfile = "3"

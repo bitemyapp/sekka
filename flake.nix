@@ -155,6 +155,7 @@
         cargoGeigerOverlay
       ];
       nixosModules = {
+        airplay = import ./modules/airplay.nix { airplay = inputs.aizome.packages.${system}.airplay; };
         default = inputs.calamares.nixosModules.default;
         desktops = inputs.calamares.nixosModules.desktops;
         applications = inputs.calamares.nixosModules.applications;
@@ -241,6 +242,30 @@
         };
         inherit tools calamares;
         sekka-discord = import ./nix/sekka-discord.nix { inherit pkgs; };
+        inherit (inputs.aizome.packages.${system})
+          doubletake
+          airplay
+          airplay-radio
+          airplay-peer-session
+          ;
+        airplay-intel-driver = pkgs.callPackage ./nix/airplay-intel-driver.nix {
+          kernel = pkgs.linuxPackages_latest.kernel;
+        };
+        airplay-intel-trial = pkgs.callPackage ./nix/airplay-peer-session.nix {
+          airplay-radio = self.packages.${system}.airplay-radio;
+          intelDriver = self.packages.${system}.airplay-intel-driver.override {
+            trace = true;
+          };
+        };
+        airplay-test-battery = pkgs.callPackage ./nix/airplay-battery.nix {
+          inherit (self.packages.${system})
+            airplay
+            airplay-radio
+            airplay-peer-session
+            airplay-intel-driver
+            doubletake
+            ;
+        };
         chatgpt = (import ./nix/ai-packages.nix inputs.ai-apps.packages.${system}).chatgpt;
         aizome = inputs.aizome.packages.${system}.aizome;
         hotaru = inputs.aizome.packages.${system}.hotaru;
@@ -344,6 +369,19 @@
         };
       };
       checks.${system} = {
+        airplay = self.packages.${system}.airplay;
+        airplay-radio = self.packages.${system}.airplay-radio;
+        airplay-battery = pkgs.callPackage ./nix/airplay-battery-test.nix { };
+        airplay-media = import ./nix/airplay-test.nix {
+          inherit pkgs;
+          inherit (self.packages.${system}) doubletake;
+        };
+        airplay-packages = import ./nix/airplay-packages-test.nix {
+          inherit pkgs installer;
+          references = referenceSystems;
+          installed = installedDefault;
+          inherit (self.packages.${system}) airplay;
+        };
         cargo-geiger = self.packages.${system}.cargo-geiger;
         pipewire-packages = import ./nix/pipewire-packages-test.nix {
           inherit pkgs installer;

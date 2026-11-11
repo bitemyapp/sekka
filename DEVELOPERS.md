@@ -2222,6 +2222,426 @@ query and passes its `XDG_ACTIVATION_TOKEN` to the existing window; it does
 not request a fresh token from that background window's old input.
 
 
+## AirPlay screen mirroring
+
+`nix run .#airplay` opens Sekka's AirPlay window (Kagami,
+`desktop/aizome/apps/kagami`), built independently through Aizome's narrow
+workspace source and dependency cache. It uses the local kit and keeps all
+network, Bluetooth and process work off the UI thread. The window currently
+requires Wayland. `nix run .#doubletake` exposes the sender's CLI, including
+its X11 capture support, for diagnostics.
+
+`nix/doubletake.nix` pins the upstream sender and Go dependencies, includes
+the GStreamer H.264 encoders and PipeWire/PulseAudio capture plugins, and
+builds with FDK AAC-ELD as well as the built-in ALAC encoder. The UI selects
+30 fps H.264 with automatic bitrate and encoder fallback. It uses the
+sender's private Unix-socket API, not CLI output parsing. PINs/passwords
+travel through that socket, never command arguments or environment variables.
+The small daemon patch waits for shutdown on the main goroutine so exiting
+does not race capture cleanup.
+
+Each window owns a private mode-0700 directory under `XDG_RUNTIME_DIR`, a
+sender process group, and temporary pairing keys. Closing sends disconnect,
+stops and reaps the process group, and removes the directory. A parent-death
+signal stops the sender if the UI crashes; a forced UI kill may leave keys
+in its private runtime directory until logout. No login service starts
+discovery or sharing. There is no automatic receiver selection or reconnect.
+
+Bonjour discovery comes from the sender. A separate BlueZ worker listens for
+Apple's AirPlay target advertisements and reads `/info` only from advertised
+private/link-local IPv4 endpoints to recover their names. It bounds response
+sizes, connection time and probe count, never pairs Bluetooth devices, and
+releases its own discovery session on exit. A zero-address advertisement
+requires another discovery/transport route. Use Direct Wi-Fi attempts AWDL
+on adapters supported by the pinned radio backend. Manual IPv4 and port entry
+is also available.
+
+Discovery Details preserves each AirPlay Bluetooth beacon, including zero
+addresses, malformed advertisements and failed `/info` requests. It displays
+Bluetooth address/type, RSSI, TX power when supplied, local name/alias,
+decoded flags/seed/address/port, raw Apple manufacturer bytes, probe errors,
+and the full successful `/info` plist. Duplicate IP advertisements remain
+separate records. BlueZ properties are explicitly labelled as cached; polling
+them is not evidence of a fresh radio observation. Bonjour records are shown
+separately. Copy All Results exports those records as JSON, without pairing
+credentials. `--discovery-details` opens the details window at launch;
+`--discover-bluetooth` prints diagnostic JSON snapshots for 20 seconds.
+
+Discovery can sort RSSI descending, unknown values last, with stable identity
+tie-breaks, or use stable Bluetooth address order. The choice survives scan
+updates. Track shows only the selected BlueZ object, pins the signal header
+outside the scrolling metadata, retains the last result if the object vanishes,
+and never guesses across private-address rotation. A bounded history records
+up to 120 samples from new BlueZ reports, not repeated cached polls. A separate
+PropertiesChanged listener with DuplicateData enabled supplies report counts,
+RSSI and timestamps; its connection is closed and thread joined on shutdown.
+Old reports are marked stale. Copy Tracking Results includes the history.
+
+The probe reports the failing stage (TCP connect, request, headers or body).
+Continuity type 0x16 is preserved as a peer-to-peer advertisement, not decoded
+as an IP. Bluetooth discovery does not establish AWDL. In particular, an
+unreachable advertised LAN address cannot be fixed by changing PIN/SRP or
+HTTP headers: no AirPlay exchange has occurred yet. Apple's peer-to-peer route
+requires a separate Wi-Fi link followed by scoped IPv6 service discovery and
+session setup. The pinned sender excludes link-local-only discovery interfaces
+and drops IPv6 scope. Kagami therefore browses `_airplay._tcp` through Avahi on
+the specific AWDL interface, resolves IPv6, and sends `fe80::…%awdl0` to the
+sender. The scope is used locally on TCP/UDP sockets. A short-lived BlueZ
+AirPlay-source advertisement accompanies direct discovery. Raw radio reports
+and capability checks are included in Discovery Details and its JSON export.
+Radio counters distinguish locally reflected AWDL frames from remote action
+headers, invalid radiotap headers and general 802.11 traffic. Packet contents
+are not retained. Counters describe received headers, not a completed session.
+
+`services/airplay-radio` is a separate Cargo workspace. It pins Owly's Rust
+radio/AWDL libraries, revision `6f2e8ea99aed0687558d78a1dd49154ab3a5fa76`,
+instead of the old unmaintained C OWL implementation. The helper handles only
+the radio; all AirPlay discovery, pairing, screen capture and media stay in
+the unprivileged app. `nix/airplay-peer-session.nix` starts a fixed transient
+system unit through pkexec, with a bounded lifetime and `ExecStopPost`
+recovery. The UI closes its control pipe to release the radio. Owly journals
+network changes; teardown and crash recovery restore the previous station
+connection. Temporary NetworkManager/udev configuration and the narrow
+IPv6 UDP firewall rule for `awdl0` are removed afterward. No service starts
+at boot and no host NixOS rebuild is needed to try a packaged session.
+The module writes `/etc/sekka/airplay/open-firewall`; the temporary helper
+honours `false`, including when launched through a standalone package.
+
+Intel currently uses an exclusive channel-6 link: normal Wi-Fi and Internet
+access pause for the session. AirDrop's proximity cutoff is disabled so it
+does not hide a reachable TV. `--discover-peer` performs a 60-second hardware
+trial; `--discover-peer-149` tests channel 149 explicitly. The kernel still
+enforces regulatory restrictions. `--diagnose-peer-airdrop` adds the anonymous
+AirDrop v3 wake-up advertisement for an unlocked iPhone in Everyone mode. It
+uses connectable advertising at 100 ms, as required by Owly's BLE-5; it does
+not offer files or connect to AirDrop services. Normal TV discovery does not
+send this diagnostic advertisement. A radio coming up is not proof of a peer
+connection or successful AirPlay. These paths remain experimental until a
+physical receiver completes pairing and sustained screen/audio playback.
+The privileged session wrapper also accepts `observe SECONDS` (at most 60):
+it listens on channels 6, 44 and 149 without injecting AWDL frames, using the
+same recovery journal and timeout. This distinguishes channels on which peers
+are heard from channels on which an active connection can be established.
+
+Physical checks on 2026-11-10 used Intel BE211 `8086:e440`, Linux 7.3.3,
+`iwlmld`, firmware `107.1b444747.0`. Channel-6 sessions started and restored
+the previous Wi-Fi connection automatically. Keeping the temporary IBSS
+interface suppressed remote AWDL reception on this driver. A receive-only
+monitor heard remote AWDL on channels 6 and 149; removing the IBSS before
+starting the AWDL engine on channel 6 enabled IPv6 Bonjour discovery of
+AppleTV14,1 receivers. The selected physical TV completed PIN pairing,
+pair verification on reconnect, and stream setup, but video keyframe TCP
+writes timed out before sustained playback. Both failures preceded the
+two-minute diagnostic timeout. Passive monitor operation does not provide
+the hardware acknowledgements that the IBSS strategy was intended to supply.
+
+`--monitor-mode --peer-trial` opens a two-minute monitor-only GUI trial;
+`--monitor-149 --peer-trial` selects channel 149. For 5 GHz the helper first
+does an ordinary passive AP scan to learn regulatory information, then checks
+the kernel's transmit permission. It never clears regulatory restrictions.
+That scan made channel 149 available on the tested laptop, but the unpatched
+Intel firmware asserted when AWDL transmission began and reloaded the radio.
+
+`nix build .#airplay-intel-driver` builds an opt-in `iwlmld` module against
+the root flake's latest kernel, with the
+[proposed upstream legacy injection correction](https://lkml.iu.edu/2610.1/04784.html).
+The original driver treats the 5-GHz index for 12 Mbps as 5.5 Mbps CCK.
+The backport translates band-relative indices and preserves the negative
+fallback sentinel. Its check compiles the actual driver rate functions,
+exercising all legacy rates, the fallback and HT MCS7. It does not certify
+radio transmission. No channel or power-limit policy changes are included.
+
+`.#airplay-intel-trial` packages a bounded, opt-in helper for the tested
+`wlp0s20f3` laptop. It requires an exact kernel-version match, temporarily
+loads the module, and restores the booted system's driver and saved Wi-Fi
+connection in the service's cleanup path. Trials are limited to 120 seconds.
+The normal app package does not load or install this experimental module.
+An initial loader attempt incorrectly removed the dependent modules too;
+the corrected launcher removes only `iwlmld`. Physical validation of the
+corrected 5-GHz path showed that rate translation alone is insufficient:
+the traced module reported channel 149 (5745 MHz), survived three seconds
+without AWDL TX, then sent firmware rate `0x4102` (12 Mbps OFDM, antenna A)
+and immediately hit firmware assertion `0x13266`. Automatic recovery restored
+the original module and guest connection. The diagnostic build reports its
+module version and rate-limited TX metadata, without packet contents.
+The monitor trial requests HT MCS7 for data only when the peer advertises
+support; action/multicast traffic retains the basic rate. The physical HT
+trial still timed out writing its first video keyframe: TCP acknowledged
+about 23 KB, left about 118 KB queued and retransmitted repeatedly. The radio
+remained up. An opt-in IBSS receive-filter patch admitted remote AWDL peers,
+but firmware asserted `0xB70` after roughly one minute. It is disabled by
+default and available only as an explicitly selected battery experiment.
+
+The pinned AWDL library is patched to schedule fixed-channel unicast against
+the destination's advertised clock and to apply guards at its slot boundaries.
+Three regressions fail with shared-clock scheduling and pass with the patch;
+the existing fixed-radio test now measures the destination's announced slots.
+The physical retry still failed at the first keyframe. Its trace showed the
+TV retaining channel-6 slots and peer clocks within a few milliseconds of the
+elected clock; clock correction is not evidence of a fix for this receiver.
+Sustained physical media remains unverified.
+
+The UI batches each complete JSON request and newline into one socket write.
+The sender decodes the JSON object without waiting for the newline and closes
+after replying; separate writes raced that close and could produce `EPIPE`
+after a successful command. A regression fixture answers on JSON completion.
+Read-only polling tolerates bounded transient failures without killing the
+sender; commands with a lost reply are reconciled by status, never replayed.
+A stopped sender offers Restart AirPlay and clears stale LAN discovery.
+References: [Apple's discovery documentation](https://support.apple.com/en-gb/guide/deployment/-dep9151c4ace/web),
+[Bluetooth beacon layout](https://github.com/FDH2/UxPlay/wiki/Bluetooth_LE_beacon),
+and [Owly's hardware support](https://github.com/t4t5/owly#supported-hardware).
+
+`nixosModules.airplay` provides `programs.sekka-airplay.enable`, `package`
+and `openFirewall`. Sekka's live and installed desktop modules enable it by
+default. The module permits UDP 5353 for discovery and 60000–60002 for the
+sender's timing/audio traffic, matching its fixed port range. It adds no TCP
+listener. `openFirewall = false` leaves firewall policy to the administrator;
+existing systems need the module activated before receiver-initiated timing
+works through a default-deny firewall. One simultaneous share is supported
+by the window's port range.
+
+```sh
+nix build .#airplay .#doubletake --no-update-lock-file
+nix build .#checks.x86_64-linux.airplay-media .#checks.x86_64-linux.airplay-packages --no-update-lock-file
+nix build .#checks.x86_64-linux.airplay-radio --no-update-lock-file
+cargo test --locked --manifest-path desktop/aizome/Cargo.toml -p aizome-kagami
+```
+
+### AirPlay research and evidence priorities
+
+The [investigation handoff](docs/airplay-investigation.md) records the physical
+evidence, source limits, stopped test window and next autonomous comparison.
+
+The follow-up four-case physical batch on November 10 reached PIN pairing in
+two cases, then timed out reading the encrypted post-control `/info` response.
+TCP smoothed round-trip times reached roughly 4–5 seconds. The other two cases
+did not discover the selected TV and therefore did not test media throughput.
+There was no firmware assertion and Wi-Fi recovery completed in all four.
+Do not describe those cases as codec failures or a repeat of the earlier IDR
+timeout: this batch failed before media setup completed.
+
+The following primary sources inform subsequent experiments:
+
+| Source | Scope and consequence |
+| --- | --- |
+| [Apple deployment guidance](https://support.apple.com/en-gb/guide/deployment/-dep9151c4ace/web) | Documents Bluetooth-assisted discovery followed by peer Wi-Fi, channel sharing and supported social channels. Discovery over Bluetooth does not establish a usable media path; channel 149 is not the only possible path. |
+| [Apple MFi program](https://mfi.apple.com/en/how-it-works), [LG hospitality requirements](https://www.lg.com/us/business/airplay-for-hospitality) | Manufacturer specifications and certification are licensed resources; the public MFi technology list explicitly includes AirPlay audio. These pages do not supply a public modern mirroring wire specification. LG's hospitality integration is not evidence that a discovered AppleTV14,1 uses LG's QR workflow. |
+| [OpenAirPlay specification](https://openairplay.github.io/airplay-spec/) | Its stated baseline is Apple TV software 5.0/iOS 5.1/iTunes 10.6. Useful framing history, but insufficient authority for modern HAP/PTP behavior. |
+| [PyATV HAP authentication](https://github.com/postlund/pyatv/blob/master/pyatv/protocols/airplay/auth/hap.py), [record framing](https://github.com/postlund/pyatv/blob/master/pyatv/auth/hap_session.py) | Independent implementation of PIN setup, pair verification and 1024-byte encrypted records with a little-endian length used as authenticated data. Compared with the pinned sender; no specific mismatch explaining this timeout was identified. This is source comparison, not independent physical qualification. |
+| [UxPlay](https://github.com/FDH2/UxPlay), [its cryptography notes](https://github.com/FDH2/UxPlay/wiki/crypto) | A useful independent receiver for legacy pairing/FairPlay. Its supported protocol generation must be considered before treating a passing local test as evidence for a current Apple TV's HAP session. |
+| [OWL requirements](https://github.com/seemoo-lab/owl#requirements), [Owly radio modes](https://github.com/t4t5/owly#modes) | Hardware ACK of received unicast matters independently of injection. Passive monitors can receive discovery yet cause repeated peer retransmissions. Owly uses an associated station, IBSS/AP or active monitor to provide ACKs. |
+| [Owly Intel investigation #4](https://github.com/t4t5/owly/issues/4) | Reports an AX211 peer repeating one frame seven times without ACK, plus firmware failures with receive-filter modifications. Relevant hypothesis for BE211, not proof that all Intel generations behave identically. |
+| [Owly PR #102](https://github.com/t4t5/owly/pull/102) | Proposes QoS No Ack in the actual data header because newer Intel TX paths omit radiotap's no-ACK request. The local 7.3.3 `iwl_mld_fill_tx_cmd` likewise does not propagate `IEEE80211_TX_CTL_NO_ACK`. The pinned PR-head backport is isolated in `qos-noack`; it is not a default or a proven BE211 fix. |
+| [Owly PR #21](https://github.com/t4t5/owly/pull/21) | Reports a P2P GO context carrying AWDL alongside normal Wi-Fi on one AX211 configuration. The opt-in `p2p-go` trial uses a channel-6 GO and monitor with the same local MAC, checks permitted channel/concurrency, refuses existing interfaces and uses the recovery journal. No DHCP, routing or authentication service runs on the GO. Defaults retain the existing radio mode. This is not qualification of BE211. |
+
+The November 11 autonomous comparison held channel, rate, sender and synthetic
+source constant and changed only QoS No Ack. Baseline selected the intended TV
+and failed in the transient-pairing/reconnect path before a PIN or stream.
+Of 218 observed incoming data frames from that TV addressed to the laptop,
+181 had the retry flag; the strongest recent signal was approximately -38 dBm.
+The longest consecutive repetition run was 19 frames. QoS No Ack did not
+discover the TV over Bonjour, although the same AWDL peer remained audible.
+Both cases restored Wi-Fi without a firmware assertion. This supports the
+missing receive-ACK hypothesis; it is not a measured packet-loss rate or
+proof that the QoS change caused discovery failure.
+
+The radio reports counts of incoming AWDL data
+addressed to its own MAC, retry flags and consecutive repeated sequence
+numbers, grouped by transmitting peer. It retains no packet payloads. These
+are observations from the local monitor, not proof of over-the-air TX or an
+independent ACK capture. Correlate them with TCP received/ACKed bytes, RTT and
+session stages before changing authentication, encoding or timeouts. Repeated
+incoming frames would support investigating hardware receive ACKs; stalled
+outgoing data with the receiver absent supports TX queue/retry investigation.
+Neither is established merely by the app entering its streaming state.
+
+### Prepared hardware test battery
+
+`nix build .#airplay-test-battery --out-link .work/airplay/test-battery`
+prepares the app, pinned radio and sender variants, and the optional Intel
+modules before a hospital testing window. Nothing is installed in the booted
+system, and building or listing the plan does not start discovery, capture,
+Bluetooth advertising or a radio session. The output link keeps the complete
+closure available without an Internet connection during testing.
+
+The [case catalog](tests/airplay-battery-cases.json) has 34 prepared cases:
+
+| Suite | Cases | Maximum radio time, excluding setup/recovery | Purpose |
+| --- | ---: | ---: | --- |
+| `quick` | 3 | 3 minutes | Current baseline, legacy 12 Mbps and MTU 1280 |
+| `radio` | 16 | 16 minutes | P2P GO receive-ACK context, rate/modulation, TX ACK request, QoS No Ack, A-MSDU, RSSI cutoff, neighbour echoes, MTU, clock comparison and 1/2 ms injection pacing |
+| `media` | 11 | 55 minutes | Synthetic/desktop capture, bitrate/FPS, audio, VAAPI/software, HEVC, playout lead, keyframe-write grace and socket buffering |
+| `driver` | 7 | 7.5 minutes | Receive-only channels, stock/corrected rate mapping, power saving, IBSS filtering and regulated 44/149 transmission |
+| `all` | 34 | 78.5 minutes | All cases once; quick cases already belong to radio |
+
+Media cases have five-minute leases to allow PIN entry, screen selection and
+at least 60 seconds of observation. Close the app to finish a case early.
+Synthetic cases generate video/audio and do not capture the desktop. The
+two-minute limit still applies to cases that reload the Intel module; they
+measure radio behavior without requiring a TV handshake. Driver cases are
+specific to the tested `wlp0s20f3` laptop and require its kernel version to
+match the built module. The receive-only case does not reload a driver.
+
+Run the battery as the desktop user from an interactive terminal:
+
+```sh
+.work/airplay/test-battery/bin/sekka-airplay-battery plan --suite all
+.work/airplay/test-battery/bin/sekka-airplay-battery run --suite quick --target 'EXACT TV NAME'
+.work/airplay/test-battery/bin/sekka-airplay-battery run --suite radio --target 'EXACT TV NAME'
+.work/airplay/test-battery/bin/sekka-airplay-battery run --suite media --target 'EXACT TV NAME'
+```
+
+For autonomous operation, use `--autonomous --target 'EXACT TV NAME'
+--device-id 'AA:BB:CC:DD:EE:FF' --case baseline-mcs7 --case qos-noack`.
+This mode also works without a terminal. It starts the direct radio, selects
+one uniquely named receiver only when its expected device ID and scoped AWDL
+endpoint match, then starts synthetic video. The default is `synthetic-low`;
+`--media-profile synthetic-video` or `synthetic-av` selects the other synthetic
+sources. Desktop capture is rejected in this mode. Linux may request one
+administrator authentication per batch; any TV PIN is entered in the app and
+never placed in arguments, environment variables or logs.
+
+Each autonomous case attempts one connection and stops on a sender error,
+90 seconds without target selection, 180 seconds without stream setup after
+selection, or 75 seconds of reported streaming. The existing radio lease is
+the outer bound. The runner advances and saves results without asking for a
+terminal verdict. No password/PIN guessing or unbounded reconnect loop occurs.
+All automatic TV verdicts remain `unverified`: sustained sender state and TCP
+delivery do not prove what the physical display rendered. An observer or an
+independent view of the TV is still needed to certify picture and sound.
+
+Use the room name visible on the TV, not a Bluetooth identifier. Without
+`--autonomous`, the runner never chooses a receiver. In each manual media window click Use Direct
+Wi-Fi, choose that TV, enter its PIN in the app and choose a screen when asked.
+The app rejects a different TV during a battery run. Automated discovery cases
+only probe a uniquely named receiver on `fe80::…%awdl0`; ambiguous or missing
+names cause no probe. Three small `/info` requests and ICMP at two sizes
+measure reachability without pairing. A TV may ignore ICMP, so loss there
+alone does not establish an unusable AirPlay connection.
+
+Small probes cannot validate video throughput. Add `--mirror` to any radio
+trial to test its exact settings with the normal sender and a five-minute
+lease (two minutes for module reloads). Add `--media-profile synthetic-low`
+to use a low-rate synthetic source with those same radio settings. All nine
+media profiles are selectable; `--help` lists them. Receive-only cases cannot
+mirror. Media trials omit the extra probes to avoid interfering with the
+handshake or video measurement.
+
+The earlier dropout comparison used baseline, injection pacing and packet
+size with actual video. Retained here for reproduction:
+
+```sh
+.work/airplay/test-battery/bin/sekka-airplay-battery run --target 'EXACT TV NAME' --mirror \
+  --case baseline-mcs7 --case pacing-1ms --case pacing-2ms --case m6-mtu1280
+.work/airplay/test-battery/bin/sekka-airplay-battery run --target 'EXACT TV NAME' --mirror \
+  --case pacing-1ms --media-profile synthetic-low
+```
+
+The four-case comparison allows up to 20 minutes of radio time, plus setup
+and recovery; close each window once its result is clear. `plan` accepts the
+same selection, mirroring and profile options and shows the resulting time.
+
+Linux may request one administrator authentication per batch. An immutable, store-owned
+broker accepts only catalog IDs and starts the existing bounded system-unit
+helpers. The GUI communicates through a same-user Unix socket; it never runs
+as root. Each case releases its control pipe and waits for helper cleanup
+before the next case. The runner checks that the previous Wi-Fi connection
+returned and temporary AWDL interfaces disappeared, and aborts if recovery
+cannot be verified. Ctrl-C closes the lease; systemd also bounds the service
+and owns recovery after an app/runner crash. No regulatory restrictions or
+transmit-power limits are bypassed. Driver cases restore the booted module
+and its original power setting.
+
+Select individual cases or run an A/B/A comparison without rebuilding:
+
+```sh
+.work/airplay/test-battery/bin/sekka-airplay-battery run --target 'EXACT TV NAME' \
+  --case baseline-mcs7 --case pacing-1ms --case baseline-mcs7
+.work/airplay/test-battery/bin/sekka-airplay-battery run --target 'EXACT TV NAME' \
+  --case synthetic-low --case screen-auto
+.work/airplay/test-battery/bin/sekka-airplay-battery run --target 'EXACT TV NAME' \
+  --case driver-149
+```
+
+`--repeat 2` or `3` repeats the selected sequence. Prefer targeted repetitions
+over spending the window repeating known firmware crashes. An all-suite run
+is deliberately explicit; it includes experiments already known to fail.
+The broker has a four-hour overall bound and accepts at most 100 case starts.
+
+Each run creates a private `airplay-results-TIMESTAMP` directory, or a new
+directory specified with `--output`. `plan.json` records the exact store
+paths, kernel, selected cases and target. Each case saves its settings, JSONL
+radio/app events, TCP samples and summary, target probe timing, kernel log,
+network restoration state and result. `summary.json` and `summary.tsv`
+distinguish discovery, PIN, pairing, stream setup, keyframe timeout, firmware
+reset and the human TV verdict. Interrupted runs retain completed results and
+the partial case's events; their summary marks incomplete evidence and never
+assumes recovery succeeded. Rebuild a summary without hardware access with:
+
+```sh
+.work/airplay/test-battery/bin/sekka-airplay-battery report --output /path/to/airplay-results
+```
+
+PINs, pairing files, screenshots and packet/application payloads are not
+collected. The app keeps pairing keys only in its private session and erases
+them on normal case shutdown. A forced kill can leave its private runtime
+directory until logout, as with normal app use. Result metadata includes TV
+names, network addresses and adapter details; inspect it before sharing.
+
+Interpret results in this order:
+
+1. Confirm discovery, `/info` latency and radio stability. Compare packet sizes,
+   pacing and rates while holding laptop/TV position constant. Use TCP ACKed
+   bytes, retransmissions and queued bytes to separate delivery from buffering.
+2. Try low-rate synthetic video without audio, then normal-rate synthetic video,
+   synthetic audio, and desktop capture. This separates the radio path from
+   capture, encoding and audio setup. Low-rate success is diagnostic, not the
+   requested high-quality outcome.
+3. If only startup fails, compare the eight-second keyframe-write deadline and
+   256 KiB send buffer separately. Growing queues or latency count as failure
+   even if the app stays in its streaming state. The normal sender is unchanged.
+4. Run driver experiments separately. A 149 assertion with valid OFDM encoding
+   calls for driver/firmware TX-queue analysis, not another country override.
+   The IBSS filter admits discovery but has not provided a stable data path.
+5. A promising case must show actual moving video and expected audio for at
+   least 60 seconds, then repeat with normal 30-fps capture, five minutes of
+   playback, mute/unmute, stop and reconnect. Stream setup alone is never a pass.
+
+Further experiments are gated on this evidence, not claimed as implemented:
+confirm hardware RX ACKs with an independent capture adapter; isolate firmware
+queue/TID/LMAC handling before another 149 driver patch; test an independently
+supported USB adapter; and compare a normal LAN path when the network permits
+it. Accepting Block Ack without verified hardware support, forcing election
+dominance across nearby rooms, or changing RF limits are not battery cases.
+The current exclusive Intel path pauses the laptop's Internet connection;
+online video also requires an independent Internet route or a working shared
+radio path before it can satisfy the original use case.
+
+Offline validation is `nix build .#checks.x86_64-linux.airplay-battery`.
+Its fake helper/Unix-socket fixtures check bounded selection, exact receiver
+matching, lease release on EOF, broker rejection, cleanup, evidence reporting
+and recovery gating without operating host radios. The radio derivation also
+runs the patched AWDL protocol tests; paced variants run their radio-library
+unit tests. Sender variants run the sender's Go checks. These checks prepare
+the battery; they do not qualify its new cases on a physical television.
+
+The sender build runs its Go protocol and capture tests with AAC-ELD enabled.
+`airplay-media` uses the packaged binaries, synthetic screen/audio and
+loopback receiver fixtures for PIN pairing, actual received media, mute,
+disconnect, reconnect and process cleanup. It never captures the host screen
+or connects to a physical TV. `airplay-packages` checks live/installed desktop
+selection and the disabled/firewall overrides. Rust tests cover the UI
+states, socket framing/bounds, PIN target/port handling and Bluetooth parsing
+and `/info`. `AIRPLAY_TEST_SCREENSHOTS=/absolute/directory cargo test …
+screenshots` renders fixture UI images; they are not real-TV evidence.
+
+These are component checks. They do not qualify an ISO, a physical TV,
+protected browser video, or the hospital network. Before claiming receiver
+compatibility, record its model/firmware and test real capture, audible audio,
+passcode rejection/retry, cancellation and stopping on that receiver. Keep
+release publication inhibited.
+
 ## Tatami Bluetooth
 
 `desktop/tatami/bluetooth` is a separate GTK 4/libadwaita Cargo workspace,
