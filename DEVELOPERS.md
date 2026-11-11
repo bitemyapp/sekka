@@ -1496,6 +1496,25 @@ nix develop .#aizome
 nix build .#aizome-checks.session -L
 ```
 
+### Tansu and removable Btrfs compression
+
+Aizome sets UDisks's `btrfs_defaults` to `compress=zstd:1`, matching Genkan's
+installed root filesystem. Tansu delegates formatting and mounting to UDisks;
+compression is enabled when the volume is mounted, not by `mkfs.btrfs`. The
+policy also applies to Hako mounts and persists across unmounts and reconnects.
+It affects new writes on existing Btrfs volumes, without recompressing old data.
+
+Administrators can override
+`services.udisks2.settings."mount_options.conf".defaults.btrfs_defaults`.
+UDisks continues to honor explicit `/etc/fstab` entries and its per-device
+overrides. Other filesystem types retain their existing mount defaults.
+
+`nix build .#aizome-checks.tansu-compression` checks the evaluated module's
+default and administrator override, then uses real UDisks Format/Mount calls
+on a disposable VM disk. It checks `compress=zstd:1`, actual zstd extents,
+remount persistence, and a subsequent ext4 mount. This is a storage-policy
+component check, not a Tansu GUI or ISO installation qualification.
+
 ### Aizome's builds
 
 An edit to Aizome compiles Aizome's crates, not the hundreds of third-party

@@ -722,6 +722,12 @@ in
     services.upower.enable = lib.mkDefault true;
     services.power-profiles-daemon.enable = lib.mkDefault true;
     services.udisks2.enable = lib.mkDefault true;
+    # Tansu formats and mounts through UDisks. Compression is a mount
+    # policy, not a mkfs option; keep removable Btrfs volumes on Genkan's
+    # zstd level 1 on every mount, including mounts from Hako. Administrators
+    # can override this default; UDisks leaves explicit fstab entries alone.
+    services.udisks2.settings."mount_options.conf".defaults.btrfs_defaults =
+      lib.mkDefault "compress=zstd:1";
     services.accounts-daemon.enable = lib.mkDefault true;
     services.printing.enable = lib.mkDefault true;
     # Network and driverless (IPP Everywhere) printers announce themselves
