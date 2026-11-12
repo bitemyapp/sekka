@@ -101,6 +101,12 @@ native build outputs, cross-worktree storage, or edit performance. The earlier
 tiny warm-test timing table remains tied to its original compiler revision; no
 new speed ordering is claimed for these fixes.
 
+The subsequent [cache and worktree comparison](../2026-11-11-cache-comparison/README.md)
+measures this compiler revision against Buck2 + NativeLink on the same component
+tests, including empty caches, warm reruns, relocated worktrees, executed source
+edits, and compression-aware physical cache storage. It keeps the historical
+whole-native-build figures separate from those JIT test measurements.
+
 ## Reproduce
 
 Use a fresh output directory for every run. The harness accepts both original

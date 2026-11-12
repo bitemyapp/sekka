@@ -174,7 +174,7 @@ This experiment validates a useful component subset under Relax, not parity with
 the native desktop build.
 
 The historical Buck2 reference is the
-[31-stage final storage run at `7fef66a8`](https://github.com/bitemyapp/sekka/blob/7fef66a8ae5b3f592194dd2104b1afa354ca6dfb/docs/test-results/buck2/2026-11-06-final/README.md),
+[31-stage final storage run at `7fef66a8`](https://github.com/bitemyapp/sekka/blob/54d6089f2cdddac0bb443faab6eb544e8be22d92/docs/test-results/buck2/2026-11-06-final/README.md),
 on the same workstation, with all gates passing. Its full workload recorded:
 
 | Buck2 observation | Historical result |

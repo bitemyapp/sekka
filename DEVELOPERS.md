@@ -337,6 +337,11 @@ JIT-compiled; successful tests exercise only their covered paths. The report
 separates these results from the Buck2 experiment's build/cache measurements.
 Neither experiment qualifies an ISO or physical hardware.
 
+The [cache and worktree comparison](docs/test-results/relax/2026-11-11-cache-comparison/README.md)
+records matched component-test timings and physical cache storage for Relax and
+Buck2 + NativeLink, with cold, warm, identical-worktree and edited-worktree cases.
+It distinguishes those measurements from the older full native-build evidence.
+
 ### Component development
 
 The [migration record](docs/migration.md) explains retained work, exclusions,
