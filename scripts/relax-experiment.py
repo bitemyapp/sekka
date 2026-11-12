@@ -56,6 +56,30 @@ def main():
     result_path = args.output / "results.json"
     runner = args.relax_root / "target/release/relax"
     fixtures = (args.fixtures_root or args.relax_root).resolve() / "libs/relax/compiler/tests"
+    def fixture_source(name):
+        # Upstream moved these rejection fixtures while incorporating the first
+        # experiment's fixes. Keep both pinned compiler revisions reproducible.
+        primary = fixtures / (name + ".rs")
+        moved = {
+            "exported_macro_builtin_reexport_reject": "exported_macro_builtin_reexport",
+            "exported_macro_absolute_import_reject": "exported_macro_absolute_import",
+        }
+        if not primary.exists() and name in moved:
+            return fixtures / "strict_errors" / (moved[name] + ".rs")
+        return primary
+    positive = ["sse2_safe_byte_intrinsics", "macro_expansion_textual_scope", "exported_macro_and_value_reexport"]
+    negative = {"sse2_load_requires_unsafe_reject": "E0133",
+                "exported_macro_builtin_reexport_reject": "E0255",
+                "exported_macro_absolute_import_reject": "E0255"}
+    # The follow-up compiler adds these fixtures; the initial pinned compiler
+    # must still run its original regression set without missing-file failures.
+    for name in ("macro_inner_use", "macro_file_order", "macro_file_shadow"):
+        if fixture_source(name).is_file():
+            positive.append(name)
+    for name, diagnostic in (("macro_inner_use_before_module_reject", "macro `later_value"),
+                             ("macro_file_before_module_reject", "macro `ordered_value")):
+        if fixture_source(name).is_file():
+            negative[name] = diagnostic
     env = os.environ.copy()
     env["MAKEPAD_RUN_STD"] = str(args.relax_root / "libs/relax/compiler/std")
     env.setdefault("MAKEPAD_CPU_CORES", "8")
@@ -76,11 +100,10 @@ def main():
                 for p in sorted({args.sekka_root / d / "Cargo.lock" for d, _, _ in COMPONENTS}) if p.exists()}
     results["inputs"]["lockfiles"] = lock_hashes()
     if args.mode == "regressions":
-        files = [fixtures / (n + ".rs") for n in (
-            "sse2_safe_byte_intrinsics", "macro_expansion_textual_scope", "exported_macro_and_value_reexport",
-            "sse2_load_requires_unsafe_reject", "exported_macro_builtin_reexport_reject", "exported_macro_absolute_import_reject")]
-        files += [p for p in (fixtures / "attribute_macro_private_module").rglob("*")
-                  if p.is_file() and (p.suffix == ".rs" or p.name == "Cargo.toml") and "target" not in p.parts]
+        files = [fixture_source(n) for n in positive + list(negative)]
+        for name in positive + ["attribute_macro_private_module"]:
+            files += [p for p in (fixtures / name).rglob("*")
+                      if p.is_file() and (p.suffix == ".rs" or p.name == "Cargo.toml") and "target" not in p.parts]
         results["inputs"]["fixtures"] = {str(p.relative_to(fixtures)): hashlib.sha256(p.read_bytes()).hexdigest()
                                              for p in files if p.is_file()}
     result_path.write_text(json.dumps(results, indent=2) + "\n")
@@ -150,16 +173,12 @@ def main():
 
     engines = ["rustc", "relax"] if args.engine == "both" else [args.engine]
     if args.mode == "regressions":
-        positive = ["sse2_safe_byte_intrinsics", "macro_expansion_textual_scope", "exported_macro_and_value_reexport"]
-        negative = {"sse2_load_requires_unsafe_reject": "E0133",
-                    "exported_macro_builtin_reexport_reject": "E0255",
-                    "exported_macro_absolute_import_reject": "E0255"}
         if args.case and set(args.case) - set(positive + list(negative) + ["attribute_macro_private_module"]):
             parser.error("unknown regression case")
         for case in positive + list(negative):
             if args.case and case not in args.case:
                 continue
-            source = fixtures / (case + ".rs")
+            source = fixture_source(case)
             for engine in engines:
                 label = f"{case}-{engine}"
                 if engine == "rustc":

@@ -313,13 +313,14 @@ Node runtime used by its WebAssembly backend tests to the
 root-locked Aizome development environment. It is an opt-in experiment shell;
 ordinary packages still use their existing Cargo workspaces and compiler.
 Build the standalone runner from the compiler revision recorded in the
-[experiment report](docs/test-results/relax/2026-11-11/README.md), then run:
+[follow-up report](docs/test-results/relax/2026-11-11-followup/README.md), then run:
 
 ```sh
 nix develop .#relax
 cargo build --release --manifest-path /path/to/relax/Cargo.toml -p relax-runner --bin relax -j 8
 python3 scripts/relax-experiment.py regressions --relax-root /path/to/relax --output /path/to/evidence/regressions
 python3 scripts/relax-experiment.py components --relax-root /path/to/relax --output /path/to/evidence/components
+python3 scripts/relax-experiment.py check --package aizome-comp --relax-root /path/to/relax --output /path/to/evidence/compositor
 ```
 
 Each output directory holds commands, revisions, exit codes, wall times and

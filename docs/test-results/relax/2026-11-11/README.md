@@ -1,5 +1,8 @@
 # Relax compiler experiment on wx-workstation
 
+This is the initial, pinned result. The [follow-up](../2026-11-11-followup/README.md)
+records fixes and new validation for the compiler and test failures below.
+
 This continues the recovered ChatGPT experiment on the workstation with Sekka's
 native dependencies available. It exercises component tests and compiler
 regressions. It does not establish a working Relax-built compositor, desktop,
