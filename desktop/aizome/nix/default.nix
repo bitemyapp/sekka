@@ -187,6 +187,7 @@ let
       power-meter = import ./vm-power-meter-test.nix { inherit pkgs self; };
       tansu-size = import ./vm-tansu-size-test.nix { inherit pkgs self; };
       tansu-resize = import ./vm-tansu-resize-test.nix { inherit pkgs self; };
+      tansu-compression = import ./vm-tansu-compression-test.nix { inherit pkgs self; };
       sumi-search = import ./vm-sumi-search-test.nix { inherit pkgs self; };
       fusen-save = import ./vm-fusen-save-test.nix { inherit pkgs self; };
       encrypted-volumes = import ./vm-encrypted-volumes-test.nix { inherit pkgs self; };
