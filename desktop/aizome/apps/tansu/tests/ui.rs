@@ -286,7 +286,11 @@ fn a_return_held_in_the_name_field_applies_nothing() {
                 h.key_down(w, enter.clone(), Modifiers::NONE);
             }
         }
-        assert!(mock.calls().is_empty(), "a held Return applied the plan (repeats marked: {marked}): {:?}", mock.calls());
+        assert!(
+            mock.calls().is_empty(),
+            "a held Return applied the plan (repeats marked: {marked}): {:?}",
+            mock.calls()
+        );
         assert_eq!(sheet_kind(&h), Some("apply"));
         h.key_up(w, enter, Modifiers::NONE);
         assert!(mock.calls().is_empty());
