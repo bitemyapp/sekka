@@ -393,9 +393,12 @@ observed; missing data is not evidence that no stall happened.
 
 There are no uploads, command-line or environment-variable captures,
 screenshots, keystrokes, `smaps` scans, `perf`, root, or debugfs access.
-Before sharing even a small event window, review it: process names and IDs,
-unit/cgroup names and paths, device identifiers, timestamps, and relevant
-journal excerpts can disclose metadata about workloads or the machine.
+Before sharing even a small event window, review it: process names and IDs
+(other users' processes included), the executable paths of your own
+processes (which can name home and project directories), unit/cgroup names
+and paths (container and application IDs among them), device identifiers,
+boot IDs, timestamps, and relevant journal excerpts can disclose metadata
+about workloads or the machine.
 Private permissions and bounded retention are not anonymization.
 
 ### Checks
