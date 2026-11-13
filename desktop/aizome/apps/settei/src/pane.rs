@@ -371,7 +371,8 @@ pub trait Pane: 'static {
     }
 
     /// The sub-page showing, which the title strip puts after the pane's
-    /// title ("General › About"); Back then returns from it.
+    /// title ("General › About"); Back, or the title pressed there, then
+    /// returns from it.
     fn crumb(&self) -> Option<&'static str> {
         None
     }

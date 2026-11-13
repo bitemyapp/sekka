@@ -149,6 +149,80 @@ fn aliases_and_sub_pages_open() {
 }
 
 #[test]
+fn a_sub_pages_crumb_leads_back_to_its_pane() {
+    use aizome_kit::sidestep_ui::{Modifiers, NamedKey};
+    use aizome_kit::widget::SemanticRole;
+    let (mut h, _) = common::open("crumb", "mouse");
+    let w = h.window();
+    // The pane's title in the strip, as assistive technology is told of it.
+    let crumb = |h: &aizome_kit::testing::Harness<settei::Settei>| {
+        h.semantics(w)
+            .into_iter()
+            .find(|(s, _)| s.role == SemanticRole::Button && s.label.as_deref() == Some("Back to General"))
+            .map(|(_, r)| r)
+    };
+    // What only General's first page says.
+    let first_page = |h: &aizome_kit::testing::Harness<settei::Settei>| {
+        h.texts(w).iter().any(|t| t == "What starts when you log in.")
+    };
+    // The title strip's words and glyphs, left to right: the pane's tile and
+    // name and, over a sub-page, the chevron and the sub-page's title.
+    let strip = |h: &aizome_kit::testing::Harness<settei::Settei>| -> Vec<aizome_kit::layout::Rect> {
+        h.inspected(w)
+            .iter()
+            .filter(|e| e["visible"] == true && (e["role"] == "label" || e["role"] == "image"))
+            .map(|e| {
+                let r: Vec<f64> = e["rect"].as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect();
+                aizome_kit::layout::Rect::new(r[0], r[1], r[0] + r[2], r[1] + r[3])
+            })
+            .filter(|r| r.x0 > settei::app::SIDEBAR && r.y1 < 44.0)
+            .collect()
+    };
+    assert_eq!(crumb(&h), None, "a pane without sub-pages has nothing to go back to");
+    let pages =
+        ["about", "software-update", "storage", "startup", "datetime", "language", "default-apps", "login-items"];
+    for page in pages {
+        h.send(settei::AppMsg::Open("general".into(), Some(page.into())));
+        assert!(!first_page(&h), "General › {page} shows");
+        let at = crumb(&h).unwrap_or_else(|| panic!("General › {page} has General to press"));
+        let over = strip(&h);
+        if page == "about" {
+            h.move_to(w, at.center());
+            h.save_png(w, common::shots_dir().join("crumb-hover-night.png"), 1.0);
+        }
+        h.click(w, at.center());
+        assert_eq!(h.program().pane_id(), "general");
+        assert!(first_page(&h), "General pressed in General › {page} shows General's first page");
+        assert_eq!(crumb(&h), None, "and on its first page General isn't there to press ({page})");
+        // Being pressable moved nothing: the tile and the name are where
+        // the first page has them, and the strip is spaced as evenly.
+        let first = strip(&h);
+        assert_eq!((over.len(), first.len()), (4, 2), "{page}: {over:?}, then {first:?}");
+        assert_eq!((over[0], over[1].origin()), (first[0], first[1].origin()), "{page}");
+        let gap = over[1].x0 - over[0].x1;
+        assert_eq!((over[2].x0 - over[1].x1, over[3].x0 - over[2].x1), (gap, gap), "{page}: {over:?}");
+    }
+    // From the keyboard: Shift+Tab from the page reaches it, Return presses it.
+    h.leave(w);
+    h.send(settei::AppMsg::Open("general".into(), Some("about".into())));
+    let at = crumb(&h).expect("General › About has General to press");
+    for _ in 0..64 {
+        if h.focused_rect(w) == Some(at) {
+            break;
+        }
+        h.named(w, NamedKey::Tab, Modifiers::SHIFT);
+    }
+    assert_eq!(h.focused_rect(w), Some(at), "Tab reaches General in General › About");
+    h.save_png(w, common::shots_dir().join("crumb-focused-night.png"), 1.0);
+    h.named(w, NamedKey::Enter, Modifiers::NONE);
+    assert!(first_page(&h), "Return on it shows General's first page");
+    assert_eq!(crumb(&h), None);
+    // It went up a page, not back a pane: Mouse is still the pane before.
+    h.send(settei::AppMsg::Back);
+    assert_eq!(h.program().pane_id(), "mouse");
+}
+
+#[test]
 fn the_layout_picker_adds_a_layout() {
     let (mut h, path) = common::open("picker", "keyboard");
     let w = h.window();
