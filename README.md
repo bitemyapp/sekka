@@ -64,6 +64,11 @@ NeXTSTEP and IRIX:
   own chooser: Files' sidebar and path bar over the app's window, with its
   filters and options. Qt apps, and GTK 4 apps that don't ask the desktop
   portal, still show their own dialogs.
+- X11 apps, audio workstations and their plug-in windows among them, take
+  files dragged from Files and other apps, and drags between X11 windows
+  land on the window under the pointer. Taking the drop is still up to the
+  app: a plug-in window gets one only if the plug-in or its host accepts
+  dropped files.
 
 It comes with its own apps: Settei (Settings), Yukimi, Hako (Files), Sumi
 (Text Editor), Fusen (Notes), Koyomi (Calendar), Tokei (Clock), Soroban

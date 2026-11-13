@@ -54,6 +54,19 @@ let
   xdg-desktop-portal-wlr = pkgs.xdg-desktop-portal-wlr.overrideAttrs (old: {
     patches = (old.patches or [ ]) ++ [ ./xdg-desktop-portal-wlr-captures.patch ];
   });
+  # X11 apps run through xwayland-satellite, patched for drag and drop
+  # between X11 and Wayland windows and between X11 windows. Its first patch
+  # is upstream's open pull request 534 (Wayland drags dropped on X11
+  # windows). The second is Sekka's: an X11 app's drag is carried by a
+  # Wayland drag, since satellite places X11 windows on the X screen without
+  # knowing where Aizome shows them and X11 drags would otherwise land
+  # wherever the X screen has a window at the pointer's position.
+  xwayland-satellite = pkgs.xwayland-satellite.overrideAttrs (old: {
+    patches = (old.patches or [ ]) ++ [
+      ./xwayland-satellite-wayland-to-x11-dnd.patch
+      ./xwayland-satellite-x11-drags.patch
+    ];
+  });
   # Another desktop on the system (sway, say) may enable NixOS's own
   # xdg.portal.wlr, which installs nixpkgs' portal and sets its ExecStart.
   # Then that package provides the unit and the portal files (installing
@@ -297,7 +310,7 @@ in
     environment.systemPackages = [
       cfg.package
       pkgs.foot
-      pkgs.xwayland-satellite
+      xwayland-satellite
       pkgs.wl-clipboard
       pkgs.xdg-utils
       pkgs.adwaita-icon-theme

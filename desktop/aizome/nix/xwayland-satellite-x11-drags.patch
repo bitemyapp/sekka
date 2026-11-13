@@ -1,0 +1,1469 @@
+From b84ab0d966b6378cefc13f1411bd587a056e1175 Mon Sep 17 00:00:00 2001
+From: Aidan Coyne <raptros.v76@gmail.com>
+Date: Sun, 8 Nov 2026 10:54:59 -0600
+Subject: [PATCH 2/2] Carry X11 clients' drags in Wayland drags
+
+Satellite puts X windows on the X screen without knowing where the
+compositor shows them, so an X client dragging looks for its XDND
+target at a position that has nothing to do with the window under the
+pointer: drops between X windows land on the wrong window or nowhere,
+unless the windows happen to line up.
+
+When an X client takes XdndSelection while a button is held on one of
+our windows, satellite starts a Wayland drag from that window. The
+compositor then says which surface the pointer is over:
+
+- Over one of our X windows, Xwayland's pointer moves to the matching
+  point on the X screen (relative to the window the drag started from,
+  since entering another surface makes Xwayland release the button),
+  and that window is raised, so the X client finds it and drives XDND
+  with it itself.
+- Over a Wayland client, an XdndAware proxy above every X window is the
+  X client's target, and the Wayland client reads the data through
+  XdndSelection conversions. Only "copy" is offered; DELETE and
+  TIMESTAMP are not offered as types.
+
+The drop ends with the button release the compositor kept. Windows of
+type _NET_WM_WINDOW_TYPE_DND get an empty input region, so drag icons
+under the pointer don't become the drop target.
+---
+ src/lib.rs               |   1 +
+ src/server/clientside.rs |  74 +++++--
+ src/server/dnd.rs        |   2 +-
+ src/server/event.rs      |  30 ++-
+ src/server/mod.rs        |  28 +++
+ src/server/selection.rs  |   6 +
+ src/server/xdrag.rs      | 422 +++++++++++++++++++++++++++++++++++++++
+ src/xstate/dnd.rs        |   2 +-
+ src/xstate/mod.rs        |  18 +-
+ src/xstate/selection.rs  |  89 +++++----
+ src/xstate/xdrag.rs      | 421 ++++++++++++++++++++++++++++++++++++++
+ 11 files changed, 1041 insertions(+), 52 deletions(-)
+ create mode 100644 src/server/xdrag.rs
+ create mode 100644 src/xstate/xdrag.rs
+
+diff --git a/src/lib.rs b/src/lib.rs
+index 31ec412..c004252 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -240,6 +240,7 @@ pub fn main(mut data: impl RunData) -> Option<()> {
+             xstate.set_primary_selection(sel);
+         }
+ 
++        xstate.handle_x_drag(&mut server_state);
+         xstate.handle_wl_dnd(&mut server_state);
+ 
+         if let Some(scale) = server_state.new_global_scale() {
+diff --git a/src/server/clientside.rs b/src/server/clientside.rs
+index d3d6bf6..9965a3f 100644
+--- a/src/server/clientside.rs
++++ b/src/server/clientside.rs
+@@ -122,16 +122,32 @@ pub(super) struct MyWorld {
+     pub primary: SelectionEvents<PrimarySelectionOffer>,
+     pub pending_activations: Vec<(xcb::x::Window, String)>,
+     pub dnd: Vec<WlDndEvent>,
++    /// The data source of a drag that an X client started, while it lasts.
++    pub x_drag_source: Option<wayland_client::protocol::wl_data_source::WlDataSource>,
++    pub x_drag_source_events: Vec<XDragSourceEvent>,
+ }
+ 
+ /// Wayland drag-and-drop events over our surfaces, bridged to XDND by XState.
+ pub(crate) enum WlDndEvent {
+     Enter(DragOffer),
+-    Motion(f64, f64),
++    Motion(f64, f64, u32),
+     Leave,
+     Drop(DragOffer),
+ }
+ 
++/// What happened to the data source of a drag an X client started.
++pub(crate) enum XDragSourceEvent {
++    Target(Option<String>),
++    Action(wayland_client::protocol::wl_data_device_manager::DndAction),
++    Send(
++        String,
++        smithay_client_toolkit::data_device_manager::WritePipe,
++    ),
++    Dropped,
++    Finished,
++    Cancelled,
++}
++
+ impl MyWorld {
+     pub fn new(global_list: GlobalList) -> Self {
+         Self {
+@@ -145,6 +161,8 @@ impl MyWorld {
+             primary: Default::default(),
+             pending_activations: Vec::new(),
+             dnd: Vec::new(),
++            x_drag_source: None,
++            x_drag_source_events: Vec::new(),
+         }
+     }
+ }
+@@ -474,11 +492,13 @@ impl DataDeviceHandler for MyWorld {
+         &mut self,
+         _: &wayland_client::Connection,
+         _: &wayland_client::QueueHandle<Self>,
+-        _: &wayland_client::protocol::wl_data_device::WlDataDevice,
++        data_device: &wayland_client::protocol::wl_data_device::WlDataDevice,
+         x: f64,
+         y: f64,
+     ) {
+-        self.dnd.push(WlDndEvent::Motion(x, y));
++        let data: &DataDeviceData = data_device.data().unwrap();
++        let time = data.drag_offer().and_then(|o| o.time).unwrap_or(0);
++        self.dnd.push(WlDndEvent::Motion(x, y, time));
+     }
+ 
+     fn leave(
+@@ -506,59 +526,87 @@ impl DataDeviceHandler for MyWorld {
+     }
+ }
+ 
++impl MyWorld {
++    fn x_drag_source_event(
++        &mut self,
++        source: &wayland_client::protocol::wl_data_source::WlDataSource,
++        event: XDragSourceEvent,
++    ) -> Option<XDragSourceEvent> {
++        if self.x_drag_source.as_ref() == Some(source) {
++            self.x_drag_source_events.push(event);
++            None
++        } else {
++            Some(event)
++        }
++    }
++}
++
+ impl DataSourceHandler for MyWorld {
+     fn send_request(
+         &mut self,
+         _: &wayland_client::Connection,
+         _: &wayland_client::QueueHandle<Self>,
+-        _: &wayland_client::protocol::wl_data_source::WlDataSource,
++        source: &wayland_client::protocol::wl_data_source::WlDataSource,
+         mime: String,
+         fd: smithay_client_toolkit::data_device_manager::WritePipe,
+     ) {
+-        self.clipboard.requests.push((mime, fd));
++        if let Some(XDragSourceEvent::Send(mime, fd)) =
++            self.x_drag_source_event(source, XDragSourceEvent::Send(mime, fd))
++        {
++            self.clipboard.requests.push((mime, fd));
++        }
+     }
+ 
+     fn cancelled(
+         &mut self,
+         _: &wayland_client::Connection,
+         _: &wayland_client::QueueHandle<Self>,
+-        _: &wayland_client::protocol::wl_data_source::WlDataSource,
++        source: &wayland_client::protocol::wl_data_source::WlDataSource,
+     ) {
+-        self.clipboard.cancelled = true;
++        if self
++            .x_drag_source_event(source, XDragSourceEvent::Cancelled)
++            .is_some()
++        {
++            self.clipboard.cancelled = true;
++        }
+     }
+ 
+     fn action(
+         &mut self,
+         _: &wayland_client::Connection,
+         _: &wayland_client::QueueHandle<Self>,
+-        _: &wayland_client::protocol::wl_data_source::WlDataSource,
+-        _: wayland_client::protocol::wl_data_device_manager::DndAction,
++        source: &wayland_client::protocol::wl_data_source::WlDataSource,
++        action: wayland_client::protocol::wl_data_device_manager::DndAction,
+     ) {
++        self.x_drag_source_event(source, XDragSourceEvent::Action(action));
+     }
+ 
+     fn dnd_finished(
+         &mut self,
+         _: &wayland_client::Connection,
+         _: &wayland_client::QueueHandle<Self>,
+-        _: &wayland_client::protocol::wl_data_source::WlDataSource,
++        source: &wayland_client::protocol::wl_data_source::WlDataSource,
+     ) {
++        self.x_drag_source_event(source, XDragSourceEvent::Finished);
+     }
+ 
+     fn dnd_dropped(
+         &mut self,
+         _: &wayland_client::Connection,
+         _: &wayland_client::QueueHandle<Self>,
+-        _: &wayland_client::protocol::wl_data_source::WlDataSource,
++        source: &wayland_client::protocol::wl_data_source::WlDataSource,
+     ) {
++        self.x_drag_source_event(source, XDragSourceEvent::Dropped);
+     }
+ 
+     fn accept_mime(
+         &mut self,
+         _: &wayland_client::Connection,
+         _: &wayland_client::QueueHandle<Self>,
+-        _: &wayland_client::protocol::wl_data_source::WlDataSource,
+-        _: Option<String>,
++        source: &wayland_client::protocol::wl_data_source::WlDataSource,
++        mime: Option<String>,
+     ) {
++        self.x_drag_source_event(source, XDragSourceEvent::Target(mime));
+     }
+ }
+ 
+diff --git a/src/server/dnd.rs b/src/server/dnd.rs
+index c7dab82..1607bf7 100644
+--- a/src/server/dnd.rs
++++ b/src/server/dnd.rs
+@@ -96,7 +96,7 @@ impl<S: X11Selection> InnerServerState<S> {
+                         None => self.dnd_surface = None,
+                     }
+                 }
+-                WlDndEvent::Motion(x, y) => {
++                WlDndEvent::Motion(x, y, _) => {
+                     if let Some((_, x, y)) =
+                         self.dnd_surface.and_then(|e| self.dnd_root_pos(e, x, y))
+                     {
+diff --git a/src/server/event.rs b/src/server/event.rs
+index acf51d9..8702d97 100644
+--- a/src/server/event.rs
++++ b/src/server/event.rs
+@@ -553,7 +553,7 @@ impl Event for client::wl_seat::Event {
+ }
+ 
+ struct PendingEnter(client::wl_pointer::Event);
+-enum CurrentSurface {
++pub(super) enum CurrentSurface {
+     Xwayland(Entity),
+     Decoration(Entity),
+ }
+@@ -651,6 +651,7 @@ impl Event for client::wl_pointer::Event {
+ 
+                 let server = state.world.get::<&WlPointer>(target).unwrap();
+                 cmd.insert(target, (*scale,));
++                let enter_pos = (surface_x * scale.0, surface_y * scale.0);
+ 
+                 let surface_is_popup = matches!(role, SurfaceRole::Popup(_));
+                 let mut do_enter = || {
+@@ -689,12 +690,22 @@ impl Event for client::wl_pointer::Event {
+                 drop(query);
+                 drop(server);
+                 cmd.run_on(&mut state.world);
++                state.pointer_moved(enter_pos);
+             }
+             Self::Leave { serial, surface } => {
+                 let _ = state.world.remove_one::<PendingEnter>(target);
+                 if !surface.is_alive() {
+                     return;
+                 }
++                // The compositor's drag took the pointer from an X client dragging: Xwayland's
++                // pointer now follows the drag (see dnd.rs), not this.
++                if state.x_drag_pointer() == Some(target) {
++                    debug!("keeping pointer on X surfaces during an X drag");
++                    return;
++                }
++                // Pressed, the pointer only leaves when the compositor takes it: no X drag can
++                // start from that press.
++                state.pointer_press_lost();
+                 debug!("leaving surface ({})", surface.id());
+                 if let Ok(CurrentSurface::Decoration(parent)) =
+                     state.world.remove_one::<CurrentSurface>(target)
+@@ -746,6 +757,8 @@ impl Event for client::wl_pointer::Event {
+                     surface_y * scale.0
+                 );
+                 server.motion(time, surface_x * scale.0, surface_y * scale.0);
++                let pos = (surface_x * scale.0, surface_y * scale.0);
++                state.pointer_moved(pos);
+             }
+             Self::Button {
+                 serial,
+@@ -793,9 +806,24 @@ impl Event for client::wl_pointer::Event {
+                     }
+                 }
+ 
++                let press = match (current_surface, button_state) {
++                    (
++                        CurrentSurface::Xwayland(surface),
++                        WEnum::Value(client::wl_pointer::ButtonState::Pressed),
++                    ) => Some(super::xdrag::PointerPress {
++                        pointer: target,
++                        surface: *surface,
++                        serial,
++                        button,
++                        pos: (0.0, 0.0),
++                    }),
++                    _ => None,
++                };
++
+                 server.button(serial, time, button, convert_wenum(button_state));
+                 drop(query);
+                 cmd.run_on(&mut state.world);
++                state.pointer_pressed(press, button);
+             }
+             _ => {
+                 let (server, current_surface) = state
+diff --git a/src/server/mod.rs b/src/server/mod.rs
+index a33c548..9f59b5e 100644
+--- a/src/server/mod.rs
++++ b/src/server/mod.rs
+@@ -6,6 +6,7 @@ mod event;
+ pub(crate) mod selection;
+ #[cfg(test)]
+ mod tests;
++pub(crate) mod xdrag;
+ 
+ use self::event::*;
+ use crate::xstate::{
+@@ -113,6 +114,9 @@ struct WindowAttributes {
+     group: Option<x::Window>,
+     decorations: Option<Decorations>,
+     transient_for: Option<x::Window>,
++    /// _NET_WM_WINDOW_TYPE_DND: a window being dragged, which follows the pointer and never
++    /// takes input (not even a drag's: the drop goes to what is under it).
++    drag_icon: bool,
+ }
+ 
+ impl WindowAttributes {
+@@ -493,6 +497,10 @@ pub struct InnerServerState<S: X11Selection> {
+     new_scale: Option<f64>,
+     current_scale: f64,
+     dnd_surface: Option<Entity>,
++    pointer_pos: (f64, f64),
++    pointer_press: Option<xdrag::PointerPress>,
++    x_drag: Option<xdrag::XDrag<S>>,
++    x_drag_events: Vec<xdrag::XDragEvent>,
+ }
+ 
+ impl<S: X11Selection> ServerState<NoConnection<S>> {
+@@ -603,6 +611,10 @@ impl<S: X11Selection> ServerState<NoConnection<S>> {
+             new_scale: None,
+             current_scale: 1.0,
+             dnd_surface: None,
++            pointer_pos: (0.0, 0.0),
++            pointer_press: None,
++            x_drag: None,
++            x_drag_events: Vec::new(),
+             decoration_manager,
+             world,
+         };
+@@ -925,6 +937,17 @@ impl<S: X11Selection + 'static> InnerServerState<S> {
+         self.world.get::<&mut WindowData>(id).unwrap().attrs.role = role;
+     }
+ 
++    pub fn set_window_drag_icon(&mut self, window: x::Window, drag_icon: bool) {
++        let Some(id) = self.windows.get(&window).copied() else {
++            return;
++        };
++        self.world
++            .get::<&mut WindowData>(id)
++            .unwrap()
++            .attrs
++            .drag_icon = drag_icon;
++    }
++
+     pub fn set_win_title(&mut self, window: x::Window, name: WmName) {
+         let Some(data) = self
+             .windows
+@@ -1410,6 +1433,11 @@ impl<S: X11Selection + 'static> InnerServerState<S> {
+         {
+             let data = self.world.entity(entity).unwrap();
+             let surface = data.get::<&client::wl_surface::WlSurface>().unwrap();
++            if data.get::<&WindowData>().unwrap().attrs.drag_icon {
++                let region = self.compositor.create_region(&self.qh, ());
++                surface.set_input_region(Some(&region));
++                region.destroy();
++            }
+             surface.attach(None, 0, 0);
+             surface.commit();
+ 
+diff --git a/src/server/selection.rs b/src/server/selection.rs
+index 05079e6..470a525 100644
+--- a/src/server/selection.rs
++++ b/src/server/selection.rs
+@@ -38,6 +38,12 @@ impl<S: X11Selection> SelectionStates<S> {
+         }
+     }
+ 
++    /// The clipboard's data device manager and device, which drags use too.
++    pub fn data_device(&self) -> Option<(&DataDeviceManagerState, &DataDevice)> {
++        let clipboard = self.clipboard.as_ref()?;
++        Some((&clipboard.manager, clipboard.device.as_ref()?))
++    }
++
+     pub fn seat_created(&mut self, qh: &QueueHandle<MyWorld>, seat: &WlSeat) {
+         if let Some(c) = &mut self.clipboard {
+             c.device = Some(c.manager.get_data_device(qh, seat));
+diff --git a/src/server/xdrag.rs b/src/server/xdrag.rs
+new file mode 100644
+index 0000000..9a60ba1
+--- /dev/null
++++ b/src/server/xdrag.rs
+@@ -0,0 +1,422 @@
++//! X11 -> Wayland drags: a drag an X client starts is carried by a Wayland drag.
++//!
++//! X windows' positions on the X screen are satellite's choice: Wayland doesn't tell clients
++//! where their windows are. An X client looks for its XDND target at the pointer's X screen
++//! position, so without help its drags land wherever the X screen has a window there, not where
++//! the person sees one. Carried by a Wayland drag, the compositor says which surface the pointer
++//! is over. Over one of our X windows, Xwayland's pointer moves to the matching point on the X
++//! screen, so the X client finds that window and drives XDND with it itself. Over a Wayland
++//! client, satellite's proxy window is the X client's target (see `xstate/xdrag.rs`) and the
++//! data comes from its XdndSelection.
++use super::InnerServerState;
++use super::WindowData;
++use super::clientside::{WlDndEvent, XDragSourceEvent};
++use super::event::{CurrentSurface, SurfaceScaleFactor};
++use crate::X11Selection;
++use hecs::Entity;
++use log::{debug, warn};
++use smithay_client_toolkit::data_device_manager::data_offer::DragOffer;
++use smithay_client_toolkit::data_device_manager::data_source::DragSource;
++use std::rc::Rc;
++use wayland_client::Proxy;
++use wayland_client::protocol::wl_data_device_manager::DndAction;
++use wayland_server::Resource;
++use wayland_server::protocol::{wl_pointer, wl_surface::WlSurface};
++use xcb::x;
++
++/// A pointer button held on one of our X windows: an X client may start a drag with it.
++pub(crate) struct PointerPress {
++    pub pointer: Entity,
++    pub surface: Entity,
++    pub serial: u32,
++    pub button: u32,
++    /// Where the pointer is on that window, in Xwayland's coordinates.
++    pub pos: (f64, f64),
++}
++
++pub(crate) struct XDrag<S> {
++    // Destroyed with the drag.
++    _source: DragSource,
++    data: Rc<S>,
++    pointer: Entity,
++    button: u32,
++    /// The surface the drag started from, which keeps Xwayland's pointer, and where the pointer
++    /// is relative to it.
++    origin: Entity,
++    pos: (f64, f64),
++    time: u32,
++    serial: u32,
++    /// The surface the compositor's drag is over, if it is one of ours.
++    over: Option<Entity>,
++    offer: Option<DragOffer>,
++    dropped_on_x: bool,
++    /// What the Wayland client under the drag said: whether it takes one of the types (if it
++    /// said), and whether it chose an action.
++    wl_mime: Option<bool>,
++    wl_action: bool,
++    released: bool,
++}
++
++impl<S> XDrag<S> {
++    fn over_wayland(&mut self) {
++        self.wl_mime = None;
++        self.wl_action = false;
++    }
++
++    fn wayland_accepts(&self) -> bool {
++        self.wl_mime != Some(false) && self.wl_action
++    }
++}
++
++/// What XState does for an X client's drag, in order.
++pub(crate) enum XDragEvent {
++    /// Over one of our X windows: XState hides its proxy, raises the window and moves
++    /// Xwayland's pointer there with [`InnerServerState::x_drag_pointer_to`].
++    OverX {
++        surface: Entity,
++        window: x::Window,
++        x: f64,
++        y: f64,
++        time: u32,
++    },
++    /// Over a Wayland client's surface, or none: XState shows its proxy as the X target.
++    OverWayland,
++    /// Whether the Wayland client under the drag would take it.
++    WaylandAccepts(bool),
++    /// Dropped on one of our X windows: the X client finishes the drop with it.
++    DroppedOnX,
++    /// Dropped on a Wayland client, which now reads the data.
++    DroppedOnWayland,
++    /// The Wayland drag is over: `true` if a Wayland client took the data.
++    Ended { finished: bool },
++}
++
++impl<S: X11Selection> InnerServerState<S> {
++    pub(crate) fn x_drag_pointer(&self) -> Option<Entity> {
++        self.x_drag.as_ref().map(|d| d.pointer)
++    }
++
++    pub(crate) fn has_pointer_press(&self) -> bool {
++        self.pointer_press.is_some()
++    }
++
++    pub(crate) fn pointer_pressed(&mut self, press: Option<PointerPress>, button: u32) {
++        if let Some(mut press) = press {
++            press.pos = self.pointer_pos;
++            self.pointer_press = Some(press);
++            return;
++        }
++        if self
++            .pointer_press
++            .as_ref()
++            .is_some_and(|p| p.button == button)
++        {
++            self.pointer_press = None;
++        }
++        // The compositor gave us the release itself: it never started the drag.
++        if let Some(drag) = self.x_drag.as_mut().filter(|d| d.button == button) {
++            debug!("X drag ended without a Wayland drag");
++            drag.released = true;
++            drag.dropped_on_x = true;
++            self.x_drag_events
++                .push(XDragEvent::Ended { finished: false });
++        }
++    }
++
++    /// An X client took XdndSelection: carry its drag in a Wayland drag from the window the
++    /// pointer was pressed on.
++    pub(crate) fn start_x_drag(&mut self, data: &Rc<S>) -> bool {
++        if self.x_drag.is_some() {
++            return false;
++        }
++        let Some(press) = &self.pointer_press else {
++            return false;
++        };
++        let Some((manager, device)) = self.selection_states.data_device() else {
++            return false;
++        };
++        let Ok(origin) = self
++            .world
++            .get::<&wayland_client::protocol::wl_surface::WlSurface>(press.surface)
++            .map(|s| (*s).clone())
++        else {
++            return false;
++        };
++        // Copy only: a Wayland target choosing "move" would have the X client delete its data.
++        let source =
++            manager.create_drag_and_drop_source(&self.qh, data.mime_types(), DndAction::Copy);
++        source.start_drag(device, &origin, None, press.serial);
++        debug!("X client started a drag, carried by a Wayland drag");
++        self.world.x_drag_source = Some(source.inner().clone());
++        self.x_drag = Some(XDrag {
++            _source: source,
++            data: data.clone(),
++            pointer: press.pointer,
++            button: press.button,
++            origin: press.surface,
++            pos: press.pos,
++            time: 0,
++            serial: press.serial,
++            over: None,
++            offer: None,
++            dropped_on_x: false,
++            wl_mime: None,
++            wl_action: false,
++            released: false,
++        });
++        // Over nothing until the compositor says otherwise: the pointer may be over a Wayland
++        // client before its first event about the drag.
++        self.x_drag_events.push(XDragEvent::OverWayland);
++        self.flush_wayland();
++        true
++    }
++
++    /// Where the pointer is on the X window it is over, in Xwayland's coordinates.
++    pub(crate) fn pointer_moved(&mut self, pos: (f64, f64)) {
++        self.pointer_pos = pos;
++        if let Some(press) = self.pointer_press.as_mut() {
++            press.pos = pos;
++        }
++    }
++
++    pub(crate) fn pointer_press_lost(&mut self) {
++        self.pointer_press = None;
++    }
++
++    pub(crate) fn take_x_drag_events(&mut self) -> Vec<XDragEvent> {
++        let mut out = std::mem::take(&mut self.x_drag_events);
++        if self.x_drag.is_none() {
++            return out;
++        }
++        let mut events = std::mem::take(&mut self.world.dnd).into_iter().peekable();
++        while let Some(event) = events.next() {
++            let drag = self.x_drag.as_mut().unwrap();
++            match event {
++                WlDndEvent::Enter(offer) => {
++                    if let Some(old) = drag.offer.take() {
++                        old.destroy();
++                    }
++                    drag.serial = offer.serial;
++                    let target = offer.surface.data::<Entity>().copied().and_then(|e| {
++                        let window = *self.world.get::<&x::Window>(e).ok()?;
++                        Some((e, window))
++                    });
++                    match target {
++                        Some((surface, window)) => {
++                            debug!("X drag over {window:?} at {},{}", offer.x, offer.y);
++                            // Accept, so that the compositor reports the drop here: the X client
++                            // and its X target decide the rest.
++                            let mime = drag.data.mime_types().first().map(|m| m.to_string());
++                            offer.accept_mime_type(offer.serial, mime);
++                            offer.set_actions(DndAction::Copy, DndAction::Copy);
++                            out.push(XDragEvent::OverX {
++                                surface,
++                                window,
++                                x: offer.x,
++                                y: offer.y,
++                                time: drag.time,
++                            });
++                            drag.over = Some(surface);
++                            drag.offer = Some(offer);
++                        }
++                        None => {
++                            // A decoration: no X target.
++                            offer.destroy();
++                            drag.over = None;
++                            drag.over_wayland();
++                            out.push(XDragEvent::OverWayland);
++                        }
++                    }
++                }
++                WlDndEvent::Motion(x, y, time) => {
++                    let Some(surface) = drag.over else {
++                        continue;
++                    };
++                    let Ok(window) = self.world.get::<&x::Window>(surface).map(|w| *w) else {
++                        continue;
++                    };
++                    out.push(XDragEvent::OverX {
++                        surface,
++                        window,
++                        x,
++                        y,
++                        time,
++                    });
++                }
++                WlDndEvent::Leave => {
++                    if let Some(offer) = drag.offer.take() {
++                        offer.destroy();
++                    }
++                    // Straight onto another surface of ours: no need for the proxy between.
++                    let onto_ours = matches!(events.peek(), Some(WlDndEvent::Enter(_)));
++                    if drag.over.take().is_some() && !onto_ours {
++                        drag.over_wayland();
++                        out.push(XDragEvent::OverWayland);
++                    }
++                }
++                WlDndEvent::Drop(offer) => {
++                    if drag.over.take().is_some() {
++                        drag.dropped_on_x = true;
++                        out.push(XDragEvent::DroppedOnX);
++                        offer.finish();
++                    }
++                    drag.offer = None;
++                    offer.destroy();
++                }
++            }
++        }
++        for event in std::mem::take(&mut self.world.x_drag_source_events) {
++            let Some(drag) = self.x_drag.as_mut() else {
++                break;
++            };
++            match event {
++                XDragSourceEvent::Target(mime) => {
++                    if drag.over.is_none() {
++                        drag.wl_mime = Some(mime.is_some());
++                        out.push(XDragEvent::WaylandAccepts(drag.wayland_accepts()));
++                    }
++                }
++                XDragSourceEvent::Action(action) => {
++                    if drag.over.is_none() {
++                        drag.wl_action = !action.is_empty();
++                        out.push(XDragEvent::WaylandAccepts(drag.wayland_accepts()));
++                    }
++                }
++                XDragSourceEvent::Send(mime, fd) => drag.data.write_to(&mime, fd),
++                XDragSourceEvent::Dropped => {
++                    if !drag.dropped_on_x {
++                        out.push(XDragEvent::DroppedOnWayland);
++                    }
++                }
++                XDragSourceEvent::Finished => out.push(XDragEvent::Ended { finished: true }),
++                XDragSourceEvent::Cancelled => out.push(XDragEvent::Ended { finished: false }),
++            }
++        }
++        out
++    }
++
++    /// Move Xwayland's pointer to a point on one of our X windows' surfaces (logical
++    /// coordinates).
++    ///
++    /// Xwayland's pointer stays on the window the drag started from: entering another surface
++    /// would make Xwayland release the held button, which ends the X client's drag. Xwayland
++    /// puts the pointer at that window's X position plus the surface coordinates it is given,
++    /// even outside the window, so the point is given relative to it.
++    pub(crate) fn x_drag_pointer_to(&mut self, surface: Entity, x: f64, y: f64, time: u32) {
++        let Some(drag) = self.x_drag.as_mut() else {
++            return;
++        };
++        let position = |entity| {
++            let mut query = self
++                .world
++                .query_one::<(&WindowData, &SurfaceScaleFactor)>(entity)
++                .ok()?;
++            let (data, scale) = query.get()?;
++            Some((data.attrs.dims.x as f64, data.attrs.dims.y as f64, scale.0))
++        };
++        let (Some((tx, ty, scale)), Some((ox, oy, _))) = (position(surface), position(drag.origin))
++        else {
++            return;
++        };
++        let (sx, sy) = (tx - ox + x * scale, ty - oy + y * scale);
++        {
++            let Ok(pointer) = self.world.get::<&wl_pointer::WlPointer>(drag.pointer) else {
++                return;
++            };
++            pointer.motion(time, sx, sy);
++            if pointer.version() >= 5 {
++                pointer.frame();
++            }
++        }
++        drag.pos = (sx, sy);
++        drag.time = time;
++        self.flush_xwayland();
++    }
++
++    /// Move Xwayland's pointer in place, so that the X client looks for its target again.
++    pub(crate) fn x_drag_nudge(&mut self) {
++        let Some(drag) = self.x_drag.as_ref() else {
++            return;
++        };
++        {
++            let Ok(pointer) = self.world.get::<&wl_pointer::WlPointer>(drag.pointer) else {
++                return;
++            };
++            let (x, y) = drag.pos;
++            for x in [x + 1.0, x] {
++                pointer.motion(drag.time, x, y);
++                if pointer.version() >= 5 {
++                    pointer.frame();
++                }
++            }
++        }
++        self.flush_xwayland();
++    }
++
++    /// Give the X client the button release that ends its drag.
++    pub(crate) fn x_drag_release(&mut self) {
++        let Some(drag) = self.x_drag.as_mut() else {
++            return;
++        };
++        if drag.released {
++            return;
++        }
++        drag.released = true;
++        {
++            let Ok(pointer) = self.world.get::<&wl_pointer::WlPointer>(drag.pointer) else {
++                return;
++            };
++            pointer.button(
++                drag.serial,
++                drag.time,
++                drag.button,
++                wl_pointer::ButtonState::Released,
++            );
++            if pointer.version() >= 5 {
++                pointer.frame();
++            }
++        }
++        if self
++            .pointer_press
++            .as_ref()
++            .is_some_and(|p| p.button == drag.button)
++        {
++            self.pointer_press = None;
++        }
++        self.flush_xwayland();
++    }
++
++    /// The Wayland drag is over. Unless it ended over one of our windows, which the compositor
++    /// gives the pointer back to, Xwayland's pointer leaves the X window it was kept on.
++    pub(crate) fn x_drag_end(&mut self) {
++        self.x_drag_release();
++        let Some(drag) = self.x_drag.take() else {
++            return;
++        };
++        if drag.over.is_none() && !drag.dropped_on_x {
++            if let (Ok(pointer), Ok(surface)) = (
++                self.world.get::<&wl_pointer::WlPointer>(drag.pointer),
++                self.world.get::<&WlSurface>(drag.origin),
++            ) {
++                pointer.leave(drag.serial, &surface);
++                if pointer.version() >= 5 {
++                    pointer.frame();
++                }
++            }
++            let _ = self.world.remove_one::<CurrentSurface>(drag.pointer);
++        }
++        if let Some(offer) = &drag.offer {
++            offer.destroy();
++        }
++        self.world.x_drag_source = None;
++        drop(drag);
++        self.flush_wayland();
++        self.flush_xwayland();
++    }
++
++    fn flush_xwayland(&mut self) {
++        if let Err(e) = self.dh.flush_clients() {
++            warn!("Failed to flush Xwayland events: {e}");
++        }
++    }
++}
+diff --git a/src/xstate/dnd.rs b/src/xstate/dnd.rs
+index f70fa1c..bc051da 100644
+--- a/src/xstate/dnd.rs
++++ b/src/xstate/dnd.rs
+@@ -32,7 +32,7 @@ struct WlDrag {
+ }
+ 
+ pub(super) struct Dnd {
+-    window: x::Window,
++    pub(super) window: x::Window,
+     drag: Option<WlDrag>,
+ }
+ 
+diff --git a/src/xstate/mod.rs b/src/xstate/mod.rs
+index a7b0a8a..c28de72 100644
+--- a/src/xstate/mod.rs
++++ b/src/xstate/mod.rs
+@@ -5,6 +5,7 @@ use selection::{Selection, SelectionState};
+ mod dnd;
+ #[cfg(test)]
+ mod tests;
++mod xdrag;
+ mod xresources;
+ 
+ use crate::XConnection;
+@@ -111,6 +112,7 @@ pub struct XState {
+     wm_window: x::Window,
+     selection_state: SelectionState,
+     dnd: dnd::Dnd,
++    x_drag: xdrag::XDragBridge,
+     settings: Settings,
+     max_req_bytes: usize,
+ }
+@@ -204,6 +206,13 @@ impl XState {
+                     | SelectionEventMask::SELECTION_CLIENT_CLOSE,
+             })
+             .unwrap();
++        connection
++            .send_and_check_request(&xcb::xfixes::SelectSelectionInput {
++                window: root,
++                selection: atoms.xdnd_selection,
++                event_mask: SelectionEventMask::SET_SELECTION_OWNER,
++            })
++            .unwrap();
+         {
+             // Setup default cursor theme
+             let ctx = CursorContext::new(&connection, screen).unwrap();
+@@ -219,6 +228,7 @@ impl XState {
+         let wm_window = connection.generate_id();
+         let selection_state = SelectionState::new(&connection, root, &atoms);
+         let dnd = dnd::Dnd::new(&connection, root);
++        let x_drag = xdrag::XDragBridge::new(&connection, root, &atoms);
+         let window_atoms = WindowTypes::intern_all(&connection).unwrap();
+         let settings = Settings::new(&connection, &atoms, root);
+         // maximum-request-length is returned in units of 4 bytes.
+@@ -233,6 +243,7 @@ impl XState {
+             window_atoms,
+             selection_state,
+             dnd,
++            x_drag,
+             settings,
+             max_req_bytes,
+         };
+@@ -349,7 +360,8 @@ impl XState {
+         while let Some(event) = self.connection.poll_for_event().unwrap() {
+             trace!("x11 event: {event:?}");
+ 
+-            if self.handle_dnd_event(&event, server_state)
++            if self.handle_x_drag_event(&event, server_state)
++                || self.handle_dnd_event(&event, server_state)
+                 || self.handle_selection_event(&event, server_state)
+             {
+                 continue;
+@@ -665,6 +677,10 @@ impl XState {
+         let window_types = self
+             .get_net_wm_window_types(window)?
+             .unwrap_or_else(Vec::new);
++        server_state.set_window_drag_icon(
++            window,
++            window_types.contains(&self.window_atoms.drag_n_drop),
++        );
+ 
+         let heuristics = WindowRoleHeuristics {
+             override_redirect,
+diff --git a/src/xstate/selection.rs b/src/xstate/selection.rs
+index 8500a79..34a5444 100644
+--- a/src/xstate/selection.rs
++++ b/src/xstate/selection.rs
+@@ -69,6 +69,49 @@ impl X11Selection for Selection {
+ }
+ 
+ impl Selection {
++    /// The X selection `selection`, owned by an X client offering `targets`, converted for
++    /// Wayland into properties of `window`.
++    pub(super) fn new(
++        connection: &Rc<xcb::Connection>,
++        atoms: &super::Atoms,
++        window: x::Window,
++        selection: x::Atom,
++        selection_time: u32,
++        targets: &[x::Atom],
++    ) -> Self {
++        let selection_name = get_atom_name(connection, selection);
++        let mimes = targets
++            .iter()
++            .copied()
++            .filter(|atom| ![atoms.targets, atoms.multiple, atoms.save_targets].contains(atom))
++            .map(|target| {
++                let name = get_atom_name(connection, target);
++                let property = connection
++                    .wait_for_reply(connection.send_request(&x::InternAtom {
++                        only_if_exists: false,
++                        name: &[name.as_bytes(), b"_", selection_name.as_bytes()].concat(),
++                    }))
++                    .unwrap()
++                    .atom();
++                SelectionTargetId {
++                    name,
++                    target,
++                    property,
++                    source: None,
++                }
++            })
++            .collect();
++        Self {
++            mimes,
++            connection: connection.clone(),
++            window,
++            pending: RefCell::default(),
++            selection,
++            selection_time,
++            incr: atoms.incr,
++        }
++    }
++
+     /// Finish handling the current pending selection (if any) and queue the next one (if any).
+     ///
+     /// Regardless of whether the selection conversion succeeds or fails, this function must be
+@@ -77,7 +120,7 @@ impl Selection {
+     ///
+     /// # Panics:
+     /// This function will panic if the `pending` `RefCell` is actively being borrowed.
+-    fn next_conversion(&self) {
++    pub(super) fn next_conversion(&self) {
+         let mut pending = self.pending.borrow_mut();
+         if pending.front().is_some_and(|p| p.active) {
+             pending.pop_front();
+@@ -106,7 +149,7 @@ impl Selection {
+         }
+     }
+ 
+-    fn handle_notify(&self, target: x::Atom) {
++    pub(super) fn handle_notify(&self, target: x::Atom) {
+         let mut pending = self.pending.borrow_mut();
+         let Some(psd) = pending.front_mut().filter(|t| t.target == target) else {
+             warn!(
+@@ -205,7 +248,7 @@ impl Selection {
+         self.next_conversion();
+     }
+ 
+-    fn check_for_incr(&self, event: &x::PropertyNotifyEvent) -> bool {
++    pub(super) fn check_for_incr(&self, event: &x::PropertyNotifyEvent) -> bool {
+         debug_assert_eq!(event.state(), x::Property::NewValue);
+         if event.window() != self.window {
+             return false;
+@@ -476,38 +519,14 @@ impl<T: SelectionType> SelectionDataImpl for SelectionData<T> {
+             debug!("got targets: {targets_str:?}");
+         }
+ 
+-        let selection = get_atom_name(connection, self.atom);
+-        let mimes = targets
+-            .iter()
+-            .copied()
+-            .filter(|atom| ![atoms.targets, atoms.multiple, atoms.save_targets].contains(atom))
+-            .map(|target| {
+-                let name = get_atom_name(connection, target);
+-                let property = connection
+-                    .wait_for_reply(connection.send_request(&x::InternAtom {
+-                        only_if_exists: false,
+-                        name: &[name.as_bytes(), b"_", selection.as_bytes()].concat(),
+-                    }))
+-                    .unwrap()
+-                    .atom();
+-                SelectionTargetId {
+-                    name,
+-                    target,
+-                    property,
+-                    source: None,
+-                }
+-            })
+-            .collect();
+-
+-        let selection = Rc::new(Selection {
+-            mimes,
+-            connection: connection.clone(),
+-            window: target_window,
+-            pending: RefCell::default(),
+-            selection: self.atom,
+-            selection_time: self.last_selection_timestamp,
+-            incr: atoms.incr,
+-        });
++        let selection = Rc::new(Selection::new(
++            connection,
++            atoms,
++            target_window,
++            self.atom,
++            self.last_selection_timestamp,
++            targets,
++        ));
+ 
+         server_state.set_selection_source::<T>(&selection);
+         self.current_selection = Some(CurrentSelection::X11(selection));
+diff --git a/src/xstate/xdrag.rs b/src/xstate/xdrag.rs
+new file mode 100644
+index 0000000..407482d
+--- /dev/null
++++ b/src/xstate/xdrag.rs
+@@ -0,0 +1,421 @@
++//! The X side of carrying X clients' drags in Wayland drags (see `server/xdrag.rs`): noticing
++//! that an X client started one, converting its XdndSelection for Wayland clients, and being its
++//! XDND target while the drag is over a Wayland client.
++use super::selection::Selection;
++use super::{Atoms, XState};
++use crate::RealServerState;
++use crate::server::xdrag::XDragEvent;
++use log::{debug, warn};
++use std::rc::Rc;
++use xcb::{Xid, x};
++
++pub(super) struct XDragBridge {
++    /// Where XdndSelection's conversions arrive.
++    requestor: x::Window,
++    /// Shown above every X window while the drag is over a Wayland client, so that the X client
++    /// has satellite as its XDND target there rather than whatever X window is at the pointer's
++    /// position on the X screen.
++    proxy: x::Window,
++    proxy_shown: bool,
++    targets_property: x::Atom,
++    /// Targets that make the owner do something rather than give data.
++    side_effect_targets: [x::Atom; 2],
++    /// An X client took XdndSelection without an XdndTypeList: its TARGETS are on their way.
++    awaiting_targets: Option<u32>,
++    drag: Option<Drag>,
++}
++
++struct Drag {
++    selection: Rc<Selection>,
++    /// The X client's window in XDND conversation with the proxy.
++    peer: Option<x::Window>,
++    wayland_accepts: bool,
++    /// The X client dropped on the proxy.
++    dropped: bool,
++    /// How the Wayland drag ended, once it has: whether a Wayland client took the data.
++    ended: Option<bool>,
++}
++
++impl XDragBridge {
++    pub fn new(connection: &xcb::Connection, root: x::Window, atoms: &Atoms) -> Self {
++        let create = |window, event_mask| {
++            connection
++                .send_and_check_request(&x::CreateWindow {
++                    wid: window,
++                    width: 1,
++                    height: 1,
++                    depth: 0,
++                    parent: root,
++                    x: 0,
++                    y: 0,
++                    border_width: 0,
++                    class: x::WindowClass::InputOnly,
++                    visual: x::COPY_FROM_PARENT,
++                    value_list: &[x::Cw::OverrideRedirect(true), x::Cw::EventMask(event_mask)],
++                })
++                .expect("Couldn't create window for X drags");
++        };
++        let requestor = connection.generate_id();
++        create(requestor, x::EventMask::PROPERTY_CHANGE);
++        let proxy = connection.generate_id();
++        create(proxy, x::EventMask::empty());
++        connection
++            .send_and_check_request(&x::ChangeProperty {
++                mode: x::PropMode::Replace,
++                window: proxy,
++                property: atoms.xdnd_aware,
++                r#type: x::ATOM_ATOM,
++                data: &[5u32],
++            })
++            .expect("Couldn't make the X drag proxy XdndAware");
++        let intern = |name: &[u8]| {
++            connection
++                .wait_for_reply(connection.send_request(&x::InternAtom {
++                    only_if_exists: false,
++                    name,
++                }))
++                .expect("Couldn't intern atoms for X drags")
++                .atom()
++        };
++        Self {
++            requestor,
++            proxy,
++            proxy_shown: false,
++            targets_property: intern(b"_XDND_TARGETS"),
++            side_effect_targets: [intern(b"DELETE"), intern(b"TIMESTAMP")],
++            awaiting_targets: None,
++            drag: None,
++        }
++    }
++
++    fn owns(&self, window: x::Window) -> bool {
++        window == self.requestor || window == self.proxy
++    }
++}
++
++impl XState {
++    fn send_to_peer(&self, peer: x::Window, r#type: x::Atom, data: [u32; 4]) {
++        let event = x::ClientMessageEvent::new(
++            peer,
++            r#type,
++            x::ClientMessageData::Data32([
++                self.x_drag.proxy.resource_id(),
++                data[0],
++                data[1],
++                data[2],
++                data[3],
++            ]),
++        );
++        if let Err(e) = self.connection.send_and_check_request(&x::SendEvent {
++            propagate: false,
++            destination: x::SendEventDest::Window(peer),
++            event_mask: x::EventMask::empty(),
++            event: &event,
++        }) {
++            warn!("Failed to answer the X drag: {e:?}");
++        }
++    }
++
++    fn copy_if(&self, yes: bool) -> u32 {
++        if yes {
++            self.atoms.xdnd_action_copy.resource_id()
++        } else {
++            0
++        }
++    }
++
++    fn send_status(&self) {
++        let Some(drag) = &self.x_drag.drag else {
++            return;
++        };
++        let Some(peer) = drag.peer else {
++            return;
++        };
++        let accepts = drag.wayland_accepts;
++        // Bit 1: send a position for every move, since the proxy covers everything.
++        self.send_to_peer(
++            peer,
++            self.atoms.xdnd_status,
++            [accepts as u32 | 2, 0, 0, self.copy_if(accepts)],
++        );
++    }
++
++    /// Answer the X client's drop on the proxy, once the Wayland drag has ended.
++    fn finish_proxy_drop(&mut self) {
++        let Some(drag) = &self.x_drag.drag else {
++            return;
++        };
++        let (Some(peer), true, Some(finished)) = (drag.peer, drag.dropped, drag.ended) else {
++            return;
++        };
++        self.send_to_peer(
++            peer,
++            self.atoms.xdnd_finished,
++            [finished as u32, self.copy_if(finished), 0, 0],
++        );
++        debug!("X drag over a Wayland client finished ({finished})");
++        self.x_drag.drag = None;
++    }
++
++    fn show_proxy(&mut self, shown: bool) {
++        if self.x_drag.proxy_shown == shown {
++            return;
++        }
++        self.x_drag.proxy_shown = shown;
++        let proxy = self.x_drag.proxy;
++        let result = if shown {
++            let geometry =
++                self.connection
++                    .wait_for_reply(self.connection.send_request(&x::GetGeometry {
++                        drawable: x::Drawable::Window(self.root),
++                    }));
++            let (width, height) = geometry
++                .map(|g| (g.width().into(), g.height().into()))
++                .unwrap_or((u16::MAX.into(), u16::MAX.into()));
++            self.connection
++                .send_and_check_request(&x::ConfigureWindow {
++                    window: proxy,
++                    value_list: &[
++                        x::ConfigWindow::X(0),
++                        x::ConfigWindow::Y(0),
++                        x::ConfigWindow::Width(width),
++                        x::ConfigWindow::Height(height),
++                        x::ConfigWindow::StackMode(x::StackMode::Above),
++                    ],
++                })
++                .and_then(|()| {
++                    self.connection
++                        .send_and_check_request(&x::MapWindow { window: proxy })
++                })
++        } else {
++            self.connection
++                .send_and_check_request(&x::UnmapWindow { window: proxy })
++        };
++        if let Err(e) = result {
++            warn!("Failed to show or hide the X drag proxy: {e:?}");
++        }
++    }
++
++    fn begin_x_drag(&mut self, targets: &[x::Atom], time: u32, server_state: &mut RealServerState) {
++        // A Wayland target asking for DELETE would have the X client delete what it dragged.
++        let targets: Vec<x::Atom> = targets
++            .iter()
++            .copied()
++            .filter(|t| !self.x_drag.side_effect_targets.contains(t))
++            .collect();
++        let selection = Rc::new(Selection::new(
++            &self.connection,
++            &self.atoms,
++            self.x_drag.requestor,
++            self.atoms.xdnd_selection,
++            time,
++            &targets,
++        ));
++        if server_state.start_x_drag(&selection) {
++            self.x_drag.drag = Some(Drag {
++                selection,
++                peer: None,
++                wayland_accepts: false,
++                dropped: false,
++                ended: None,
++            });
++        }
++    }
++
++    /// An X client took XdndSelection while a button is held on one of our windows: the start
++    /// of its drag.
++    fn x_drag_selection_owner(
++        &mut self,
++        owner: x::Window,
++        time: u32,
++        server_state: &mut RealServerState,
++    ) {
++        if owner.is_none()
++            || self.x_drag.owns(owner)
++            || owner == self.dnd.window
++            || server_state.x_drag_pointer().is_some()
++            || !server_state.has_pointer_press()
++        {
++            return;
++        }
++        let types = self
++            .connection
++            .wait_for_reply(self.connection.send_request(&x::GetProperty {
++                delete: false,
++                window: owner,
++                property: self.atoms.xdnd_type_list,
++                r#type: x::ATOM_ATOM,
++                long_offset: 0,
++                long_length: 256,
++            }));
++        match types {
++            Ok(reply) if !reply.value::<x::Atom>().is_empty() => {
++                let targets = reply.value::<x::Atom>().to_vec();
++                self.begin_x_drag(&targets, time, server_state);
++            }
++            // Up to three types may be named only in XdndEnter, which goes to X targets alone.
++            _ => {
++                if let Err(e) = self
++                    .connection
++                    .send_and_check_request(&x::ConvertSelection {
++                        requestor: self.x_drag.requestor,
++                        selection: self.atoms.xdnd_selection,
++                        target: self.atoms.targets,
++                        property: self.x_drag.targets_property,
++                        time,
++                    })
++                {
++                    warn!("Couldn't ask the X drag for its types: {e:?}");
++                    return;
++                }
++                self.x_drag.awaiting_targets = Some(time);
++            }
++        }
++    }
++
++    pub(super) fn handle_x_drag_event(
++        &mut self,
++        event: &xcb::Event,
++        server_state: &mut RealServerState,
++    ) -> bool {
++        match event {
++            xcb::Event::XFixes(xcb::xfixes::Event::SelectionNotify(e))
++                if e.selection() == self.atoms.xdnd_selection =>
++            {
++                if e.subtype() == xcb::xfixes::SelectionEvent::SetSelectionOwner {
++                    self.x_drag_selection_owner(e.owner(), e.timestamp(), server_state);
++                }
++                true
++            }
++            xcb::Event::X(x::Event::SelectionNotify(e))
++                if e.requestor() == self.x_drag.requestor =>
++            {
++                if e.target() == self.atoms.targets {
++                    let Some(time) = self.x_drag.awaiting_targets.take() else {
++                        return true;
++                    };
++                    let targets = if e.property() == x::ATOM_NONE {
++                        Vec::new()
++                    } else {
++                        self.connection
++                            .wait_for_reply(self.connection.send_request(&x::GetProperty {
++                                delete: true,
++                                window: self.x_drag.requestor,
++                                property: e.property(),
++                                r#type: x::ATOM_ATOM,
++                                long_offset: 0,
++                                long_length: 256,
++                            }))
++                            .map(|r| r.value::<x::Atom>().to_vec())
++                            .unwrap_or_default()
++                    };
++                    self.begin_x_drag(&targets, time, server_state);
++                } else if let Some(drag) = &self.x_drag.drag {
++                    if e.property() == x::ATOM_NONE {
++                        drag.selection.next_conversion();
++                    } else {
++                        drag.selection.handle_notify(e.target());
++                    }
++                }
++                true
++            }
++            xcb::Event::X(x::Event::PropertyNotify(e)) if e.window() == self.x_drag.requestor => {
++                if let Some(drag) = &self.x_drag.drag {
++                    if e.state() == x::Property::NewValue {
++                        drag.selection.check_for_incr(e);
++                    }
++                }
++                true
++            }
++            xcb::Event::X(x::Event::ClientMessage(e)) if e.window() == self.x_drag.proxy => {
++                let x::ClientMessageData::Data32(data) = e.data() else {
++                    return true;
++                };
++                let source = <x::Window as xcb::XidNew>::new(data[0]);
++                let Some(drag) = &mut self.x_drag.drag else {
++                    return true;
++                };
++                let r#type = e.r#type();
++                if r#type == self.atoms.xdnd_enter {
++                    debug!("X drag entered the proxy from {source:?}");
++                    drag.peer = Some(source);
++                    drag.dropped = false;
++                } else if r#type == self.atoms.xdnd_position {
++                    drag.peer = Some(source);
++                    self.send_status();
++                } else if r#type == self.atoms.xdnd_leave {
++                    drag.peer = None;
++                    if drag.ended.is_some() {
++                        self.x_drag.drag = None;
++                    }
++                } else if r#type == self.atoms.xdnd_drop {
++                    debug!("X drag dropped on the proxy");
++                    drag.peer = Some(source);
++                    drag.dropped = true;
++                    self.finish_proxy_drop();
++                }
++                true
++            }
++            // Our own windows aren't windows to manage.
++            xcb::Event::X(x::Event::CreateNotify(e)) => self.x_drag.owns(e.window()),
++            xcb::Event::X(x::Event::MapNotify(e)) => self.x_drag.owns(e.window()),
++            xcb::Event::X(x::Event::UnmapNotify(e)) => self.x_drag.owns(e.window()),
++            xcb::Event::X(x::Event::ConfigureNotify(e)) => self.x_drag.owns(e.window()),
++            xcb::Event::X(x::Event::DestroyNotify(e)) => self.x_drag.owns(e.window()),
++            _ => false,
++        }
++    }
++
++    pub(crate) fn handle_x_drag(&mut self, server_state: &mut RealServerState) {
++        for event in server_state.take_x_drag_events() {
++            match event {
++                XDragEvent::OverX {
++                    surface,
++                    window,
++                    x,
++                    y,
++                    time,
++                } => {
++                    // The X client looks for its target at the pointer's position on the X
++                    // screen: the window under the drag has to be the topmost one there.
++                    self.show_proxy(false);
++                    if let Err(e) = self.connection.send_and_check_request(&x::ConfigureWindow {
++                        window,
++                        value_list: &[x::ConfigWindow::StackMode(x::StackMode::Above)],
++                    }) {
++                        debug!("Couldn't raise {window:?} under the X drag: {e:?}");
++                    }
++                    server_state.x_drag_pointer_to(surface, x, y, time);
++                }
++                XDragEvent::OverWayland => {
++                    debug!("X drag over a Wayland client");
++                    self.show_proxy(true);
++                    server_state.x_drag_nudge();
++                }
++                XDragEvent::WaylandAccepts(accepts) => {
++                    debug!("Wayland client accepts the X drag: {accepts}");
++                    if let Some(drag) = &mut self.x_drag.drag {
++                        drag.wayland_accepts = accepts;
++                    }
++                    self.send_status();
++                }
++                XDragEvent::DroppedOnX | XDragEvent::DroppedOnWayland => {
++                    debug!("X drag dropped");
++                    server_state.x_drag_release();
++                }
++                XDragEvent::Ended { finished } => {
++                    debug!("X drag's Wayland drag ended (finished: {finished})");
++                    server_state.x_drag_end();
++                    self.show_proxy(false);
++                    match &mut self.x_drag.drag {
++                        Some(drag) if drag.peer.is_some() => {
++                            drag.ended = Some(finished);
++                            self.finish_proxy_drop();
++                        }
++                        _ => self.x_drag.drag = None,
++                    }
++                }
++            }
++        }
++    }
++}
+-- 
+2.56.0
+

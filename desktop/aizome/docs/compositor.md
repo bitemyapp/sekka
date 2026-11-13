@@ -199,7 +199,13 @@ Notes for client authors:
 - Drag and drop: wl_data_device_manager 3 (source and offer actions),
   and the drag icon moves with its wl_surface.offset (or attach x, y)
   relative to the pointer; it shows above everything, in screenshots
-  too.
+  too. X11 apps' drags go through the NixOS module's patched
+  xwayland-satellite (`nix/xwayland-satellite-*.patch`): a Wayland drag
+  over an X11 window becomes an XDND drag to it, and an X11 app's drag is
+  carried by a Wayland drag, so it lands on the window under the pointer
+  (X11 or Wayland) rather than wherever satellite's X screen has a window
+  at that position. DEVELOPERS.md ("Drag and drop with X11 apps") has
+  the details and limits.
 - Frame callbacks fire after a frame that showed the surface, and roughly
   once a second for surfaces that don't show (other Desks, minimised).
   Nothing draws while nothing changes.
