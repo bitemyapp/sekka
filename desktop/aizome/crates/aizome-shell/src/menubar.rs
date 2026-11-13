@@ -33,11 +33,22 @@ pub enum BarMsg {
     Banner(u32),
     /// A Desk was right-clicked, at.
     DeskMenu(u32, Point),
-    /// Renaming a Desk in place: the text, done, or given up.
+    /// Rename was chosen from a Desk's menu: the menu had the keyboard, so
+    /// this bar asks for it (a double click's `Run` leaves it the keys).
+    DeskRename(u32),
+    /// Renaming a Desk in place: the text, done, or given up (Escape, or
+    /// the field lost the focus, or the bar the keyboard).
     RenameText(String),
     RenameDone,
     RenameCancel,
     Run(Action),
+}
+
+/// The name the field Desk `index` is renamed in has in `output`'s bar,
+/// for focusing that one: each display's bar shows one, and another Desk's
+/// may still be there as this one is asked for.
+pub fn rename_id(output: &str, index: u32) -> String {
+    format!("desk-rename:{output}:{index}")
 }
 
 /// The bar's height.
@@ -439,8 +450,9 @@ fn desks(model: &BarModel) -> Element<BarMsg> {
             let f = crate::widgets::field::field(text, |t| ui_spec(t, 12.0, typeface::WEIGHT_TAB, t.on_selection()))
                 .height(18.0)
                 .on_change(BarMsg::RenameText)
-                .on_submit(BarMsg::RenameDone);
-            let keyed = crate::widgets::keys::keys(Element::from(f).id("desk-rename"), |k| {
+                .on_submit(BarMsg::RenameDone)
+                .on_blur(BarMsg::RenameCancel);
+            let keyed = crate::widgets::keys::keys(Element::from(f).id(rename_id(&model.output, index)), |k| {
                 matches!(k.key, aizome_kit::sidestep_ui::Key::Named(aizome_kit::sidestep_ui::NamedKey::Escape))
                     .then_some(BarMsg::RenameCancel)
             });

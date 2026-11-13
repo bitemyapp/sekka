@@ -25,7 +25,7 @@ Aizome's look.
 
 | Surface | Layer | Namespace | Per | Anchors / size | Keyboard |
 |---|---|---|---|---|---|
-| Menu bar | top | `aizome-menubar` | output | top, left, right; 24pt; exclusive 24 | on demand |
+| Menu bar | top | `aizome-menubar` | output | top, left, right; 24pt; exclusive 24 | on demand; exclusive while a Desk is renamed from its menu |
 | Deskbar | top | `aizome-deskbar` | the main display (the compositor's `primary`; it moves when that changes) | top and `[deskbar] side` (right by default); `[deskbar] width` (232pt by default) plus its 3pt shadow, as tall as its content; margin-top 24 | on demand |
 | Deskbar width, while its edge is dragged | overlay | `aizome-deskbar-preview` | the main display | top and the Deskbar's side; as wide as the Deskbar can be there; no input | none |
 | Where the Deskbar would go, while its grip is dragged | overlay | `aizome-deskbar-landing` | the main display | top and the other side; the Deskbar's face, margin-top 24; no input | none |
@@ -61,7 +61,14 @@ Aizome's look.
   display shows underlined in `text3`; click to show a Desk on this
   display (one another display shows swaps with it), `+` adds a desk,
   double-click renames in place, right-click for Rename, Set Folder…,
-  Remove.
+  Remove. The double click leaves the bar the keyboard, and a click
+  elsewhere ends the rename. Rename from the menu doesn't (the compositor
+  gives the keyboard to the window as a menu closes), so that bar's
+  surface asks for it (exclusive) until the rename ends: Return, Escape, a
+  click beside the field, a window's taking the focus, or anything above
+  the bar taking the keyboard. A click in the window that has the focus
+  already doesn't end it: the compositor leaves the keyboard with a
+  surface that asked outright.
 - **The recording indicator**, first in the systray while a screen
   recording goes: a `red` dot (8pt) and the time recorded in IBM Plex Mono
   600 tabular digits (`0:42`, `1:02:09`), ticking once a second and

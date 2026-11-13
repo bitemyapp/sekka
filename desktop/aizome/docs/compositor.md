@@ -596,7 +596,10 @@ nix develop .#aizome --command cargo test -p aizome-comp
 - `tests/focus.rs`: a shell-like wayland-client (layer surfaces and their
   popups): exclusive and on-demand keyboard interactivity, grabbing menus
   getting the keys and giving them back, menus closing for an exclusive
-  surface or a click elsewhere, and the popup layer's stacking.
+  surface or a click elsewhere, a bar that turns exclusive as its menu
+  closes having the keys until it's on demand again, and the popup
+  layer's stacking. With the real shell (`AIZOME_LAYOUT_TEST_SHELL`,
+  ignored otherwise), Rename in a Desk's menu takes what's typed next.
 - `tests/context_menus.rs`: an app with a text field and an input method
   that grabs the keyboard while a field has it (as Telegram and ibus):
   the field's context menu opening on a right-press, keeping the keys

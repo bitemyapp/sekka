@@ -208,6 +208,16 @@ impl Screen {
     }
 }
 
+/// A bar that asked the compositor for the keyboard so that a Desk can be
+/// renamed in it (`Shell::rename_desk`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RenameKeys {
+    pub bar: WindowKey,
+    /// The window with the focus when it asked: one focused since gets
+    /// what's typed next.
+    pub focused: Option<aizome_ipc::WindowId>,
+}
+
 /// Whether a connector is a built-in panel (a laptop's eDP, LVDS or DSI),
 /// the kind whose light `/sys/class/backlight` sets.
 pub fn builtin_panel(connector: &str) -> bool {
@@ -267,6 +277,9 @@ pub struct Shell {
     pub meters: Reading,
     pub now: Local,
     pub renaming: Option<(u32, String)>,
+    /// The bar holding the keyboard for that rename, when it had to ask
+    /// the compositor for it (`rename_desk`).
+    pub rename_keys: Option<RenameKeys>,
     pub shelf: crate::shelf::Shelf,
     /// Apps whose windows the person folded (true) or unfolded (false).
     pub folded: HashMap<String, bool>,
@@ -474,6 +487,7 @@ impl Shell {
             meters: Reading::default(),
             now: Local::now(),
             renaming: None,
+            rename_keys: None,
             shelf: crate::shelf::Shelf::default(),
             folded: HashMap::new(),
             notes: crate::notifications::store::Store::default(),
@@ -784,6 +798,8 @@ impl Shell {
     fn bar(&mut self, win: WindowKey, msg: BarMsg, cx: &mut Cx<Msg>) {
         match msg {
             BarMsg::DeskbarHover(inside) => self.deskbar_hover(true, inside, cx),
+            // A Desk double-clicked: the click gave this bar the keyboard.
+            BarMsg::Run(Action::RenameDesk { index }) => self.rename_desk(index, Some(win), false, cx),
             BarMsg::Run(a) => self.run(a, cx),
             BarMsg::Press(slot, rect) => {
                 // Pressing the open menu's title closes it (the press closed
@@ -818,8 +834,71 @@ impl Shell {
             BarMsg::DeskMenu(index, at) => {
                 let Some(desk) = self.wm.desk(index).cloned() else { return };
                 let menu = build::desk_context(&desk, self.wm.desks.len() > 1);
-                self.show_menu(win, Rect::from_origin_size(at, (1.0, 1.0)), &menu, MenuStyle::at_point(), cx);
+                // Rename comes back to the bar the menu is over: the Desk
+                // is renamed there, and it must ask for the keyboard.
+                let kit = build::to_kit(&menu, &|a| match a {
+                    Action::RenameDesk { index } => Msg::Bar(win, BarMsg::DeskRename(index)),
+                    a => Msg::Run(a),
+                });
+                cx.show_menu(win, Rect::from_origin_size(at, (1.0, 1.0)), kit, MenuStyle::at_point());
             }
+            BarMsg::DeskRename(index) => self.rename_desk(index, Some(win), true, cx),
+        }
+    }
+
+    /// Starts renaming Desk `index` in place, in `bar`'s strip (the bar of
+    /// the display with the focus, asked from elsewhere).
+    ///
+    /// A bar is an on-demand layer surface: it has the keyboard after a
+    /// click on it, and the compositor takes it back as a menu of the bar
+    /// closes, for the focused window. So a rename chosen from a menu
+    /// (`take_keys`) has the bar ask for the keyboard outright until it's
+    /// over ([`Shell::sync_rename_keys`]); one begun by a double click on
+    /// the Desk already has it, and loses it to a click elsewhere as before.
+    pub(crate) fn rename_desk(&mut self, index: u32, bar: Option<WindowKey>, take_keys: bool, cx: &mut Cx<Msg>) {
+        let screen = bar.and_then(|b| self.screen_of(b)).or_else(|| self.focused_screen());
+        let Some((bar, output)) = screen.and_then(|s| Some((s.bar?, s.name()))) else { return };
+        let name = self.wm.desk(index).map(|d| d.name.clone()).unwrap_or_default();
+        self.renaming = Some((index, name));
+        if self.rename_keys.is_some_and(|k| k.bar != bar) {
+            // Another display's bar was renaming one: this one takes over.
+            self.release_rename_keys(cx);
+        }
+        if take_keys && self.rename_keys.is_none() {
+            cx.set_layer_keyboard(bar, KeyboardInteractivity::Exclusive);
+            self.rename_keys = Some(RenameKeys { bar, focused: self.wm.focused });
+        }
+        cx.focus(&crate::menubar::rename_id(&output, index));
+    }
+
+    fn release_rename_keys(&mut self, cx: &mut Cx<Msg>) {
+        if let Some(k) = self.rename_keys.take() {
+            cx.set_layer_keyboard(k.bar, KeyboardInteractivity::OnDemand);
+        }
+    }
+
+    /// A bar that asked for the keyboard to rename a Desk gives it back
+    /// when the rename is over, however it ended: done, given up with
+    /// Escape, or the field lost the focus or the bar the keyboard to
+    /// something above it (the field says so, `RenameCancel`). It's over,
+    /// too, once something else should have what's typed, which the
+    /// compositor doesn't decide for a surface that asked outright: a
+    /// window focused since, the lock, the shell's own surfaces that take
+    /// the keyboard (on another display the compositor would leave it with
+    /// the bar); and once there's no field to type into, or to hear Escape:
+    /// the bar went, or the Desk.
+    fn sync_rename_keys(&mut self, cx: &mut Cx<Msg>) {
+        let Some(keys) = self.rename_keys else { return };
+        let refocused = self.wm.focused.is_some() && self.wm.focused != keys.focused;
+        let locked = self.wm.locked || !self.lock.surfaces.is_empty();
+        let taken = self.palette.is_some() || self.confirm.is_some() || self.auth.is_some();
+        let gone = !self.surfaces.contains_key(&keys.bar)
+            || self.renaming.as_ref().is_some_and(|(index, _)| self.wm.desk(*index).is_none());
+        if refocused || locked || taken || gone {
+            self.renaming = None;
+        }
+        if self.renaming.is_none() {
+            self.release_rename_keys(cx);
         }
     }
 
@@ -995,11 +1074,9 @@ impl Shell {
                 let name = (self.wm.desks.len() + 1).to_string();
                 self.ipc.send(Request::AddDesk { name, folder: None, index: None });
             }
-            Action::RenameDesk { index } => {
-                let name = self.wm.desk(index).map(|d| d.name.clone()).unwrap_or_default();
-                self.renaming = Some((index, name));
-                cx.focus("desk-rename");
-            }
+            // Asked for away from a bar's own strip (which says which bar,
+            // `Shell::bar`): no click has given a bar the keyboard.
+            Action::RenameDesk { index } => self.rename_desk(index, None, true, cx),
             Action::Session(SessionVerb::Sleep) => self.do_session(SessionVerb::Sleep),
             Action::Session(v @ (SessionVerb::LogOut | SessionVerb::Restart | SessionVerb::ShutDown)) => {
                 self.confirm(v, cx)
@@ -2040,6 +2117,7 @@ impl Shell {
         self.sync_tearoffs(cx);
         self.sync_cards(cx);
         self.keep_palette_ahead(cx);
+        self.sync_rename_keys(cx);
         if let Some(screen) = self.primary().cloned() {
             let model = self.bar_model(&screen);
             let theme = cx.theme().clone();
