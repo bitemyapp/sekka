@@ -185,15 +185,15 @@ impl Headless {
         Ok(())
     }
 
-    /// Imports a surface tree when the renderer copies wl_shm pixels (GLES).
+    /// Imports a surface tree when the renderer copies wl_shm pixels (GLES),
+    /// and says whether `fresh` were copied.
     pub fn import_shm_copies(
         &mut self,
         surface: &smithay::reexports::wayland_server::protocol::wl_surface::WlSurface,
+        fresh: &[smithay::reexports::wayland_server::protocol::wl_buffer::WlBuffer],
     ) -> bool {
         match &mut self.renderer {
-            HeadlessRenderer::Gles(r) => {
-                smithay::backend::renderer::utils::import_surface_tree(r.as_mut(), surface).is_ok()
-            }
+            HeadlessRenderer::Gles(r) => super::import_fresh(r.as_mut(), surface, fresh),
             HeadlessRenderer::Pixman(_) => false,
         }
     }

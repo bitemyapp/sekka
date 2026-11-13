@@ -371,14 +371,24 @@ impl Udev {
         }
     }
 
-    /// With GLES on one GPU the early import copied wl_shm pixels into
-    /// textures already; import again (a no-op then) to know it worked.
-    pub fn import_shm_copies(&mut self, surface: &WlSurface) -> bool {
+    /// With GLES on one GPU, imports a surface tree in the primary GPU's
+    /// context, where every frame and capture is drawn, so that wl_shm
+    /// pixels are copied into its textures now, and says whether `fresh`
+    /// were. (smithay's early import does nothing for wl_shm: it leaves the
+    /// copy to the draw, which may come after the client has the buffer
+    /// back.)
+    pub fn import_shm_copies(
+        &mut self,
+        surface: &WlSurface,
+        fresh: &[smithay::reexports::wayland_server::protocol::wl_buffer::WlBuffer],
+    ) -> bool {
         if self.devices.len() > 1 {
             return false;
         }
         match &mut self.renderers {
-            Renderers::Gles(g) => g.early_import(self.primary_gpu, surface).is_ok(),
+            Renderers::Gles(g) => {
+                g.single_renderer(&self.primary_gpu).is_ok_and(|mut r| super::import_fresh(&mut r, surface, fresh))
+            }
             Renderers::Pixman(_) => false,
         }
     }
