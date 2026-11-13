@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 
 use aizome_kit::WindowKey;
 use aizome_kit::layout::{Point, Vec2};
-use aizome_kit::sidestep_ui::Modifiers;
+use aizome_kit::sidestep_ui::{Key, Modifiers, NamedKey};
 use aizome_kit::testing::Harness;
 use aizome_yukimi::app::{Changes, Clock, Launch, Msg, Page, Runner, Source, Yukimi, launch_from_args};
 use aizome_yukimi::job::Outcome;
@@ -426,6 +426,40 @@ fn going_back_and_cleaning_up_ask_first() {
     assert!(has(&h, w, "Clean up the store?"));
     assert!(click_last(&mut h, w, "Clean up"));
     assert_eq!(ran.lock().unwrap().last(), Some(&Operation::Clean { older_than_days: Some(90) }));
+}
+
+/// A keyboard-only person's Return on Clean Up…, held: it asks, and its
+/// repeats don't answer the alert's default button for them. Let go and
+/// pressed again, Return answers.
+#[test]
+fn a_return_held_on_clean_up_asks_and_cleans_nothing() {
+    let (mut h, w, ran) = sample(WORKS);
+    h.send(Msg::Show(Page::Storage));
+    h.send(Msg::Older(2));
+    // Tab to Clean Up…, which the focus scrolls into view.
+    let on_it = |h: &Harness<Yukimi>| match (h.focused_rect(w), h.find(w, "Clean Up…")) {
+        (Some(focus), Some(button)) => button.contains(focus.center()),
+        _ => false,
+    };
+    for _ in 0..80 {
+        if on_it(&h) {
+            break;
+        }
+        h.named(w, NamedKey::Tab, Modifiers::NONE);
+    }
+    assert!(on_it(&h), "Tab reaches Clean Up…");
+    let enter = Key::Named(NamedKey::Enter);
+    h.key_down(w, enter.clone(), Modifiers::NONE);
+    assert!(has(&h, w, "Clean up the store?"), "Return on the button asks");
+    for _ in 0..40 {
+        h.key_repeat(w, enter.clone(), Modifiers::NONE);
+    }
+    let cleaned = ran.lock().unwrap().clone();
+    assert!(cleaned.is_empty(), "the held Return answered the alert: {cleaned:?}");
+    assert!(has(&h, w, "Clean up the store?"), "the alert still asks");
+    h.key_up(w, enter, Modifiers::NONE);
+    h.named(w, NamedKey::Enter, Modifiers::NONE);
+    assert_eq!(ran.lock().unwrap().as_slice(), [Operation::Clean { older_than_days: Some(90) }]);
 }
 
 #[test]

@@ -880,6 +880,42 @@ impl<P: Program> Harness<P> {
         self.rt.flush(&mut self.platform);
     }
 
+    /// A key going down in the window with the keyboard, and staying down:
+    /// [`key_repeat`](Self::key_repeat) is it repeating while it's held, and
+    /// [`key_up`](Self::key_up) lets it go.
+    pub fn key_down(&mut self, key: WindowKey, k: Key, mods: Modifiers) {
+        self.key_event(key, Self::held(k, mods, true, false));
+    }
+
+    /// A held key repeating: the press the platform sends again, marked as
+    /// a repeat, for as long as the key stays down.
+    pub fn key_repeat(&mut self, key: WindowKey, k: Key, mods: Modifiers) {
+        self.key_event(key, Self::held(k, mods, true, true));
+    }
+
+    /// A key let go.
+    pub fn key_up(&mut self, key: WindowKey, k: Key, mods: Modifiers) {
+        self.key_event(key, Self::held(k, mods, false, false));
+    }
+
+    /// One event of a key held down, as [`key`](Self::key) makes its two.
+    fn held(k: Key, mods: Modifiers, pressed: bool, repeat: bool) -> KeyEvent {
+        let text = match &k {
+            Key::Character(s) if pressed && !mods.super_key() && !mods.control() => Some(s.clone()),
+            _ => None,
+        };
+        KeyEvent {
+            key: k,
+            text,
+            pressed,
+            repeat,
+            code: 0,
+            modifiers: mods,
+            composing: None,
+            native: Default::default(),
+        }
+    }
+
     pub fn named(&mut self, key: WindowKey, k: NamedKey, mods: Modifiers) {
         self.key(key, Key::Named(k), mods);
     }
@@ -939,7 +975,8 @@ impl<P: Program> Harness<P> {
         self.rt.flush(&mut self.platform);
     }
 
-    /// The popup windows of the kit, raw: for driving menus.
+    /// The popup windows of the kit, raw: for driving menus. A key press
+    /// (and release) in `popup`, which may close at the press.
     pub fn popup_keyboard(&mut self, popup: u32, k: Key, mods: Modifiers) {
         let press = KeyEvent {
             key: k,
@@ -951,7 +988,10 @@ impl<P: Program> Harness<P> {
             composing: None,
             native: Default::default(),
         };
+        let release = KeyEvent { pressed: false, ..press.clone() };
         self.rt.core.key(popup, press, &mut self.platform);
+        self.rt.flush(&mut self.platform);
+        self.rt.core.key(popup, release, &mut self.platform);
         self.rt.flush(&mut self.platform);
     }
 

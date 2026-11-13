@@ -316,6 +316,9 @@ pub(crate) struct Core {
     pub quit: bool,
     /// Hooks for what only the compositor can do (Window menu).
     pub wm: Option<Box<dyn crate::cx::WindowManager>>,
+    /// The keys that are down, by their codes and what they are, since the
+    /// keyboard last came to a window or left one ([`Core::first_press`]).
+    keys_down: Vec<(u32, Key)>,
 }
 
 impl Core {
@@ -347,6 +350,7 @@ impl Core {
             key_window: None,
             quit: false,
             wm: None,
+            keys_down: Vec::new(),
         }
     }
 
@@ -2405,6 +2409,9 @@ impl Core {
     }
 
     pub fn window_focus(&mut self, win: WinId, on: bool, platform: &mut dyn Platform) {
+        // A key let go while no window has the keyboard is never heard of:
+        // none counts as down across a change of the keyboard's window.
+        self.keys_down.clear();
         let Some(w) = self.wins.get_mut(&win) else { return };
         w.has_keyboard = on;
         if let Some(f) = w.focused {
@@ -2427,11 +2434,36 @@ impl Core {
         }
     }
 
+    /// Whether `ev` is a key going down that wasn't down: not a repeat of a
+    /// held key, whether the platform marked it as one or only sent the
+    /// press again with no release since the last. Hears every key event,
+    /// to know which keys are down.
+    fn first_press(&mut self, ev: &KeyEvent) -> bool {
+        // By its code where the platform gives one (the layout can make a
+        // key's release something other than its press); by what it is
+        // where it doesn't (the testing harness).
+        let at = self.keys_down.iter().position(|(code, key)| match (*code, ev.code) {
+            (0, 0) => *key == ev.key,
+            (down, code) => down == code,
+        });
+        if !ev.pressed {
+            if let Some(i) = at {
+                self.keys_down.swap_remove(i);
+            }
+            return false;
+        }
+        if at.is_none() {
+            self.keys_down.push((ev.code, ev.key.clone()));
+        }
+        at.is_none() && !ev.repeat
+    }
+
     /// A key: menus' shortcuts, then the focused widget and its parents,
     /// then the kit's own keys (Tab, Escape, Return in sheets).
     pub fn key(&mut self, win: WinId, ev: KeyEvent, platform: &mut dyn Platform) {
         let started = Instant::now();
         self.mods = ev.modifiers;
+        let first_press = self.first_press(&ev);
         if !self.wins.contains_key(&win) {
             return;
         }
@@ -2464,7 +2496,7 @@ impl Core {
             None => false,
         };
         if !handled && ev.pressed {
-            self.default_key(win, &ev, focused, platform);
+            self.default_key(win, &ev, focused, first_press, platform);
         }
         self.stats.event(started.elapsed());
     }
@@ -2489,7 +2521,19 @@ impl Core {
         Some(drag)
     }
 
-    fn default_key(&mut self, win: WinId, ev: &KeyEvent, focused: Option<usize>, platform: &mut dyn Platform) {
+    /// The kit's own keys. Return and Space press a button (the focused
+    /// control, or for Return the sheet's default button) only on a key's
+    /// `first_press`: a key held since before the button got the focus, or
+    /// before its sheet opened, presses nothing however long it repeats, so
+    /// one held key can't both ask and answer. Tab and Escape repeat.
+    fn default_key(
+        &mut self,
+        win: WinId,
+        ev: &KeyEvent,
+        focused: Option<usize>,
+        first_press: bool,
+        platform: &mut dyn Platform,
+    ) {
         let m = ev.modifiers;
         match &ev.key {
             Key::Named(NamedKey::Tab) if !m.control() && !m.super_key() => self.move_focus(win, !m.shift(), platform),
@@ -2508,6 +2552,7 @@ impl Core {
                     self.activate(win, i, platform);
                 }
             }
+            Key::Named(NamedKey::Enter) | Key::Character(_) if !first_press => {}
             Key::Named(NamedKey::Enter) => {
                 if let Some(f) = focused
                     && self.activate(win, f, platform)

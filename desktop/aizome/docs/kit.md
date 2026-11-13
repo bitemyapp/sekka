@@ -436,7 +436,9 @@ elsewhere), the press is over and the next one starts afresh.
   keyboard for others).
 - Space or Return work the focused control. In a sheet, Return presses the
   default button and Escape the cancel one; Escape closes popovers and
-  menus.
+  menus. Space and Return press only as the key goes down: a held key's
+  repeats press nothing, so the Return that opened a sheet, or moved the
+  focus to a button, doesn't also answer it (`--test held_keys`).
 - Menus' shortcuts come before the focused widget: ❖ (Super) is the command
   key. With nothing focused, keys go to what's under the pointer (a scroll
   view pages).
@@ -619,6 +621,7 @@ fn adds() {
 `Harness::with(program, appearance, menu_bar)` picks the theme and the
 in-window menu bar. Input: `click`, `click_text`, `press`/`release`,
 `drag`, `move_to`, `scroll`, `pinch`, `key`, `named`, `command`, `type_text`, `ime`,
+`key_down`/`key_repeat`/`key_up` (a key held and repeating),
 `focus_window`, `send(msg)`, `resize`, `window_state` (the compositor's
 answer; `fullscreen_asked` says what was asked). `settle(wait, |p| done)`
 handles what `cx.spawn` and streams send until the program says it's
