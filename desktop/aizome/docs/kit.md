@@ -439,7 +439,8 @@ elsewhere), the press is over and the next one starts afresh.
   menus.
 - Menus' shortcuts come before the focused widget: ❖ (Super) is the command
   key. With nothing focused, keys go to what's under the pointer (a scroll
-  view pages).
+  view pages). An item marked `.yields_to_text()` leaves its shortcut to a
+  text field or editor that has the keyboard (see Menus).
 
 ## Menus
 
@@ -476,7 +477,7 @@ fn menus(&self) -> MenuBar<Msg> {
 `.replace(title, menu)`, `.remove(title)`, `.extend(title, items)`,
 `.insert(i, menu)` change the standard ones. Items: `MenuItem::new(label,
 msg)`, `.shortcut(Shortcut::cmd('N').shift().alt().ctrl())`, `.enabled`,
-`.checked`, `.icon`, `.key(k)`, `.role(MenuRole::..)`;
+`.checked`, `.icon`, `.key(k)`, `.role(MenuRole::..)`, `.yields_to_text()`;
 `MenuItem::role_item(label, role)` for an item the kit carries out itself;
 `Menu::separator()`, `.submenu(menu)`, `.header(text)`.
 
@@ -494,6 +495,14 @@ too gets it only when no widget takes the command); Quit asks each window's
 `close_requested`; About shows the About panel; Minimise asks the window's
 compositor; Hide, Hide Others, Fill, Stack with… and Bring All to Front go
 through `Cx::set_window_manager` (the compositor's IPC).
+
+A shortcut that is also a key text is edited with (❖⌫ deletes back to the
+start of a line; ❖↑ and ❖↓ go to the text's ends) is taken from a focused
+field like any other. `.yields_to_text()` on the item leaves the key to a
+text field or editor while one has the keyboard, in a sheet too; the item is
+still chosen from the menu. Hako's Move to Trash (❖⌫) is one: while a name,
+the location or a search is being typed, the key edits that text. `cargo test
+-p aizome-kit --test menu_text_keys` covers it.
 
 Settings and app-specific Help have no generic kit handler. Their role-only
 standard entries are disabled, including their shortcuts. Apps with preferences

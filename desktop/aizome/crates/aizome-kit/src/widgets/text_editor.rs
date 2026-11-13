@@ -1423,6 +1423,10 @@ impl Widget for EditorWidget {
         }
     }
 
+    fn edits_text(&self) -> bool {
+        true
+    }
+
     fn selection(&self, _state: StateView) -> Option<String> {
         let r = self.snap.selection.range();
         (!r.is_empty()).then(|| self.snap.rope.slice(r).to_string())

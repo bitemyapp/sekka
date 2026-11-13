@@ -52,25 +52,36 @@ pub fn menu_bar(h: &Hako) -> MenuBar<Msg> {
         .submenu(compress_as(w, has_sel && !in_trash))
         .item(item("Extract", Msg::Extract(w)).enabled(archive_sel && !in_trash))
         .separator();
+    // ❖⌫ (with ⌥ or ⇧ too) deletes back to the start of the line in a
+    // field: while the location, a name, the search or a passphrase has
+    // the keyboard, the key is that text's, not these items'.
     if in_trash {
         file = file
             .item(
-                item("Put Back", Msg::PutBack(w)).shortcut(Shortcut::cmd_key(ShortcutKey::Backspace)).enabled(has_sel),
+                item("Put Back", Msg::PutBack(w))
+                    .shortcut(Shortcut::cmd_key(ShortcutKey::Backspace))
+                    .yields_to_text()
+                    .enabled(has_sel),
             )
             .item(
                 item("Delete Immediately…", Msg::AskErase(w))
                     .shortcut(Shortcut::cmd_key(ShortcutKey::Backspace).alt())
+                    .yields_to_text()
                     .enabled(has_sel),
             );
     } else {
         file = file.item(
-            item("Move to Trash", Msg::Trash(w)).shortcut(Shortcut::cmd_key(ShortcutKey::Backspace)).enabled(has_sel),
+            item("Move to Trash", Msg::Trash(w))
+                .shortcut(Shortcut::cmd_key(ShortcutKey::Backspace))
+                .yields_to_text()
+                .enabled(has_sel),
         );
     }
     file = file
         .item(
             item("Empty Trash…", Msg::AskEmptyTrash(w))
                 .shortcut(Shortcut::cmd_key(ShortcutKey::Backspace).shift())
+                .yields_to_text()
                 .enabled(!h.trash_is_empty()),
         )
         .separator()
@@ -102,7 +113,13 @@ pub fn menu_bar(h: &Hako) -> MenuBar<Msg> {
         .item(item("Cut", Msg::Cut(w)).role(MenuRole::Cut).shortcut(Shortcut::cmd('X')).enabled(has_sel && !in_trash))
         .item(item("Copy", Msg::Copy(w)).role(MenuRole::Copy).shortcut(Shortcut::cmd('C')).enabled(has_sel))
         .item(item("Paste", Msg::Paste(w, false)).role(MenuRole::Paste).shortcut(Shortcut::cmd('V')).enabled(can_paste))
-        .item(item("Move Here", Msg::Paste(w, true)).shortcut(Shortcut::cmd('V').alt()).enabled(can_paste))
+        // A field pastes text on ⌥❖V as on ❖V.
+        .item(
+            item("Move Here", Msg::Paste(w, true))
+                .shortcut(Shortcut::cmd('V').alt())
+                .yields_to_text()
+                .enabled(can_paste),
+        )
         .item(item("Select All", Msg::SelectAll(w)).role(MenuRole::SelectAll).shortcut(Shortcut::cmd('A')))
         .separator()
         .item(item("Copy Path", Msg::CopyPath(w)).shortcut(Shortcut::cmd('C').alt()))
@@ -156,10 +173,12 @@ pub fn menu_bar(h: &Hako) -> MenuBar<Msg> {
                 .shortcut(Shortcut::cmd(']'))
                 .enabled(b.is_some_and(|b| !b.forward.is_empty())),
         )
-        .item(item("Enclosing Folder", Msg::Up(w)).shortcut(Shortcut::cmd_key(ShortcutKey::Up)))
+        // ❖↑ and ❖↓ go to the ends of a field's text.
+        .item(item("Enclosing Folder", Msg::Up(w)).shortcut(Shortcut::cmd_key(ShortcutKey::Up)).yields_to_text())
         .item(
             item("Open Selected", Msg::OpenSelection(w))
                 .shortcut(Shortcut::cmd_key(ShortcutKey::Down))
+                .yields_to_text()
                 .enabled(has_sel),
         )
         .separator();

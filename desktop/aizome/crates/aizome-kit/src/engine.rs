@@ -1578,6 +1578,7 @@ impl Core {
                 id: Some(crate::shell::WINDOW_LIST + win),
                 icon: None,
                 swatch: None,
+                yields_to_text: false,
             }));
         }
         spec.items.splice(at..at + 1, items);
@@ -2428,7 +2429,9 @@ impl Core {
     }
 
     /// A key: menus' shortcuts, then the focused widget and its parents,
-    /// then the kit's own keys (Tab, Escape, Return in sheets).
+    /// then the kit's own keys (Tab, Escape, Return in sheets). The
+    /// shortcut of an item that yields to text isn't taken while text
+    /// has the keyboard.
     pub fn key(&mut self, win: WinId, ev: KeyEvent, platform: &mut dyn Platform) {
         let started = Instant::now();
         self.mods = ev.modifiers;
@@ -2438,6 +2441,8 @@ impl Core {
         let m = ev.modifiers;
         if ev.pressed && (m.super_key() || m.control()) {
             let found = self.menubar.iter().find_map(|menu| menu.find_shortcut(&ev).cloned());
+            // A key text is edited with stays the text's.
+            let found = found.filter(|a| !(a.yields_to_text && self.editing_text(win)));
             if let Some(a) = found {
                 let mut a = a;
                 // Settle Edit items against the focused widget.
@@ -2467,6 +2472,12 @@ impl Core {
             self.default_key(win, &ev, focused, platform);
         }
         self.stats.event(started.elapsed());
+    }
+
+    /// Whether a text field or editor has `win`'s keyboard.
+    fn editing_text(&self, win: WinId) -> bool {
+        let Some(w) = self.wins.get(&win) else { return false };
+        w.focused.and_then(|f| w.input_node(f)).is_some_and(|i| w.tree.nodes[i].widget.edits_text())
     }
 
     /// The app window a popup (or the window itself) belongs to.
