@@ -45,10 +45,14 @@ pub(crate) fn quick_look_key(w: WindowKey, k: &aizome_kit::sidestep_ui::KeyEvent
 }
 
 /// What a key no control took means to the window: ⇧❖. (by the key's
-/// place) shows hidden files.
+/// place) shows hidden files, and ⇧❖G is Go to Folder as ❖L is (the
+/// file chooser's key for it; the menu lists the command once).
 pub fn window_key(k: &aizome_kit::sidestep_ui::KeyEvent) -> Option<Msg> {
     let m = k.modifiers;
-    (m.super_key() && m.shift() && k.code == KEY_DOT).then_some(Msg::ToggleHidden)
+    if m.super_key() && m.shift() && k.code == KEY_DOT {
+        return Some(Msg::ToggleHidden);
+    }
+    Shortcut::cmd('G').shift().matches(k).then_some(Msg::EditPath(WindowKey::NONE))
 }
 
 fn toolbar(h: &Hako, w: WindowKey, b: &Browser) -> Element<Msg> {
@@ -130,8 +134,12 @@ fn toolbar(h: &Hako, w: WindowKey, b: &Browser) -> Element<Msg> {
 fn pathbar(h: &Hako, w: WindowKey, b: &Browser) -> Element<Msg> {
     let inner: Element<Msg> = if let Some(text) = &b.path_edit {
         row![
+            // The field is new each time the bar is edited (the folders
+            // show in between), so each time it starts with the caret
+            // after the folder's path.
             text_field(text)
                 .id("location")
+                .select_on_focus(text.len()..text.len())
                 .mono()
                 .placeholder("A folder or file: ~/Documents, /etc")
                 .error(b.path_error.clone())
