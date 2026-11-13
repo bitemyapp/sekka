@@ -20,13 +20,20 @@ use tiny_skia::{Mask, PixmapMut, PixmapRef, Transform};
 use crate::protocol::{GradientSpec, ShadowSpec};
 
 /// A thread's shadow buffers, reused: the coverage, its alpha, a spare
-/// for the blur, and its columns' running sums.
+/// for the blur, its columns' running sums, and what [`blur_coverage`]
+/// works in (a band of rows on its own, some columns of that, which
+/// columns are unlike the one before, the blurred coverage, a line of it).
 #[derive(Default)]
 struct Scratch {
     cover: Vec<u32>,
     alpha: Vec<u8>,
     tmp: Vec<u8>,
     sums: Vec<u32>,
+    part: Vec<u8>,
+    sub: Vec<u8>,
+    unlike: Vec<bool>,
+    out: Vec<u8>,
+    row: [Vec<u8>; 2],
 }
 
 thread_local!(static SCRATCH: RefCell<Scratch> = RefCell::default());
@@ -52,6 +59,23 @@ fn boxes(sigma: f32) -> [usize; 3] {
     [0, 1, 2].map(|i| if i < m { lower } else { upper })
 }
 
+/// Blur the row `src` into `dst` with a box of `size` pixels (odd, over
+/// 1): each pixel the rounded mean of the `size` around it, zeros outside.
+fn blur_row(src: &[u8], dst: &mut [u8], size: usize) {
+    let (w, r) = (src.len(), size / 2);
+    let mean = Mean::new(size as u32);
+    let mut sum: u32 = src[..=r.min(w - 1)].iter().map(|&v| u32::from(v)).sum();
+    for (i, out) in dst.iter_mut().enumerate() {
+        *out = mean.of(sum);
+        if i + r + 1 < w {
+            sum += u32::from(src[i + r + 1]);
+        }
+        if i >= r {
+            sum -= u32::from(src[i - r]);
+        }
+    }
+}
+
 /// Blur `a` (`w` × `h` coverage) in place with a box of `size` pixels (odd),
 /// along rows, then along columns: each pixel the rounded mean of the
 /// `size` around it, zeros outside. The columns go a row at a time with a
@@ -65,16 +89,7 @@ fn box_blur(a: &mut [u8], tmp: &mut Vec<u8>, sums: &mut Vec<u32>, w: usize, h: u
     tmp.clear();
     tmp.resize(a.len(), 0);
     for (src, dst) in a.chunks_exact(w).zip(tmp.chunks_exact_mut(w)) {
-        let mut sum: u32 = src[..=r.min(w - 1)].iter().map(|&v| u32::from(v)).sum();
-        for (i, out) in dst.iter_mut().enumerate() {
-            *out = mean.of(sum);
-            if i + r + 1 < w {
-                sum += u32::from(src[i + r + 1]);
-            }
-            if i >= r {
-                sum -= u32::from(src[i - r]);
-            }
-        }
+        blur_row(src, dst, size);
     }
     sums.clear();
     sums.resize(w, 0);
@@ -89,6 +104,167 @@ fn box_blur(a: &mut [u8], tmp: &mut Vec<u8>, sums: &mut Vec<u32>, w: usize, h: u
         if y >= r {
             sums.iter_mut().zip(&tmp[(y - r) * w..(y - r + 1) * w]).for_each(|(s, &v)| *s -= u32::from(v));
         }
+    }
+}
+
+/// The fewest rows or columns alike, beyond those the blur reaches from
+/// either end, for a stretch of them to be blurred as one.
+const ALIKE: usize = 4;
+
+/// The stretches of `count` things in a row, each like the one before it
+/// by `like`, whose neighbours as far as the blur reaches (`reach`) are all
+/// in the same run of them: (from, to) of each, in order; none if they come
+/// to under a quarter of everything, when going around them saves less
+/// than it costs. Blurring across such a stretch changes nothing, a mean
+/// of equal values being that value.
+fn alike(count: usize, reach: usize, like: impl Fn(usize) -> bool) -> Vec<(usize, usize)> {
+    let mut flat = Vec::new();
+    let mut from = 0;
+    while from < count {
+        let to = (from + 1..count).find(|&i| !like(i)).unwrap_or(count);
+        if to - from >= 2 * reach + ALIKE {
+            flat.push((from + reach, to - reach));
+        }
+        from = to;
+    }
+    if flat.iter().map(|(a, b)| b - a).sum::<usize>() < count / 4 {
+        flat.clear();
+    }
+    flat
+}
+
+/// The stretches of columns alike ([`alike`]) of `a`, rows `w` wide, with
+/// `unlike` to work in. Coverage with no such columns (text, a disc) shows
+/// it in its first few rows, and the rest aren't read.
+fn columns_alike(a: &[u8], unlike: &mut Vec<bool>, w: usize, reach: usize) -> Vec<(usize, usize)> {
+    unlike.clear();
+    unlike.resize(w, false);
+    let mut look = 8;
+    for (y, row) in a.chunks_exact(w).enumerate() {
+        unlike[1..].iter_mut().zip(row.windows(2)).for_each(|(u, pair)| *u |= pair[0] != pair[1]);
+        if y + 1 == look {
+            look *= 4;
+            if alike(w, reach, |x| !unlike[x]).is_empty() {
+                return Vec::new();
+            }
+        }
+    }
+    alike(w, reach, |x| !unlike[x])
+}
+
+/// Blur `line` along itself with each of `sizes`, with `spare` to work in.
+fn blur_line(line: &mut Vec<u8>, spare: &mut Vec<u8>, sizes: [usize; 3]) {
+    spare.clear();
+    spare.resize(line.len(), 0);
+    for size in sizes.into_iter().filter(|size| *size > 1) {
+        blur_row(line, spare, size);
+        std::mem::swap(line, spare);
+    }
+}
+
+/// Blur the scratch's alpha (`w` × `h` coverage) with a box of each of
+/// `sizes` in turn, as [`box_blur`] three times over does, leaving out
+/// the work whose answer is known.
+///
+/// Where a row and every row the blur reaches from it are alike, blurring
+/// along columns changes nothing, so each of them comes out as that row
+/// blurred along itself, worked out once; and so for columns alike, blurred
+/// along themselves. A box with a soft shadow is nearly all such rows and
+/// columns (those between its corners, and the empty ones around it),
+/// which leaves its corners to blur both ways: each with the rows and
+/// columns that reach it, as on its own the three boxes read no further.
+/// The pixels are the ones blurring everything gives, for a small part of
+/// the work when what casts the shadow is large; coverage with nothing
+/// alike is blurred where it is, as before.
+fn blur_coverage(s: &mut Scratch, w: usize, h: usize, sizes: [usize; 3]) {
+    let reach: usize = sizes.iter().map(|size| size / 2).sum();
+    if w == 0 || h == 0 || reach == 0 {
+        return;
+    }
+    let rows = alike(h, reach, |y| s.alpha[y * w..(y + 1) * w] == s.alpha[(y - 1) * w..y * w]);
+    if rows.is_empty() {
+        // One band, all of it.
+        std::mem::swap(&mut s.alpha, &mut s.part);
+        let columns = columns_alike(&s.part, &mut s.unlike, w, reach);
+        if columns.is_empty() {
+            for size in sizes {
+                box_blur(&mut s.part, &mut s.tmp, &mut s.sums, w, h, size);
+            }
+            std::mem::swap(&mut s.alpha, &mut s.part);
+        } else {
+            s.out.clear();
+            s.out.resize(w * h, 0);
+            blur_around(s, w, h, sizes, columns, (0, h), 0);
+            std::mem::swap(&mut s.alpha, &mut s.out);
+        }
+        return;
+    }
+    s.out.clear();
+    s.out.resize(w * h, 0);
+    let mut from = 0;
+    for (f0, f1) in rows.into_iter().chain([(h, h)]) {
+        if from < f0 {
+            // The rows between two stretches, with the rows above and below
+            // that reach them (zeros past the coverage's own edges).
+            let (top, bottom) = (from.saturating_sub(reach), (f0 + reach).min(h));
+            s.part.clear();
+            s.part.extend_from_slice(&s.alpha[top * w..bottom * w]);
+            let columns = columns_alike(&s.part, &mut s.unlike, w, reach);
+            blur_around(s, w, bottom - top, sizes, columns, (from - top, f0 - top), from);
+        }
+        if f0 < f1 {
+            let [row, spare] = &mut s.row;
+            row.clear();
+            row.extend_from_slice(&s.alpha[f0 * w..(f0 + 1) * w]);
+            blur_line(row, spare, sizes);
+            s.out[f0 * w..f1 * w].chunks_exact_mut(w).for_each(|out| out.copy_from_slice(row));
+        }
+        from = f1;
+    }
+    std::mem::swap(&mut s.alpha, &mut s.out);
+}
+
+/// Blur the scratch's part (`w` × `h`: a band of rows of the coverage, with
+/// the rows that reach it) with each of `sizes`, and put its rows `keep`
+/// into the scratch's out from row `at` on: the stretches of `columns`
+/// alike as those columns blurred along themselves, the rest both ways.
+fn blur_around(
+    s: &mut Scratch,
+    w: usize,
+    h: usize,
+    sizes: [usize; 3],
+    columns: Vec<(usize, usize)>,
+    keep: (usize, usize),
+    at: usize,
+) {
+    let reach: usize = sizes.iter().map(|size| size / 2).sum();
+    let out = &mut s.out[at * w..(at + keep.1 - keep.0) * w];
+    let mut from = 0;
+    for (f0, f1) in columns.into_iter().chain([(w, w)]) {
+        if from < f0 {
+            // The columns between two stretches, with those on either side
+            // that reach them.
+            let (left, right) = (from.saturating_sub(reach), (f0 + reach).min(w));
+            let width = right - left;
+            s.sub.clear();
+            s.part.chunks_exact(w).for_each(|row| s.sub.extend_from_slice(&row[left..right]));
+            for size in sizes {
+                box_blur(&mut s.sub, &mut s.tmp, &mut s.sums, width, h, size);
+            }
+            for (out, sub) in out.chunks_exact_mut(w).zip(s.sub.chunks_exact(width).skip(keep.0)) {
+                out[from..f0].copy_from_slice(&sub[from - left..f0 - left]);
+            }
+        }
+        if f0 < f1 {
+            let [column, spare] = &mut s.row;
+            column.clear();
+            column.extend(s.part.chunks_exact(w).map(|row| row[f0]));
+            blur_line(column, spare, sizes);
+            for (out, &v) in out.chunks_exact_mut(w).zip(&column[keep.0..keep.1]) {
+                out[f0..f1].fill(v);
+            }
+        }
+        from = f1;
     }
 }
 
@@ -199,10 +375,13 @@ fn cast(
         if !coverage(s, (ww, wh), (r as isize + dx, r as isize + dy)) {
             return;
         }
+        // Nothing reaches the region (the shape is empty, or all of it is
+        // further off than its shadow goes): no shadow to blur or put down.
+        if s.alpha.iter().all(|&a| a == 0) {
+            return;
+        }
         if blur > 0.0 {
-            for size in boxes(blur / 2.0) {
-                box_blur(&mut s.alpha, &mut s.tmp, &mut s.sums, ww, wh, size);
-            }
+            blur_coverage(s, ww, wh, boxes(blur / 2.0));
         }
         let c = spec.color.map(|v| v.clamp(0.0, 1.0));
         // The shadow's pixel at each coverage, worked out once.
@@ -214,17 +393,45 @@ fn cast(
         let mask = mask.map(Mask::data);
         for (y, row) in pm.data_mut().as_chunks_mut::<4>().0.chunks_exact_mut(w).enumerate() {
             let covs = &s.alpha[(y + r) * ww + r..(y + r) * ww + r + w];
+            let Some(m) = mask else {
+                put_down(row, covs, &shades);
+                continue;
+            };
             for (x, (px, &cov)) in row.iter_mut().zip(covs).enumerate() {
-                let mut cov = u32::from(cov);
-                if let Some(m) = mask {
-                    cov = (cov * u32::from(m[y * w + x]) + 127) / 255;
-                }
+                let cov = (u32::from(cov) * u32::from(m[y * w + x]) + 127) / 255;
                 if cov != 0 {
                     *px = super::over(u32::from_ne_bytes(*px), shades[cov as usize]).to_ne_bytes();
                 }
             }
         }
     });
+}
+
+/// Put a row of shadow down: `shades[cov]` over each pixel of `row`, for
+/// its coverage in `covs`. A stretch of one coverage goes as one: none of
+/// it is skipped, and all of it (inside what casts the shadow) is one shade
+/// over each pixel, in a loop with no choice in it, which the compiler
+/// spreads over a vector's lanes.
+fn put_down(row: &mut [[u8; 4]], covs: &[u8], shades: &[u32; 256]) {
+    // How many of `covs` are like its first.
+    let run = |covs: &[u8]| {
+        let mut n = 1;
+        while n + 32 <= covs.len() && covs[n..n + 32] == [covs[0]; 32] {
+            n += 32;
+        }
+        n + covs[n..].iter().take_while(|&&c| c == covs[0]).count()
+    };
+    let mut x = 0;
+    while x < covs.len() {
+        let end = x + run(&covs[x..]);
+        if covs[x] != 0 {
+            let shade = shades[usize::from(covs[x])];
+            for px in &mut row[x..end] {
+                *px = super::over(u32::from_ne_bytes(*px), shade).to_ne_bytes();
+            }
+        }
+        x = end;
+    }
 }
 
 /// The shader for a gradient in user space.
@@ -311,6 +518,70 @@ mod tests {
             let m = Mean::new(n);
             for sum in (0..=255 * n).step_by((n as usize / 64).max(1)).chain([255 * n]) {
                 assert_eq!(u32::from(m.of(sum)), (sum + n / 2) / n, "sum {sum} of {n}");
+            }
+        }
+    }
+
+    #[test]
+    fn rows_alike_blur_to_the_pixels_blurring_everything_gives() {
+        let mut seed = 0x9e37_79b9_7f4a_7c15u64;
+        let mut next = move || {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            seed
+        };
+        let plain = |a: &[u8], w: usize, h: usize, sizes: [usize; 3]| {
+            let (mut a, mut tmp, mut sums) = (a.to_vec(), Vec::new(), Vec::new());
+            sizes.iter().for_each(|&size| box_blur(&mut a, &mut tmp, &mut sums, w, h, size));
+            a
+        };
+        // Boxes with soft corners and edges as a rasterizer leaves them,
+        // some reaching past the coverage's edges, alone and one over
+        // another; a box of noise among them; nothing; and noise alone,
+        // which has no rows alike.
+        let mut cases: Vec<(usize, usize, Vec<u8>)> = Vec::new();
+        for (w, h) in [(97, 240), (64, 64), (33, 500), (200, 131), (5, 90)] {
+            for kind in 0..6 {
+                let mut a = vec![0u8; w * h];
+                let mut boxed = |a: &mut [u8], (x0, y0, x1, y1): (usize, usize, usize, usize), corner: usize, noise| {
+                    for y in y0..y1.min(h) {
+                        for x in x0..x1.min(w) {
+                            let (dx, dy) = (x.min(x1 - 1 - x), y.min(y1 - 1 - y));
+                            let edge = (y - y0).min(y1 - 1 - y).min(x - x0).min(x1 - 1 - x);
+                            let round = dx < corner && dy < corner && (corner - dx) + (corner - dy) > corner + 1;
+                            a[y * w + x] = match (noise, round, edge) {
+                                (true, ..) => (next() % 256) as u8,
+                                (_, true, _) => 0,
+                                (.., 0) => 141,
+                                _ => 255,
+                            };
+                        }
+                    }
+                };
+                match kind {
+                    0 => boxed(&mut a, (w / 8, h / 10, w - w / 8, h - h / 10), 4, false),
+                    1 => boxed(&mut a, (0, 0, w, h + 40), 6, false),
+                    2 => {
+                        boxed(&mut a, (2, h / 3, w - 1, h + 9), 3, false);
+                        boxed(&mut a, (w / 3, h / 2, w / 2 + 1, h / 2 + 30), 2, false);
+                    }
+                    3 => {
+                        boxed(&mut a, (1, 3, w - 1, h - 3), 5, false);
+                        boxed(&mut a, (w / 4, h / 2, w / 2 + 1, h / 2 + 7), 0, true);
+                    }
+                    4 => {}
+                    _ => a.iter_mut().for_each(|v| *v = (next() % 256) as u8),
+                }
+                cases.push((w, h, a));
+            }
+        }
+        for (w, h, a) in cases {
+            for blur in [1.0f32, 2.0, 4.0, 8.0, 13.5, 30.0] {
+                let sizes = boxes(blur / 2.0);
+                let mut s = Scratch { alpha: a.clone(), ..Scratch::default() };
+                blur_coverage(&mut s, w, h, sizes);
+                assert!(s.alpha == plain(&a, w, h, sizes), "{w}x{h}, blurred by {blur} (boxes {sizes:?})");
             }
         }
     }

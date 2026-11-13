@@ -321,6 +321,26 @@ pub enum Tone {
 }
 
 impl Tone {
+    /// Into a paint hash: which token it is, or the colour's channels.
+    /// (Every container is hashed on every build, so nothing here may
+    /// allocate.)
+    pub(crate) fn hash(self, h: &mut PaintHasher) {
+        h.add(&std::mem::discriminant(&self));
+        match self {
+            Tone::Color(c) => {
+                h.color(c);
+            }
+            Tone::Surface
+            | Tone::Chrome
+            | Tone::Raised
+            | Tone::Sunk
+            | Tone::Bar
+            | Tone::Selection
+            | Tone::Focus
+            | Tone::MenuTitle => {}
+        }
+    }
+
     pub(crate) fn color(self, t: &crate::theme::Theme) -> Color {
         match self {
             Tone::Surface => t.surface(),
@@ -347,6 +367,17 @@ pub enum Edge {
 }
 
 impl Edge {
+    /// Into a paint hash, as [`Tone::hash`].
+    pub(crate) fn hash(self, h: &mut PaintHasher) {
+        h.add(&std::mem::discriminant(&self));
+        match self {
+            Edge::Color(c) => {
+                h.color(c);
+            }
+            Edge::Line | Edge::Line2 | Edge::BevelLo | Edge::Focus => {}
+        }
+    }
+
     pub(crate) fn color(self, t: &crate::theme::Theme) -> Color {
         match self {
             Edge::Line => t.line(),
@@ -551,10 +582,10 @@ impl Widget for ContainerWidget {
         let s = &self.style;
         h.add(&(s.fill.is_some(), s.bevel, s.floating, s.clip, s.edge.map(|(_, sd)| sd)));
         if let Some(f) = s.fill {
-            h.add(&format!("{f:?}"));
+            f.hash(h);
         }
         if let Some((e, _)) = s.edge {
-            h.add(&format!("{e:?}"));
+            e.hash(h);
         }
     }
 
@@ -730,7 +761,8 @@ impl Widget for DividerWidget {
     }
 
     fn hash(&self, h: &mut PaintHasher) {
-        h.add(&(self.vertical, self.engraved, format!("{:?}", self.edge))).f64(self.inset);
+        h.add(&(self.vertical, self.engraved)).f64(self.inset);
+        self.edge.hash(h);
     }
 
     fn semantics(&self) -> Option<Semantics> {
@@ -757,4 +789,60 @@ macro_rules! row {
 macro_rules! stack {
     () => { $crate::widgets::layout::stack(Vec::new()) };
     ($($x:expr),+ $(,)?) => { $crate::widgets::layout::stack(vec![$($crate::Element::from($x)),+]) };
+}
+
+#[cfg(test)]
+mod tests {
+    use std::hash::Hasher;
+
+    use super::*;
+    use crate::hash::Fx;
+
+    fn hashed(feed: impl Fn(&mut PaintHasher)) -> u64 {
+        let mut fx = Fx::default();
+        feed(&mut PaintHasher(&mut fx));
+        fx.finish()
+    }
+
+    #[test]
+    fn fills_and_edges_hash_by_what_they_are() {
+        let (navy, teal) = (Color::hex(0x18243a), Color::hex(0x357d74));
+        let tones = [
+            Tone::Surface,
+            Tone::Chrome,
+            Tone::Raised,
+            Tone::Sunk,
+            Tone::Bar,
+            Tone::Selection,
+            Tone::Focus,
+            Tone::MenuTitle,
+            Tone::Color(navy),
+            Tone::Color(teal),
+        ];
+        let edges = [Edge::Line, Edge::Line2, Edge::BevelLo, Edge::Focus, Edge::Color(navy), Edge::Color(teal)];
+        let tone_hashes: Vec<u64> = tones.iter().map(|t| hashed(|h| t.hash(h))).collect();
+        let edge_hashes: Vec<u64> = edges.iter().map(|e| hashed(|h| e.hash(h))).collect();
+        for hashes in [&tone_hashes, &edge_hashes] {
+            for (i, a) in hashes.iter().enumerate() {
+                assert!(hashes[i + 1..].iter().all(|b| a != b), "two of them hash alike: {hashes:?}");
+            }
+        }
+        assert_eq!(
+            hashed(|h| Tone::Color(Color::hex(0x18243a)).hash(h)),
+            tone_hashes[8],
+            "the same colour, the same hash"
+        );
+
+        // So a container is drawn again when its fill or its edge changes,
+        // and not otherwise.
+        let filled = |fill: Tone, edge: Option<Edge>| {
+            let style = ContainerStyle { fill: Some(fill), edge: edge.map(|e| (e, Sides::ALL)), ..Default::default() };
+            hashed(|h| ContainerWidget { style }.hash(h))
+        };
+        assert_eq!(filled(Tone::Color(navy), None), filled(Tone::Color(navy), None));
+        assert_ne!(filled(Tone::Color(navy), None), filled(Tone::Color(teal), None));
+        assert_ne!(filled(Tone::Chrome, None), filled(Tone::Raised, None));
+        assert_ne!(filled(Tone::Chrome, Some(Edge::Line)), filled(Tone::Chrome, Some(Edge::Line2)));
+        assert_ne!(filled(Tone::Chrome, Some(Edge::Line)), filled(Tone::Chrome, None));
+    }
 }

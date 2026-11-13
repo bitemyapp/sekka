@@ -54,6 +54,8 @@ pub struct Ctx {
     pub fcx: parley::FontContext,
     pub lcx: parley::LayoutContext<Brush>,
     faces: HashMap<fonts::FaceKey, Arc<fonts::Face>>,
+    /// Which characters the fonts text was laid out in have.
+    covered: fonts::Coverage,
     pub layouts: layout::Cache,
     /// A parley layout lent to each new layout, to reuse its allocations.
     scratch: parley::Layout<Brush>,
@@ -70,6 +72,7 @@ pub fn with_ctx<R>(f: impl FnOnce(&mut Ctx) -> R) -> R {
             fcx: fonts::shared().font_context(),
             lcx: parley::LayoutContext::new(),
             faces: HashMap::new(),
+            covered: fonts::Coverage::default(),
             layouts: layout::Cache::default(),
             scratch: parley::Layout::new(),
         });

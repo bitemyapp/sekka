@@ -748,3 +748,51 @@ fn baseline_offsets_move_attachments() {
         assert!((grown - want).abs() < 0.01, "TextKit 1: {glyphs}: grew {grown}");
     }
 }
+
+#[test]
+fn text_that_runs_one_way_needs_no_mark_to_say_so() {
+    // A paragraph told to run left to right gets a direction mark in front
+    // of its text, unless nothing in the text could run another way: then
+    // it lays out as text left to find its own direction does, glyph for
+    // glyph.
+    let a = Attrs::new(sans(13.0));
+    let said = Attrs {
+        paragraph: layout::Paragraph { direction: Direction::LeftToRight, ..a.paragraph.clone() },
+        ..a.clone()
+    };
+    let placed = |l: &TextLayout| -> Vec<(u32, u32, f32, f32)> {
+        l.runs.iter().flat_map(|r| r.glyphs.iter().map(move |g| (r.font, g.id, r.x + g.x, r.y + g.y))).collect()
+    };
+    for text in ["item 00012 · 0034", "Hello, world", "12:34 (56%)", "naïve café", "1-2", "#7 * 6"] {
+        let (found, told) = (lay(text, a.clone(), Options::UNBOUNDED), lay(text, said.clone(), Options::UNBOUNDED));
+        assert!(!placed(&found).is_empty(), "{text:?}");
+        assert_eq!(placed(&found), placed(&told), "{text:?}");
+        assert_eq!((found.width, found.height), (told.width, told.height), "{text:?}");
+    }
+    // Text with something in it that runs the other way keeps its mark:
+    // its paragraph runs as it was told (`right_to_left_runs_are_reversed`
+    // has Hebrew alone start on the left).
+    let mixed = lay("abc אבג 123", said, in_width(200.0));
+    assert!(mixed.runs.iter().map(|r| r.x).fold(f32::INFINITY, f32::min) < 1.0);
+}
+
+#[test]
+fn a_family_with_every_character_needs_none_after_it() {
+    let a = Attrs::new(sans(13.0));
+    super::with_ctx(|ctx| {
+        let mut seen = fonts::Coverage::default();
+        for text in ["item 00012 · 0034", "Hello, world", "", "naïve café"] {
+            assert!(fonts::covers(&mut ctx.fcx, &mut seen, &a.font.face, text), "{text:?}");
+        }
+        // DejaVu Sans has no Han, and nothing has the last character of
+        // the last plane: the families after it are asked, as before.
+        for text in ["日本語", "a\u{10FFFD}"] {
+            assert!(!fonts::covers(&mut ctx.fcx, &mut seen, &a.font.face, text), "{text:?}");
+        }
+    });
+    // Which still finds them their glyphs (`fallback_finds_cjk_and_emoji`),
+    // in text that has the family's own characters too.
+    let laid = lay("ab日本", a, Options::UNBOUNDED);
+    assert!(glyphs(&laid).iter().all(|&g| g != 0), "{:?}", glyphs(&laid));
+    assert!(laid.runs.len() >= 2, "two fonts' runs");
+}

@@ -199,19 +199,31 @@ impl Span {
     }
 }
 
-/// Text laid out, by what it was laid out from. Least recently used
-/// entries go once there are too many.
+/// Text laid out, by what it was laid out from.
+///
+/// A layout that something else still holds (the widget showing it) stays
+/// however many there are: letting it go would free nothing, and whoever
+/// shows it asks again at the next build. Layouts nothing holds any more
+/// go least recently used first, once there are too many of those. So a
+/// window keeps every label it shows, and scrolling or typing leaves a
+/// bounded trail behind.
 pub struct TextCache {
     map: FxHashMap<u64, (TextLayout, u64)>,
     tick: u64,
+    /// How many layouts nothing else holds are kept, at most.
     capacity: usize,
+    /// How many layouts there are before the next look for ones to let go.
+    limit: usize,
     pub(crate) hits: u64,
     pub(crate) misses: u64,
 }
 
+/// Layouts nothing shows that a cache keeps, for text shown again.
+const KEPT_UNSHOWN: usize = 4096;
+
 impl Default for TextCache {
     fn default() -> TextCache {
-        TextCache { map: FxHashMap::default(), tick: 0, capacity: 4096, hits: 0, misses: 0 }
+        TextCache::with_capacity(KEPT_UNSHOWN)
     }
 }
 
@@ -220,27 +232,40 @@ pub(crate) fn is_symbol(c: char) -> bool {
     matches!(c, '❖' | '⇧' | '⌥' | '⌃' | '⌘' | '⎋' | '⌫' | '⌦' | '⇥' | '↩' | '⏎')
 }
 
+/// What [`TextCache::layout`] keeps a layout under.
+fn text_key(text: &str, spec: &TextSpec, width: Option<f64>) -> u64 {
+    let mut h = Fx::default();
+    text.hash(&mut h);
+    spec.hash_into(&mut h);
+    width.map(f64::to_bits).hash(&mut h);
+    h.finish()
+}
+
+/// Text's layout, to build.
+fn text_builder(theme: &Theme, text: &str, spec: &TextSpec, width: Option<f64>) -> sidestep_ui::TextLayoutBuilder {
+    let mut b = TextLayout::builder(text, &spec.style(theme))
+        .width(width)
+        .wrap(spec.wrap)
+        .alignment(spec.align)
+        .max_lines(spec.max_lines)
+        .ellipsis(spec.max_lines > 0)
+        .line_height_multiple(spec.line_height);
+    for r in symbol_runs(text) {
+        b = b.style(r, symbol_style(spec, theme));
+    }
+    b
+}
+
 impl TextCache {
+    /// A cache that keeps at most `unshown` layouts nothing else holds.
+    pub fn with_capacity(unshown: usize) -> TextCache {
+        let capacity = unshown.max(4);
+        TextCache { map: FxHashMap::default(), tick: 0, capacity, limit: capacity, hits: 0, misses: 0 }
+    }
+
     /// `text` set as `spec`, broken at `width` (none: unbounded).
     pub fn layout(&mut self, theme: &Theme, text: &str, spec: &TextSpec, width: Option<f64>) -> TextLayout {
-        let mut h = Fx::default();
-        text.hash(&mut h);
-        spec.hash_into(&mut h);
-        width.map(f64::to_bits).hash(&mut h);
-        let key = h.finish();
-        self.get(key, || {
-            let mut b = TextLayout::builder(text, &spec.style(theme))
-                .width(width)
-                .wrap(spec.wrap)
-                .alignment(spec.align)
-                .max_lines(spec.max_lines)
-                .ellipsis(spec.max_lines > 0)
-                .line_height_multiple(spec.line_height);
-            for r in symbol_runs(text) {
-                b = b.style(r, symbol_style(spec, theme));
-            }
-            b.build()
-        })
+        self.get(text_key(text, spec, width), || text_builder(theme, text, spec, width).build())
     }
 
     /// Rich text: `spans` over `base`.
@@ -265,42 +290,63 @@ impl TextCache {
             keys.push(key);
             builders.push(spans_builder(theme, spans, base, *width));
         }
+        self.build_together(keys, builders);
+    }
+
+    /// Lay `builders` out together and keep each under its key, if there
+    /// are enough of them for that to be worth it.
+    fn build_together(&mut self, keys: Vec<u64>, builders: Vec<sidestep_ui::TextLayoutBuilder>) {
         if builders.len() < 2 {
             return;
         }
         for (key, layout) in keys.into_iter().zip(sidestep_ui::TextLayoutBuilder::build_all(builders)) {
             self.tick += 1;
             self.misses += 1;
-            if self.map.len() >= self.capacity {
-                self.evict();
-            }
-            self.map.insert(key, (layout, self.tick));
+            self.insert(key, layout);
         }
     }
 
     /// A layout by a key of the caller's, made by `make` if it isn't kept.
     pub fn get(&mut self, key: u64, make: impl FnOnce() -> TextLayout) -> TextLayout {
-        self.tick += 1;
-        if let Some((layout, used)) = self.map.get_mut(&key) {
-            *used = self.tick;
-            self.hits += 1;
-            return layout.clone();
+        if let Some(layout) = self.find(key) {
+            return layout;
         }
+        self.tick += 1;
         self.misses += 1;
         let layout = make();
-        if self.map.len() >= self.capacity {
-            self.evict();
-        }
-        self.map.insert(key, (layout.clone(), self.tick));
+        self.insert(key, layout.clone());
         layout
     }
 
-    /// Drop the least recently used quarter.
+    /// The layout kept under `key`, if there is one.
+    fn find(&mut self, key: u64) -> Option<TextLayout> {
+        let (layout, used) = self.map.get_mut(&key)?;
+        self.tick += 1;
+        *used = self.tick;
+        self.hits += 1;
+        Some(layout.clone())
+    }
+
+    fn insert(&mut self, key: u64, layout: TextLayout) {
+        if self.map.len() >= self.limit {
+            self.evict();
+        }
+        self.map.insert(key, (layout, self.tick));
+    }
+
+    /// Let the least recently used of the layouts nothing else holds go,
+    /// down to three quarters of how many are kept, and look again once a
+    /// quarter more have come: a look reads every layout, so it mustn't
+    /// come with each new one.
     fn evict(&mut self) {
-        let mut ticks: Vec<u64> = self.map.values().map(|(_, t)| *t).collect();
-        let cut = ticks.len() / 4;
-        let (_, &mut threshold, _) = ticks.select_nth_unstable(cut);
-        self.map.retain(|_, (_, t)| *t > threshold);
+        let keep = self.capacity - self.capacity / 4;
+        let mut ticks: Vec<u64> = self.map.values().filter(|(l, _)| !l.is_shared()).map(|(_, t)| *t).collect();
+        if ticks.len() > keep {
+            let cut = ticks.len() - keep;
+            let (_, &mut newest_gone, _) = ticks.select_nth_unstable(cut - 1);
+            self.map.retain(|_, (l, t)| *t > newest_gone || l.is_shared());
+        }
+        self.limit = self.capacity.max(self.map.len() + self.capacity / 4);
     }
 
     pub fn len(&self) -> usize {
@@ -313,6 +359,7 @@ impl TextCache {
 
     pub fn clear(&mut self) {
         self.map.clear();
+        self.limit = self.capacity;
     }
 }
 
@@ -582,7 +629,7 @@ impl<Msg> From<Text<Msg>> for Element<Msg> {
             strikethrough: t.strikethrough,
             letter_spacing: t.letter_spacing,
             selectable: t.selectable,
-            spec: None,
+            key: None,
             laid: None,
         };
         Element::from_raw(RawElement::new(w, t.common, Vec::new()))
@@ -620,7 +667,9 @@ pub(crate) struct TextWidget {
     strikethrough: bool,
     letter_spacing: f64,
     selectable: bool,
-    spec: Option<TextSpec>,
+    /// What its text and the way it's set are kept under in the cache,
+    /// once it's laid out.
+    key: Option<u64>,
     laid: Option<TextLayout>,
 }
 
@@ -656,6 +705,48 @@ impl TextWidget {
     }
 }
 
+/// Labels a look ahead lays out together, at most.
+const AHEAD: usize = 512;
+
+/// Labels in a row found kept before a look ahead stops.
+const KEPT_AHEAD: usize = 8;
+
+/// `text` set as `spec` is a label nothing has shown, and where there's
+/// one there are often many: a window opening, a list whose every row
+/// changed. Sidestep lays texts out together on its text threads, so this
+/// looks at the labels mounted after this one and lays out with it the
+/// ones that are new too, for their own layouts to find. A label alone in
+/// being new finds the next few kept and stops there, and one that was
+/// kept never looks.
+fn lay_out_ahead(cx: &mut LayoutCx, key: u64, text: &str, spec: &TextSpec) {
+    let (theme, selected) = (cx.env.theme, cx.env.on_selection);
+    let mut keys = vec![key];
+    let mut builders = vec![text_builder(theme, text, spec, None)];
+    let mut kept = 0;
+    for node in cx.tree.nodes[cx.node + 1..].iter().filter(|n| !n.dead) {
+        let widget: &dyn std::any::Any = node.widget.as_ref();
+        let Some(label) = widget.downcast_ref::<TextWidget>() else { continue };
+        // What its own layout asks for, if it's on a selected row or not
+        // as this one is; if it isn't, it lays itself out when it comes.
+        let spec = label.spec(theme, selected);
+        let key = text_key(&label.content, &spec, None);
+        if cx.env.text.map.contains_key(&key) || keys.contains(&key) {
+            kept += 1;
+            if kept == KEPT_AHEAD {
+                break;
+            }
+            continue;
+        }
+        kept = 0;
+        keys.push(key);
+        builders.push(text_builder(theme, &label.content, &spec, None));
+        if builders.len() == AHEAD {
+            break;
+        }
+    }
+    cx.env.text.build_together(keys, builders);
+}
+
 impl Widget for TextWidget {
     fn name(&self) -> &'static str {
         "text"
@@ -666,21 +757,28 @@ impl Widget for TextWidget {
         let theme = cx.env.theme;
         // A line laid out unbounded tells the natural width; text that
         // doesn't fit is laid out again at the width it has.
-        let natural = cx.env.text.layout(theme, &self.content, &spec, None);
-        let mut laid = natural.clone();
+        let key = text_key(&self.content, &spec, None);
+        let natural = match cx.env.text.find(key) {
+            Some(kept) => kept,
+            None => {
+                lay_out_ahead(cx, key, &self.content, &spec);
+                cx.env.text.get(key, || text_builder(theme, &self.content, &spec, None).build())
+            }
+        };
         let nat = natural.size();
         let fits = nat.width <= bc.max.width + 0.01;
         let aligned = spec.align != Alignment::Start && spec.align != Alignment::Left;
+        let (mut laid, mut s) = (natural, nat);
         if !fits || (aligned && bc.max.width.is_finite()) || (self.wrap && self.max_lines > 0) {
             let w = if aligned { bc.max.width.max(bc.min.width) } else { bc.max.width };
             if w.is_finite() {
                 laid = cx.env.text.layout(theme, &self.content, &spec, Some(w.max(1.0)));
+                s = laid.size();
             }
         }
-        let s = laid.size();
-        let height = if self.content.is_empty() { natural.size().height.max(spec.font.size * 1.2) } else { s.height };
+        let height = if self.content.is_empty() { nat.height.max(spec.font.size * 1.2) } else { s.height };
         let width = if aligned { bc.max.width.min(s.width.max(bc.min.width)) } else { s.width.ceil() };
-        self.spec = Some(spec);
+        self.key = Some(key);
         self.laid = Some(laid);
         bc.constrain(Size::new(width, height.ceil()))
     }
@@ -694,10 +792,12 @@ impl Widget for TextWidget {
     }
 
     fn hash(&self, h: &mut PaintHasher) {
-        h.str(&self.content);
-        if let Some(s) = &self.spec {
-            s.hash_into(h.0);
-        }
+        // Once laid out, what its text and the way it's set were kept
+        // under stands for both.
+        match self.key {
+            Some(key) => h.add(&key),
+            None => h.str(&self.content),
+        };
     }
 
     fn semantics(&self) -> Option<Semantics> {
@@ -839,6 +939,37 @@ mod tests {
         assert_eq!(lines.len(), 2);
         // The last line holds the rest, cut short by the ellipsis.
         assert_eq!(lines[1].range.end, text.len(), "{lines:?}");
+    }
+
+    #[test]
+    fn layouts_something_shows_stay_and_the_rest_are_bounded() {
+        let theme = Theme::new(Appearance::default());
+        let mut cache = TextCache::with_capacity(8);
+        let spec = TextSpec::new(FontSpec::ui(13.0), theme.text());
+        // Sixty labels a window shows, held as their widgets hold them:
+        // far more than the cache keeps of layouts nothing shows.
+        let shown: Vec<TextLayout> = (0..60).map(|i| cache.layout(&theme, &format!("row {i}"), &spec, None)).collect();
+        assert_eq!(cache.len(), 60);
+        // Text that comes and goes (a counter) leaves a bounded trail,
+        // and takes none of the shown ones with it.
+        for i in 0..500 {
+            cache.layout(&theme, &format!("tick {i}"), &spec, None);
+        }
+        assert!(cache.len() <= 60 + 8, "{} kept", cache.len());
+        let made = cache.misses;
+        for i in 0..60 {
+            cache.layout(&theme, &format!("row {i}"), &spec, None);
+        }
+        assert_eq!(cache.misses, made, "what shows was not laid out again");
+        // The most recent of the rest are the ones kept.
+        cache.layout(&theme, "tick 499", &spec, None);
+        assert_eq!(cache.misses, made);
+        // Let go of, the labels go as the rest do.
+        drop(shown);
+        for i in 500..600 {
+            cache.layout(&theme, &format!("tick {i}"), &spec, None);
+        }
+        assert!(cache.len() <= 8, "{} kept", cache.len());
     }
 
     #[test]
