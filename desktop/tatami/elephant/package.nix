@@ -19,5 +19,8 @@
   ];
 }).overrideAttrs
   (old: {
-    patches = (old.patches or [ ]) ++ [ ./search.patch ];
+    patches = (old.patches or [ ]) ++ [
+      ./search.patch
+      ./files-watch.patch
+    ];
   })
