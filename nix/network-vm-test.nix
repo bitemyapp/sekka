@@ -18,6 +18,12 @@ let
         ssid = "Home";
         password = "correct horse";
       }
+      # A password nmcli's passwd-file rewrites unless it is escaped: a
+      # backslash, and a space at either end.
+      {
+        ssid = "Annex";
+        password = " back\\slash ";
+      }
       {
         ssid = "Back Room";
         password = "backroom-pass";
@@ -120,6 +126,12 @@ pkgs.testers.runNixOSTest {
         time.sleep(3)
         machine.screenshot("joined")
 
+    with subtest("A password with a backslash and spaces at its ends joins as typed"):
+        window("--join Annex")
+        time.sleep(3)
+        machine.send_chars(" back\\slash \n")
+        wait_active("Annex")
+
     with subtest("Joining a hidden network by name"):
         # A second start reaches the open window, which asks for the
         # network's security and password.
@@ -144,6 +156,34 @@ pkgs.testers.runNixOSTest {
         wait_active("Back Room")
         machine.screenshot("refused")
         assert "Office" not in saved(), saved()
+
+    with subtest("Closing the window while joining leaves nothing behind"):
+        window("--join Office")
+        time.sleep(3)
+        machine.send_chars("wrong-password\n")
+        machine.wait_until_succeeds("nmcli -t -f NAME connection show | grep -qx Office", timeout=30)
+
+        def secrets():
+            return machine.execute("ls /run/user/1000/tatami-network-* 2>/dev/null")[1].split()
+
+        # nmcli is waiting for the network: its password is in no file.
+        waiting = secrets()
+        # Escape closes the window from its first page; the join goes on.
+        machine.send_key("esc")
+        machine.wait_until_fails(
+            "runuser -u demo -- env XDG_RUNTIME_DIR=/run/user/1000 "
+            f"HYPRLAND_INSTANCE_SIGNATURE={signature} hyprctl clients | grep -q org.tatami.Network",
+            timeout=30)
+        deadline = time.time() + 90
+        while "Office" in saved() and time.time() < deadline:
+            time.sleep(1)
+        assert not waiting and not secrets() and "Office" not in saved(), (
+            "closing the window while joining Office with a wrong password: "
+            f"passwd-files while nmcli waited {waiting}, afterwards {secrets()}; "
+            f"saved connections {saved()}")
+        # The program ends with the join.
+        machine.wait_until_fails("pgrep -u demo -f bin/tatami-network", timeout=30)
+        wait_active("Back Room")
 
     with subtest("Passwords never stay on disk"):
         machine.fail("ls /run/user/1000/tatami-network-* 2>/dev/null | grep -q .")
