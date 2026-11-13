@@ -295,6 +295,9 @@ mod tests {
         erased: Vec<String>,
         /// Erase messages that came without one.
         empty: usize,
+        /// Return in the field moves to the Erase button (as Genkan's phrase
+        /// field and Tansu's name field do) rather than asking with the alert.
+        submit_moves: bool,
     }
 
     #[derive(Clone, Debug)]
@@ -302,6 +305,7 @@ mod tests {
         Name(String),
         Erase(Pressed<String>),
         Ask,
+        ToErase,
     }
 
     impl Program for Eraser {
@@ -325,12 +329,14 @@ mod tests {
                         .agree_button("Erase Disk", self.disk.clone(), Msg::Erase)
                         .cancel_button("Cancel"),
                 ),
+                Msg::ToErase => cx.focus("erase"),
             }
         }
         fn view(&self, _: WindowKey) -> Element<Msg> {
+            let submit = if self.submit_moves { Msg::ToErase } else { Msg::Ask };
             column![
                 Element::new(Grip, Vec::new()).id("grip"),
-                text_field(&self.name).on_change(Msg::Name).on_submit(Msg::Ask).id("name"),
+                text_field(&self.name).on_change(Msg::Name).on_submit(submit).id("name"),
                 button("Ask").on_press(Msg::Ask),
                 button(format!("Erase {}", self.disk))
                     .destructive()
@@ -418,6 +424,90 @@ mod tests {
         // Return while it has the focus presses it too.
         h.named(w, NamedKey::Enter, Modifiers::NONE);
         assert_eq!(h.program().erased, ["sdb", "sdb"]);
+    }
+
+    /// The field's Return moves the focus to the button (`submit_moves`),
+    /// with the field focused to type in.
+    fn at_the_field() -> (Harness<Eraser>, WindowKey) {
+        let (mut h, w) = harness(true);
+        h.program_mut().submit_moves = true;
+        h.send(Msg::Name("x".into()));
+        assert!(h.click_text(w, "x"));
+        (h, w)
+    }
+
+    fn enter() -> Key {
+        Key::Named(NamedKey::Enter)
+    }
+
+    /// The Return that moved the focus to the button, still held and
+    /// repeating, is no press of the button: it went down before the button
+    /// had the focus. Let go and pressed again, it is one.
+    #[test]
+    fn a_return_held_since_the_field_agrees_to_nothing_at_the_button() {
+        let (mut h, w) = at_the_field();
+        h.key_down(w, enter(), Modifiers::NONE);
+        assert_eq!(h.focused_name(w).as_deref(), Some("erase"), "Return in the field moves to the button");
+        for _ in 0..40 {
+            h.key_repeat(w, enter(), Modifiers::NONE);
+        }
+        assert!(h.program().erased.is_empty(), "a held key's repeats agreed: {:?}", h.program().erased);
+        h.key_up(w, enter(), Modifiers::NONE);
+        assert!(h.program().erased.is_empty());
+        h.named(w, NamedKey::Enter, Modifiers::NONE);
+        assert_eq!(h.program().erased, ["sdb"], "the person's own press of the button");
+    }
+
+    /// Nor is a press with no release since the last, which is what a held
+    /// key's repeats are from a platform that doesn't mark them.
+    #[test]
+    fn a_press_with_no_release_since_the_last_agrees_to_nothing() {
+        let (mut h, w) = at_the_field();
+        h.key_down(w, enter(), Modifiers::NONE);
+        assert_eq!(h.focused_name(w).as_deref(), Some("erase"));
+        for _ in 0..40 {
+            h.key_down(w, enter(), Modifiers::NONE);
+        }
+        assert!(h.program().erased.is_empty(), "presses with no release between agreed: {:?}", h.program().erased);
+        h.key_up(w, enter(), Modifiers::NONE);
+        h.named(w, NamedKey::Enter, Modifiers::NONE);
+        assert_eq!(h.program().erased, ["sdb"]);
+    }
+
+    /// A key held on the focused button presses it once, as it goes down,
+    /// however long it repeats.
+    #[test]
+    fn a_key_held_on_the_button_agrees_once() {
+        let (mut h, w) = harness(true);
+        // From the field, Tab to Erase (past Ask).
+        h.send(Msg::Name("x".into()));
+        assert!(h.click_text(w, "x"));
+        h.named(w, NamedKey::Tab, Modifiers::NONE);
+        h.named(w, NamedKey::Tab, Modifiers::NONE);
+        assert_eq!(h.focused_name(w).as_deref(), Some("erase"));
+        for key in [Key::Character(" ".into()), enter()] {
+            let before = h.program().erased.len();
+            h.key_down(w, key.clone(), Modifiers::NONE);
+            for _ in 0..10 {
+                h.key_repeat(w, key.clone(), Modifiers::NONE);
+            }
+            h.key_up(w, key.clone(), Modifiers::NONE);
+            assert_eq!(h.program().erased.len(), before + 1, "{key:?} held on the button");
+        }
+    }
+
+    /// A key that was down when the window lost the keyboard may be let go
+    /// where the window can't see: it isn't taken for held when the keyboard
+    /// comes back.
+    #[test]
+    fn a_key_down_when_the_keyboard_left_is_forgotten() {
+        let (mut h, w) = at_the_field();
+        h.key_down(w, enter(), Modifiers::NONE);
+        assert_eq!(h.focused_name(w).as_deref(), Some("erase"));
+        h.focus_window(w, false);
+        h.focus_window(w, true);
+        h.named(w, NamedKey::Enter, Modifiers::NONE);
+        assert_eq!(h.program().erased, ["sdb"]);
     }
 
     #[test]
