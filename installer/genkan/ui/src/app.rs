@@ -378,7 +378,9 @@ pub enum Msg {
     /// the review it showed, with the phrase typed.
     Install(Pressed<Erasing>),
     /// Return in the phrase field: on to the Erase Disk and Install button,
-    /// which only a press of its own confirms.
+    /// which only a press of its own confirms. This Return isn't one however
+    /// long it's held: the kit presses a button only as a key goes down
+    /// (`tests/early_confirmation.rs` holds it).
     ToConfirm,
     Consent(bool),
     Tick,

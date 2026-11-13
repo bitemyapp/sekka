@@ -111,10 +111,13 @@ its type names.
 
 The kit makes an `Agreed<T>` only when a person presses a button made with
 `on_agree(target, msg)`, with the pointer or keyboard, and only for a press
-that began on that button. The agreement carries what the button showed,
-can't be cloned, and is spent once. Program code can't make one, and tests
-get one only through the kit's `testing` feature, which no shipped build
-enables. The destructive steps take it:
+that began on that button: Return and Space press any button only as the
+key goes down, so a key held since before the button had the focus (the
+Return that moved there from Genkan's phrase field or Tansu's name field)
+presses nothing however long it repeats. The agreement carries what the
+button showed, can't be cloned, and is spent once. Program code can't make
+one, and tests get one only through the kit's `testing` feature, which no
+shipped build enables. The destructive steps take it:
 
 - **aizome-sys and Tansu:** `Confirm::new` (and `Confirm::resize`, with the
   sizes a resize goes between) takes an agreement to the disk's identity, so
