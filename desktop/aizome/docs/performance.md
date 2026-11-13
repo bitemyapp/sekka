@@ -191,7 +191,10 @@ summary of six or seven frames is in effect its largest frame.
    about a millisecond each (a second after the shell warms its text, a
    second after it closes, and a second after what it would open with
    changes; `Cx::prepare_window`), so opening it copies that picture in
-   (the window keeps it while closed: 5.6 MB) and draws only what changed.
+   (the window keeps it while closed and until it next closes, 5.6 MB:
+   dropped in the frame that draws it, each opening's picture stayed in
+   the renderer's image cache, up to its 256 MiB) and draws only what
+   changed.
    On 19 October, release, Aizome's headless compositor at 2880 × 1800,
    scale 2, ❖Space five seconds after start, twelve runs each interleaved
    with main (`2e15129`) at load 0.1–2.9: the first opening median

@@ -10,3 +10,6 @@ repository.workspace = true
 [dependencies]
 aizome-kit.workspace = true
 aizome-theme.workspace = true
+# The JPEG decoder Sidestep decodes with, for a photo's RGB pixels as it
+# leaves them (wallpaper.rs).
+image = { version = "0.25", default-features = false, features = ["jpeg"] }
