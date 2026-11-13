@@ -66,6 +66,21 @@ fn has(h: &Harness<Yukimi>, w: WindowKey, text: &str) -> bool {
     h.texts(w).iter().any(|t| t == text)
 }
 
+#[test]
+fn history_and_cleanup_do_not_present_nar_bytes_as_reclaimable_disk_space() {
+    let (mut h, w, _) = sample(WORKS);
+    h.send(Msg::Show(Page::History));
+    assert!(has(&h, w, "NAR closure"));
+    h.send(Msg::ToggleGeneration(28));
+    // The distinction is shown even while the package comparison loads.
+    assert!(has(&h, w, "Estimated freed"));
+    h.send(Msg::Show(Page::Storage));
+    let words = h.texts(w);
+    assert!(words.iter().any(|s| s.contains("NAR size across")));
+    assert!(words.iter().any(|s| s.contains("Cleanup estimates below use file allocation and hardlinks")));
+    assert!(!words.iter().any(|s| s.contains("Frees at least")));
+}
+
 fn active_aliases(selected: u32, active: &[u32], expected: Option<u32>) {
     let mut model = aizome_yukimi::fixture::model();
     model.generations.truncate(3);
@@ -432,16 +447,17 @@ fn going_back_and_cleaning_up_ask_first() {
 fn deleting_a_generation_says_what_comes_back_and_asks_first() {
     let (mut h, w, ran) = sample(WORKS);
     h.send(Msg::Show(Page::History));
-    // Beside each older generation, what deleting it gives back on disk,
-    // not everything it needs.
+    // The estimate is separate from the full NAR closure, which includes shared paths.
     assert!(has(&h, w, "96 MB") && has(&h, w, "2.6 GB"));
-    assert!(!has(&h, w, "18 GB"));
+    assert!(has(&h, w, "18 GB") && has(&h, w, "NAR closure") && has(&h, w, "Estimated freed"));
     h.send(Msg::ToggleGeneration(26));
     settle(&mut h, |a| matches!(a.changes.get(&26), Some(Changes::Ready { .. })));
-    assert!(h.texts(w).iter().any(|t| t.contains("about 96 MB on disk, comes back once garbage is collected")));
+    assert!(h.texts(w).iter().any(|t| t.contains("Estimated space freed after garbage collection: 96 MB")));
     assert!(h.click_text(w, "Delete…"));
     assert!(has(&h, w, "Delete generation 26?"));
-    assert!(h.texts(w).iter().any(|t| t.contains("frees about 96 MB") && t.contains("13 GB that nothing needs")));
+    assert!(
+        h.texts(w).iter().any(|t| t.contains("is estimated to free 96 MB") && t.contains("13 GB that nothing needs"))
+    );
     // Delete alone leaves the garbage for the next clean-up.
     assert!(click_last(&mut h, w, "Delete"));
     assert_eq!(ran.lock().unwrap().as_slice(), [Operation::Delete { generations: vec![26], collect: false }]);
@@ -479,21 +495,21 @@ fn generations_selected_together_are_priced_and_deleted_together() {
     // Selecting one doesn't open it.
     h.click(w, tick(&h, 24));
     assert!(!h.program().opened.contains(&24));
-    assert!(has(&h, w, "1 selected · frees about 1.9 GB"), "{:?}", h.texts(w));
+    assert!(has(&h, w, "1 selected · estimated freed: 1.9 GB"), "{:?}", h.texts(w));
     // Shift-click: every one from the last clicked.
     h.click_with(w, tick(&h, 26), Modifiers::SHIFT);
     assert_eq!(h.program().ticked.numbers.iter().copied().collect::<Vec<_>>(), [24, 25, 26]);
     // Nothing only 24 to 26 have: what each frees alone, added up.
     settle(&mut h, |a| a.ticked.priced().is_some());
-    assert!(has(&h, w, "3 selected · frees about 2.4 GB"), "{:?}", h.texts(w));
+    assert!(has(&h, w, "3 selected · estimated freed: 2.4 GB"), "{:?}", h.texts(w));
     // With 27, what all four kept goes too: more than one at a time frees.
     assert!(h.click_text(w, "Select All"));
     settle(&mut h, |a| a.ticked.priced().is_some());
-    assert!(has(&h, w, "4 selected · frees about 6.9 GB"), "{:?}", h.texts(w));
+    assert!(has(&h, w, "4 selected · estimated freed: 6.9 GB"), "{:?}", h.texts(w));
     assert!(!has(&h, w, "Select All"));
     assert!(h.click_text(w, "Delete…"));
     assert!(has(&h, w, "Delete generations 24–27?"), "{:?}", h.texts(w));
-    assert!(h.texts(w).iter().any(|t| t.contains("Deleting them frees about 6.9 GB")
+    assert!(h.texts(w).iter().any(|t| t.contains("Deleting them is estimated to free 6.9 GB")
         && t.contains("nothing older to go back to")
         && t.contains("13 GB that nothing needs")));
     assert!(click_last(&mut h, w, "Delete and Clean Up"));
@@ -513,7 +529,7 @@ fn unselecting_runs_and_selecting_none() {
     h.send(Msg::Tick { number: 27, on: false, run: false });
     h.send(Msg::Tick { number: 25, on: false, run: true });
     assert_eq!(h.program().ticked.numbers.iter().copied().collect::<Vec<_>>(), [24]);
-    assert!(has(&h, w, "1 selected · frees about 1.9 GB"));
+    assert!(has(&h, w, "1 selected · estimated freed: 1.9 GB"));
     // Only some are selected, so there's one prompt for those, without
     // the warning about what's left.
     h.send(Msg::DeleteTicked);
@@ -542,11 +558,11 @@ fn cleaning_up_says_what_comes_back() {
     let (mut h, w, _) = sample(WORKS);
     h.send(Msg::Show(Page::Storage));
     h.send(Msg::Older(0));
-    assert!(h.texts(w).iter().any(|t| t.contains("Frees about 15 GB on disk") && t.contains("generation 24")));
+    assert!(h.texts(w).iter().any(|t| t.contains("Estimated space freed: 15 GB") && t.contains("generation 24")));
     h.send(Msg::Older(1));
     assert!(h.texts(w).iter().any(|t| t.contains("No generation is old enough")));
     h.send(Msg::CleanUp);
-    assert!(h.texts(w).iter().any(|t| t.contains("none is old enough") && t.contains("About 13 GB comes back")));
+    assert!(h.texts(w).iter().any(|t| t.contains("none is old enough") && t.contains("Estimated space freed: 13 GB")));
 }
 
 #[test]

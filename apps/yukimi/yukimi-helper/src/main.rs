@@ -1129,14 +1129,21 @@ fn clean(args: &[String]) -> Result<String> {
         stage_done(1);
     }
     stage(2, "Collecting garbage");
+    let available_before_gc = free_space("/nix/store");
     let freed = collect_garbage()?;
+    let available_after_gc = free_space("/nix/store");
     stage_done(2);
     // The boot menu lists only generations that still exist.
     stage(3, "Updating the boot menu");
     commit()?;
     switch(&format!("{PROFILE}/bin/switch-to-configuration"), "boot")?;
     stage_done(3);
-    Ok(serde_json::json!({"ok": true, "freed": freed}).to_string())
+    Ok(serde_json::json!({
+        "ok": true, "freed": freed,
+        "available_before_gc": available_before_gc,
+        "available_after_gc": available_after_gc,
+    })
+    .to_string())
 }
 
 /// Collect garbage, passing Nix's report on, and return its last line
@@ -1308,6 +1315,7 @@ fn delete(args: &[String]) -> Result<String> {
     if deletion.collect {
         stage(3, "Collecting garbage");
         let before = blocks_free("/nix/store");
+        report_json["available_before_gc"] = free_space("/nix/store").into();
         match collect_garbage() {
             Ok(summary) => {
                 report_json["collected"] = true.into();
@@ -1320,6 +1328,7 @@ fn delete(args: &[String]) -> Result<String> {
                 report_json["collect_error"] = message.into();
             }
         }
+        report_json["available_after_gc"] = free_space("/nix/store").into();
         if let (Some(before), Some(after)) = (before, blocks_free("/nix/store")) {
             report_json["freed"] = after.saturating_sub(before).into();
         }
