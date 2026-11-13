@@ -40,6 +40,8 @@ let
   '';
 in
 {
+  imports = [ ../../../../nix/scheduling/lag-recorder.nix ];
+
   options.calamares = {
     tuning.enable = lib.mkEnableOption "CachyOS-inspired kernel, memory, I/O and service defaults";
     zswap.enable = lib.mkEnableOption "zswap in front of the RAM-sized swap partition";
