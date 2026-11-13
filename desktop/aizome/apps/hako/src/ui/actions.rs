@@ -222,6 +222,18 @@ impl Hako {
         }
     }
 
+    /// A drag began on the picture in window `w`'s preview: the file it
+    /// previews goes out as its row does once a drag of it leaves the
+    /// window (the same chip, the same copy and nothing else). A file
+    /// gone since it was selected has nothing to carry.
+    pub(crate) fn drag_preview(&mut self, cx: &mut Cx<Msg>, w: WindowKey) {
+        let Some(e) = self.preview_entry(w) else { return };
+        if std::fs::symlink_metadata(&e.path).is_err() {
+            return;
+        }
+        self.drag_out(cx, w, vec![e.path]);
+    }
+
     /// A drag waited over a folder: open it in the next column.
     pub(crate) fn spring(&mut self, cx: &mut Cx<Msg>, w: WindowKey, target: Target, n: u64) {
         let g = self.next_gen();

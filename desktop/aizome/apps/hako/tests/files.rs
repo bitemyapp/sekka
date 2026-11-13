@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use aizome_kit::sidestep_ui::{DropAction, Key, Modifiers, NamedKey, PointerButton};
 use aizome_kit::testing::Harness;
 use aizome_kit::theme::ThemeChoice;
-use aizome_kit::{Point, WindowKey};
+use aizome_kit::{DragSource, Point, Rect, Vec2, WindowKey};
 use common::*;
 use hako::ui::app::{Request, Sheet};
 use hako::ui::browser::Loc;
@@ -51,6 +51,25 @@ fn click_name(h: &mut Harness<Hako>, w: WindowKey, col: usize, name: &str) {
         .unwrap_or_else(|| panic!("{name} in column {col}: {:?}", names(h, w, col)));
     let p = row_at(h, w, col, i);
     h.click(w, p);
+}
+
+/// Where the preview's picture is: the largest picture (or icon) the
+/// window shows. A picture is drawn in the middle of its room.
+fn preview_picture(h: &Harness<Hako>, w: WindowKey) -> Rect {
+    use aizome_kit::widget::SemanticRole;
+    h.semantics(w)
+        .into_iter()
+        .filter(|(s, _)| s.role == SemanticRole::Image)
+        .map(|(_, r)| r)
+        .max_by(|a, b| a.area().total_cmp(&b.area()))
+        .expect("the preview's picture")
+}
+
+/// What a drag offers and lets a destination do with it, apart from the
+/// chip it shows.
+fn offer(source: &DragSource) -> String {
+    let all = format!("{source:?}");
+    all.split(", icon:").next().unwrap_or_default().to_owned()
 }
 
 fn open(s: &Sandbox, rel: &str, layout: Layout) -> (Harness<Hako>, WindowKey) {
@@ -408,6 +427,107 @@ fn drags_move_within_a_disk_and_drops_copy_in() {
     assert!(h.drop(w, docs, vec![url], None));
     settle(&mut h);
     assert!(s.home().join("work/eighth.flac").exists() && s.home().join("Music/eighth.flac").exists());
+}
+
+#[test]
+fn the_preview_s_picture_drags_its_file_out() {
+    let s = Sandbox::new("drag-preview");
+    populate(&s);
+    let (mut h, w) = open(&s, "Pictures/mark.png", Layout::Column);
+    let mark = s.home().join("Pictures/mark.png");
+    assert!(wait_for(&mut h, |p| p.previews.get(&mark).is_some_and(|p| p.image.is_some())), "its picture shows");
+    h.render(w, 1.0);
+    // What a drag of its row carries once it has left the window.
+    let from = row_at(&h, w, 0, names(&h, w, 0).iter().position(|n| n == "mark.png").unwrap());
+    h.drag(w, from, Point::new(-40.0, from.y), 8);
+    settle(&mut h);
+    let (by_row, _) = h.program().outbound.clone().expect("the row's drag went out");
+    let rows = format!("{:?}", h.drags()[0].1);
+    h.end_drag(by_row, DropAction::None);
+    // A click on the picture is the click it was (the preview takes the
+    // keys, to scroll by), and drags nothing. Nor does the room beside
+    // the picture, or a press that hardly moves.
+    let room = preview_picture(&h, w);
+    let picture = room.center();
+    assert_eq!(h.focused_name(w).as_deref(), Some("col-0"));
+    h.click(w, picture);
+    assert_eq!(h.focused_name(w), None, "the click went to the preview");
+    assert!(room.width() > room.height() + 60.0, "a square picture leaves room beside it: {room:?}");
+    let beside = Point::new(room.x0 + 20.0, picture.y);
+    h.drag(w, beside, beside + Vec2::new(0.0, 40.0), 4);
+    h.press(w, picture, PointerButton::Left, 1);
+    h.move_to(w, picture + Vec2::new(3.0, 0.0));
+    assert_eq!(h.drags().len(), 1, "no drag yet: a click, the room beside, and three points");
+    // Moved on, the file goes out, once, however far it's taken.
+    h.move_to(w, picture + Vec2::new(12.0, 4.0));
+    h.move_to(w, picture + Vec2::new(60.0, 4.0));
+    let drags = h.drags();
+    assert_eq!(drags.len(), 2, "the picture's drag went out");
+    let (id, carried) = drags[1];
+    // It offers the file, to copy and nothing else, under the row's chip.
+    let a_copy = DragSource::new().urls([hako::model::uri::file_uri(&mark)]).actions(true, false);
+    assert_eq!(offer(carried), offer(&a_copy));
+    assert_eq!(format!("{carried:?}"), rows, "as its row goes");
+    assert_eq!(h.program().outbound, Some((id, vec![mark.clone()])));
+    // Whatever took it says it did, Hako moves and deletes nothing.
+    h.end_drag(id, DropAction::Move);
+    settle(&mut h);
+    assert!(mark.exists());
+    assert_eq!(selected(&h, w), ["mark.png"]);
+    assert_eq!(h.program().outbound, None);
+}
+
+#[test]
+fn the_preview_drags_what_its_row_would_or_nothing() {
+    let s = Sandbox::new("drag-preview-edges");
+    populate(&s);
+    let (mut h, w) = open(&s, "Documents/roadmap.md", Layout::Column);
+    let drag = |h: &mut Harness<Hako>| {
+        h.render(w, 1.0);
+        let from = preview_picture(h, w).center();
+        h.drag(w, from, from + Vec2::new(40.0, 10.0), 4);
+        settle(h);
+        h.drags().len()
+    };
+    // A file with no picture of its own goes by its icon.
+    let roadmap = s.home().join("Documents/roadmap.md");
+    assert_eq!(drag(&mut h), 1);
+    let first = h.drags()[0].0;
+    assert_eq!(h.program().outbound, Some((first, vec![roadmap.clone()])));
+    h.end_drag(first, DropAction::Copy);
+    // Gone since it was selected (the column hasn't heard): there's
+    // nothing to carry.
+    std::fs::remove_file(&roadmap).unwrap();
+    assert_eq!(h.program().preview_entry(w).map(|e| e.path), Some(roadmap));
+    assert_eq!(drag(&mut h), 1, "a file that's gone drags nothing");
+    assert_eq!(h.program().outbound, None);
+    // In the Trash it's the file the can holds, as it is for its row.
+    h.send(Msg::GoPath(w, s.home().join("Documents/budget.csv")));
+    settle(&mut h);
+    h.key(w, Key::Named(NamedKey::Backspace), Modifiers::SUPER);
+    settle(&mut h);
+    h.send(Msg::Go(w, Loc::Trash));
+    settle(&mut h);
+    click_name(&mut h, w, 0, "budget.csv");
+    settle(&mut h);
+    let trashed = s.path().join("data/Trash/files/budget.csv");
+    assert_eq!(h.program().preview_entry(w).map(|e| e.path), Some(trashed.clone()));
+    assert_eq!(drag(&mut h), 2);
+    let second = h.drags()[1].0;
+    assert_eq!(h.program().outbound, Some((second, vec![trashed.clone()])));
+    h.end_drag(second, DropAction::Copy);
+    assert!(trashed.exists());
+    // Several items selected show no preview to drag by; nor does a
+    // folder, which opens its column instead.
+    h.send(Msg::GoPath(w, s.home().join("Downloads/fonts.tar.gz")));
+    settle(&mut h);
+    assert!(h.program().preview_entry(w).is_some());
+    h.key(w, Key::Named(NamedKey::End), Modifiers::SHIFT);
+    assert_eq!(selected(&h, w).len(), 3);
+    assert!(h.program().preview_entry(w).is_none());
+    h.send(Msg::GoPath(w, s.home().join("work/sidestep")));
+    settle(&mut h);
+    assert!(h.program().preview_entry(w).is_none());
 }
 
 #[test]

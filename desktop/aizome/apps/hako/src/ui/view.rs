@@ -10,6 +10,7 @@ use aizome_kit::{column, row};
 use super::app::{Hako, Msg};
 use super::browser::{Browser, Column, Load, Loc};
 use super::dnd::{self, Dest};
+use super::dragout::handle;
 use super::fileview::{Detail, Handlers, Layout, file_view};
 use super::keys::{self, KEY_DOT};
 use super::look;
@@ -420,7 +421,7 @@ fn content(h: &Hako, w: WindowKey, b: &Browser) -> Element<Msg> {
             let preview = h.preview_entry(w);
             let last_width = if preview.is_some() { 300.0 } else { h.settings.column_width };
             if let Some(e) = preview {
-                cols.push(preview_column(h, &e));
+                cols.push(preview_column(h, w, &e));
             }
             strip(cols, h.settings.column_width, last_width, b.reveal, Rc::new(Msg::ColumnWidth))
         }
@@ -498,14 +499,24 @@ fn column_view(h: &Hako, w: WindowKey, b: &Browser, i: usize, c: &Column, layout
 }
 
 /// The preview of a file selected last: its picture (or icon), name,
-/// kind, size and dates, and the start of its text.
-fn preview_column(h: &Hako, e: &Entry) -> Element<Msg> {
+/// kind, size and dates, and the start of its text. The picture is
+/// something to take hold of: dragged, it carries the file out of the
+/// window.
+fn preview_column(h: &Hako, w: WindowKey, e: &Entry) -> Element<Msg> {
     let p = h.previews.get(&e.path);
     let (ic, role) = look::entry_icon(e);
+    let drag = Msg::DragPreview(w);
     let picture: Element<Msg> = match p.and_then(|p| p.image.clone()).or_else(|| h.thumbs.images.get(&e.path).cloned())
     {
-        Some(img) => image(img).fit(Fit::Contain).width(Length::Fill).height(180.0).into(),
-        None => container(icon(ic).size(96.0).role(role)).center().width(Length::Fill).height(180.0).into(),
+        Some(img) => {
+            let size = img.size();
+            let shown = image(img).fit(Fit::Contain).width(Length::Fill).height(180.0);
+            handle(shown.into(), Some(size), drag).width(Length::Fill).height(180.0)
+        }
+        None => {
+            let held = handle(icon(ic).size(96.0).role(role).into(), None, drag);
+            container(held).center().width(Length::Fill).height(180.0).into()
+        }
     };
     let now = h.now();
     let mut facts: Vec<Element<Msg>> = vec![
