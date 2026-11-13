@@ -34,6 +34,7 @@ pub fn field<Msg>(value: &str, spec: impl Fn(&aizome_kit::Theme) -> TextSpec + '
             on_change: None,
             on_submit: None,
             on_caps: None,
+            on_blur: None,
             height: 24.0,
         },
         _m: std::marker::PhantomData,
@@ -53,6 +54,14 @@ impl<Msg: Clone + Send + 'static> Field<Msg> {
 
     pub fn on_caps(mut self, f: impl Fn(bool) -> Msg + 'static) -> Self {
         self.w.on_caps = Some(MsgMap::new(f));
+        self
+    }
+
+    /// Sent when what's typed stops reaching the field: its window lost
+    /// the keyboard while the field had the focus in it, or the focus left
+    /// the field (a click beside it).
+    pub fn on_blur(mut self, msg: Msg) -> Self {
+        self.w.on_blur = Some(MsgFn::new(msg));
         self
     }
 }
@@ -90,6 +99,8 @@ struct FieldWidget {
     on_submit: Option<MsgFn>,
     /// Told when Caps Lock turns on or off, as keys show it.
     on_caps: Option<MsgMap<bool>>,
+    /// Told when the field loses the focus, or its window the keyboard.
+    on_blur: Option<MsgFn>,
     height: f64,
 }
 
@@ -287,10 +298,19 @@ impl Widget for FieldWidget {
                     // The caret shows at once, then blinks.
                     cx.state::<FieldState>().blink_off = false;
                     cx.request_tick(Duration::from_millis(530));
+                } else if let Some(msg) = &self.on_blur {
+                    cx.emit(msg);
                 }
                 cx.invalidate();
                 Status::Handled
             }
+            Event::WindowFocus(false) => match &self.on_blur {
+                Some(msg) => {
+                    cx.emit(msg);
+                    Status::Handled
+                }
+                None => Status::Ignored,
+            },
             Event::Tick => {
                 if cx.is_focused() {
                     let st = cx.state::<FieldState>();
