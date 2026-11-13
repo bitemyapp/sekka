@@ -1341,6 +1341,7 @@ impl Shell {
                     self.pointer_menu_soon(x, y, cx);
                 }
             }
+            "deskbar" => self.run(Action::SetDeskbarCollapsed(!self.deskbar_cfg.collapsed), cx),
             "play-pause" => self.sys.media_control(crate::systray::panels::MediaVerb::PlayPause),
             "next" => self.sys.media_control(crate::systray::panels::MediaVerb::Next),
             "previous" => self.sys.media_control(crate::systray::panels::MediaVerb::Previous),
