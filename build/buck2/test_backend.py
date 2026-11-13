@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from generate import outside_data, package_records, scheduling_priorities, units_from_graph
@@ -46,6 +47,26 @@ class SchedulingContract(unittest.TestCase):
         for index, unit in enumerate(graph["units"]):
             unit.update(pkg_id="arbitrary-" + str(index), target={"name": "renamed", "src_path": "/other/source"})
         self.assertEqual(scheduling_priorities(graph), expected)
+
+
+class DarwinStorageContract(unittest.TestCase):
+    def test_darwin_uses_engine_publication_not_linux_post_build_ioctls(self):
+        import client
+        import cas_dedupe
+        with patch("client.sys.platform", "darwin"), patch("client.cas_dedupe.scan", side_effect=AssertionError("must not scan")):
+            self.assertEqual(client.share_with_cas(["not-a-directory"], True, Path("not-a-journal")), 0)
+            with self.assertRaises(OSError) as failure:
+                cas_dedupe.share("absent", "absent", 8192)
+            self.assertEqual(failure.exception.errno, errno.ENOTSUP)
+
+    def test_darwin_auto_store_does_not_disable_explicit_cas_sharing(self):
+        import client
+        with patch("client.sys.platform", "darwin"), patch.dict(os.environ, {"BUCK2_LOCAL_CAS_DIR": "/private/cas"}, clear=True):
+            client.configure_content_store(Path("absent"), SimpleNamespace(local_content_store="auto"))
+            self.assertNotIn("BUCK2_LOCAL_CONTENT_STORE", os.environ)
+            self.assertEqual(os.environ["BUCK2_LOCAL_CAS_DIR"], "/private/cas")
+            with self.assertRaisesRegex(SystemExit, "standalone.*Linux"):
+                client.configure_content_store(Path("absent"), SimpleNamespace(local_content_store="/explicit/store"))
 
 
 class CompilerContract(unittest.TestCase):

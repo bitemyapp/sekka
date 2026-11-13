@@ -16,6 +16,7 @@ from pathlib import Path
 import re
 import stat
 import struct
+import sys
 import time
 
 FIEMAP = 0xC020660B
@@ -96,6 +97,8 @@ def share_all(pairs):
 
 def share(source, blob, size):
     """Share `blob`'s extents with `source`. Returns 'shared', 'already' or 'differs'."""
+    if sys.platform != "linux":
+        raise OSError(errno.ENOTSUP, "Post-build extent sharing requires Linux; APFS sharing runs inside Buck2 before publication")
     src = os.open(source, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
     try:
         dst = os.open(blob, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)

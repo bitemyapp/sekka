@@ -1,0 +1,123 @@
+{
+  "date": "2026-11-13",
+  "branch": "codex/buck2-macos",
+  "upstream_buck2_commit": "9a1876786f32806f6b65fc51f4c1c3077efc38a5",
+  "engine_patches": [
+    {
+      "file": "local-content-store.patch",
+      "sha256": "b48f7bd1de72d072402380973ae5fc9ef721afe2116cfecbf11f0b6a3199828d"
+    },
+    {
+      "file": "external-startup-config.patch",
+      "sha256": "2f8399f63a4bbd965e6d63c65a169b2b8076e18eb865ece5cd7cf7660442b343"
+    },
+    {
+      "file": "http2-goaway.patch",
+      "sha256": "601e6e2f46758c189e7172694492a9ea3a8a771f1c4655107141b0dc2fc2062a"
+    },
+    {
+      "file": "reproducible-generation.patch",
+      "sha256": "9f7e5bf68743fdbf1c93f9d3757eb4dee508f1fb0acbe4431206bd6bb04b75fd"
+    },
+    {
+      "file": "private-config-telemetry.patch",
+      "sha256": "3d31920663946d38e06b73b343594b87af5cf6c5da2cbdd00e21adddca1686cd"
+    },
+    {
+      "file": "local-live-views.patch",
+      "sha256": "3c7041a649b183333fa961328e79b956b603bf2c2869993a14a4836c92ed8eff"
+    },
+    {
+      "file": "cas-recovery.patch",
+      "sha256": "0c22f0e28977ce49f97c50911354c53d0107c7c7f498f4e28b00d108651b5ccb"
+    },
+    {
+      "file": "critical-path-priority.patch",
+      "sha256": "6a622d33d247a82524575b724f47ac64033d885528a6e8233014d17d635d6c04"
+    },
+    {
+      "file": "incremental-source-cache.patch",
+      "sha256": "71a4caa8b77b2899f9797c462e1ea32693102a99499d8ad867bff475e1dd7a38"
+    },
+    {
+      "file": "output-pipeline.patch",
+      "sha256": "df584fb489bb88dd769152db0d50fc2add48ce8d0e608b638a905535f50e1f30"
+    },
+    {
+      "file": "presence-consistent-hits.patch",
+      "sha256": "5d52dd44cf0b867f529c50fe69119f0a6f50d1b8793adae0da48f404a1c669c4"
+    },
+    {
+      "file": "content-store-unlocked-views.patch",
+      "sha256": "1f4531bb6a10dc70015e8325bad4bddad3996ab23b0454d688871c63e31eeb5d"
+    },
+    {
+      "file": "content-store-advisory-writes.patch",
+      "sha256": "80695f166113195e49dd0b729ddd46fa9afc6ec45de6118d79d9f882f37440ed"
+    },
+    {
+      "file": "bytestream-empty-source.patch",
+      "sha256": "cd86be846cbc5243db0f12ba0c82b09d81bf737e462e8ec3a181200415b92724"
+    },
+    {
+      "file": "startup-identity-config-layer.patch",
+      "sha256": "4fda84ed00ef7f850064d6d442863cf9bf1fc09bc4e144b9b099b44e75d9591b"
+    },
+    {
+      "file": "local-cas-downloads.patch",
+      "sha256": "7776aa430fa5dd79400514a53271d358eef0cde4224d6b1fc09deaf4d7344e3f"
+    },
+    {
+      "file": "local-cas-outputs.patch",
+      "sha256": "5b5daaaf887e950c3b77cb9ffcec33ed59366566b2340f8c65ebfd2929873f85"
+    },
+    {
+      "file": "apfs-local-cas.patch",
+      "sha256": "ec250fa36263738e4bde8347c1c82a8ce9169f1856227f893a50832f68367a49"
+    },
+    {
+      "file": "drop-unused-bindgen.patch",
+      "sha256": "78223aa76d6436b0df9c9f8dd808a3a998ad782cb8ce96a7e331ea3bf6310642"
+    },
+    {
+      "file": "priority-dependencies.patch",
+      "sha256": "19b8da0c9efa997d9c85e3f12fd0fd795a71e3b36b3f67becc32c2f424ae655f"
+    },
+    {
+      "file": "parallel-sync-dependencies.patch",
+      "sha256": "5cf67650ce82645bd48f1cb7bac5084ec08d426add69cfc31103fc937a14331a"
+    }
+  ],
+  "engine_compiler": "rustc 1.98.0-nightly (c397dae80 2026-07-02)",
+  "engine_build": "CARGO_PROFILE_RELEASE_INCREMENTAL=false cargo +nightly-2026-07-05 build --locked --release --bin buck2 -j 12",
+  "engine_sha256": "c77d59c6410c4eb4bdaddd1de0adef500516374a09af4c93ab89118d52afcec1",
+  "nativelink_archive_sha256": "f6099c3c9e46e7b9709fb05bed5e4c6eeaabfabe48c21ca3590d8e3965e24efe",
+  "host": "Darwin spetses 27.0.0 Darwin Kernel Version 27.0.0: Tue Aug 11 21:06:40 PDT 2026; root:xnu-13432.1.9~1/RELEASE_ARM64_T6050 arm64",
+  "macos": "ProductName:\t\tmacOS\nProductVersion:\t\t27.0.1\nBuildVersion:\t\t26A434",
+  "cpu": "Apple M5 Max",
+  "logical_cpus": 18,
+  "ram_bytes": 137438953472,
+  "filesystem": "APFS",
+  "python": "3.15.2 (main, Oct 25 2026, 16:57:51) [Clang 21.0.0 (clang-2100.3.34.2)]",
+  "workload_isolation": "Normal interactive workstation; no tuning; native engine compilation completed before final measurements. Linux compilation was on a separate host.",
+  "cache_state": "Empty private NativeLink CAS and fresh Buck daemon for cold run; OS caches warm; subsequent edits in same worktree. Every target explicitly requested in fresh workspace.",
+  "sekka_base_commit": "d40d60075763ef8457db565eb48149c4ccf3d963",
+  "engine_path": "/Users/callen/.cache/sekka/mac-probe-20261113/buck2-apfs",
+  "storage_baseline_engine_sha256": "1de2902eef66a13dea657178d91c58e7ca4bab8e9343ced222c5dd8bfb7cabeb",
+  "apfs_probe": "4 GiB disposable APFS sparse image; statvfs free-space deltas after sync; final baseline and shared runs sequential",
+  "graph_comparison": "Same final engine with local-CAS mode disabled, then enabled; separate empty private caches; warm OS caches; no compiler incremental state.",
+  "raw_results": "/Users/callen/.cache/sekka/apfs-qualification",
+  "scripts": {
+    "buck2-apfs-integration.py": "e761e744747de73e016699713014a6960ca07ef7d07d09602d85c04d4d6aec99",
+    "buck2-macos-probe.py": "bae3a1c3ae7f8da6692edb5c60474ca9738e1aa84e969f508a58a4dbe681a438"
+  },
+  "linux": {
+    "host": "wx-workstation",
+    "filesystem": "Btrfs",
+    "engine_output": "/nix/store/c1yy2kimhribn7m6z6l1h8lz57p10iqd-sekka-buck2-2026-10-15-local-content-store",
+    "build": "nix-build --no-out-link --cores 24 --max-jobs 1 --expr 'let pkgs = import ./nix/bazel/nixpkgs.nix {}; in import ./nix/buck2/engine.nix { inherit pkgs; }'",
+    "patch_sha256": "ec250fa36263738e4bde8347c1c82a8ce9169f1856227f893a50832f68367a49",
+    "root_flake_lock_sha256": "ab39bf2fee304bd09a9e96c30cfb8b2bc8329300c32846bfde65ba0a74e2b1f8",
+    "check_phase": "passed; includes 21 Btrfs local-content-store tests and preceding config/auth/download/local-CAS/pipeline checks"
+  }
+}

@@ -3,7 +3,7 @@ let
   rust = import ./nightly.nix { inherit pkgs rustOverlay; };
   platform = pkgs.makeRustPlatform { cargo = rust; rustc = rust; };
 in
-platform.buildRustPackage {
+platform.buildRustPackage ({
   pname = "sekka-buck2";
   version = "2026-10-15-local-content-store";
   src = pkgs.fetchFromGitHub {
@@ -30,6 +30,7 @@ platform.buildRustPackage {
     ./patches/startup-identity-config-layer.patch
     ./patches/local-cas-downloads.patch
     ./patches/local-cas-outputs.patch
+    ./patches/apfs-local-cas.patch
   ];
   # Cargo loads Git patch manifests even when the lock records them as unused.
   # Remove this dead patch in both source and vendoring; no resolved dep changes.
@@ -39,13 +40,15 @@ platform.buildRustPackage {
     ./patches/parallel-sync-dependencies.patch
   ];
   cargoHash = "sha256-bQiNyy/k6DA+Wwt4kHJn13KMcmZ1ouos3Dwn/I+4Sn4=";
-  nativeBuildInputs = [ pkgs.clang pkgs.mold pkgs.pkg-config pkgs.git ];
+  nativeBuildInputs = [ pkgs.clang ]
+    ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [ pkgs.mold ]
+    ++ [ pkgs.pkg-config pkgs.git ];
   cargoBuildFlags = [ "--bin" "buck2" ];
-  RUSTFLAGS = "--cfg tokio_unstable -C linker=clang -C link-arg=-fuse-ld=mold";
+  RUSTFLAGS = "--cfg tokio_unstable -C linker=clang"
+    + pkgs.lib.optionalString pkgs.stdenv.hostPlatform.isLinux " -C link-arg=-fuse-ld=mold";
   CARGO_PROFILE_RELEASE_INCREMENTAL = "false";
   # jemalloc otherwise runs CPUID during configure and emits different pointer
   # layouts on 48-bit and 57-bit hosts. Use its portable x86-64 fallback.
-  JEMALLOC_SYS_WITH_LG_VADDR = "57";
   # Auth/config and download-integrity regressions run on every builder.
   # Reflink tests additionally run on Btrfs; ext4 builders explicitly report
   # that coverage limit. Real Aizome extent sharing is qualified separately.
@@ -73,7 +76,9 @@ platform.buildRustPackage {
     for filter in re::error::tests re::remote_action_result::tests re::presence::tests entry::tests; do
       cargo test --frozen --release --target ${pkgs.stdenv.hostPlatform.rust.rustcTarget} --jobs "$NIX_BUILD_CORES" -p buck2_execute -- "$filter"
     done
-    if [ "$(stat -f -c %T "$TMPDIR")" = btrfs ]; then
+    if [ "$(uname -s)" = Darwin ]; then
+      cargo test --frozen --release --target ${pkgs.stdenv.hostPlatform.rust.rustcTarget} --jobs "$NIX_BUILD_CORES" -p buck2_execute_impl --lib -- materializers::apfs::tests
+    elif [ "$(stat -f -c %T "$TMPDIR")" = btrfs ]; then
       cargo test --frozen --release --target ${pkgs.stdenv.hostPlatform.rust.rustcTarget} --jobs "$NIX_BUILD_CORES" -p buck2_execute_impl --lib -- local_content_store::linux::tests
     else
       echo "Reflink-store execution not checked: this builder is not on Btrfs."
@@ -85,6 +90,8 @@ platform.buildRustPackage {
     homepage = "https://github.com/facebook/buck2";
     license = with pkgs.lib.licenses; [ mit asl20 ];
     mainProgram = "buck2";
-    platforms = [ "x86_64-linux" ];
+    platforms = [ "x86_64-linux" ] ++ pkgs.lib.platforms.darwin;
   };
-}
+} // pkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isx86_64 {
+  JEMALLOC_SYS_WITH_LG_VADDR = "57";
+})

@@ -65,6 +65,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ("buck2", "nativelink", "rustc", "output"):
         parser.add_argument("--" + name, type=Path, required=True)
+    parser.add_argument("--local-cas", action="store_true", help="Exercise native APFS CAS sharing")
     args = parser.parse_args()
     if sys.platform != "darwin":
         parser.error("this probe declares a macOS execution platform")
@@ -79,6 +80,9 @@ def main():
                 "BUCK2_LOCAL_CONTENT_STORE_MAX_BYTES", "BUCK2_LOCAL_CONTENT_STORE_MAX_ENTRIES",
                 "BUCK2_LOCAL_CAS_DIR", "BUCK2_LOCAL_CAS_JOURNAL"):
         env.pop(key, None)
+    if args.local_cas:
+        env["BUCK2_LOCAL_CAS_DIR"] = str(root / "cas/content")
+        env["BUCK2_LOCAL_CAS_JOURNAL"] = str(root / "unused-apfs-journal")
     # Port is private and short-lived; no credentials or production cache.
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
@@ -130,7 +134,7 @@ instance_name = probe
     main_text = 'fn main() { println!("{}", ' + '+'.join(f'leaf{i}::f0({i})' for i in range(16)) + '); }\n'
     source("app", main_text, [f"leaf{i}" for i in range(16)], True)
     (workspace / "BUCK").write_text('\n'.join(targets) + '\n')
-    results = {"versions": versions, "kind": "synthetic 19-action Rust DAG; no Cargo incremental state", "runs": [], "storage": []}
+    results = {"versions": versions, "local_cas": args.local_cas, "kind": "synthetic 19-action Rust DAG; no Cargo incremental state", "runs": [], "storage": []}
     def build(label, expected, cwd=workspace):
         log = root / (label + ".events.json-lines")
         start = time.perf_counter()

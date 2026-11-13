@@ -18,6 +18,7 @@ let
   backendTestSource = lib.fileset.toSource {
     root = ../../build/buck2;
     fileset = lib.fileset.unions [
+      ../../build/buck2/client.py
       ../../build/buck2/generate.py
       ../../build/buck2/action.py
       ../../build/buck2/run.py

@@ -1,5 +1,9 @@
 # Mac Buck2 / NativeLink probe — 2026-11-13
 
+This records the pre-implementation baseline. The subsequent
+[APFS implementation and qualification](../2026-11-13-apfs/README.md)
+supersedes the storage limitations and proposed storage work below.
+
 The Sekka-patched Buck2 engine and NativeLink 1.8.3 run natively on this
 Apple M5 Max. Cache correctness and invalidation passed a small Rust fixture.
 Sekka's complete Cargo/Nix frontend and its single-CAS extent sharing are

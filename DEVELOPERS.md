@@ -317,11 +317,13 @@ provenance account for the other changes. No checks were removed.
 
 ### Cargo workspaces through Buck2
 
-Native macOS feasibility results are recorded in
-[the 2026-11-13 probe](docs/test-results/buck2/2026-11-13-macos/README.md).
-The patched engine and NativeLink cache run on Apple Silicon, but the Sekka
-Cargo/Nix frontend and single-CAS sharing still require Linux. APFS clone
-support alone does not make the Linux dedupe implementation portable.
+The patched engine and NativeLink cache run on Apple Silicon, with native
+APFS single-CAS sharing. [The implementation results](docs/test-results/buck2/2026-11-13-apfs/README.md)
+cover physical allocation, build times and recovery checks; the earlier
+[feasibility probe](docs/test-results/buck2/2026-11-13-macos/README.md) records
+the starting point. The complete Sekka Cargo/Nix frontend still requires
+Linux: Darwin toolchains, runtime-library handling and execution-root
+relocation remain separate work.
 
 `scripts/sekka-buck2` roots a pinned client closure once, then executes it
 without reevaluating the root flake on ordinary source edits. Cargo manifests,
@@ -621,7 +623,7 @@ this validates the observer path, not the full workload matrix. Store paths
 that are themselves symlinks, such as a man output pointing at another output,
 are listed as `symlink_requisites` rather than measured: they hold no file data.
 
-On one host, the CAS and the per-user Buck2 content store each keep a copy of
+On Linux, the CAS and the per-user Buck2 content store each keep a copy of
 every uploaded output. On the deployment host, share their extents with:
 
 ```sh
@@ -635,7 +637,7 @@ selects stores other than the default `~/.cache/sekka/buck2/content-v1`.
 Pairs that already share their first extent are skipped, so repeating it is
 cheap. Ephemeral CI caches are not touched.
 
-Clients on the deployment host make the CAS their only store. Generate their
+Linux clients on the deployment host make the CAS their only store. Generate their
 client file there with `client --domain trusted --access writer --format buck2
 --local-cas`; it names the CAS directory (`[sekka] local_cas_dir`), and
 `scripts/sekka-buck2` then:
@@ -679,6 +681,45 @@ worktrees each rebuilding a different shared-crate edit at once took 40 s
 each, as with the content store off, against 222 s on the engine of the
 2026-11-06 storage run. Their content store held 109 MB, and each worktree
 kept 23 MB of its 6.3 GB `buck-out` unshared with the CAS.
+
+On macOS, `apfs-local-cas.patch` uses `fclonefileat` for independent writable
+views on the same APFS volume as NativeLink's filesystem CAS. Cache hits
+clone into private download stages and pass the usual digest check before
+publication. Successful local actions capture verified private snapshots,
+upload through NativeLink's normal API, and clone the resulting CAS blobs
+back into their outputs while the executor still owns its output lease and
+host-sharing permit. Placeholder-to-content materialization also clones and
+verifies. NativeLink alone writes its CAS namespace.
+
+The existing local-CAS opt-in applies: `BUCK2_LOCAL_CAS_DIR` selects the CAS
+content directory; the client sets `BUCK2_LOCAL_CAS_JOURNAL` only for cache
+writers. On Darwin that second setting enables publication-time sharing,
+without creating a journal or running the Linux post-build dedupe pass.
+Per-action upload permission, platform permissions, upload size limits and
+successful completion still gate uploads. Read-only clients can clone hits.
+Another volume or an unsupported clone operation falls back to the ordinary
+cache path. The standalone Buck content store remains Linux-only; Darwin
+`auto` disables it, and an explicit store path reports that limitation.
+
+Snapshots use private directories and advisory locks; concurrent captures
+cannot reclaim live stages. Recognized unlocked stages left by a crash are
+removed on the next capture in that directory. Upload batches hold at most
+16 files or 64 MiB (a larger single file goes alone), with four concurrent
+batches. Publication normalizes permissions, syncs the file, renames it and
+syncs the parent. This is not a power-loss qualification. No unlocked APFS
+post-build replacement of live outputs is allowed. Linux retains its
+FICLONE/FIDEDUPERANGE operations, journal, scan throttling and preparation
+pipeline.
+
+For a native-engine regression, run `scripts/buck2-macos-probe.py` with
+explicit `--buck2`, `--nativelink`, `--rustc` and a new `--output` directory,
+once with `--local-cas` and once without. For physical allocation and failure
+checks, mount a disposable APFS image and run
+`scripts/buck2-apfs-integration.py --buck2 PATH --nativelink PATH
+--local-cas --output MOUNT/new-run`; repeat without `--local-cas`. Never use a
+production CAS for fault injection. See the implementation report for exact
+commands and scope. The engine derivation supports Darwin, but the root flake
+and full development client have not been ported or qualified there.
 
 The gateway binds host loopback. From another machine, forward it explicitly:
 

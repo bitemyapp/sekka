@@ -83,6 +83,10 @@ def share_with_cas(content_dirs, store_changed, journal):
 
     Uploaded outputs are listed in the journal; content-store objects that the
     CAS also holds are matched by name. One physical copy remains of each."""
+    if sys.platform == "darwin":
+        # The native engine shares APFS outputs before publication. Replacing
+        # an inode from this unlocked post-build pass could lose a later write.
+        return 0
     reports = []
     blobs = functools.cache(lambda: cas_dedupe.scan(content_dirs))  # One scan for both passes.
 
@@ -116,6 +120,12 @@ def configure_content_store(root, args):
     if selection is None:
         selection = os.environ.get(names[0], "auto") or "off"
     if selection == "off":
+        for name in names:
+            os.environ.pop(name, None)
+        return
+    if sys.platform == "darwin":
+        if selection != "auto":
+            raise SystemExit("The standalone Buck content store requires Linux; use a --local-cas NativeLink client for APFS sharing.")
         for name in names:
             os.environ.pop(name, None)
         return
