@@ -6,7 +6,7 @@
 
 use std::rc::Rc;
 
-use aizome_kit::sidestep_ui::{Modifiers, NamedKey};
+use aizome_kit::sidestep_ui::{Key, Modifiers, NamedKey};
 use aizome_kit::testing::Harness;
 use tansu::app::{Msg, SheetKind, SheetMsg, Tansu};
 use tansu::layout::{Mark, Target};
@@ -259,6 +259,40 @@ fn a_built_in_disk_needs_its_name_typed() {
     assert_eq!(h.focused_name(w).as_deref(), Some("apply"));
     h.named(w, NamedKey::Enter, Modifiers::NONE);
     assert_eq!(mock.calls(), ["Delete /dev/sda2"]);
+}
+
+/// One Return, held in the name field: it moves to Apply, and its repeats
+/// there are no press of the button, whether the platform marks them as
+/// repeats or sends presses with no release between. Let go and pressed
+/// again, it's the person's press.
+#[test]
+fn a_return_held_in_the_name_field_applies_nothing() {
+    for marked in [true, false] {
+        let (mut h, mock) = start();
+        let w = h.window();
+        drive(&mut h, "Crucial");
+        seg(&mut h, "sda2");
+        h.send(Msg::Do(Action::Delete));
+        h.send(Msg::Apply);
+        assert_eq!(h.focused_name(w).as_deref(), Some("type-0"));
+        h.type_text(w, "sda");
+        let enter = Key::Named(NamedKey::Enter);
+        h.key_down(w, enter.clone(), Modifiers::NONE);
+        assert_eq!(h.focused_name(w).as_deref(), Some("apply"));
+        for _ in 0..40 {
+            if marked {
+                h.key_repeat(w, enter.clone(), Modifiers::NONE);
+            } else {
+                h.key_down(w, enter.clone(), Modifiers::NONE);
+            }
+        }
+        assert!(mock.calls().is_empty(), "a held Return applied the plan (repeats marked: {marked}): {:?}", mock.calls());
+        assert_eq!(sheet_kind(&h), Some("apply"));
+        h.key_up(w, enter, Modifiers::NONE);
+        assert!(mock.calls().is_empty());
+        h.named(w, NamedKey::Enter, Modifiers::NONE);
+        assert_eq!(mock.calls(), ["Delete /dev/sda2"]);
+    }
 }
 
 #[test]
