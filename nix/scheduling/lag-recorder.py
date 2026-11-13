@@ -1012,10 +1012,15 @@ def positive_count(value):
     return number
 
 
+def state_home(environ=None):
+    """$XDG_STATE_HOME; as the XDG specification says, ignored when empty or relative."""
+    configured = (os.environ if environ is None else environ).get("XDG_STATE_HOME", "")
+    return Path(configured) if os.path.isabs(configured) else Path.home() / ".local/state"
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    default_state = Path(os.environ.get("XDG_STATE_HOME", str(Path.home() / ".local/state")))
-    parser.add_argument("--output-dir", type=Path, default=default_state / "sekka/lag-recorder")
+    parser.add_argument("--output-dir", type=Path, default=state_home() / "sekka/lag-recorder")
     parser.add_argument("--interval", type=finite_interval, default=1.0)
     parser.add_argument("--samples", type=positive_count)
     parser.add_argument("--once", action="store_true")

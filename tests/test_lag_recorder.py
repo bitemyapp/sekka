@@ -233,6 +233,15 @@ class StorageTest(unittest.TestCase):
             self.assertEqual(target.read_text(), "preserve")
 
 
+class StateDirectoryTest(unittest.TestCase):
+    def test_empty_or_relative_state_home_does_not_record_into_the_working_directory(self):
+        default = Path.home() / ".local/state"
+        self.assertEqual(recorder.state_home({}), default)
+        self.assertEqual(recorder.state_home({"XDG_STATE_HOME": ""}), default)
+        self.assertEqual(recorder.state_home({"XDG_STATE_HOME": "state"}), default)
+        self.assertEqual(recorder.state_home({"XDG_STATE_HOME": "/var/tmp/state"}), Path("/var/tmp/state"))
+
+
 class JournalTest(unittest.TestCase):
     def test_journal_timeout_preserves_window_until_success(self):
         worker = recorder.DetailWorker({})
