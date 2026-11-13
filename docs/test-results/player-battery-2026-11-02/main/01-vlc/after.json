@@ -1,0 +1,23 @@
+{
+  "window": {
+    "id": 75,
+    "app_id": "vlc",
+    "pid": 369506,
+    "fullscreen": true,
+    "focused": true,
+    "geometry": {
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 900
+    },
+    "output": "eDP-1"
+  },
+  "position_s": 782.707295,
+  "player": {
+    "PlaybackStatus": "Playing",
+    "Position": 782707295,
+    "Rate": 1.0,
+    "Volume": 1.0
+  }
+}

@@ -1,0 +1,122 @@
+[
+  {
+    "path": "main/01-utsushi/fullscreen-after.png",
+    "local_original": "/home/callen/Videos/player-battery-benchmark/mirrored-final/01-utsushi/fullscreen-after.png",
+    "width": 2880,
+    "height": 1800,
+    "sha256": "6e4310abdbe8d3a1e0b5e4bbcfed963f8a2c3640316a020c94d15d4f661c1682",
+    "committed": false
+  },
+  {
+    "path": "main/01-utsushi/fullscreen-before.png",
+    "local_original": "/home/callen/Videos/player-battery-benchmark/mirrored-final/01-utsushi/fullscreen-before.png",
+    "width": 2880,
+    "height": 1800,
+    "sha256": "6ef9c392be1af88977b4d5439134a2830b3b51b053346249552d44c0e7a77a81",
+    "committed": true
+  },
+  {
+    "path": "main/02-vlc/fullscreen-after.png",
+    "local_original": "/home/callen/Videos/player-battery-benchmark/mirrored-final/02-vlc/fullscreen-after.png",
+    "width": 2880,
+    "height": 1800,
+    "sha256": "f1adab1d8b184450fe381be90b97753e082bdd8ada8ae8dbb09997909032cfc6",
+    "committed": false
+  },
+  {
+    "path": "main/02-vlc/fullscreen-before.png",
+    "local_original": "/home/callen/Videos/player-battery-benchmark/mirrored-final/02-vlc/fullscreen-before.png",
+    "width": 2880,
+    "height": 1800,
+    "sha256": "0bb98e587bdb41e453275b26ce37c76ce50726c838469b278d6bfc128df9bc71",
+    "committed": true
+  },
+  {
+    "path": "main/03-mpv/fullscreen-after.png",
+    "local_original": "/home/callen/Videos/player-battery-benchmark/mirrored-final/03-mpv/fullscreen-after.png",
+    "width": 2880,
+    "height": 1800,
+    "sha256": "740db6b583c752397035d7c0d229f60c9c84def752ec51019296cc112d7710db",
+    "committed": false
+  },
+  {
+    "path": "main/03-mpv/fullscreen-before.png",
+    "local_original": "/home/callen/Videos/player-battery-benchmark/mirrored-final/03-mpv/fullscreen-before.png",
+    "width": 2880,
+    "height": 1800,
+    "sha256": "bb67cbdcda3997e9bab4359323ea9c654878db2e08657fe9731a15d2830f3a9f",
+    "committed": true
+  },
+  {
+    "path": "main/04-mpv/fullscreen-after.png",
+    "local_original": "/home/callen/Videos/player-battery-benchmark/mirrored-final/04-mpv/fullscreen-after.png",
+    "width": 2880,
+    "height": 1800,
+    "sha256": "740db6b583c752397035d7c0d229f60c9c84def752ec51019296cc112d7710db",
+    "committed": false
+  },
+  {
+    "path": "main/04-mpv/fullscreen-before.png",
+    "local_original": "/home/callen/Videos/player-battery-benchmark/mirrored-final/04-mpv/fullscreen-before.png",
+    "width": 2880,
+    "height": 1800,
+    "sha256": "bb67cbdcda3997e9bab4359323ea9c654878db2e08657fe9731a15d2830f3a9f",
+    "committed": false
+  },
+  {
+    "path": "main/05-vlc/fullscreen-after.png",
+    "local_original": "/home/callen/Videos/player-battery-benchmark/mirrored-final/05-vlc/fullscreen-after.png",
+    "width": 2880,
+    "height": 1800,
+    "sha256": "c5a0731dac4086eaa7324145dc25dbb925e21477ef0deb23fb26b9fa475442b7",
+    "committed": false
+  },
+  {
+    "path": "main/05-vlc/fullscreen-before.png",
+    "local_original": "/home/callen/Videos/player-battery-benchmark/mirrored-final/05-vlc/fullscreen-before.png",
+    "width": 2880,
+    "height": 1800,
+    "sha256": "0bb98e587bdb41e453275b26ce37c76ce50726c838469b278d6bfc128df9bc71",
+    "committed": false
+  },
+  {
+    "path": "main/06-utsushi/fullscreen-after.png",
+    "local_original": "/home/callen/Videos/player-battery-benchmark/mirrored-final/06-utsushi/fullscreen-after.png",
+    "width": 2880,
+    "height": 1800,
+    "sha256": "85f4abc4ac999e79fdc9c11e8325c359b98e26e49e78d872a00445bf8ff9738d",
+    "committed": false
+  },
+  {
+    "path": "main/06-utsushi/fullscreen-before.png",
+    "local_original": "/home/callen/Videos/player-battery-benchmark/mirrored-final/06-utsushi/fullscreen-before.png",
+    "width": 2880,
+    "height": 1800,
+    "sha256": "6ef9c392be1af88977b4d5439134a2830b3b51b053346249552d44c0e7a77a81",
+    "committed": false
+  },
+  {
+    "path": "alignment-attempt/01-utsushi/fullscreen-after.png",
+    "local_original": "/home/callen/Videos/player-battery-benchmark/mirrored/01-utsushi/fullscreen-after.png",
+    "width": 2880,
+    "height": 1800,
+    "sha256": "85f4abc4ac999e79fdc9c11e8325c359b98e26e49e78d872a00445bf8ff9738d",
+    "committed": false
+  },
+  {
+    "path": "alignment-attempt/01-utsushi/fullscreen-before.png",
+    "local_original": "/home/callen/Videos/player-battery-benchmark/mirrored/01-utsushi/fullscreen-before.png",
+    "width": 2880,
+    "height": 1800,
+    "sha256": "6ef9c392be1af88977b4d5439134a2830b3b51b053346249552d44c0e7a77a81",
+    "committed": false
+  },
+  {
+    "path": "alignment-attempt/02-vlc/fullscreen-before.png",
+    "local_original": "/home/callen/Videos/player-battery-benchmark/mirrored/02-vlc/fullscreen-before.png",
+    "width": 2880,
+    "height": 1800,
+    "sha256": "0bb98e587bdb41e453275b26ce37c76ce50726c838469b278d6bfc128df9bc71",
+    "committed": false
+  }
+]
