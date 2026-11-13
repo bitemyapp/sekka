@@ -215,7 +215,8 @@ class HistoryTest(unittest.TestCase):
     def test_missing_and_corrupt_history_are_errors_not_empty_results(self):
         self.directory.mkdir(mode=0o700)
         for operation in [lambda: self.records(), lambda: history.history_stats(self.directory)]:
-            with self.assertRaises(FileNotFoundError):
+            # The CLI prints this exception: it has to say what is missing.
+            with self.assertRaisesRegex(FileNotFoundError, "no lag history has been recorded here.*history.sqlite3"):
                 operation()
         self.assertEqual(list(self.directory.iterdir()), [])
         with self.store() as store:

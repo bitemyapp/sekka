@@ -17,6 +17,7 @@ reported and prevents further appends rather than growing without bound.
 """
 
 import datetime
+import errno
 import fcntl
 import hashlib
 import json
@@ -149,7 +150,7 @@ def _read_connection(output_dir):
     _check_files(directory)
     path = directory / DATABASE_NAME
     if not path.exists():
-        raise FileNotFoundError(path)
+        raise FileNotFoundError(errno.ENOENT, "no lag history has been recorded here", str(path))
     connection = sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True,
                                  isolation_level=None, timeout=5)
     try:
