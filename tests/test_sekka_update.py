@@ -275,8 +275,53 @@ class Update(unittest.TestCase):
              'options': [{'id': 'aizome', 'title': 'Aizome'}, {'id': 'gdm', 'title': 'GNOME'}]},
             {'setting': 'calamares.desktops', 'title': 'Desktops', 'many': True, 'value': ['tatami'],
              'options': [{'id': 'aizome', 'title': 'Aizome'}, {'id': 'tatami', 'title': 'Tatami'}]},
+            {'setting': 'calamares.autoLogin', 'title': 'Log in automatically', 'people': True, 'value': '',
+             'options': []},
             {'setting': 'calamares.bootSplash.enable', 'title': 'Boot splash', 'boolean': True, 'value': 'false',
              'options': [{'id': 'true', 'title': 'On'}, {'id': 'false', 'title': 'Off'}]}]}))
+
+    def test_who_logs_in_automatically_is_a_person_whose_account_can(self):
+        self.declare_choices()
+        self.compatible_live_system()
+        # The computer's accounts, as root reads them. Kara can log in. Lee
+        # was added without a password and has to set one at the first login
+        # (AccountsService's SetPasswordMode). Gaius's password is locked
+        # (AccountsService's SetLocked). Leoben's account has expired. The
+        # others aren't people.
+        (self.root / 'etc/passwd').write_text(
+            'root:x:0:0::/root:/bin/sh\n'
+            'kara:x:1001:100:Kara Thrace:/home/kara:/bin/sh\n'
+            'lee:x:1002:100::/home/lee:/bin/sh\n'
+            'gaius:x:1003:100::/home/gaius:/bin/sh\n'
+            'leoben:x:1004:100::/home/leoben:/bin/sh\n'
+            'nixbld1:x:30001:30000::/var/empty:/bin/nologin\n')
+        shadow = self.root / 'etc/shadow'
+        shadow.write_text('root:!:1::::::\n'
+                          'kara:$y$j9T$salt$hash:20000:0:99999:7:::\n'
+                          'lee::0:0:99999:7:::\n'
+                          'gaius:!$y$j9T$salt$hash:20000:0:99999:7:::\n'
+                          'leoben:$y$j9T$salt$hash:20000:0:99999:7::1:\n')
+        shadow.chmod(0o600)
+        original = (self.config / 'configuration.nix').read_text()
+        for who, why in [('ghost', "isn't one of the people"), ('root', "isn't one of the people"),
+                         ('nixbld1', "isn't one of the people"), ('lee', 'has to set a password'),
+                         ('gaius', 'account is locked'), ('leoben', 'account has expired'),
+                         ('kara,lee', 'takes one person'),
+                         ('Kara', 'Not a choice'), ('kara;reboot', 'Not a choice')]:
+            result = self.run_cmd('/bin/yukimi-helper', 'change', '--choose', 'calamares.autoLogin=' + who, ok=False)
+            self.assertIn(why, result.stdout + result.stderr, who)
+        self.assertEqual((self.config / 'configuration.nix').read_text(), original)
+        self.assertFalse((self.root / 'state/building').exists())
+        # The command native Yukimi sends once Settei has proposed Kara.
+        result = self.run_cmd('/bin/yukimi-helper', 'change', '--choose', 'calamares.autoLogin=kara', '--mode', 'auto')
+        self.assertTrue(json.loads(result.stdout)['ok'])
+        self.assertIn('calamares.autoLogin = "kara";', (self.config / 'configuration.nix').read_text())
+        # No one is the empty value, written in place.
+        self.run_cmd('/bin/yukimi-helper', 'change', '--choose', 'calamares.autoLogin=', '--mode', 'auto')
+        configured = (self.config / 'configuration.nix').read_text()
+        self.assertIn('calamares.autoLogin = "";', configured)
+        self.assertEqual(configured.count('calamares.autoLogin'), 1)
+        self.assertIn('./hardware-configuration.nix', configured)
 
     def test_boot_splash_choice_writes_booleans_and_stages_changed_boot_artifacts(self):
         self.declare_choices()

@@ -27,6 +27,43 @@ const ACCOUNTS_PATH: &str = "/org/freedesktop/Accounts";
 const IFACE_USER: &str = "org.freedesktop.Accounts.User";
 const IFACE_AIZOME: &str = "org.aizome.DisplayScales";
 
+/// The active greetd service's configuration, including NixOS's store path.
+/// Query systemd's argument vector rather than assuming `/etc/greetd` exists.
+/// An inactive service is not this session's login manager.
+pub fn greetd_config(bus: &Bus) -> Result<Option<std::path::PathBuf>> {
+    const SYSTEMD: &str = "org.freedesktop.systemd1";
+    let unit: OwnedObjectPath = bus.call(
+        SYSTEMD,
+        "/org/freedesktop/systemd1",
+        "org.freedesktop.systemd1.Manager",
+        "GetUnit",
+        &("greetd.service",),
+    )?;
+    let active: String = bus.get(SYSTEMD, unit.as_str(), "org.freedesktop.systemd1.Unit", "ActiveState")?;
+    if active != "active" {
+        return Ok(None);
+    }
+    // systemd's ExecStart property: path, argv, ignore-failure, timestamps,
+    // pid and exit status (a(sasbttttuii)).
+    type ExecStart = (String, Vec<String>, bool, u64, u64, u64, u64, u32, i32, i32);
+    let commands: Vec<ExecStart> = bus.get(SYSTEMD, unit.as_str(), "org.freedesktop.systemd1.Service", "ExecStart")?;
+    let Some((_, argv, ..)) =
+        commands.iter().find(|(exe, ..)| std::path::Path::new(exe).file_name().is_some_and(|n| n == "greetd"))
+    else {
+        return Ok(None);
+    };
+    let mut args = argv.iter().skip(1);
+    while let Some(arg) = args.next() {
+        if arg == "--config" || arg == "-c" {
+            return Ok(args.next().map(std::path::PathBuf::from));
+        }
+        if let Some(path) = arg.strip_prefix("--config=") {
+            return Ok(Some(path.into()));
+        }
+    }
+    Ok(Some("/etc/greetd/config.toml".into()))
+}
+
 /// A person's public display scales for the login screen. AccountsService
 /// persists this even when their home is unavailable before login.
 pub fn display_scales(bus: &Bus, uid: u32) -> Result<String> {

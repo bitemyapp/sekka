@@ -2,6 +2,9 @@ name: Yuki (manual)
 
 # Deliberately opt-in: ordinary pushes, PRs and shared flake updates must not
 # schedule this job. Run it from main after merging a Yuki change when needed.
+# A successful run is also the deployment request: hosts with
+# services.sekka-discord.deploy pull and build its commit themselves. This job
+# holds no host or production credentials and deploys nothing itself.
 on:
   workflow_dispatch:
 

@@ -304,6 +304,10 @@ pub(crate) struct Core {
     pub bg_tx: Sender<AnyMsg>,
     pub bg_rx: Receiver<AnyMsg>,
     pub stats: Stats,
+    /// This application's current update uses the default, whole-app
+    /// refresh. Explicit refresh requests only add dirty windows; they
+    /// never clear work requested by an earlier message or by the kit.
+    pub refresh_all_after_update: bool,
     pub alerts: HashMap<u64, AlertState>,
     pub panels: HashMap<u64, crate::dialogs::PanelState>,
     pub next_id: u64,
@@ -336,6 +340,7 @@ impl Core {
             bg_tx,
             bg_rx,
             stats: Stats::default(),
+            refresh_all_after_update: true,
             alerts: HashMap::new(),
             panels: HashMap::new(),
             next_id: 1,
@@ -739,7 +744,7 @@ impl Core {
             WinKind::App { .. } => "window",
             WinKind::Popup { .. } => "popup",
         });
-        let mut tree = Tree::new(root, base);
+        let mut tree = Tree::new(root, base, w.tree.nodes.len());
         let mut env = Env {
             scale: w.scale,
             focus: w.active_focus(),
@@ -757,7 +762,7 @@ impl Core {
             tree.local_damage.clear();
             vec![Rect::from_origin_size(Point::ZERO, w.size)]
         };
-        w.snapshot = tree.snapshot();
+        tree.snapshot_into(&mut w.snapshot);
         let ticks = std::mem::take(&mut tree.ticks);
         let widget_timers = std::mem::take(&mut tree.widget_timers);
         w.tree = tree;
@@ -922,7 +927,7 @@ impl Core {
             w.tree.compact();
         }
         let damage = settle(&mut w.tree, &w.snapshot, w.focused, win, platform);
-        w.snapshot = w.tree.snapshot();
+        w.tree.snapshot_into(&mut w.snapshot);
         let ticks = std::mem::take(&mut w.tree.ticks);
         let widget_timers = std::mem::take(&mut w.tree.widget_timers);
         let live = &w.tree.by_id;
@@ -958,7 +963,7 @@ impl Core {
             WinKind::Popup { kind: PopupKind::Menu { fit, .. }, .. } => fit.unwrap_or(f64::INFINITY),
             _ => 900.0,
         };
-        let mut tree = Tree::new(root, NodeId::ROOT.child("popup"));
+        let mut tree = Tree::new(root, NodeId::ROOT.child("popup"), w.tree.nodes.len());
         let mut env = Env {
             scale: w.scale,
             focus: w.active_focus(),
@@ -980,7 +985,7 @@ impl Core {
             platform.invalidate_all(win);
         }
         w.size = size;
-        w.snapshot = tree.snapshot();
+        tree.snapshot_into(&mut w.snapshot);
         w.tree = tree;
         w.built = true;
         w.dirty = false;
@@ -1049,7 +1054,7 @@ impl Core {
         // grows back, and only ever widens (it doesn't jump about). It grows
         // no taller than the compositor let it be.
         let Some(w) = self.wins.get_mut(&win) else { return };
-        let mut tree = Tree::new(root, NodeId::ROOT.child("popup"));
+        let mut tree = Tree::new(root, NodeId::ROOT.child("popup"), w.tree.nodes.len());
         let mut env = Env {
             scale: w.scale,
             focus: w.active_focus(),
@@ -1074,7 +1079,7 @@ impl Core {
             platform.request_size(win, size);
             platform.invalidate_all(win);
         }
-        w.snapshot = tree.snapshot();
+        tree.snapshot_into(&mut w.snapshot);
         w.tree = tree;
         w.dirty = false;
     }

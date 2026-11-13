@@ -1076,6 +1076,13 @@ impl<P: Program> Harness<P> {
         self.rt.core.stats.clear();
     }
 
+    /// How often text has been laid out so far, and how often a layout was
+    /// found kept instead: a view built again with nothing changed lays
+    /// out nothing.
+    pub fn text_layouts(&self) -> TextLayouts {
+        TextLayouts { made: self.rt.core.text.misses, found: self.rt.core.text.hits }
+    }
+
     pub fn theme(&self) -> &crate::theme::Theme {
         &self.rt.core.theme
     }
@@ -1405,6 +1412,15 @@ fn blend(d: &mut [u8], s: &[u8]) {
         d[i] = c.round().clamp(0.0, 255.0) as u8;
     }
     d[3] = (oa * 255.0).round() as u8;
+}
+
+/// What [`Harness::text_layouts`] counts.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TextLayouts {
+    /// Times text was laid out.
+    pub made: u64,
+    /// Times a layout was found kept, and nothing laid out.
+    pub found: u64,
 }
 
 /// Work and exact comparison from `Harness::check_frame_exact`.

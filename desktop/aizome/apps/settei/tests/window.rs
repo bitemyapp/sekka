@@ -149,6 +149,80 @@ fn aliases_and_sub_pages_open() {
 }
 
 #[test]
+fn a_sub_pages_crumb_leads_back_to_its_pane() {
+    use aizome_kit::sidestep_ui::{Modifiers, NamedKey};
+    use aizome_kit::widget::SemanticRole;
+    let (mut h, _) = common::open("crumb", "mouse");
+    let w = h.window();
+    // The pane's title in the strip, as assistive technology is told of it.
+    let crumb = |h: &aizome_kit::testing::Harness<settei::Settei>| {
+        h.semantics(w)
+            .into_iter()
+            .find(|(s, _)| s.role == SemanticRole::Button && s.label.as_deref() == Some("Back to General"))
+            .map(|(_, r)| r)
+    };
+    // What only General's first page says.
+    let first_page = |h: &aizome_kit::testing::Harness<settei::Settei>| {
+        h.texts(w).iter().any(|t| t == "What starts when you log in.")
+    };
+    // The title strip's words and glyphs, left to right: the pane's tile and
+    // name and, over a sub-page, the chevron and the sub-page's title.
+    let strip = |h: &aizome_kit::testing::Harness<settei::Settei>| -> Vec<aizome_kit::layout::Rect> {
+        h.inspected(w)
+            .iter()
+            .filter(|e| e["visible"] == true && (e["role"] == "label" || e["role"] == "image"))
+            .map(|e| {
+                let r: Vec<f64> = e["rect"].as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect();
+                aizome_kit::layout::Rect::new(r[0], r[1], r[0] + r[2], r[1] + r[3])
+            })
+            .filter(|r| r.x0 > settei::app::SIDEBAR && r.y1 < 44.0)
+            .collect()
+    };
+    assert_eq!(crumb(&h), None, "a pane without sub-pages has nothing to go back to");
+    let pages =
+        ["about", "software-update", "storage", "startup", "datetime", "language", "default-apps", "login-items"];
+    for page in pages {
+        h.send(settei::AppMsg::Open("general".into(), Some(page.into())));
+        assert!(!first_page(&h), "General › {page} shows");
+        let at = crumb(&h).unwrap_or_else(|| panic!("General › {page} has General to press"));
+        let over = strip(&h);
+        if page == "about" {
+            h.move_to(w, at.center());
+            h.save_png(w, common::shots_dir().join("crumb-hover-night.png"), 1.0);
+        }
+        h.click(w, at.center());
+        assert_eq!(h.program().pane_id(), "general");
+        assert!(first_page(&h), "General pressed in General › {page} shows General's first page");
+        assert_eq!(crumb(&h), None, "and on its first page General isn't there to press ({page})");
+        // Being pressable moved nothing: the tile and the name are where
+        // the first page has them, and the strip is spaced as evenly.
+        let first = strip(&h);
+        assert_eq!((over.len(), first.len()), (4, 2), "{page}: {over:?}, then {first:?}");
+        assert_eq!((over[0], over[1].origin()), (first[0], first[1].origin()), "{page}");
+        let gap = over[1].x0 - over[0].x1;
+        assert_eq!((over[2].x0 - over[1].x1, over[3].x0 - over[2].x1), (gap, gap), "{page}: {over:?}");
+    }
+    // From the keyboard: Shift+Tab from the page reaches it, Return presses it.
+    h.leave(w);
+    h.send(settei::AppMsg::Open("general".into(), Some("about".into())));
+    let at = crumb(&h).expect("General › About has General to press");
+    for _ in 0..64 {
+        if h.focused_rect(w) == Some(at) {
+            break;
+        }
+        h.named(w, NamedKey::Tab, Modifiers::SHIFT);
+    }
+    assert_eq!(h.focused_rect(w), Some(at), "Tab reaches General in General › About");
+    h.save_png(w, common::shots_dir().join("crumb-focused-night.png"), 1.0);
+    h.named(w, NamedKey::Enter, Modifiers::NONE);
+    assert!(first_page(&h), "Return on it shows General's first page");
+    assert_eq!(crumb(&h), None);
+    // It went up a page, not back a pane: Mouse is still the pane before.
+    h.send(settei::AppMsg::Back);
+    assert_eq!(h.program().pane_id(), "mouse");
+}
+
+#[test]
 fn the_layout_picker_adds_a_layout() {
     let (mut h, path) = common::open("picker", "keyboard");
     let w = h.window();
@@ -290,4 +364,146 @@ fn removing_a_user_names_their_home_and_fixed_accounts_keep_their_type() {
     change(&mut h, |s| s.users_managed = true);
     let (kind, _) = row_of(&h, "Standard").expect("Guest's account type");
     assert!(kind.disabled, "the account type can be changed though the configuration fixes it");
+}
+
+#[test]
+fn on_sekka_yukimi_changes_who_logs_in_by_themselves() {
+    use aizome_kit::testing::Harness;
+    use settei::panes::users::{AutoLogin, Msg};
+    use settei::system::choices::Now;
+    let (mut h, _) = common::open("users-auto-login", "users");
+    let w = h.window();
+    let send = |h: &mut Harness<settei::Settei>, msg: Msg| {
+        let msg: settei::pane::PaneMsg = std::sync::Arc::new(msg);
+        h.send(settei::AppMsg::Pane("users", msg));
+    };
+    let choice = |now: &str, next: &str| AutoLogin::Choice(Now { now: now.into(), next: next.into() });
+    let launched = |h: &Harness<settei::Settei>| h.program().shared.launched.last().cloned().unwrap_or_default();
+    let says =
+        |h: &Harness<settei::Settei>, w: aizome_kit::WindowKey, what: &str| h.texts(w).iter().any(|t| t.contains(what));
+    // Sekka's choice: Yukimi is handed the person, and AccountsService's
+    // flag (GDM's) stays as it is.
+    send(&mut h, Msg::AutoLoginRead(choice("", "")));
+    send(&mut h, Msg::AutoLoginConfirmed(Some("ren".into())));
+    assert_eq!(launched(&h), ["aizome-yukimi", "--choose", "calamares.autoLogin=ren"]);
+    assert!(h.program().shared.sys.accounts.snapshot().users.iter().all(|u| !u.automatic_login));
+    assert!(says(&h, w, "Proposed in Yukimi: Ren Ishida."), "{:?}", h.texts(w));
+    // Applied for the next start: the row says so, and the proposal is done.
+    send(&mut h, Msg::AutoLoginRead(choice("", "ren")));
+    assert!(says(&h, w, "From the next start: Ren Ishida."), "{:?}", h.texts(w));
+    assert!(!says(&h, w, "Proposed in Yukimi"), "{:?}", h.texts(w));
+    // Removing them waits until the computer no longer starts into their
+    // account: the sheet offers to turn that off first, which proposes no
+    // one in Yukimi, and nobody is removed meanwhile.
+    let has_ren = |h: &Harness<settei::Settei>| h.program().shared.sys.accounts.snapshot().user("ren").is_some();
+    send(&mut h, Msg::Remove("ren".into()));
+    let s = h.program().sheet_window().expect("the sheet");
+    assert!(says(&h, s, "Turn that off first"), "{:?}", h.texts(s));
+    assert!(!says(&h, s, "Remove User"), "{:?}", h.texts(s));
+    // Not even when asked without the sheet's button.
+    send(&mut h, Msg::RemoveConfirmed);
+    assert!(has_ren(&h));
+    send(&mut h, Msg::Remove("ren".into()));
+    let s = h.program().sheet_window().expect("the sheet");
+    assert!(h.click_text(s, "Turn Off in Yukimi…"), "{:?}", h.texts(s));
+    assert!(h.settle(std::time::Duration::from_secs(5), |p| p.shared.launched.len() == 2));
+    assert_eq!(launched(&h), ["aizome-yukimi", "--choose", "calamares.autoLogin="]);
+    assert!(says(&h, w, "Proposed in Yukimi: no one."), "{:?}", h.texts(w));
+    assert!(has_ren(&h));
+    // Once Yukimi has made the change, they are removed as anyone is, and
+    // nothing more is proposed.
+    send(&mut h, Msg::AutoLoginRead(choice("ren", "")));
+    send(&mut h, Msg::Remove("ren".into()));
+    let s = h.program().sheet_window().expect("the sheet");
+    assert!(!says(&h, s, "Turn that off first"), "{:?}", h.texts(s));
+    assert!(h.click_text(s, "Remove User"));
+    assert!(
+        h.settle(std::time::Duration::from_secs(5), |p| { p.shared.sys.accounts.snapshot().user("ren").is_none() })
+    );
+    assert_eq!(h.program().shared.launched.len(), 2);
+}
+
+#[test]
+fn someone_who_must_set_a_password_is_not_offered_to_log_in_by_themselves() {
+    use aizome_kit::testing::Harness;
+    use aizome_sys::users::PasswordMode;
+    use settei::panes::users::{AutoLogin, Msg};
+    use settei::system::Accounts;
+    use settei::system::choices::Now;
+    let (mut h, _) = common::open("users-auto-login-password", "users");
+    let w = h.window();
+    let send = |h: &mut Harness<settei::Settei>, msg: Msg| {
+        let msg: settei::pane::PaneMsg = std::sync::Arc::new(msg);
+        h.send(settei::AppMsg::Pane("users", msg));
+    };
+    let says = |h: &Harness<settei::Settei>, what: &str| h.texts(w).iter().any(|t| t.contains(what));
+    send(&mut h, Msg::AutoLoginRead(AutoLogin::Choice(Now { now: String::new(), next: String::new() })));
+    assert!(!says(&h, "can't be chosen yet"), "{:?}", h.texts(w));
+    // As Settei leaves a person added with the password left empty.
+    if let Accounts::Sample(c) = &h.program().shared.sys.accounts {
+        let _ = c
+            .update(|s| {
+                let ren = s.users.iter_mut().find(|u| u.name == "ren").expect("Ren");
+                ren.password_mode = PasswordMode::SetAtLogin;
+            })
+            .wait();
+    }
+    h.send(settei::AppMsg::SystemChanged);
+    assert!(says(&h, "Ren Ishida can't be chosen yet"), "{:?}", h.texts(w));
+}
+
+#[test]
+fn removing_someone_goes_by_who_logs_in_by_themselves_then() {
+    use aizome_kit::testing::Harness;
+    use settei::panes::users::{AutoLogin, Msg};
+    use settei::system::choices::{Files, Now};
+    use std::time::Duration;
+    let (mut h, settings) = common::open("users-remove-reads-again", "users");
+    let w = h.window();
+    // The system's choices as Yukimi leaves them, in files of this test's:
+    // the running system's, and those of the one the computer starts next.
+    let dir = settings.parent().expect("the test's directory");
+    let files = Files { now: dir.join("now.json"), next: dir.join("next.json") };
+    let choose = |file: &std::path::Path, who: &str| {
+        let choice = format!(
+            r#"{{"choices":[{{"setting":"calamares.autoLogin","title":"Log in automatically","people":true,"value":"{who}","options":[]}}]}}"#
+        );
+        std::fs::write(file, choice).expect("the choices");
+    };
+    choose(&files.now, "");
+    choose(&files.next, "");
+    h.program_mut().shared.choices = Some(files.clone());
+    let send = |h: &mut Harness<settei::Settei>, msg: Msg| {
+        let msg: settei::pane::PaneMsg = std::sync::Arc::new(msg);
+        h.send(settei::AppMsg::Pane("users", msg));
+    };
+    let says =
+        |h: &Harness<settei::Settei>, w: aizome_kit::WindowKey, what: &str| h.texts(w).iter().any(|t| t.contains(what));
+    let has_ren = |h: &Harness<settei::Settei>| h.program().shared.sys.accounts.snapshot().user("ren").is_some();
+    let sheet = |h: &mut Harness<settei::Settei>| {
+        assert!(h.settle(Duration::from_secs(5), |p| p.sheet_window().is_some()), "no sheet");
+        h.program().sheet_window().expect("the sheet")
+    };
+    // As the pane read it when it opened: no one logs in by themselves.
+    send(&mut h, Msg::AutoLoginRead(AutoLogin::Choice(Now { now: String::new(), next: String::new() })));
+    // Then Ren is chosen in Yukimi itself, and applied for the next start,
+    // while this pane stays open. Removing Ren goes by that, not by what
+    // the pane read before: only turning it off first is offered.
+    choose(&files.next, "ren");
+    send(&mut h, Msg::Remove("ren".into()));
+    let s = sheet(&mut h);
+    assert!(says(&h, s, "Turn that off first"), "{:?}", h.texts(s));
+    assert!(!says(&h, s, "Remove User"), "{:?}", h.texts(s));
+    send(&mut h, Msg::RemoveConfirmed);
+    assert!(has_ren(&h));
+    // The row has it as read then, too.
+    assert!(says(&h, w, "From the next start: Ren Ishida."), "{:?}", h.texts(w));
+    // Turned off in Yukimi again: Ren is removed as anyone is.
+    choose(&files.next, "");
+    send(&mut h, Msg::Remove("ren".into()));
+    let s = sheet(&mut h);
+    assert!(!says(&h, s, "Turn that off first"), "{:?}", h.texts(s));
+    assert!(h.click_text(s, "Remove User"));
+    assert!(h.settle(Duration::from_secs(5), |p| p.shared.sys.accounts.snapshot().user("ren").is_none()));
+    assert!(h.program().shared.launched.is_empty());
 }

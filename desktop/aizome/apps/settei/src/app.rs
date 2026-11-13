@@ -14,7 +14,7 @@ use crate::form::PAGE_WIDTH;
 use crate::pane::{AnyPane, Group, PaneMsg, SettingEntry, ViewCx, entry_name};
 use crate::search::{self, Hit, PaneInfo};
 use crate::shared::Shared;
-use crate::widgets::{avatar, press, tile};
+use crate::widgets::{PressStyle, avatar, press, tile};
 
 /// The sidebar's width.
 pub const SIDEBAR: f64 = 232.0;
@@ -378,19 +378,30 @@ impl Settei {
                 .on_press(AppMsg::Forward)
                 .tooltip("Forward"),
             space(4.0),
-            tile(p.icon(), p.tile(), 20.0),
         ]
         .spacing(6.0)
         .align(Align::Center)
         .padding([0.0, 12.0, 0.0, 8.0])
         .height(44.0)
         .width(Fill);
+        let glyph = tile(p.icon(), p.tile(), 20.0);
         bar = match crumb {
-            None => bar.push(text(p.title()).size(15.0).weight(650.0)),
-            Some(c) => bar
-                .push(text(p.title()).size(15.0).role(Role::Text3))
-                .push(icon(Icon::ChevronRight).size(12.0).role(Role::Text3))
-                .push(text(c).size(15.0).weight(650.0)),
+            None => bar.push(glyph).push(text(p.title()).size(15.0).weight(650.0)),
+            Some(c) => {
+                // The pane's title leads back to its first page, as its row
+                // in the sidebar does. Its 4pt of padding comes out of the
+                // 6pt either side of it, and its run fills the strip's
+                // height, so the strip is laid out exactly as it was when
+                // the title was only text.
+                let parent = press(text(p.title()).size(15.0).role(Role::Text3))
+                    .style(PressStyle::Crumb)
+                    .padding([4.0, 4.0])
+                    .on_press(AppMsg::Show(self.current))
+                    .named(format!("Back to {}", p.title()));
+                let chevron = icon(Icon::ChevronRight).size(12.0).role(Role::Text3);
+                bar.push(row![glyph, space(2.0), parent, space(2.0), chevron].height(Fill))
+                    .push(text(c).size(15.0).weight(650.0))
+            }
         };
         bar = bar.push(spacer());
         if let Some(t) = p.toolbar_any(&self.vcx(self.current, &empty)) {
@@ -519,7 +530,8 @@ impl Program for Settei {
     fn update(&mut self, msg: AppMsg, cx: &mut Cx<AppMsg>) {
         match msg {
             AppMsg::Show(i) => {
-                // The pane showing again: back to its first page.
+                // The pane showing again (its row in the sidebar, or its
+                // title over a sub-page): back to its first page.
                 if i == self.current && self.started {
                     for _ in 0..8 {
                         if !self.panes[i].back_any(cx, &mut self.shared) {

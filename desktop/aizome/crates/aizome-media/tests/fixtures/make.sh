@@ -5,6 +5,14 @@
 set -euo pipefail
 ff() { ffmpeg -nostdin -hide_banner -loglevel error -y "$@"; }
 
+# Open-GOP H.264 recovery points: seeking can issue reference diagnostics
+# despite succeeding. Audio makes rate changes take the same seek path.
+ff -f lavfi -i "testsrc2=size=160x90:rate=24000/1001:duration=14" \
+   -f lavfi -i "anullsrc=r=48000:cl=stereo" -shortest \
+   -c:v libx264 -preset veryfast \
+   -x264-params keyint=48:min-keyint=48:scenecut=0:open-gop=1:ref=3:bframes=3:b-pyramid=normal \
+   -pix_fmt yuv420p -c:a flac open-gop.mkv
+
 # 2 s of H.264 (160×90, 25 fps, a keyframe a second) and AAC stereo.
 ff -f lavfi -i "testsrc2=size=160x90:rate=25:duration=2" \
    -f lavfi -i "sine=frequency=440:sample_rate=48000:duration=2" \

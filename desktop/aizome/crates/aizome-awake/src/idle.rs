@@ -1,8 +1,9 @@
 //! The compositor's idle inhibitor, on a surface of its own that's never
 //! shown: Aizome holds off idleness while any surface has one (as for a
-//! video player), whether or not it's on screen. Keep Awake's service
-//! holds one while it runs, and the shell holds one while an app asks the
-//! session bus to keep the screen awake.
+//! video player), whether or not it's on screen, until the session is
+//! locked. The shell holds one while an app asks the session bus to keep
+//! the screen awake, and Keep Awake's service holds one where the
+//! compositor doesn't know its own request (`hold.rs`).
 
 use std::os::fd::{AsFd, AsRawFd};
 use std::time::Duration;

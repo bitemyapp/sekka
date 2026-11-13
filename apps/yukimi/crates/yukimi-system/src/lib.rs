@@ -8,6 +8,7 @@
 //! - [`generations`]: every version of the system (and of a user's
 //!   packages) that can be returned to.
 //! - [`diff`]: what changed between two of them, package by package.
+//! - [`people`]: the accounts people log in to.
 //! - [`profile`]: packages a user installed for themselves.
 //! - [`reclaim`]: what deleting generations gives back, on disk.
 //! - [`catalog`]: well-known applications to offer, Yukimi's and the
@@ -27,6 +28,7 @@ pub mod index;
 pub mod info;
 pub mod log;
 pub mod nix;
+pub mod people;
 pub mod profile;
 pub mod reclaim;
 pub mod setup;

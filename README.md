@@ -273,6 +273,16 @@ screen and the boot splash can be changed after installing too: in Aizome's
 password, builds the new system, and offers a restart when the change needs
 one, as an update does.
 
+To have the computer start straight into someone's account without asking
+for a password, pick them under **Log in automatically as** in Aizome's
+**Settei → Users & Groups**. Anyone with an account can be picked, including
+people you added after installing; someone added without a password has to
+set one first. Yukimi makes the change, which asks for an administrator
+password, and it applies from the next start, whichever login screen you use.
+Their saved passwords (the keyring) stay locked until their password is typed
+once. If the account can't be logged in to when the computer starts, the
+login screen shows instead.
+
 ## Questions, bugs, and contributions
 
 Please [open an issue](https://github.com/bitemyapp/sekka/issues) with what you tried, what happened, and the image version or source revision. Hardware details help with boot and display problems. Review logs for personal information before attaching them.

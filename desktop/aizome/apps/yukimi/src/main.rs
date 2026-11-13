@@ -13,12 +13,13 @@ const HELP: &str = "Usage: aizome-yukimi [--page PAGE] [--choose SETTING=VALUE[,
 Yukimi (雪見), Aizome's software manager for Sekka's NixOS: see what is
 installed and why, find what is available, install it for yourself or for
 everyone, update, go back to an earlier version, keep the store tidy, and
-choose the system's desktops, login screen and boot splash.
+choose the system's desktops, login screen, automatic login and boot splash.
 
   --page PAGE   overview, installed, discover, updates, history, storage or
                 desktops
   --choose S=V  propose one of the system's choices on the Desktops page, such
-                as --choose calamares.loginScreen=aizome; Apply builds it
+                as --choose calamares.loginScreen=aizome; Apply builds it.
+                No value (S=) is the empty one: no one, for automatic login
   --early       propose updating Sekka early, from its main branch
   --nightly     propose updating Sekka from the nightly again
   --sample      show a sample system instead of this one (changes nothing)

@@ -25,7 +25,7 @@ Aizome's look.
 
 | Surface | Layer | Namespace | Per | Anchors / size | Keyboard |
 |---|---|---|---|---|---|
-| Menu bar | top | `aizome-menubar` | output | top, left, right; 24pt; exclusive 24 | on demand |
+| Menu bar | top | `aizome-menubar` | output | top, left, right; 24pt; exclusive 24 | on demand; exclusive while a Desk is renamed from its menu |
 | Deskbar | top | `aizome-deskbar` | the main display (the compositor's `primary`; it moves when that changes) | top and `[deskbar] side` (right by default); `[deskbar] width` (232pt by default) plus its 3pt shadow, as tall as its content; margin-top 24 | on demand |
 | Deskbar width, while its edge is dragged | overlay | `aizome-deskbar-preview` | the main display | top and the Deskbar's side; as wide as the Deskbar can be there; no input | none |
 | Where the Deskbar would go, while its grip is dragged | overlay | `aizome-deskbar-landing` | the main display | top and the other side; the Deskbar's face, margin-top 24; no input | none |
@@ -61,7 +61,14 @@ Aizome's look.
   display shows underlined in `text3`; click to show a Desk on this
   display (one another display shows swaps with it), `+` adds a desk,
   double-click renames in place, right-click for Rename, Set Folder…,
-  Remove.
+  Remove. The double click leaves the bar the keyboard, and a click
+  elsewhere ends the rename. Rename from the menu doesn't (the compositor
+  gives the keyboard to the window as a menu closes), so that bar's
+  surface asks for it (exclusive) until the rename ends: Return, Escape, a
+  click beside the field, a window's taking the focus, or anything above
+  the bar taking the keyboard. A click in the window that has the focus
+  already doesn't end it: the compositor leaves the keyboard with a
+  surface that asked outright.
 - **The recording indicator**, first in the systray while a screen
   recording goes: a `red` dot (8pt) and the time recorded in IBM Plex Mono
   600 tabular digits (`0:42`, `1:02:09`), ticking once a second and
@@ -563,16 +570,19 @@ session locked even while no outputs are available.
 
 The compositor counts idleness, and holds it off while any client has a
 Wayland idle inhibitor (`docs/compositor.md`): no `idle` event comes, so
-the screen doesn't lock and the displays stay on. Utsushi and mpv take one
-while a video plays and let it go when it pauses; Keep Awake's service has
-one while it's on (`docs/keep-awake.md`). Chromium and Google Chrome take
-one too, on their window, from a page's video starting until it pauses, in
-a window or full screen, but not for a video that starts while their
-window has neither the keyboard nor the pointer: one that starts by itself
-with the person in another window, as the next in a playlist does, gets
-none. They are Wayland clients in an Aizome session: they choose that
-themselves, and the session's `NIXOS_OZONE_WL` has Nixpkgs' wrappers ask
-for it besides.
+the screen doesn't lock and the displays stay on. That is for someone at
+the screen: once the session is locked the inhibitors stop counting, and
+the displays turn off on their timer whatever plays behind the lock.
+Utsushi and mpv take one while a video plays and let it go when it
+pauses. Keep Awake's service holds idleness off in a way of its own while
+it's on, which counts locked or not (`docs/keep-awake.md`). Chromium and
+Google Chrome take an inhibitor too, on their window, from a page's video
+starting until it pauses, in a window or full screen, but not for a video
+that starts while their window has neither the keyboard nor the pointer:
+one that starts by itself with the person in another window, as the next
+in a playlist does, gets none. They are Wayland clients in an Aizome
+session: they choose that themselves, and the session's `NIXOS_OZONE_WL`
+has Nixpkgs' wrappers ask for it besides.
 
 Other apps ask the session bus instead, with `Inhibit` and `UnInhibit` of
 `org.freedesktop.ScreenSaver`. VLC does (it's an X11 client here, through
@@ -588,7 +598,7 @@ theirs that reaches the compositor when they're started as X11 clients
 both cases. The shell serves the interface (`aizome_sys::screensaver`), at
 `/org/freedesktop/ScreenSaver` and at KDE's `/ScreenSaver`, which VLC
 calls. While any app holds, the shell holds an idle inhibitor for them on
-a connection of its own to the compositor (`idle.rs`, with Keep Awake's
+a connection of its own to the compositor (`idle.rs`, with
 `aizome_awake::IdleInhibitor`), and lets it go with the last hold.
 
 - `Inhibit` gives a cookie for one hold, and `UnInhibit` with it lets go.
@@ -630,6 +640,75 @@ What it doesn't do:
   is left at `ignore`), so there's no idle sleep for a video to hold off.
   Sleep asked for otherwise isn't these apps' to block: that's Keep Awake.
 
+### Who is holding
+
+Nothing was switched on when a video keeps the screen lit, so the cup at
+the front of the systray says so, and its panel says who
+(`holders.rs`; `docs/keep-awake.md` has what a person sees). The shell
+makes one list of the two ways an app asks:
+
+- The compositor says which windows and processes have an idle inhibitor
+  (IPC `idle-inhibitors`, and `idle-inhibitors-changed` so nothing is
+  polled; `docs/ipc.md`).
+- The screen saver the shell serves has each hold's connection, the name
+  the app gave for itself, its reason, and the connection's process,
+  which the bus is asked for as the hold is taken.
+
+The shell's own inhibitor is in the compositor's list, by the shell's
+process: it stands for the bus's holds and is nobody's row. Neither, for
+the seconds a restart takes, is the one the shell before still holds
+(the compositor gives a restarted shell that shell's process, which is
+forgotten once that shell has gone, so a process given its ID later
+isn't hidden).
+
+Keep Awake's hold is in that list too, as one of the `keep-awake` kind,
+and is the user's own switch, not a row. But the compositor gives that
+kind to any program of the session that asks, so the kind alone doesn't
+make a hold Keep Awake's. It is left out only when its process runs in
+Keep Awake's service (the systemd unit its control group is named for,
+`/proc/PID/cgroup`) and Keep Awake is on: by the watcher's word, while
+this shell is switching it, or by its setting read there and then, as
+the service holds a moment before the watcher looks. Any other hold of
+that kind is a holder like the rest, named the same way, and its row
+says "Also while the screen is locked" where another's says its reason:
+the cup would otherwise show nothing for a hold that keeps the screen on
+even behind a lock.
+
+A holder is named by its desktop entry where one is found, looked for in
+this order: the app ID of a window of the holding process; the name it
+gave the bus, as a program (Chromium gives its program's path, so
+`/nix/store/…/chromium` is Chromium); the name it gave as a desktop ID,
+as the portal gives a sandboxed app's; the program of its process
+(`/proc/PID/exe`, NixOS's `.name-wrapped` undone). The name given goes
+before the process's program because the portal's backend, which is the
+process then, has a desktop entry of its own ("Portal"): an app that
+isn't sandboxed gives the portal no name, and is listed as that. Failing
+all of those it goes by its window's app ID or its program's file name,
+never a path.
+Two holds with the same desktop entry are one row, so an app that asks
+both ways (Chrome, with the keys) is listed once, with the reason it gave
+the bus; a Wayland inhibitor gives no reason, and its row says which
+window holds. A row's window is the holder's own, or for an X11 app,
+whose windows are xwayland-satellite's on the Wayland side, the one a
+switch to the app would show.
+
+The cup shows for apps only while Keep Awake is off (on, it's Keep
+Awake's amber cup, and the panel lists the apps under its switch), and
+not at once. It comes when apps have held for `SHOWS_AFTER`, three
+seconds, and each row, and the cup after the last of them, stays
+`LINGERS`, two seconds, after its hold goes. VLC lets go and holds again
+at each loop of a clip, about 60 ms apart, and a browser at each pause
+and play: within the linger they never left, and such gaps don't start
+the three seconds over. A hold that ends inside its first three seconds
+never shows the cup.
+
+A row leads to its app and does nothing to its hold: a click asks the
+compositor to focus its window, and its button opens Myaku at its
+process, where Quit and Force Quit are. There's no switch to let go of
+an app's hold or to ignore it. The app would take it again at its next
+request, a Wayland inhibitor isn't the shell's to release, and apps are
+never told that a hold was set aside.
+
 `cargo test -p aizome-sys --lib screensaver` checks the holds, including a
 call delayed until its caller and 512 later connections have left, and
 cleanup when checking the caller fails. `cargo test -p aizome-sys --test
@@ -642,7 +721,18 @@ longer; paused, it locks and goes dark; and so it does when VLC is killed
 while it plays. Chromium plays a page's video there too: in a window and
 full screen, started by itself with another window in use, and as an X11
 client. Chromium stands for Google Chrome, which isn't free software;
-Firefox isn't in that check.
+Firefox isn't in that check. While each plays there, the cup's panel
+lists it by name (Chromium once, though it holds both ways; the shell's
+own inhibitor never), and the cup goes when it pauses. With mpv and with
+VLC playing, the session is locked by hand: the displays turn off on
+their minute and the video plays on. With Keep Awake turned on beside
+VLC, they stay on behind the lock for as long as it's on.
+
+`cargo test -p aizome-shell --lib holders` checks the list (names, one
+row an app, whose rows there are none of) and the cup's two waits, and
+`cargo test -p aizome-shell --test holders` drives the shell itself: the
+cup in its two colours, the panel's rows, wording and size, and what a
+row does.
 
 ## Authentication dialog
 

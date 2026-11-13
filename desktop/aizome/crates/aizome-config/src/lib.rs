@@ -12,9 +12,6 @@
 use std::collections::BTreeMap;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::{Duration, SystemTime};
 
 pub use aizome_theme::{Effects, FocusColor, ThemeName};
 
@@ -22,6 +19,7 @@ pub mod compositor;
 pub mod greeter;
 pub mod location;
 pub mod shell;
+mod watch;
 pub use compositor::{NightLight, NightSchedule, RendererChoice, Sun, TabDoubleClick, sun_times, temperature_rgb};
 pub use location::{LocalNow, Location, Place, PlaceSource, Span, daylight, hm, system_timezone};
 use serde::{Deserialize, Serialize};
@@ -30,6 +28,7 @@ pub use shell::{
     NotificationSettings, PALETTE_SCOPES, PaletteSettings, PowerKey, PowerSettings, Recorder, RecordingFormat,
     RecordingQuality, RecordingSettings, SYSTRAY_WIDGETS, SoundSettings, names_app,
 };
+pub use watch::Watcher;
 
 /// Everything in `settings.toml`.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -802,52 +801,6 @@ pub fn expand_home(path: &str) -> PathBuf {
         home_dir().join(rest)
     } else {
         PathBuf::from(path)
-    }
-}
-
-/// Watches the settings file and calls back when it changes.
-///
-/// It polls the file's modification time once a second on its own thread,
-/// which costs nothing measurable and needs no inotify plumbing; dropping
-/// the watcher stops the thread.
-pub struct Watcher {
-    stop: Arc<AtomicBool>,
-}
-
-impl Watcher {
-    /// Watches `Settings::path()`.
-    pub fn spawn(on_change: impl FnMut() + Send + 'static) -> Watcher {
-        Watcher::spawn_for(Settings::path(), Duration::from_secs(1), on_change)
-    }
-
-    pub fn spawn_for(path: PathBuf, interval: Duration, mut on_change: impl FnMut() + Send + 'static) -> Watcher {
-        let stop = Arc::new(AtomicBool::new(false));
-        let stop2 = stop.clone();
-        let stamp = |p: &Path| -> Option<(SystemTime, u64)> {
-            let m = std::fs::metadata(p).ok()?;
-            Some((m.modified().ok()?, m.len()))
-        };
-        std::thread::Builder::new()
-            .name("aizome-config-watch".into())
-            .spawn(move || {
-                let mut last = stamp(&path);
-                while !stop2.load(Ordering::Relaxed) {
-                    std::thread::sleep(interval);
-                    let now = stamp(&path);
-                    if now != last {
-                        last = now;
-                        on_change();
-                    }
-                }
-            })
-            .expect("spawn the settings watcher");
-        Watcher { stop }
-    }
-}
-
-impl Drop for Watcher {
-    fn drop(&mut self) {
-        self.stop.store(true, Ordering::Relaxed);
     }
 }
 

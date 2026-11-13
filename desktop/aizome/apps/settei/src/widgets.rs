@@ -34,6 +34,9 @@ pub enum PressStyle {
     Row,
     /// A row inside a form card: hover shades it a little, no selection.
     Plain,
+    /// A step of the title strip's path, on `surface`: hover shades it, no
+    /// selection.
+    Crumb,
     /// A tile of its own: raised, edged, hover lifts it; selection edges it
     /// in the focus colour (wallpapers, previews).
     Card,
@@ -166,11 +169,12 @@ impl Widget for PressWidget {
                     cx.canvas.fill_rect(r, t.hover(t.chrome()));
                 }
             }
-            PressStyle::Plain => {
+            PressStyle::Plain | PressStyle::Crumb => {
+                let under = if self.style == PressStyle::Crumb { t.surface() } else { card_fill(t) };
                 if live && cx.is_pressed() {
                     cx.canvas.fill_rect(r, t.sunk());
                 } else if live && cx.is_hovered() {
-                    cx.canvas.fill_rect(r, t.hover(card_fill(t)));
+                    cx.canvas.fill_rect(r, t.hover(under));
                 }
             }
             PressStyle::Card => {

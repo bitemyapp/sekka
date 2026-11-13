@@ -571,6 +571,14 @@ impl TextLayout {
         self.width
     }
 
+    /// Whether a clone of this layout is held anywhere else. A cache asks
+    /// before it lets one go: while whatever shows the text holds it, the
+    /// cache's own handle costs nothing to keep and saves laying it out
+    /// again.
+    pub fn is_shared(&self) -> bool {
+        Arc::strong_count(&self.frame) > 1
+    }
+
     /// How much room the text takes: its widest line (from the layout's
     /// left, to where its last character that shows ends: the spaces a line
     /// wrapped after don't count), and its lines' height.

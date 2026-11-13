@@ -3,8 +3,9 @@
 Aizome's speed comes from a few decisions made once, at the bottom, and
 kept everywhere above them. This page names each decision, says why it
 helps, and gives a benchmark aimed at that decision alone, measured on
-runnymede on 2 November 2026 ([the machine](README.md#the-machine)). It
-ends with what the decisions cost.
+runnymede on 2 November 2026 ([the machine](README.md#the-machine)), with
+an [idle-update follow-up on 6–7 November](#9-idle-updates-november-2026).
+It ends with what the decisions cost.
 
 The decisions, from [architecture.md](../../desktop/aizome/docs/architecture.md),
 [rendering.md](../../desktop/aizome/docs/rendering.md),
@@ -102,13 +103,15 @@ What it shows:
   kit against 11.6–36.8 MiB. PSS counts a shared library in full when one
   process maps it, as here, so in a session with many GTK or Qt apps
   their libraries' share shrinks; the private column doesn't.
-- **The one figure the kit loses: one wakeup a second at rest.** Every kit
-  app checks `~/.config/aizome/settings.toml`'s modification time once a
+- **The original kit woke once a second at rest.** In the 2 November build,
+  every kit app checked `~/.config/aizome/settings.toml`'s modification time once a
   second on a thread of its own (aizome-config's `Watcher`), so theme and
   settings changes apply live without inotify. (A second watcher looks for
   the shell's socket once a second, but only while a session names a shell
   that isn't there yet; it didn't run here.) GTK and Qt woke 0–0.07 times
-  a second. The CPU cost is 0.02 ms a second.
+  a second. The CPU cost was 0.02 ms a second. The 6 November follow-up
+  measured **1 → 0 wakeups/s** after replacing settings polling with
+  file notifications; see [section 9](#9-idle-updates-november-2026).
 
 ## 2. Whole apps, beside GNOME's and KDE's
 
@@ -214,6 +217,9 @@ What it shows:
   none at all.
 
 ## 3. An idle desktop draws nothing
+
+The results below are the original 2 November record. The website's
+current idle figures use the [7 November rerun](#9-idle-updates-november-2026).
 
 **What it shows:** decisions 2 and 5 at the scale of the whole desktop. A
 desktop left alone should neither draw nor wake.
@@ -461,6 +467,10 @@ What it shows:
 
 ## 8. The 4 ms budget on this machine
 
+The table below retains the original 2 November results. Updated kit and
+shell rows, including the real clock-update message, are recorded in
+[section 9](#9-idle-updates-november-2026).
+
 **What it shows:** whether the desktop's own frame-budget tests, which
 Aizome's docs record on an Intel Core Ultra 7 365 laptop, hold on this
 desktop. Each app's tests drive it headlessly through the kit's offscreen
@@ -520,6 +530,75 @@ What it shows:
   frame, not the compositor's or the display's (sections 4 and 5 time
   those).
 
+## 9. Idle updates, November 2026
+
+Measured **6 November** (latency and window wakeups) and **7 November**
+(energy and native idle), comparing the preceding revision `2711942e` with
+`553dc6af`. These deltas are against that parent, not the 2 November build.
+Same Ryzen 9800X3D, Linux 7.3.1, locked dependencies and Rust 1.99.0;
+binary hashes and build profiles are in the
+[per-run record](data/design/idle-updates-2026-11-07/results.json).
+
+| Measurement | Before | After | Change |
+|---|---:|---:|---:|
+| Idle kit window, wakeups/s | 1 | 0 | −100% |
+| Published meter-frame fixture, p50 / p95, ms | 0.055 / 0.080 | 0.020 / 0.030 | p50 −64% |
+| Actual clock-update message, p50 / p95, ms | 0.049 / 0.075 | 0.021 / 0.040 | p50 −57% |
+| Settings save → callback, p50 / p95, ms | 447 / 917 | 3.17 / 6.28 | p50 −99.3% |
+| 100,000 meter updates, energy above background, J | 43.46 | 20.17 | −53.6% |
+| CPU time for those updates, s | 3.98 | 1.90 | −52.2% |
+| Idle package power, 1080p, W | 19.97 | 20.07 | +0.10; within variation |
+| Idle package power, 4K, W | 19.82 | 19.84 | +0.02; within variation |
+
+All six paired energy trials improved, by 48–59%. The percentage applies
+to this update workload; idle power showed no detectable saving.
+
+**Current native idle results**, medians of three after-change runs:
+
+| Output | Frames/min (range) | Compositor CPU, ms/s | Shell CPU, ms/s | Shell wakeups/s | Session PSS, MiB |
+|---|---:|---:|---:|---:|---:|
+| 1920 × 1080 | 5 (1–9) | 0.13 | 0.69 | 55.28 | 181 |
+| 3840 × 2160 | 1 (1–3) | 0.12 | 0.63 | 48.33 | 214 |
+
+**Method and limits.** Published `window-cost.py`, `session-idle.py` and
+kit/shell `perf` tests, with alternating before/after order. The latency
+tests ran eight pairs under background build/VM load; they measure elapsed
+CPU-side frame work, not input-to-photon latency. Their original clock
+fixture sends `Msg::Nothing`; the updated clock row instead uses
+[`idle_bench.rs`](../../tests/performance/design/idle-updates/idle_bench.rs)
+with `Msg::TimeChanged`, 100 warmups and 1,000 measured events per run.
+The same fixture measures meter work. Settings notification latency uses
+[`watcher_bench.rs`](../../tests/performance/design/idle-updates/watcher_bench.rs):
+120 atomic saves per revision and the production one-second fallback interval.
+
+On 7 November the background jobs were stopped. Each energy batch ran
+100,000 meter updates plus 100 warmups; the published PPT sampler integrated
+package energy at 10 ms intervals. Subtract batch duration times the average
+of the 15-second background readings immediately before and after it.
+Native idle used 30 seconds to settle and 60 to measure, three pairs per
+resolution; RAPL counter boundary reads avoided adding a 100 Hz polling
+loop. The existing counter service still refreshes once a second. Running
+desktop applications and live meter readings cause residual variation.
+Power covers the CPU package and integrated GPU, not RAM, the discrete GPU,
+display or PSU; battery life was not measured.
+
+The ten-pair startup run gave 31.02 → 46.94 ms; a 40-pair follow-up gave
+34.00 → 34.56 ms, with no established regression under the background load.
+The follow-up shortened only the waits after the mapped-window measurement.
+The kit window's idle CPU time fell from 17.1 µs/s to zero in all ten
+after-change runs. “Wakeups” uses the original all-thread context-switch proxy.
+
+The record includes every run's percentiles, maxima, power readings and
+RAPL boundaries. [Latency samples](data/design/idle-updates-2026-11-07/latency-samples.json.gz)
+and [PPT traces](data/design/idle-updates-2026-11-07/power-samples.tsv.gz)
+retain the underlying measurements. To repeat the supplemental fixtures,
+copy `idle_bench.rs` into each revision's `aizome-shell/tests/` and
+`watcher_bench.rs` into `aizome-config/examples/`, then build with the root
+flake's `.#aizome` shell and `--locked --release`. Run `idle-bench --nocapture`
+with `IDLE_BENCH_KIND=meter` or `clock` and `IDLE_BENCH_N=1000` (100000 for
+energy); run `watcher_bench` with `WATCH_BENCH_N=60` twice. Use
+`tests/performance/lock-measure` and keep unrelated jobs stopped for power tests.
+
 ## What the design costs
 
 The same measurements show where the decisions cost something, or where
@@ -530,9 +609,9 @@ Aizome hasn't yet done what its design allows:
   shell about 53. Per thread
   ([thread-wakeups.txt](data/design/thread-wakeups.txt), from
   `tests/performance/design/thread-wakeups.sh` and the live shell):
-  - every kit app checks its settings file's modification time once a
-    second (the price of applying settings live without inotify; 0.02 ms
-    of CPU a second);
+  - the 2 November kit checked its settings file once a second (0.02 ms
+    of CPU a second); file notifications removed this timer in the
+    [6 November rerun](#9-idle-updates-november-2026);
   - `aizome-sys`'s D-Bus watchers, one thread per watched service, check
     for a stop request every 250 ms: four wakeups a second each, most of
     the shell's and two of Hako's threads;
@@ -547,8 +626,8 @@ Aizome hasn't yet done what its design allows:
   Each is small (0.02–1 ms of CPU a second), but a wakeup can keep a core
   from its deepest idle state. A watcher that blocks until it's stopped,
   a watchdog that sleeps while nothing is in flight, a caret that stops
-  blinking and an inotify watch for the settings would take most of them
-  to zero.
+  blinking would remove further idle wakeups. The settings watcher now
+  blocks until a file event or shutdown.
 - **Static binaries don't share code.** Every app is one Rust program
   with the toolkit inside (13–24 MB each, the shell 30 MB; the `aizome`
   package is 507 MiB for some 30 programs). Two Aizome apps open at once

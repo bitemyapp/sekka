@@ -161,6 +161,7 @@
         tatami = inputs.tatami.nixosModules.default;
         yukimi = inputs.yukimi.nixosModules.default;
         aizome = inputs.aizome.nixosModules.default;
+        sekka-discord = import ./nix/sekka-discord-service.nix;
       };
       lib = {
         inherit installedLock;
@@ -383,6 +384,11 @@
           nixPackage = runnerNix;
         };
         libsecret-dh = import ./nix/libsecret-dh-test.nix { inherit pkgs; };
+        sekka-discord-deploy = import ./nix/sekka-discord-deploy-test.nix {
+          inherit pkgs;
+          module = self.nixosModules.sekka-discord;
+          package = self.packages.${system}.sekka-discord;
+        };
         session-environment = import ./nix/session-environment-vm-test.nix {
           inherit pkgs;
           desktopsModule = inputs.calamares.nixosModules.desktops;
@@ -713,6 +719,7 @@
         tuning-policy = import ./nix/scheduling/policy-test.nix { inherit nixpkgs system; };
         boot-splash = import ./nix/boot-splash-test.nix { inherit pkgs; };
         boot-splash-choice = import ./nix/boot-splash-choice-test.nix { inherit pkgs inputs; };
+        auto-login-choice = import ./nix/auto-login-choice-test.nix { inherit pkgs inputs; };
         prebuilt-binaries = import ./nix/prebuilt-binaries-vm-test.nix { inherit pkgs; };
         fish = import ./nix/fish-vm-test.nix {
           inherit pkgs;
@@ -783,6 +790,10 @@
           desktopsModule = inputs.calamares.nixosModules.desktops;
         };
         aizome-login = import ./nix/aizome-login-vm-test.nix {
+          inherit pkgs;
+          desktopsModule = inputs.calamares.nixosModules.desktops;
+        };
+        aizome-automatic-login = import ./nix/aizome-automatic-login-vm-test.nix {
           inherit pkgs;
           desktopsModule = inputs.calamares.nixosModules.desktops;
         };

@@ -123,6 +123,20 @@ pub fn wait_for_last(previous: u32) -> Option<Carried> {
     }
 }
 
+/// How long after its last word the shell this one replaces is waited
+/// for: the compositor stops it within eight seconds of starting the
+/// restart, and kills it five seconds on if it's still there.
+pub const GONE_WITHIN: Duration = Duration::from_secs(20);
+
+/// Waits (on a thread) until process `previous` has gone, or for `within`
+/// at the longest.
+pub fn wait_until_gone(previous: u32, within: Duration) {
+    let deadline = Instant::now() + within;
+    while std::path::Path::new(&format!("/proc/{previous}")).exists() && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(100));
+    }
+}
+
 /// A cheap mark of what would be carried, to save only on change.
 pub fn mark(notes: &[Notification], folded: &[(String, bool)], open: &[String]) -> u64 {
     use std::hash::{Hash, Hasher};
@@ -223,5 +237,22 @@ mod tests {
         assert_eq!(again.get(p.id).unwrap().summary, "Re: tiles");
         assert_ne!(again.fresh_id(), p.id, "ids go on from where they were");
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn the_shell_before_is_waited_for_until_it_has_gone_and_no_longer() {
+        // This process isn't going: the wait gives up when its time is up.
+        let start = Instant::now();
+        wait_until_gone(std::process::id(), Duration::from_millis(150));
+        assert!(start.elapsed() >= Duration::from_millis(150));
+        // One that ends is noticed as it does.
+        let mut child = std::process::Command::new("sleep").arg("0.3").spawn().unwrap();
+        let pid = child.id();
+        let reaped = std::thread::spawn(move || child.wait().unwrap());
+        let start = Instant::now();
+        wait_until_gone(pid, Duration::from_secs(30));
+        assert!(start.elapsed() < Duration::from_secs(10), "it waited on after the process had gone");
+        reaped.join().unwrap();
+        assert!(!std::path::Path::new(&format!("/proc/{pid}")).exists());
     }
 }

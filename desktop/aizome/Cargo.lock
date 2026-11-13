@@ -54,6 +54,7 @@ dependencies = [
 name = "aizome-awake"
 version = "0.1.0"
 dependencies = [
+ "aizome-ipc",
  "libc",
  "serde_json",
  "wayland-client",
@@ -312,10 +313,12 @@ dependencies = [
 name = "aizome-media"
 version = "0.1.0"
 dependencies = [
+ "cc",
  "ffmpeg-sys-next",
  "libc",
  "log",
  "pipewire",
+ "pkg-config",
  "sidestep-ui",
 ]
 

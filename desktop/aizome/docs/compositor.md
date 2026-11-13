@@ -240,12 +240,34 @@ Notes for client authors:
   window urgent (IPC `urgent`) instead.
 - idle-inhibit: while any surface has an inhibitor, idleness is held off:
   no `idle` event (no lock, and the displays stay on) and no `idled` from
-  ext-idle-notify. The surface needn't show (Keep Awake's never does). An
+  ext-idle-notify. The surface needn't show (the shell's never does). An
   inhibitor goes when it's destroyed, and with its surface or its client
   (`tests/idle_inhibit.rs`). Apps that ask the session bus's
   `org.freedesktop.ScreenSaver` instead are answered by the shell, which
   holds an inhibitor for them (`docs/shell.md`, "Staying awake for a
   video").
+- Whose hold it is (`idle.rs`, `tests/idle_holders.rs`). An inhibitor is
+  an app's, and is for someone at the screen: once the session is locked
+  (from the lock being asked for until it's unlocked) inhibitors no
+  longer hold off the `idle` events, so `monitors-off` comes after its
+  minutes and the displays turn off behind the lock whatever plays. While
+  a hold counts the idle clock stands at nothing, so those minutes count
+  from the lock (to within the idle timer's five seconds), or from the
+  last input after it. The user's own Keep Awake asks over IPC
+  instead (`keep-awake`, held for as long as the asking connection stays
+  open, so it goes with its service however that ends), and that hold
+  counts locked or not. Asking by a request of its own is what tells it
+  from an app's: nothing is read from a client's name, and only programs
+  of the session reach the IPC socket. Any of them may ask, so the
+  compositor logs which process did, and lists the hold with it; the
+  shell shows every such hold that isn't Keep Awake's own
+  (`docs/shell.md`, "Who is holding"). ext-idle-notify's clients are told
+  of any hold as before, locked or not. `idle-inhibitors` lists the holds
+  (an inhibitor by the window its surface belongs to, with that window's
+  app ID and title, and by its client's process), and
+  `idle-inhibitors-changed` says when the list changes: at once when a
+  hold begins or ends, and within five seconds (the idle timer's next
+  look) when a holder's window opened or was renamed.
 - ext-session-lock: `locked` is sent once every output has drawn a frame
   without the desktop; lock surfaces get the output's size and all input.
   A locker that dies leaves the session locked. Locking closes the
@@ -575,7 +597,10 @@ nix develop .#aizome --command cargo test -p aizome-comp
 - `tests/focus.rs`: a shell-like wayland-client (layer surfaces and their
   popups): exclusive and on-demand keyboard interactivity, grabbing menus
   getting the keys and giving them back, menus closing for an exclusive
-  surface or a click elsewhere, and the popup layer's stacking.
+  surface or a click elsewhere, a bar that turns exclusive as its menu
+  closes having the keys until it's on demand again, and the popup
+  layer's stacking. With the real shell (`AIZOME_LAYOUT_TEST_SHELL`,
+  ignored otherwise), Rename in a Desk's menu takes what's typed next.
 - `tests/context_menus.rs`: an app with a text field and an input method
   that grabs the keyboard while a field has it (as Telegram and ibus):
   the field's context menu opening on a right-press, keeping the keys

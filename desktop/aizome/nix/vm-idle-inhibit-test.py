@@ -17,8 +17,23 @@ keyboard nor the pointer. The desktop portal's Inhibit, which Firefox
 ends at when nobody serves the screen saver, is asked once to see that it
 reaches the same place.
 
+While each plays, the cup at the front of the systray shows for it, and
+its panel lists the app by its desktop entry's name with its reason (the
+shell says what its bar and panel show): one row for Chromium, which
+holds both ways, and none for the shell's own inhibitor. The cup goes
+once the player has paused.
+
+Those holds are for someone at the screen. With mpv playing, and with
+VLC, the session is locked by hand (the lock's keys): the displays turn
+off on their minute behind the lock though the video plays on, and
+unlocked, it holds them on again. Keep Awake is the user's own switch:
+turned on beside VLC, its cup takes the place of the apps', the panel
+lists VLC under it, and locked by hand the displays stay on for as long
+as it's on.
+
 Nothing touches the keyboard or pointer while the session is watched:
-state is read over the compositor's IPC, which isn't input.
+state is read over the compositor's IPC and the shell's socket, which
+aren't input.
 """
 
 import json
@@ -37,6 +52,7 @@ ENV = (
     "export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus; "
     "export WAYLAND_DISPLAY=$(ls /run/user/1000 | grep -m1 '^wayland-[0-9]*$'); "
     "export AIZOME_SOCKET=/run/user/1000/aizome.$WAYLAND_DISPLAY.sock; "
+    "export AIZOME_SHELL_SOCKET=/run/user/1000/aizome-shell.$WAYLAND_DISPLAY.sock; "
 )
 # The settings' minute, the compositor's five seconds between looks at
 # the clock, and room for a busy host.
@@ -122,6 +138,93 @@ def goes_idle(what):
     print(f"{what}: locked and dark after {time.monotonic() - start:.0f} s without input")
 
 
+def awake():
+    """What the shell says of Keep Awake, the cup in its bar, and the apps
+    its panel lists as holding the screen on."""
+    return json.loads(user("aizome-shell msg state"))["awake"]
+
+
+def inhibitors():
+    """Who the compositor says holds idleness off."""
+    return ipc("idle-inhibitors")["inhibitors"]
+
+
+def cup_lists(rows, shot):
+    """The cup is in the bar for apps (Keep Awake is off), and its panel
+    lists just these: each app's name, and what's said under it. A
+    picture of the panel is kept."""
+
+    def listed():
+        state = awake()
+        return state["cup"] == "apps" and [(h["name"], h["detail"]) for h in state["holders"]] == rows
+
+    until(f"the cup, listing {rows}", listed, timeout=20)
+    panel_shot(shot)
+    print(f"the cup lists {rows}")
+
+
+def panel_shot(shot):
+    """A picture of the screen with the cup's panel open."""
+    user("aizome-shell msg " + shlex.quote(json.dumps({"request": "open", "what": "keep-awake"})))
+    until("the cup's panel", lambda: json.loads(user("aizome-shell msg state"))["panel"] == "keep-awake")
+    time.sleep(1)
+    machine.screenshot(shot)
+    user("aizome-shell msg dismiss")
+    until("the panel closed", lambda: json.loads(user("aizome-shell msg state"))["panel"] is None)
+
+
+def cup_goes(what):
+    """Nothing holds any more: the cup leaves the bar, a moment later."""
+    start = time.monotonic()
+    until(f"{what}: the cup stayed in the bar", lambda: awake()["cup"] is None and not awake()["holders"], timeout=20)
+    print(f"{what}: the cup went {time.monotonic() - start:.1f} s later")
+
+
+def lock_by_hand(what):
+    """The lock's keys, as a person presses them."""
+    assert displays_on() and not locked(), f"{what}: not awake to begin with"
+    user("aizomectl input chord ctrl+super+q")
+    until(f"{what}: the lock by hand", locked)
+
+
+def goes_dark_locked(what, still_playing):
+    """Locked, with nobody touching anything: the displays turn off on
+    their minute though the video plays on."""
+    start = time.monotonic()
+    until(f"{what}: the displays stayed on behind the lock", lambda: not displays_on(), timeout=IDLE_WITHIN)
+    waited = time.monotonic() - start
+    assert locked() and still_playing(), f"{what}: it stopped playing behind the lock"
+    assert waited > IDLE - 15, f"{what}: the displays went off after {waited:.0f} s, before their minute"
+    print(f"{what}: locked, the displays went off {waited:.0f} s later, and it was still playing")
+
+
+def stays_lit_locked(what):
+    """Locked, with nobody touching anything for longer than the idle
+    minute: the displays stay on."""
+    start = time.monotonic()
+    while (waited := time.monotonic() - start) < AWAKE_FOR:
+        if not locked() or not displays_on():
+            fail(f"{what}: after {waited:.0f} s locked: {locked()}, displays on: {displays_on()}")
+        time.sleep(5)
+    print(f"{what}: locked, the displays were still on after {AWAKE_FOR} s without input")
+
+
+def holds_again_unlocked(what, still_playing):
+    """A key and the password bring the session back, and with someone
+    watching again the video holds the displays on. The compositor is told
+    nobody has touched anything for an hour and reads its idle clock at
+    once, as its timer would: with nothing holding, that locks the session
+    and turns the displays off on the spot (the idle minute is long past),
+    and this fails; with the video's hold counting again, nothing happens."""
+    wake()
+    assert still_playing(), f"{what}: it wasn't playing once unlocked"
+    user("aizomectl input idle 3600")
+    time.sleep(3)
+    if locked() or not displays_on():
+        fail(f"{what}: it didn't hold again once unlocked (locked: {locked()}, displays on: {displays_on()})")
+    print(f"{what}: unlocked, it held through an hour without input")
+
+
 def wake():
     """A key lights the displays; the password unlocks."""
     machine.send_key("shift")
@@ -200,6 +303,9 @@ with subtest("the settings ask for a minute, and nothing but the session's own i
         "busctl get-property org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager IdleAction"
     )
     assert action.strip() == 's "ignore"', action
+    # Nothing plays yet: nobody holds the screen on, and there's no cup.
+    assert inhibitors() == [], inhibitors()
+    assert awake() == {"keep_awake": "off", "cup": None, "holders": []}, awake()
 
 with subtest("Utsushi playing holds idleness off, and paused lets it come"):
     # As the desktop opens a video: the session's default for video/mp4.
@@ -211,8 +317,11 @@ with subtest("Utsushi playing holds idleness off, and paused lets it come"):
     stays_awake("Utsushi playing")
     assert playing("utsushi"), "Utsushi stopped playing"
     machine.screenshot("utsushi-playing")
+    # Its Wayland inhibitor gives no reason: the row says which window.
+    cup_lists([("Utsushi", "Test Pattern")], "cup-utsushi")
     mpris("utsushi", "call", "Pause")
     until("Utsushi paused", lambda: not playing("utsushi"))
+    cup_goes("Utsushi paused")
     goes_idle("Utsushi paused")
     wake()
     close("org.aizome.Utsushi")
@@ -225,8 +334,18 @@ with subtest("mpv playing holds idleness off, and paused lets it come"):
     assert machine.succeed(f"cat /proc/{mpv['pid']}/comm").strip() == "mpv", mpv
     stays_awake("mpv playing")
     machine.screenshot("mpv-playing")
+    mpv_holds = [(i["kind"], i.get("app_id"), i.get("window"), i.get("pid")) for i in inhibitors()]
+    assert mpv_holds == [("app", "mpv", mpv["id"], mpv["pid"])], mpv_holds
+    cup_lists([("mpv Media Player", window("mpv")["title"])], "cup-mpv")
+    # Its hold is for someone at the screen: locked by hand, the displays
+    # turn off on their minute. (mpv holds its inhibitor only while it
+    # plays: still there, it plays.)
+    lock_by_hand("mpv playing")
+    goes_dark_locked("mpv playing", lambda: any(i.get("app_id") == "mpv" for i in inhibitors()))
+    holds_again_unlocked("mpv playing", lambda: any(i.get("app_id") == "mpv" for i in inhibitors()))
     user(f"aizomectl focus {mpv['id']}")
     user("aizomectl input key space")
+    cup_goes("mpv paused")
     goes_idle("mpv paused")
     wake()
     close("mpv")
@@ -247,11 +366,46 @@ with subtest("VLC playing holds idleness off; paused, and killed, it lets it com
     assert playing("vlc"), "VLC stopped playing"
     assert said("vlc", HELD) > 0, "VLC played on without asking the shell's screen saver"
     machine.screenshot("vlc-playing")
+    # At the compositor the shell's own inhibitor stands for VLC's hold,
+    # on a surface that's no window's. It isn't a row: VLC is, by its
+    # desktop entry's name, with the reason it gave the bus.
+    shell_pid = int(machine.succeed("pgrep -u alice -x aizome-shell").split()[0])
+    # (Looked for more than once: VLC lets go for a moment at each loop
+    # of the clip, and the shell's inhibitor with it.)
+    until(
+        "the shell's inhibitor alone at the compositor",
+        lambda: [(i["kind"], i.get("window"), i.get("pid")) for i in inhibitors()] == [("app", None, shell_pid)],
+    )
+    cup_lists([("VLC media player", "Playing some media.")], "cup-vlc")
+
+    # Keep Awake on as well. It's the user's own switch: its service asks
+    # the compositor by a request of its own, the cup is Keep Awake's, and
+    # the panel lists VLC under its switch still.
+    print(user("aizome-awake on"))
+    until("Keep Awake's cup", lambda: awake()["cup"] == "keep-awake")
+    service = int(user("systemctl --user show -p MainPID --value aizome-keep-awake.service"))
+    until(
+        "Keep Awake's hold at the compositor, by its service",
+        lambda: ("keep-awake", service) in [(i["kind"], i.get("pid")) for i in inhibitors()],
+    )
+    assert [(h["name"], h["detail"]) for h in awake()["holders"]] == [("VLC media player", "Playing some media.")], awake()
+    panel_shot("cup-keep-awake-and-vlc")
+    # Locked by hand, Keep Awake holds the displays on as it always has…
+    lock_by_hand("Keep Awake on, VLC playing")
+    stays_lit_locked("Keep Awake on, VLC playing")
+    # …and off, VLC's hold alone doesn't: the displays' minute runs, and
+    # they turn off with VLC playing on behind the lock.
+    print(user("aizome-awake off"))
+    until("Keep Awake's hold gone", lambda: all(i["kind"] == "app" for i in inhibitors()))
+    goes_dark_locked("VLC playing, Keep Awake off again", lambda: playing("vlc"))
+    holds_again_unlocked("VLC playing", lambda: playing("vlc"))
+    until("VLC's cup again", lambda: awake()["cup"] == "apps")
 
     let_go = said("vlc", LET_GO)
     mpris("vlc", "call", "Pause")
     until("VLC paused", lambda: not playing("vlc"))
     until("VLC gave its cookie back", lambda: said("vlc", LET_GO) > let_go)
+    cup_goes("VLC paused")
     goes_idle("VLC paused")
     wake()
 
@@ -277,6 +431,12 @@ with subtest("Chromium playing a page's video holds idleness off, in a window an
     until("Chromium playing", page_playing)
     stays_awake("Chromium playing")
     assert page_playing(), "Chromium stopped playing"
+    # With the keys it holds both ways, its window's inhibitor and the
+    # bus under its program's path: one row, under its name.
+    chromium_holds = [i.get("window") for i in inhibitors() if i.get("app_id") == "chromium-browser"]
+    assert chromium_holds == [chromium["id"]], inhibitors()
+    assert said(CHROMIUM_NAME, HELD) > said(CHROMIUM_NAME, LET_GO), "Chromium with the keys didn't ask the bus as well"
+    cup_lists([("Chromium", "Video Wake Lock")], "cup-chromium")
     press("f")
     until("Chromium full screen", lambda: (w := window("chromium-browser")) and w["fullscreen"] and "fullscreen" in w["title"])
     until("Chromium playing full screen", page_playing)
@@ -361,3 +521,11 @@ with subtest("an app that asks the desktop portal reaches the same screen saver"
         "org.freedesktop.portal.Inhibit Inhibit 'sua{sv}' '' 8 1 reason s 'a film'"
     )
     until("the portal's hold", lambda: said("", HELD + ': "a film"') > 0)
+    # It gave no name, so its row is the portal's own, with the reason.
+    # The portal usually gives the hold back as its caller goes, and the
+    # row lingers only a moment after: said if it was seen, not required.
+    rows = within(lambda: [h for h in awake()["holders"] if h["detail"] == "a film"], 3)
+    if rows:
+        print(f"the portal's hold was listed as {rows[0]['name']!r}")
+    else:
+        print("the portal's hold had gone before its row was looked for")

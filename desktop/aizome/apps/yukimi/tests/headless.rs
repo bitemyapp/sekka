@@ -762,9 +762,12 @@ fn a_launch_proposes_and_changes_nothing_by_itself() {
         Launch { page: None, choose: vec![("calamares.loginScreen".into(), vec!["aizome".into()])], early: Some(true) }
     );
     assert_eq!(launch_from_args(&args(&["--page", "desktops"])).unwrap().page, Some(Page::Desktops));
-    for bad in [&["--choose"][..], &["--choose", "x"], &["--choose", "a b=c"], &["--choose", "a="], &["--page", "x"]] {
+    for bad in [&["--choose"][..], &["--choose", "x"], &["--choose", "a b=c"], &["--page", "x"]] {
         assert!(launch_from_args(&args(bad)).is_err(), "{bad:?}");
     }
+    // No value: the empty one (no one logs in by themselves).
+    let no_one = launch_from_args(&args(&["--choose", "calamares.autoLogin="])).unwrap();
+    assert_eq!(no_one.choose, [("calamares.autoLogin".to_owned(), vec![String::new()])]);
     assert!(launch_from_args(&args(&["--choose", "a=b", "--choose", "a=c"])).is_err(), "once each");
 
     // A running Yukimi handed a launch shows what it proposes.
@@ -812,6 +815,57 @@ fn settei_proposes_the_boot_splash_and_apply_writes_it() {
     h.send(Msg::Launched(args(&["--choose", "calamares.bootSplash.enable=yes"])));
     let notes: Vec<&str> = h.program().notes.iter().map(|(_, n)| n.as_str()).collect();
     assert!(notes.iter().any(|n| n.contains("\"yes\" isn't one of the choices")), "{notes:?}");
+}
+
+#[test]
+fn an_automatic_login_the_configuration_already_has_does_not_hold_back_other_choices() {
+    use yukimi_system::people::Person;
+    use yukimi_system::setup::{Choice, ChoiceValue};
+    // The system's own configuration starts the computer straight into
+    // "kiosk": an account outside the people Yukimi offers (a system
+    // account, say), which the choice reports as it is.
+    let mut model = aizome_yukimi::fixture::model();
+    model.setup.facts.choices.push(Choice {
+        setting: "calamares.autoLogin".into(),
+        title: "Log in automatically".into(),
+        many: false,
+        boolean: false,
+        value: ChoiceValue::One("kiosk".into()),
+        options: Vec::new(),
+        within: None,
+        people: true,
+    });
+    model.setup.facts.offer_people(&[Person { name: "adama".into(), full_name: Some("William Adama".into()) }]);
+    model.configured.choices.insert("calamares.autoLogin".into(), vec!["kiosk".into()]);
+    let ran = Arc::new(Mutex::new(Vec::new()));
+    let seen = ran.clone();
+    let runner = Runner::Mock(Arc::new(move |op: &Operation| {
+        seen.lock().unwrap().push(op.clone());
+        vec![script(WORKS)]
+    }));
+    let app = Yukimi::with(Source::Sample(Arc::new(model)), runner, Clock::Fixed(aizome_yukimi::fixture::NOW, 21));
+    let mut h = Harness::new(app);
+    let w = h.window();
+    h.send(Msg::Show(Page::Desktops));
+    // It shows as the configuration has it, and is no problem to leave.
+    assert!(h.program().choice_problems().is_empty(), "{:?}", h.program().choice_problems());
+    assert!(has(&h, w, "kiosk"), "{:?}", h.texts(w));
+    // Someone Yukimi offers can take its place, and it can be put back,
+    // which is no change.
+    h.send(pick("calamares.autoLogin", "adama", true));
+    assert_eq!(h.program().chosen("calamares.autoLogin"), ["adama"]);
+    h.send(pick("calamares.autoLogin", "kiosk", true));
+    assert!(h.program().choice_changes().is_empty(), "{:?}", h.program().choice_changes());
+    // Another choice is applied alone: what isn't changed isn't written.
+    h.send(pick("calamares.bootSplash.enable", "true", true));
+    h.send(Msg::ApplyChoices);
+    assert!(has(&h, w, "Apply these changes?"), "{:?}", h.texts(w));
+    assert!(click_last(&mut h, w, "Apply"));
+    let expected = Operation::Choose {
+        choices: vec![("calamares.bootSplash.enable".into(), vec!["true".into()])],
+        what: "the boot splash".into(),
+    };
+    assert_eq!(ran.lock().unwrap().as_slice(), std::slice::from_ref(&expected));
 }
 
 #[test]

@@ -60,6 +60,13 @@ let
     // lib.optionalAttrs (cfg.wallpapers.day != null) { wallpaper_day = "${cfg.wallpapers.day}"; }
   );
   autoLogin = config.services.displayManager.autoLogin;
+  automatic = autoLogin.enable && autoLogin.user != null;
+  # Whether greetd has an initial session, however it was given: from
+  # services.displayManager.autoLogin below, or set as greetd's own.
+  initial = config.services.greetd.settings ? initial_session;
+  # Where greetd notes that it has started once since boot: what its
+  # settings say, or its default.
+  runFile = config.services.greetd.settings.general.runfile or "/run/greetd.run";
 in
 {
   options.programs.aizome.greeter = {
@@ -121,12 +128,40 @@ in
       };
       # Logging in by itself at boot: straight into the default session,
       # without the greeter (greetd's initial session).
-      settings.initial_session = lib.mkIf (autoLogin.enable && autoLogin.user != null) {
+      settings.initial_session = lib.mkIf automatic {
         command = "/run/current-system/sw/bin/aizome-greeter --session ${
           if g.defaultSession != null then g.defaultSession else "aizome"
         }";
         inherit (autoLogin) user;
       };
+      # NixOS stops restarting greetd once there is an initial session, from
+      # when a restart logged the person in again. greetd starts it only on
+      # its first run since boot (the run file), so with it greetd is
+      # restarted as it is without: after the greeter dies, the login screen
+      # comes back, and nobody is logged in again.
+      restart = lib.mkIf initial true;
+    };
+    # The login screen always comes up. When the initial session can't
+    # start (the account is gone, expired, or has to set a password first),
+    # greetd exits with status 1 before it has noted its first run, and
+    # would try the same session at every start. So whenever greetd stops,
+    # its first run is over, and after that exit it is started again: the
+    # second start shows the login screen. Only with an initial session
+    # (whichever way it was set), so every other system's unit stays as it
+    # was.
+    systemd.services.greetd = lib.mkIf initial {
+      serviceConfig = {
+        RestartForceExitStatus = 1;
+        ExecStopPost = "${pkgs.coreutils}/bin/touch ${runFile}";
+      };
+      # A greeter that can't start exits, and greetd with it, to be started
+      # again: without end, taking the console back each time, when each try
+      # takes longer than systemd's usual limit counts (five starts in ten
+      # seconds). The greeter waits up to 20 s for its compositor, so five
+      # starts in three minutes stop that too: the unit fails, and a text
+      # console stays where it was switched to.
+      startLimitIntervalSec = 180;
+      startLimitBurst = 5;
     };
     services.xserver.displayManager.startx.enable = lib.mkIf g.x11 true;
     # Who logged in last and each person's session (nothing secret).

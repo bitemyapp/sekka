@@ -2,25 +2,152 @@ use crate::db::{IngestOutcome, Store};
 use crate::events;
 use anyhow::{Context, Result, ensure};
 use axum::Router;
-use axum::body::Bytes;
-use axum::extract::{DefaultBodyLimit, State};
+use axum::body::Body;
+use axum::extract::{Request, State};
+use axum::http::header::CONTENT_LENGTH;
 use axum::http::{HeaderMap, StatusCode};
 use axum::routing::{get, post};
 use hmac::{Hmac, Mac};
+use http_body_util::BodyExt;
+use hyper::body::Incoming;
+use hyper::server::conn::http1;
+use hyper::service::{Service, service_fn};
+use hyper_util::rt::TokioIo;
+use hyper_util::service::TowerToHyperService;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
+use std::collections::VecDeque;
 use std::net::{SocketAddr, TcpListener};
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
-use tower::limit::ConcurrencyLimitLayer;
-use tower_http::timeout::TimeoutLayer;
+use tokio::net::TcpStream;
+use tokio::sync::{OwnedSemaphorePermit, Semaphore, oneshot};
+use tokio::task::AbortHandle;
+use tokio::time::{Instant, timeout_at};
 
 const MAX_BODY: usize = 25 * 1024 * 1024;
+// A body is the only proof of the secret, so it has to be read for anyone who
+// sends one. What the receiver holds for senders it has not verified is still
+// bounded: for each connection a request head and this much body, and for all
+// bodies needing more one shared allowance. A head is checked against MAX_HEAD
+// between reads, so one that arrives in large reads can reach just under twice
+// that before it is refused. Together that is at most
+// MAX_CONNECTIONS * (2 * MAX_HEAD + UNSHARED_BODY) + SHARED_BODIES, or 98 MiB.
+const MAX_HEAD: usize = 64 * 1024;
+const UNSHARED_BODY: usize = 256 * 1024;
+const SHARED_BODIES: usize = 2 * MAX_BODY;
+// The unit allows 1,024 file descriptors (LimitNOFILE in
+// nix/sekka-discord-service.nix); most are left to everything else.
+const MAX_CONNECTIONS: usize = 128;
+const _: () = assert!(MAX_CONNECTIONS <= 1024 / 4);
+const MAX_IN_FLIGHT: usize = 2;
+const HEAD_TIMEOUT: Duration = Duration::from_secs(5);
+const BODY_TIMEOUT: Duration = Duration::from_secs(10);
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
+const CONNECTION_TIMEOUT: Duration = Duration::from_secs(30);
+const REJECTION_INTERVAL: Duration = Duration::from_secs(60);
 
 #[derive(Clone)]
 struct Receiver {
     secret: Arc<Vec<u8>>,
     store: Arc<Mutex<Store>>,
+    in_flight: Arc<Semaphore>,
+    shared_bodies: Arc<Semaphore>,
+    rejections: Arc<AtomicU64>,
+}
+
+impl Receiver {
+    fn new(secret: Vec<u8>, store: Arc<Mutex<Store>>) -> Self {
+        Self {
+            secret: Arc::new(secret),
+            store,
+            in_flight: Arc::new(Semaphore::new(MAX_IN_FLIGHT)),
+            shared_bodies: Arc::new(Semaphore::new(SHARED_BODIES)),
+            rejections: Arc::new(AtomicU64::new(0)),
+        }
+    }
+
+    fn count_rejection(&self) {
+        let mut count = self.rejections.load(Ordering::Relaxed);
+        while let Err(current) = self.rejections.compare_exchange_weak(
+            count,
+            count.saturating_add(1),
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+        ) {
+            count = current;
+        }
+    }
+
+    fn reject(&self, status: StatusCode, message: &'static str) -> (StatusCode, &'static str) {
+        self.count_rejection();
+        (status, message)
+    }
+}
+
+#[derive(Clone, Copy)]
+struct Limits {
+    connections: usize,
+    /// From accepting a connection to its complete request head.
+    head: Duration,
+    /// From accepting a connection to the end of its one request.
+    connection: Duration,
+}
+
+const LIMITS: Limits = Limits {
+    connections: MAX_CONNECTIONS,
+    head: HEAD_TIMEOUT,
+    connection: CONNECTION_TIMEOUT,
+};
+
+/// The connections the listener holds. Those already here never keep a new one
+/// out: when every place is taken, the connection that has gone longest without
+/// showing the secret is closed, without an answer. Idle and stalled senders
+/// therefore cannot hold the places against a signed delivery, however many of
+/// them there are. A delivery shows the secret only with its last byte, though:
+/// one that is still arriving when as many further connections as there are
+/// places have come in behind it is closed like any other, and of more
+/// deliveries at once than there are places the excess are closed.
+struct Gate {
+    places: Arc<Semaphore>,
+    unproven: Mutex<VecDeque<(u64, AbortHandle)>>,
+}
+
+impl Gate {
+    fn new(connections: usize) -> Arc<Self> {
+        Arc::new(Self {
+            places: Arc::new(Semaphore::new(connections)),
+            unproven: Mutex::new(VecDeque::new()),
+        })
+    }
+
+    fn unproven(&self) -> MutexGuard<'_, VecDeque<(u64, AbortHandle)>> {
+        self.unproven
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+}
+
+/// One connection's place, given up when the connection ends, however it ends.
+struct Place {
+    id: u64,
+    gate: Arc<Gate>,
+    head: AtomicBool,
+    _place: OwnedSemaphorePermit,
+}
+
+impl Place {
+    /// Its sender has shown the secret: it no longer gives way to newcomers.
+    fn proven(&self) {
+        self.gate.unproven().retain(|(id, _)| *id != self.id);
+    }
+}
+
+impl Drop for Place {
+    fn drop(&mut self) {
+        self.proven();
+    }
 }
 
 pub fn spawn(address: SocketAddr, secret: Vec<u8>, store: Arc<Mutex<Store>>) -> Result<()> {
@@ -39,10 +166,7 @@ pub fn spawn(address: SocketAddr, secret: Vec<u8>, store: Arc<Mutex<Store>>) -> 
         "Webhook listener bound at http://{}/github/webhook",
         listener.local_addr()?
     );
-    let receiver = Receiver {
-        secret: Arc::new(secret),
-        store,
-    };
+    let receiver = Receiver::new(secret, store);
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
         .enable_all()
@@ -52,17 +176,18 @@ pub fn spawn(address: SocketAddr, secret: Vec<u8>, store: Arc<Mutex<Store>>) -> 
         .name("github-webhooks".into())
         .spawn(move || {
             let result: Result<()> = runtime.block_on(async move {
-                let router = Router::new()
-                    .route("/healthz", get(|| async { "ok\n" }))
-                    .route("/github/webhook", post(receive))
-                    .layer(DefaultBodyLimit::max(MAX_BODY))
-                    .layer(ConcurrencyLimitLayer::new(32))
-                    .layer(TimeoutLayer::with_status_code(
-                        StatusCode::REQUEST_TIMEOUT,
-                        Duration::from_secs(20),
-                    ))
-                    .with_state(receiver);
-                axum::serve(tokio::net::TcpListener::from_std(listener)?, router).await?;
+                let rejections = Arc::clone(&receiver.rejections);
+                tokio::spawn(async move {
+                    loop {
+                        tokio::time::sleep(REJECTION_INTERVAL).await;
+                        let count = rejections.swap(0, Ordering::Relaxed);
+                        if count != 0 {
+                            eprintln!("SECURITY webhook_rejections count={count}");
+                        }
+                    }
+                });
+                let listener = tokio::net::TcpListener::from_std(listener)?;
+                serve(listener, receiver, LIMITS, Gate::new(LIMITS.connections)).await;
                 Ok(())
             });
             eprintln!("Webhook listener exited: {result:?}");
@@ -72,41 +197,205 @@ pub fn spawn(address: SocketAddr, secret: Vec<u8>, store: Arc<Mutex<Store>>) -> 
     Ok(())
 }
 
-fn verify_signature(secret: &[u8], signature: &str, body: &[u8]) -> bool {
-    let Some(encoded) = signature.strip_prefix("sha256=") else {
-        return false;
-    };
-    let mut expected = [0u8; 32];
-    if hex::decode_to_slice(encoded, &mut expected).is_err() {
-        return false;
+async fn serve(
+    listener: tokio::net::TcpListener,
+    receiver: Receiver,
+    limits: Limits,
+    gate: Arc<Gate>,
+) {
+    let router = Router::new()
+        .route("/healthz", get(|| async { "ok\n" }))
+        .route("/github/webhook", post(receive))
+        .with_state(receiver.clone());
+    let service = TowerToHyperService::new(router);
+    let mut id = 0;
+    loop {
+        let Ok((stream, _)) = listener.accept().await else {
+            // A connection that was gone before it was accepted, or no
+            // descriptor to accept it with: neither ends the listener.
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            continue;
+        };
+        let place = match Arc::clone(&gate.places).try_acquire_owned() {
+            Ok(place) => place,
+            Err(_) => {
+                let oldest = gate.unproven().pop_front();
+                if let Some((_, oldest)) = oldest {
+                    oldest.abort();
+                    receiver.count_rejection();
+                }
+                // Free as soon as the connection closed above is gone. When
+                // every connection is a verified delivery, each ends within
+                // its deadline.
+                let Ok(place) = Arc::clone(&gate.places).acquire_owned().await else {
+                    return;
+                };
+                place
+            }
+        };
+        id += 1;
+        let place = Arc::new(Place {
+            id,
+            gate: Arc::clone(&gate),
+            head: AtomicBool::new(false),
+            _place: place,
+        });
+        // A connection is handed its place only once it is listed, so it cannot
+        // leave the list before it is on it. Nothing is spawned or dropped
+        // under the list's lock: a runtime that is shutting down drops what it
+        // is asked to spawn there and then, and a place dropped by the thread
+        // that holds the lock would wait for that lock for ever.
+        let (listed, place_when_listed) = oneshot::channel();
+        let (service, receiver) = (service.clone(), receiver.clone());
+        let task = tokio::spawn(async move {
+            if let Ok(place) = place_when_listed.await {
+                connection(stream, service, place, receiver, limits).await;
+            }
+        });
+        gate.unproven().push_back((id, task.abort_handle()));
+        // A task that is already gone hands the place straight back, and
+        // dropping it here takes the connection off the list again.
+        let _ = listed.send(place);
     }
-    let Ok(mut mac) = Hmac::<Sha256>::new_from_slice(secret) else {
-        return false;
-    };
-    mac.update(body);
-    mac.verify_slice(&expected).is_ok()
 }
 
-async fn receive(
-    State(receiver): State<Receiver>,
-    headers: HeaderMap,
-    body: Bytes,
-) -> (StatusCode, &'static str) {
-    let signature = headers
-        .get("x-hub-signature-256")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("");
-    if !verify_signature(&receiver.secret, signature, &body) {
-        return (StatusCode::UNAUTHORIZED, "invalid signature\n");
+async fn connection(
+    stream: TcpStream,
+    service: TowerToHyperService<Router>,
+    place: Arc<Place>,
+    receiver: Receiver,
+    limits: Limits,
+) {
+    let accepted = Instant::now();
+    let requested = Arc::clone(&place);
+    let service = service_fn(move |mut request: hyper::Request<Incoming>| {
+        requested.head.store(true, Ordering::Release);
+        request.extensions_mut().insert(Arc::clone(&requested));
+        service.call(request)
+    });
+    // One request for each connection. A connection kept open between requests
+    // would have to be closed when idle, and a client that reuses it at that
+    // moment loses a delivery that cannot be sent again.
+    let mut served = std::pin::pin!(
+        http1::Builder::new()
+            .keep_alive(false)
+            .max_buf_size(MAX_HEAD)
+            .serve_connection(TokioIo::new(stream), service)
+    );
+    if timeout_at(accepted + limits.head, &mut served)
+        .await
+        .is_ok()
+    {
+        return;
     }
+    if !place.head.load(Ordering::Acquire) {
+        receiver.count_rejection();
+        return;
+    }
+    let _ = timeout_at(accepted + limits.connection, served).await;
+}
+
+fn signature_bytes(signature: &str) -> Option<[u8; 32]> {
+    let encoded = signature.strip_prefix("sha256=")?;
+    let mut expected = [0u8; 32];
+    hex::decode_to_slice(encoded, &mut expected).ok()?;
+    Some(expected)
+}
+
+fn header_signature(headers: &HeaderMap) -> Option<[u8; 32]> {
+    let mut signatures = headers.get_all("x-hub-signature-256").iter();
+    let expected = signature_bytes(signatures.next()?.to_str().ok()?)?;
+    if signatures.next().is_some() {
+        return None;
+    }
+    Some(expected)
+}
+
+/// A body the receiver holds, with what it took of the shared allowance.
+struct Held {
+    bytes: Vec<u8>,
+    shared: Option<OwnedSemaphorePermit>,
+}
+
+/// Reads a body within the bounds above and returns it only if its exact bytes
+/// carry the signature. Reading waits for nobody and keeps nobody waiting: a
+/// sender that stalls holds only what it has sent, until the deadline.
+async fn read_body(
+    receiver: &Receiver,
+    mut body: Body,
+    signature: &[u8; 32],
+    deadline: Instant,
+) -> Result<Held, (StatusCode, &'static str)> {
+    let Ok(mut mac) = Hmac::<Sha256>::new_from_slice(&receiver.secret) else {
+        return Err((StatusCode::UNAUTHORIZED, "invalid signature\n"));
+    };
+    let mut held = Held {
+        bytes: Vec::new(),
+        shared: None,
+    };
+    loop {
+        let frame = match timeout_at(deadline, body.frame()).await {
+            Err(_) => return Err((StatusCode::REQUEST_TIMEOUT, "body read timed out\n")),
+            Ok(None) => break,
+            Ok(Some(Err(_))) => return Err((StatusCode::BAD_REQUEST, "cannot read body\n")),
+            Ok(Some(Ok(frame))) => frame,
+        };
+        let Ok(data) = frame.into_data() else {
+            continue;
+        };
+        let before = held.bytes.len();
+        let after = before + data.len();
+        if after > MAX_BODY {
+            return Err((StatusCode::PAYLOAD_TOO_LARGE, "payload too large\n"));
+        }
+        let shared = after.saturating_sub(UNSHARED_BODY) - before.saturating_sub(UNSHARED_BODY);
+        if shared > 0 {
+            let more = u32::try_from(shared).ok().and_then(|more| {
+                Arc::clone(&receiver.shared_bodies)
+                    .try_acquire_many_owned(more)
+                    .ok()
+            });
+            let Some(more) = more else {
+                return Err((StatusCode::SERVICE_UNAVAILABLE, "receiver busy\n"));
+            };
+            match &mut held.shared {
+                Some(shared) => shared.merge(more),
+                None => held.shared = Some(more),
+            }
+        }
+        mac.update(&data);
+        held.bytes.extend_from_slice(&data);
+    }
+    if mac.verify_slice(signature).is_err() {
+        return Err((StatusCode::UNAUTHORIZED, "invalid signature\n"));
+    }
+    Ok(held)
+}
+
+async fn receive(State(receiver): State<Receiver>, request: Request) -> (StatusCode, &'static str) {
+    receive_before(receiver, request, Instant::now() + REQUEST_TIMEOUT).await
+}
+
+async fn receive_before(
+    receiver: Receiver,
+    request: Request,
+    deadline: Instant,
+) -> (StatusCode, &'static str) {
+    let (parts, body) = request.into_parts();
+    let headers = &parts.headers;
+    // Never poll an unauthenticated body's stream merely to discover that its
+    // signature header is absent or malformed.
+    let Some(signature) = header_signature(headers) else {
+        return receiver.reject(StatusCode::UNAUTHORIZED, "invalid signature\n");
+    };
     let Some(delivery) = headers
         .get("x-github-delivery")
         .and_then(|v| v.to_str().ok())
     else {
-        return (StatusCode::BAD_REQUEST, "missing delivery ID\n");
+        return receiver.reject(StatusCode::BAD_REQUEST, "missing delivery ID\n");
     };
     let Some(kind) = headers.get("x-github-event").and_then(|v| v.to_str().ok()) else {
-        return (StatusCode::BAD_REQUEST, "missing event type\n");
+        return receiver.reject(StatusCode::BAD_REQUEST, "missing event type\n");
     };
     if delivery.is_empty()
         || delivery.len() > 128
@@ -117,22 +406,59 @@ async fn receive(
         || kind.len() > 64
         || !kind.bytes().all(|b| b.is_ascii_lowercase() || b == b'_')
     {
-        return (StatusCode::BAD_REQUEST, "invalid event headers\n");
+        return receiver.reject(StatusCode::BAD_REQUEST, "invalid event headers\n");
     }
+    let declared = headers
+        .get(CONTENT_LENGTH)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.parse::<u64>().ok());
+    if declared.is_some_and(|length| length > MAX_BODY as u64) {
+        return receiver.reject(StatusCode::PAYLOAD_TOO_LARGE, "payload too large\n");
+    }
+    let body_deadline = (Instant::now() + BODY_TIMEOUT).min(deadline);
+    let held = match read_body(&receiver, body, &signature, body_deadline).await {
+        Ok(held) => held,
+        Err((status, message)) => return receiver.reject(status, message),
+    };
+    if let Some(place) = parts.extensions.get::<Arc<Place>>() {
+        place.proven();
+    }
+    // Only a verified delivery waits for one of the workers that parse and
+    // commit. Its body stays counted against the allowances until that is done.
+    let Ok(Ok(permit)) =
+        timeout_at(deadline, Arc::clone(&receiver.in_flight).acquire_owned()).await
+    else {
+        return receiver.reject(StatusCode::SERVICE_UNAVAILABLE, "receiver busy\n");
+    };
     let kind = kind.to_owned();
     let delivery = delivery.to_owned();
-    // SQLite fsync and payload normalization never block the async listener.
-    match tokio::task::spawn_blocking(move || ingest(receiver, &kind, &delivery, &body)).await {
-        Ok(result) => result,
-        Err(error) => {
-            eprintln!("Webhook ingestion worker failed: {error}");
-            (StatusCode::SERVICE_UNAVAILABLE, "storage unavailable\n")
+    let worker_receiver = receiver.clone();
+    // Keep the permit INSIDE the blocking job: disconnects and deadline expiry
+    // cannot cancel spawn_blocking or release capacity while it still owns a
+    // payload or waits for SQLite. At most two jobs can exist. The exact bytes
+    // were authenticated as they were read, before any of them is parsed.
+    let worker = tokio::task::spawn_blocking(move || {
+        // Both whole: the body's share of the allowance stays with its bytes.
+        let (_permit, held) = (permit, held);
+        let result = ingest(&worker_receiver, &kind, &delivery, &held.bytes);
+        if result.0 != StatusCode::ACCEPTED {
+            worker_receiver.reject(result.0, result.1)
+        } else {
+            result
         }
+    });
+    match timeout_at(deadline, worker).await {
+        Ok(Ok(result)) => result,
+        Ok(Err(error)) => {
+            eprintln!("Webhook ingestion worker failed: {error}");
+            receiver.reject(StatusCode::SERVICE_UNAVAILABLE, "storage unavailable\n")
+        }
+        Err(_) => receiver.reject(StatusCode::REQUEST_TIMEOUT, "ingestion timed out\n"),
     }
 }
 
 fn ingest(
-    receiver: Receiver,
+    receiver: &Receiver,
     kind: &str,
     delivery: &str,
     body: &[u8],
@@ -153,10 +479,7 @@ fn ingest(
     }
     let notification = match events::normalize_webhook(kind, &payload) {
         Ok(value) => value,
-        Err(error) => {
-            eprintln!("Rejected malformed {kind} delivery {delivery}: {error:#}");
-            return (StatusCode::BAD_REQUEST, "unsupported payload shape\n");
-        }
+        Err(_) => return (StatusCode::BAD_REQUEST, "unsupported payload shape\n"),
     };
     let fingerprint = hex::encode(Sha256::digest(body));
     let result = receiver
@@ -193,26 +516,1129 @@ fn ingest(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::body::Bytes;
+    use http_body::{Body as HttpBody, Frame};
+    use std::future::{Future, poll_fn};
+    use std::io::{Read, Write};
+    use std::path::PathBuf;
+    use std::pin::Pin;
+    use std::task::{Context as TaskContext, Poll};
+
+    const SECRET: &[u8] = b"a webhook secret kept outside the repository";
+    const PAYLOAD: &[u8] =
+        br#"{"repository":{"id":1412948279,"full_name":"bitemyapp/sekka","private":false}}"#;
+
+    struct Fixture {
+        receiver: Receiver,
+        directory: PathBuf,
+    }
+
+    impl Fixture {
+        fn new() -> Self {
+            static NEXT: AtomicU64 = AtomicU64::new(0);
+            let directory = std::env::temp_dir().join(format!(
+                "sekka-discord-webhook-{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            ));
+            let store = Store::open(&directory, "channel", 100).unwrap();
+            Self {
+                receiver: Receiver::new(SECRET.to_vec(), Arc::new(Mutex::new(store))),
+                directory,
+            }
+        }
+    }
+
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            std::fs::remove_dir_all(&self.directory).unwrap();
+        }
+    }
+
+    fn runtime() -> tokio::runtime::Runtime {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+    }
+
+    fn sign(body: &[u8]) -> String {
+        let mut mac = Hmac::<Sha256>::new_from_slice(SECRET).unwrap();
+        mac.update(body);
+        format!("sha256={}", hex::encode(mac.finalize().into_bytes()))
+    }
+
+    fn request(body: Body, signature: Option<&str>) -> Request {
+        let mut request = Request::builder()
+            .method("POST")
+            .uri("/github/webhook")
+            .header("x-github-delivery", "test-delivery")
+            .header("x-github-event", "ping");
+        if let Some(signature) = signature {
+            request = request.header("x-hub-signature-256", signature);
+        }
+        request.body(body).unwrap()
+    }
+
+    #[derive(Default)]
+    struct BodyProbe {
+        polls: AtomicU64,
+        drops: AtomicU64,
+    }
+
+    struct PendingBody(Arc<BodyProbe>);
+
+    impl HttpBody for PendingBody {
+        type Data = Bytes;
+        type Error = std::convert::Infallible;
+
+        fn poll_frame(
+            self: Pin<&mut Self>,
+            _: &mut TaskContext<'_>,
+        ) -> Poll<Option<Result<Frame<Bytes>, Self::Error>>> {
+            self.0.polls.fetch_add(1, Ordering::Relaxed);
+            Poll::Pending
+        }
+    }
+
+    impl Drop for PendingBody {
+        fn drop(&mut self) {
+            self.0.drops.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    /// Sends its first bytes and then nothing more.
+    struct StalledBody {
+        sent: Option<Bytes>,
+        probe: Arc<BodyProbe>,
+    }
+
+    impl HttpBody for StalledBody {
+        type Data = Bytes;
+        type Error = std::convert::Infallible;
+
+        fn poll_frame(
+            self: Pin<&mut Self>,
+            _: &mut TaskContext<'_>,
+        ) -> Poll<Option<Result<Frame<Bytes>, Self::Error>>> {
+            let body = self.get_mut();
+            body.probe.polls.fetch_add(1, Ordering::Relaxed);
+            match body.sent.take() {
+                Some(sent) => Poll::Ready(Some(Ok(Frame::data(sent)))),
+                None => Poll::Pending,
+            }
+        }
+    }
+
+    impl Drop for StalledBody {
+        fn drop(&mut self) {
+            self.probe.drops.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    /// Arrives a frame at a time, as a body read from a connection does, and
+    /// then either ends or sends nothing more.
+    struct Frames {
+        frames: VecDeque<Bytes>,
+        ends: bool,
+    }
+
+    impl HttpBody for Frames {
+        type Data = Bytes;
+        type Error = std::convert::Infallible;
+
+        fn poll_frame(
+            self: Pin<&mut Self>,
+            _: &mut TaskContext<'_>,
+        ) -> Poll<Option<Result<Frame<Bytes>, Self::Error>>> {
+            let body = self.get_mut();
+            match body.frames.pop_front() {
+                Some(frame) => Poll::Ready(Some(Ok(Frame::data(frame)))),
+                None if body.ends => Poll::Ready(None),
+                None => Poll::Pending,
+            }
+        }
+    }
+
+    fn frames(body: &[u8], size: usize, ends: bool) -> Body {
+        Body::new(Frames {
+            frames: body.chunks(size).map(Bytes::copy_from_slice).collect(),
+            ends,
+        })
+    }
 
     #[test]
     fn signature_authenticates_exact_bytes_and_secret() {
-        let secret = b"a webhook secret kept outside the repository";
+        let fixture = Fixture::new();
         let body = br#"{"action":"opened"}"#;
-        let mut mac = Hmac::<Sha256>::new_from_slice(secret).unwrap();
-        mac.update(body);
-        let signature = format!("sha256={}", hex::encode(mac.finalize().into_bytes()));
-        assert!(verify_signature(secret, &signature, body));
-        assert!(!verify_signature(
-            secret,
-            &signature,
-            br#"{"action":"closed"}"#
+        let signature = signature_bytes(&sign(body)).unwrap();
+        let read = |receiver: &Receiver, sent: &'static [u8]| {
+            let deadline = Instant::now() + BODY_TIMEOUT;
+            runtime()
+                .block_on(read_body(receiver, Body::from(sent), &signature, deadline))
+                .map(|held| held.bytes)
+                .map_err(|refused| refused.0)
+        };
+        assert_eq!(read(&fixture.receiver, body), Ok(body.to_vec()));
+        assert_eq!(
+            read(&fixture.receiver, br#"{"action":"closed"}"#),
+            Err(StatusCode::UNAUTHORIZED)
+        );
+        let mut other = fixture.receiver.clone();
+        other.secret = Arc::new(b"different secret".to_vec());
+        assert_eq!(read(&other, body), Err(StatusCode::UNAUTHORIZED));
+        assert!(signature_bytes("sha256=00").is_none());
+        assert!(signature_bytes("sha1=0000000000000000000000000000000000000000").is_none());
+    }
+
+    #[test]
+    fn signature_covers_every_frame_of_a_body() {
+        let fixture = Fixture::new();
+        let read = |sent: &[u8], size: usize, signed: &[u8]| {
+            let signature = signature_bytes(&sign(signed)).unwrap();
+            let deadline = Instant::now() + BODY_TIMEOUT;
+            runtime()
+                .block_on(read_body(
+                    &fixture.receiver,
+                    frames(sent, size, true),
+                    &signature,
+                    deadline,
+                ))
+                .map(|held| held.bytes)
+                .map_err(|refused| refused.0)
+        };
+        // A delivery's own bytes are taken however they are cut into frames.
+        for size in [1, 7, PAYLOAD.len() - 1, PAYLOAD.len()] {
+            assert_eq!(read(PAYLOAD, size, PAYLOAD), Ok(PAYLOAD.to_vec()), "{size}");
+        }
+        // A signature for the first frame does not vouch for the frames after
+        // it, and a change in the last frame alone is a change to the body.
+        assert_eq!(
+            read(PAYLOAD, 7, &PAYLOAD[..7]),
+            Err(StatusCode::UNAUTHORIZED)
+        );
+        let mut altered = PAYLOAD.to_vec();
+        *altered.last_mut().unwrap() = b' ';
+        assert_eq!(read(&altered, 7, PAYLOAD), Err(StatusCode::UNAUTHORIZED));
+    }
+
+    #[test]
+    fn missing_malformed_and_duplicate_signatures_never_poll_body() {
+        let fixture = Fixture::new();
+        runtime().block_on(async {
+            for signature in [None, Some("sha256=00"), Some("sha256=not-hex")] {
+                let probe = Arc::new(BodyProbe::default());
+                let response = receive(
+                    State(fixture.receiver.clone()),
+                    request(Body::new(PendingBody(probe.clone())), signature),
+                )
+                .await;
+                assert_eq!(response.0, StatusCode::UNAUTHORIZED);
+                assert_eq!(probe.polls.load(Ordering::Relaxed), 0);
+                assert_eq!(probe.drops.load(Ordering::Relaxed), 1);
+            }
+            let probe = Arc::new(BodyProbe::default());
+            let signature = sign(b"");
+            let mut request = request(Body::new(PendingBody(probe.clone())), Some(&signature));
+            request
+                .headers_mut()
+                .append("x-hub-signature-256", signature.parse().unwrap());
+            assert_eq!(
+                receive(State(fixture.receiver.clone()), request).await.0,
+                StatusCode::UNAUTHORIZED
+            );
+            assert_eq!(probe.polls.load(Ordering::Relaxed), 0);
+            assert_eq!(fixture.receiver.rejections.swap(0, Ordering::Relaxed), 4);
+            assert_eq!(fixture.receiver.rejections.swap(0, Ordering::Relaxed), 0);
+        });
+    }
+
+    #[test]
+    fn missing_and_invalid_delivery_and_event_headers_never_poll_body() {
+        let fixture = Fixture::new();
+        let signature = sign(PAYLOAD);
+        let long_delivery = "d".repeat(129);
+        let long_event = "e".repeat(65);
+        let cases = [
+            (None, Some("ping")),
+            (Some("test-delivery"), None),
+            (Some(""), Some("ping")),
+            (Some("two words"), Some("ping")),
+            (Some("../delivery"), Some("ping")),
+            (Some(long_delivery.as_str()), Some("ping")),
+            (Some("test-delivery"), Some("")),
+            (Some("test-delivery"), Some("Push")),
+            (Some("test-delivery"), Some(long_event.as_str())),
+        ];
+        runtime().block_on(async {
+            for (delivery, event) in cases {
+                let probe = Arc::new(BodyProbe::default());
+                let mut request = request(Body::new(PendingBody(probe.clone())), Some(&signature));
+                for (name, value) in [("x-github-delivery", delivery), ("x-github-event", event)] {
+                    request.headers_mut().remove(name);
+                    if let Some(value) = value {
+                        request.headers_mut().insert(name, value.parse().unwrap());
+                    }
+                }
+                assert_eq!(
+                    receive(State(fixture.receiver.clone()), request).await.0,
+                    StatusCode::BAD_REQUEST,
+                    "{delivery:?} {event:?}"
+                );
+                assert_eq!(probe.polls.load(Ordering::Relaxed), 0);
+            }
+            assert_eq!(
+                fixture.receiver.rejections.swap(0, Ordering::Relaxed),
+                cases.len() as u64
+            );
+            // The longest identifiers the receiver takes still pass.
+            let mut accepted = request(Body::from(PAYLOAD), Some(&signature));
+            let longest = [
+                ("x-github-delivery", "d".repeat(128)),
+                ("x-github-event", "e".repeat(64)),
+            ];
+            for (name, value) in longest {
+                accepted.headers_mut().insert(name, value.parse().unwrap());
+            }
+            assert_eq!(
+                receive(State(fixture.receiver.clone()), accepted).await.0,
+                StatusCode::ACCEPTED
+            );
+        });
+    }
+
+    #[test]
+    fn bad_hmac_precedes_json_and_repository_validation() {
+        let fixture = Fixture::new();
+        runtime().block_on(async {
+            for body in [b"not JSON".as_slice(), b"{}".as_slice()] {
+                assert_eq!(
+                    receive(
+                        State(fixture.receiver.clone()),
+                        request(Body::from(body.to_vec()), Some(&sign(b"different bytes"))),
+                    )
+                    .await
+                    .0,
+                    StatusCode::UNAUTHORIZED
+                );
+            }
+            for (body, expected) in [
+                (b"not JSON".as_slice(), StatusCode::BAD_REQUEST),
+                (b"{}".as_slice(), StatusCode::FORBIDDEN),
+            ] {
+                assert_eq!(
+                    receive(
+                        State(fixture.receiver.clone()),
+                        request(Body::from(body.to_vec()), Some(&sign(body))),
+                    )
+                    .await
+                    .0,
+                    expected
+                );
+            }
+            assert_eq!(
+                fixture.receiver.store.lock().unwrap().status().unwrap()["receipts"],
+                0
+            );
+        });
+    }
+
+    #[test]
+    fn exact_maximum_signed_body_is_committed_but_extra_byte_is_rejected() {
+        let fixture = Fixture::new();
+        runtime().block_on(async {
+            let mut payload = PAYLOAD.to_vec();
+            payload.resize(MAX_BODY, b' ');
+            let signature = sign(&payload);
+            assert_eq!(
+                receive(
+                    State(fixture.receiver.clone()),
+                    request(Body::from(payload), Some(&signature)),
+                )
+                .await
+                .0,
+                StatusCode::ACCEPTED
+            );
+            assert_eq!(
+                fixture.receiver.store.lock().unwrap().status().unwrap()["receipts"],
+                1
+            );
+            assert_eq!(
+                receive(
+                    State(fixture.receiver.clone()),
+                    request(Body::from(vec![b' '; MAX_BODY + 1]), Some(&signature)),
+                )
+                .await
+                .0,
+                StatusCode::PAYLOAD_TOO_LARGE
+            );
+            assert_eq!(
+                fixture.receiver.in_flight.available_permits(),
+                MAX_IN_FLIGHT
+            );
+            assert_eq!(
+                fixture.receiver.shared_bodies.available_permits(),
+                SHARED_BODIES
+            );
+        });
+    }
+
+    #[test]
+    fn stalled_body_deadline_drops_stream_and_releases_capacity() {
+        let fixture = Fixture::new();
+        let probe = Arc::new(BodyProbe::default());
+        let response = runtime().block_on(async {
+            receive_before(
+                fixture.receiver.clone(),
+                request(Body::new(PendingBody(probe.clone())), Some(&sign(b""))),
+                Instant::now() + Duration::from_millis(10),
+            )
+            .await
+        });
+        assert_eq!(response.0, StatusCode::REQUEST_TIMEOUT);
+        assert!(probe.polls.load(Ordering::Relaxed) > 0);
+        assert_eq!(probe.drops.load(Ordering::Relaxed), 1);
+        assert_eq!(
+            fixture.receiver.in_flight.available_permits(),
+            MAX_IN_FLIGHT
+        );
+        assert_eq!(fixture.receiver.rejections.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn cancellation_while_reading_returns_what_the_body_held() {
+        let fixture = Fixture::new();
+        let probe = Arc::new(BodyProbe::default());
+        runtime().block_on(async {
+            let body = StalledBody {
+                sent: Some(Bytes::from(vec![b' '; UNSHARED_BODY + 4096])),
+                probe: probe.clone(),
+            };
+            let mut pending = Box::pin(receive(
+                State(fixture.receiver.clone()),
+                request(Body::new(body), Some(&sign(b""))),
+            ));
+            poll_fn(|cx| {
+                assert!(pending.as_mut().poll(cx).is_pending());
+                Poll::Ready(())
+            })
+            .await;
+            // Reading takes none of the workers, and of the shared allowance
+            // only what the body has sent beyond its unshared part.
+            assert_eq!(
+                fixture.receiver.in_flight.available_permits(),
+                MAX_IN_FLIGHT
+            );
+            assert_eq!(
+                fixture.receiver.shared_bodies.available_permits(),
+                SHARED_BODIES - 4096
+            );
+            drop(pending);
+            assert_eq!(
+                fixture.receiver.shared_bodies.available_permits(),
+                SHARED_BODIES
+            );
+            assert_eq!(probe.drops.load(Ordering::Relaxed), 1);
+        });
+    }
+
+    #[test]
+    fn body_in_many_frames_returns_all_it_took_of_the_shared_allowance() {
+        let fixture = Fixture::new();
+        let shared = &fixture.receiver.shared_bodies;
+        let beyond = 300 * 1024;
+        let mut payload = PAYLOAD.to_vec();
+        payload.resize(UNSHARED_BODY + beyond, b' ');
+        let signature = sign(&payload);
+        let delivery = |ends: bool| {
+            receive(
+                State(fixture.receiver.clone()),
+                request(frames(&payload, 64 * 1024, ends), Some(&signature)),
+            )
+        };
+        runtime().block_on(async {
+            // Stalled after its last frame, it holds what its frames brought
+            // beyond the unshared part, and gives all of it back when it goes.
+            let mut pending = Box::pin(delivery(false));
+            poll_fn(|cx| {
+                assert!(pending.as_mut().poll(cx).is_pending());
+                Poll::Ready(())
+            })
+            .await;
+            assert_eq!(shared.available_permits(), SHARED_BODIES - beyond);
+            drop(pending);
+            assert_eq!(shared.available_permits(), SHARED_BODIES);
+            // Taken whole, it is committed and gives back the same.
+            assert_eq!(delivery(true).await.0, StatusCode::ACCEPTED);
+            assert_eq!(shared.available_permits(), SHARED_BODIES);
+        });
+    }
+
+    #[test]
+    fn body_has_its_own_deadline_ahead_of_the_one_for_the_request() {
+        let fixture = Fixture::new();
+        // On a clock that only moves to the next deadline, so nothing waits.
+        let paused = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .start_paused(true)
+            .build()
+            .unwrap();
+        paused.block_on(async {
+            let probe = Arc::new(BodyProbe::default());
+            let started = Instant::now();
+            let response = receive(
+                State(fixture.receiver.clone()),
+                request(Body::new(PendingBody(probe.clone())), Some(&sign(b""))),
+            )
+            .await;
+            assert_eq!(
+                response,
+                (StatusCode::REQUEST_TIMEOUT, "body read timed out\n")
+            );
+            let waited = started.elapsed();
+            assert!(
+                waited >= BODY_TIMEOUT && waited < BODY_TIMEOUT + Duration::from_secs(1),
+                "{waited:?}"
+            );
+            assert!(BODY_TIMEOUT + Duration::from_secs(1) < REQUEST_TIMEOUT);
+        });
+    }
+
+    #[test]
+    fn timeout_and_cancellation_keep_blocking_ingest_capacity_reserved() {
+        let fixture = Fixture::new();
+        runtime().block_on(async {
+            for cancel in [false, true] {
+                let store = Arc::clone(&fixture.receiver.store);
+                let (locked_tx, locked_rx) = std::sync::mpsc::channel();
+                let (release_tx, release_rx) = std::sync::mpsc::channel();
+                let holder = std::thread::spawn(move || {
+                    // Deliberately hold the production database mutex while
+                    // the HTTP future is cancelled or reaches its deadline.
+                    let _guard = store.lock().unwrap();
+                    locked_tx.send(()).unwrap();
+                    release_rx.recv().unwrap();
+                });
+                locked_rx.recv().unwrap();
+                let mut pending = Box::pin(receive_before(
+                    fixture.receiver.clone(),
+                    request(Body::from(PAYLOAD), Some(&sign(PAYLOAD))),
+                    Instant::now() + Duration::from_millis(100),
+                ));
+                if cancel {
+                    poll_fn(|cx| {
+                        assert!(pending.as_mut().poll(cx).is_pending());
+                        Poll::Ready(())
+                    })
+                    .await;
+                    drop(pending);
+                } else {
+                    assert_eq!(pending.await.0, StatusCode::REQUEST_TIMEOUT);
+                }
+                assert_eq!(
+                    fixture.receiver.in_flight.available_permits(),
+                    MAX_IN_FLIGHT - 1
+                );
+                release_tx.send(()).unwrap();
+                // Completion, not the HTTP deadline or disconnect, returns
+                // the permit and makes another blocking job admissible.
+                let permits = tokio::time::timeout(
+                    Duration::from_secs(5),
+                    fixture
+                        .receiver
+                        .in_flight
+                        .acquire_many(MAX_IN_FLIGHT as u32),
+                )
+                .await
+                .unwrap()
+                .unwrap();
+                drop(permits);
+                holder.join().unwrap();
+            }
+        });
+    }
+
+    #[test]
+    fn busy_workers_refuse_only_a_verified_delivery_and_only_at_its_deadline() {
+        let fixture = Fixture::new();
+        let permits = Arc::clone(&fixture.receiver.in_flight)
+            .try_acquire_many_owned(MAX_IN_FLIGHT as u32)
+            .unwrap();
+        runtime().block_on(async {
+            // An unverified body is read and refused without waiting for a worker.
+            assert_eq!(
+                receive(
+                    State(fixture.receiver.clone()),
+                    request(Body::from(PAYLOAD), Some(&sign(b"different bytes"))),
+                )
+                .await
+                .0,
+                StatusCode::UNAUTHORIZED
+            );
+            assert_eq!(
+                receive_before(
+                    fixture.receiver.clone(),
+                    request(Body::from(PAYLOAD), Some(&sign(PAYLOAD))),
+                    Instant::now() + Duration::from_millis(50),
+                )
+                .await,
+                (StatusCode::SERVICE_UNAVAILABLE, "receiver busy\n")
+            );
+            // A worker that frees up before the deadline takes the delivery.
+            let waiting = tokio::spawn(receive(
+                State(fixture.receiver.clone()),
+                request(Body::from(PAYLOAD), Some(&sign(PAYLOAD))),
+            ));
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            assert!(!waiting.is_finished());
+            drop(permits);
+            assert_eq!(waiting.await.unwrap().0, StatusCode::ACCEPTED);
+        });
+        assert_eq!(fixture.receiver.rejections.load(Ordering::Relaxed), 2);
+        assert_eq!(
+            fixture.receiver.in_flight.available_permits(),
+            MAX_IN_FLIGHT
+        );
+    }
+
+    #[test]
+    fn signed_delivery_is_taken_while_unverified_senders_withhold_their_bodies() {
+        let fixture = Fixture::new();
+        runtime().block_on(async {
+            let probe = Arc::new(BodyProbe::default());
+            let unverified = format!("sha256={}", "0".repeat(64));
+            let mut stalled: Vec<_> = (0..MAX_CONNECTIONS)
+                .map(|_| {
+                    Box::pin(receive(
+                        State(fixture.receiver.clone()),
+                        request(Body::new(PendingBody(probe.clone())), Some(&unverified)),
+                    ))
+                })
+                .collect();
+            poll_fn(|cx| {
+                for sender in &mut stalled {
+                    assert!(sender.as_mut().poll(cx).is_pending());
+                }
+                Poll::Ready(())
+            })
+            .await;
+            assert_eq!(probe.polls.load(Ordering::Relaxed), MAX_CONNECTIONS as u64);
+            for _ in 0..40 {
+                assert_eq!(
+                    receive(
+                        State(fixture.receiver.clone()),
+                        request(Body::from(PAYLOAD), Some(&sign(PAYLOAD))),
+                    )
+                    .await
+                    .0,
+                    StatusCode::ACCEPTED
+                );
+            }
+            assert_eq!(fixture.receiver.rejections.load(Ordering::Relaxed), 0);
+        });
+    }
+
+    #[test]
+    fn large_unverified_bodies_share_one_allowance_and_never_crowd_out_a_small_delivery() {
+        let fixture = Fixture::new();
+        let shared = &fixture.receiver.shared_bodies;
+        runtime().block_on(async {
+            let probe = Arc::new(BodyProbe::default());
+            let unverified = format!("sha256={}", "0".repeat(64));
+            let sender = |sent: usize| {
+                let body = StalledBody {
+                    sent: Some(Bytes::from(vec![b' '; sent])),
+                    probe: probe.clone(),
+                };
+                Box::pin(receive(
+                    State(fixture.receiver.clone()),
+                    request(Body::new(body), Some(&unverified)),
+                ))
+            };
+            // Up to its unshared part a body costs the others nothing.
+            let mut small = sender(UNSHARED_BODY);
+            // Two of the largest size and a third take all that is shared, then stall.
+            let rest = SHARED_BODIES - 2 * (MAX_BODY - UNSHARED_BODY);
+            let mut large = [
+                sender(MAX_BODY),
+                sender(MAX_BODY),
+                sender(UNSHARED_BODY + rest),
+            ];
+            poll_fn(|cx| {
+                assert!(small.as_mut().poll(cx).is_pending());
+                for sender in &mut large {
+                    assert!(sender.as_mut().poll(cx).is_pending());
+                }
+                Poll::Ready(())
+            })
+            .await;
+            assert_eq!(shared.available_permits(), 0);
+            // Another has nowhere to put its first shared byte and is refused at once,
+            assert_eq!(
+                sender(UNSHARED_BODY + 1).await,
+                (StatusCode::SERVICE_UNAVAILABLE, "receiver busy\n")
+            );
+            // while a delivery that fits its unshared part is taken as ever.
+            assert_eq!(
+                receive(
+                    State(fixture.receiver.clone()),
+                    request(Body::from(PAYLOAD), Some(&sign(PAYLOAD))),
+                )
+                .await
+                .0,
+                StatusCode::ACCEPTED
+            );
+            // What a sender held returns when it goes, by deadline or disconnect.
+            drop(large);
+            assert_eq!(shared.available_permits(), SHARED_BODIES);
+            drop(small);
+        });
+    }
+
+    #[test]
+    fn declared_oversize_is_refused_without_reading() {
+        let fixture = Fixture::new();
+        runtime().block_on(async {
+            for (declared, expected) in [
+                (MAX_BODY + 1, StatusCode::PAYLOAD_TOO_LARGE),
+                (MAX_BODY, StatusCode::REQUEST_TIMEOUT),
+            ] {
+                let probe = Arc::new(BodyProbe::default());
+                let mut request = request(Body::new(PendingBody(probe.clone())), Some(&sign(b"")));
+                request
+                    .headers_mut()
+                    .insert(CONTENT_LENGTH, declared.to_string().parse().unwrap());
+                let deadline = Instant::now() + Duration::from_millis(10);
+                assert_eq!(
+                    receive_before(fixture.receiver.clone(), request, deadline)
+                        .await
+                        .0,
+                    expected
+                );
+                assert_eq!(
+                    probe.polls.load(Ordering::Relaxed) == 0,
+                    declared > MAX_BODY
+                );
+            }
+        });
+    }
+
+    struct Listening {
+        address: SocketAddr,
+        gate: Arc<Gate>,
+        _runtime: tokio::runtime::Runtime,
+        fixture: Fixture,
+    }
+
+    /// The real listener on a port of its own, with the limits a test asks for.
+    fn listen(limits: Limits) -> Listening {
+        let fixture = Fixture::new();
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_all()
+            .build()
+            .unwrap();
+        let listener = runtime
+            .block_on(tokio::net::TcpListener::bind("127.0.0.1:0"))
+            .unwrap();
+        let address = listener.local_addr().unwrap();
+        let gate = Gate::new(limits.connections);
+        runtime.spawn(serve(
+            listener,
+            fixture.receiver.clone(),
+            limits,
+            Arc::clone(&gate),
         ));
-        assert!(!verify_signature(b"different secret", &signature, body));
-        assert!(!verify_signature(secret, "sha256=00", body));
-        assert!(!verify_signature(
-            secret,
-            "sha1=0000000000000000000000000000000000000000",
-            body
-        ));
+        Listening {
+            address,
+            gate,
+            _runtime: runtime,
+            fixture,
+        }
+    }
+
+    /// A connection on which nothing is waited for longer than a test may
+    /// take. If the listener stops accepting and its queue fills, connecting
+    /// fails here after ten seconds, not after the kernel's two minutes of
+    /// retries.
+    fn connect(address: SocketAddr) -> std::net::TcpStream {
+        let stream =
+            std::net::TcpStream::connect_timeout(&address, Duration::from_secs(10)).unwrap();
+        stream
+            .set_read_timeout(Some(Duration::from_secs(30)))
+            .unwrap();
+        stream
+    }
+
+    fn head(signature: &str, length: usize) -> String {
+        format!(
+            "POST /github/webhook HTTP/1.1\r\nhost: yuki\r\nx-hub-signature-256: {signature}\r\n\
+             x-github-delivery: test-delivery\r\nx-github-event: ping\r\ncontent-length: {length}\r\n\r\n"
+        )
+    }
+
+    /// The status line of the answer; nothing if the connection closed without one.
+    fn answer(stream: std::net::TcpStream) -> String {
+        let answered = answered(stream);
+        answered.lines().next().unwrap_or_default().to_owned()
+    }
+
+    /// All the listener sends before it closes the connection. It serves one
+    /// request on each, so the close follows the answer: a connection left
+    /// open after its answer fails here instead of waiting out a deadline.
+    fn answered(mut stream: std::net::TcpStream) -> String {
+        let mut answered = Vec::new();
+        let mut read = [0; 4096];
+        loop {
+            match stream.read(&mut read) {
+                Ok(0) => break,
+                Ok(count) => {
+                    answered.extend_from_slice(&read[..count]);
+                    stream
+                        .set_read_timeout(Some(Duration::from_secs(5)))
+                        .unwrap();
+                }
+                Err(error) => {
+                    let waited = matches!(
+                        error.kind(),
+                        std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+                    );
+                    assert!(
+                        !waited || answered.is_empty(),
+                        "the connection stayed open after its answer"
+                    );
+                    break;
+                }
+            }
+        }
+        String::from_utf8_lossy(&answered).into_owned()
+    }
+
+    /// Waits for a state the listener is on its way to, and fails if it is not
+    /// reached in a time no test here needs.
+    fn eventually(what: &str, mut reached: impl FnMut() -> bool) {
+        let limit = std::time::Instant::now() + Duration::from_secs(10);
+        while !reached() {
+            assert!(
+                std::time::Instant::now() < limit,
+                "the listener did not get as far as: {what}"
+            );
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    }
+
+    fn deliver(address: SocketAddr) -> String {
+        let mut stream = connect(address);
+        stream
+            .write_all(head(&sign(PAYLOAD), PAYLOAD.len()).as_bytes())
+            .unwrap();
+        stream.write_all(PAYLOAD).unwrap();
+        answer(stream)
+    }
+
+    /// Whether the listener still holds this connection, which is set not to block.
+    fn is_open(mut stream: &std::net::TcpStream) -> bool {
+        let waiting = stream.read(&mut [0]);
+        waiting.is_err_and(|error| error.kind() == std::io::ErrorKind::WouldBlock)
+    }
+
+    /// How many of these connections, set not to block, the listener still holds.
+    fn still_open(streams: &[std::net::TcpStream]) -> usize {
+        streams.iter().filter(|stream| is_open(stream)).count()
+    }
+
+    fn receipts(listening: &Listening) -> u64 {
+        let mut store = listening.fixture.receiver.store.lock().unwrap();
+        store.status().unwrap()["receipts"].as_u64().unwrap()
+    }
+
+    #[test]
+    fn unfinished_request_head_is_closed_at_its_deadline() {
+        let listening = listen(Limits {
+            connections: 8,
+            head: Duration::from_millis(300),
+            connection: Duration::from_secs(30),
+        });
+        for sent in [
+            b"".as_slice(),
+            b"POST /github/webhook HTTP/1.1\r\nhost: yuki\r\n",
+        ] {
+            let started = std::time::Instant::now();
+            let mut stream = connect(listening.address);
+            stream.write_all(sent).unwrap();
+            assert_eq!(answer(stream), "");
+            let elapsed = started.elapsed();
+            assert!(
+                elapsed >= Duration::from_millis(250) && elapsed < Duration::from_secs(20),
+                "{elapsed:?}"
+            );
+        }
+        assert_eq!(
+            listening
+                .fixture
+                .receiver
+                .rejections
+                .load(Ordering::Relaxed),
+            2
+        );
+        // A request sent whole is answered, and so is the health check the
+        // monitor and deployer make.
+        assert_eq!(deliver(listening.address), "HTTP/1.1 202 Accepted");
+        let mut health = connect(listening.address);
+        health
+            .write_all(b"GET /healthz HTTP/1.1\r\nhost: yuki\r\n\r\n")
+            .unwrap();
+        assert_eq!(answer(health), "HTTP/1.1 200 OK");
+    }
+
+    #[test]
+    fn idle_connections_give_way_to_new_ones_within_the_limit() {
+        // Deadlines far beyond the test: only giving way can make room here.
+        let limits = Limits {
+            connections: 16,
+            head: Duration::from_secs(600),
+            connection: Duration::from_secs(600),
+        };
+        let listening = listen(limits);
+        let idle: Vec<_> = (0..200).map(|_| connect(listening.address)).collect();
+        for _ in 0..40 {
+            assert_eq!(deliver(listening.address), "HTTP/1.1 202 Accepted");
+        }
+        // Of the idle connections the listener still holds no more than it has
+        // places; it closed the others, longest waiting first, without an answer.
+        for stream in &idle {
+            stream.set_nonblocking(true).unwrap();
+        }
+        let settled = std::time::Instant::now() + Duration::from_secs(20);
+        while still_open(&idle) > limits.connections && std::time::Instant::now() < settled {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert!(still_open(&idle) <= limits.connections);
+    }
+
+    #[test]
+    fn verified_delivery_keeps_its_place_while_it_waits_for_a_worker() {
+        let limits = Limits {
+            connections: 4,
+            head: Duration::from_secs(600),
+            connection: Duration::from_secs(600),
+        };
+        let listening = listen(limits);
+        let gate = &listening.gate;
+        let workers = Arc::clone(&listening.fixture.receiver.in_flight)
+            .try_acquire_many_owned(MAX_IN_FLIGHT as u32)
+            .unwrap();
+        let mut delivery = connect(listening.address);
+        delivery
+            .write_all(head(&sign(PAYLOAD), PAYLOAD.len()).as_bytes())
+            .unwrap();
+        // With its body still to come it can only be unverified, so it is seen
+        // on the list before it can leave it. The listener takes a place a
+        // moment before it lists the connection, and "one place taken, nobody
+        // listed" is as true in that moment as once the delivery has verified:
+        // only having seen it listed first tells the two apart.
+        eventually("listing the delivery", || gate.unproven().len() == 1);
+        delivery.write_all(PAYLOAD).unwrap();
+        // It leaves the list by verifying or by ending, and only a verified
+        // delivery, here waiting for a worker, leaves it with its place.
+        eventually("taking the delivery off the list", || {
+            gate.unproven().is_empty()
+        });
+        assert_eq!(gate.places.available_permits(), limits.connections - 1);
+        // Newcomers take the other places and push each other out of them.
+        let idle: Vec<_> = (0..40).map(|_| connect(listening.address)).collect();
+        for stream in &idle {
+            stream.set_nonblocking(true).unwrap();
+        }
+        eventually("closing all but three newcomers", || {
+            still_open(&idle) < limits.connections
+        });
+        assert_eq!(still_open(&idle), limits.connections - 1);
+        drop(workers);
+        assert_eq!(answer(delivery), "HTTP/1.1 202 Accepted");
+    }
+
+    #[test]
+    fn connection_closed_for_a_newcomer_is_the_oldest_unverified_and_is_counted() {
+        let limits = Limits {
+            connections: 4,
+            head: Duration::from_secs(600),
+            connection: Duration::from_secs(600),
+        };
+        let listening = listen(limits);
+        let gate = &listening.gate;
+        let rejections = &listening.fixture.receiver.rejections;
+        // Silent connections, each listed before the next is opened.
+        let silent: Vec<_> = (1..=limits.connections)
+            .map(|held| {
+                let stream = connect(listening.address);
+                stream.set_nonblocking(true).unwrap();
+                eventually("listing a silent connection", || {
+                    gate.unproven().len() == held
+                });
+                stream
+            })
+            .collect();
+        assert_eq!(still_open(&silent), limits.connections);
+        assert_eq!(rejections.load(Ordering::Relaxed), 0);
+        let newcomer = connect(listening.address);
+        newcomer.set_nonblocking(true).unwrap();
+        eventually("closing a connection for the newcomer", || {
+            still_open(&silent) < limits.connections
+        });
+        eventually("listing the newcomer", || {
+            gate.unproven().len() == limits.connections
+        });
+        let open: Vec<_> = silent.iter().map(is_open).collect();
+        assert_eq!(open, [false, true, true, true]);
+        assert!(is_open(&newcomer));
+        assert_eq!(rejections.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn listener_shut_down_while_taking_connections_in_does_not_hang() {
+        // Whether the shutdown meets the listener in the middle of taking a
+        // connection in is a matter of timing, so it is tried several times.
+        for _ in 0..4 {
+            let listening = listen(Limits {
+                connections: 4,
+                head: Duration::from_secs(600),
+                connection: Duration::from_secs(600),
+            });
+            let address = listening.address;
+            let rejections = Arc::clone(&listening.fixture.receiver.rejections);
+            // Connections keep arriving, each closing one that came before it,
+            let stop = Arc::new(AtomicBool::new(false));
+            let stopped = Arc::clone(&stop);
+            let arriving = std::thread::spawn(move || {
+                let mut open = VecDeque::new();
+                while !stopped.load(Ordering::Relaxed) {
+                    let wait = Duration::from_millis(200);
+                    match std::net::TcpStream::connect_timeout(&address, wait) {
+                        Ok(stream) => open.push_back(stream),
+                        Err(_) => std::thread::sleep(Duration::from_millis(1)),
+                    }
+                    if open.len() > 16 {
+                        open.pop_front();
+                    }
+                }
+            });
+            eventually("closing connections for newcomers", || {
+                rejections.load(Ordering::Relaxed) > 100
+            });
+            // and the listener is shut down while it takes them in. A runtime
+            // that is shutting down drops what it is asked to spawn, there and
+            // then, which must not leave the listener waiting for itself.
+            let (done, finished) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                drop(listening);
+                let _ = done.send(());
+            });
+            let finished = finished.recv_timeout(Duration::from_secs(20));
+            stop.store(true, Ordering::Relaxed);
+            arriving.join().unwrap();
+            assert!(
+                finished.is_ok(),
+                "shutting the listener down did not finish"
+            );
+        }
+    }
+
+    #[test]
+    fn connection_is_closed_at_its_deadline_whatever_it_is_waiting_for() {
+        let limits = Limits {
+            connections: 8,
+            head: Duration::from_secs(1),
+            connection: Duration::from_secs(2),
+        };
+        let listening = listen(limits);
+        let started = std::time::Instant::now();
+        let mut stream = connect(listening.address);
+        stream
+            .set_read_timeout(Some(Duration::from_secs(6)))
+            .unwrap();
+        // A whole head, so the head's deadline does not apply, and no body,
+        // which would be waited for until the body's own, later deadline.
+        stream
+            .write_all(head(&sign(PAYLOAD), PAYLOAD.len()).as_bytes())
+            .unwrap();
+        assert_eq!(answer(stream), "");
+        let elapsed = started.elapsed();
+        assert!(
+            elapsed >= limits.connection && elapsed < Duration::from_secs(5),
+            "{elapsed:?}"
+        );
+    }
+
+    #[test]
+    fn request_head_beyond_its_bound_is_refused() {
+        let listening = listen(LIMITS);
+        let deliver_with = |padding: usize| {
+            let padding = format!("\r\nx-padding: {}\r\n", "a".repeat(padding));
+            let padded = head(&sign(PAYLOAD), PAYLOAD.len()).replacen("\r\n", &padding, 1);
+            let mut stream = connect(listening.address);
+            // The listener may refuse and close before it has read all of this.
+            let _ = stream
+                .write_all(padded.as_bytes())
+                .and_then(|()| stream.write_all(PAYLOAD));
+            answer(stream)
+        };
+        // A head within the bound is taken with whatever else it carries, and
+        // one that no pattern of arrival brings within it is refused.
+        assert_eq!(deliver_with(MAX_HEAD / 2), "HTTP/1.1 202 Accepted");
+        assert_eq!(
+            deliver_with(3 * MAX_HEAD),
+            "HTTP/1.1 431 Request Header Fields Too Large"
+        );
+        assert_eq!(receipts(&listening), 1);
+    }
+
+    #[test]
+    fn one_request_is_served_on_each_connection() {
+        let listening = listen(LIMITS);
+        // Two deliveries written together on one connection.
+        let first = head(&sign(PAYLOAD), PAYLOAD.len());
+        let second = first.replace("test-delivery", "second-delivery");
+        let mut both = Vec::new();
+        for delivery in [first, second] {
+            both.extend_from_slice(delivery.as_bytes());
+            both.extend_from_slice(PAYLOAD);
+        }
+        let mut stream = connect(listening.address);
+        let _ = stream.write_all(&both);
+        let sent = answered(stream);
+        assert!(
+            sent.starts_with("HTTP/1.1 202 Accepted\r\n")
+                && sent.contains("\r\nconnection: close\r\n"),
+            "{sent}"
+        );
+        assert_eq!(sent.matches("HTTP/1.1 ").count(), 1, "{sent}");
+        assert_eq!(receipts(&listening), 1);
+    }
+
+    #[test]
+    fn stalled_bodies_over_the_wire_never_refuse_a_signed_delivery() {
+        let listening = listen(LIMITS);
+        let unverified = format!("sha256={}", "0".repeat(64));
+        // More senders than there are places, each with a whole head and no body.
+        let stalled: Vec<_> = (0..MAX_CONNECTIONS + 8)
+            .map(|_| {
+                let mut stream = connect(listening.address);
+                stream
+                    .write_all(head(&unverified, 1000).as_bytes())
+                    .unwrap();
+                stream
+            })
+            .collect();
+        for _ in 0..40 {
+            assert_eq!(deliver(listening.address), "HTTP/1.1 202 Accepted");
+        }
+        // An oversized declaration is answered without waiting for its body.
+        let mut oversized = connect(listening.address);
+        oversized
+            .write_all(head(&unverified, MAX_BODY + 1).as_bytes())
+            .unwrap();
+        assert_eq!(answer(oversized), "HTTP/1.1 413 Payload Too Large");
+        drop(stalled);
     }
 }

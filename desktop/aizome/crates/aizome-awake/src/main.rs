@@ -10,7 +10,7 @@ use std::os::fd::{AsRawFd, OwnedFd};
 use std::process::{Command, ExitCode};
 use std::time::{Duration, Instant};
 
-use aizome_awake::{IdleInhibitor, Inhibitor, UNIT, WHAT, WHO, WHY, protected_by, requested, setting, state_dir};
+use aizome_awake::{Inhibitor, KeepAwakeHold, UNIT, WHAT, WHO, WHY, protected_by, requested, setting, state_dir};
 
 type Result<T> = std::result::Result<T, String>;
 
@@ -159,11 +159,12 @@ fn status() -> Result<()> {
 
 // ---- the service -------------------------------------------------------------
 
-/// Takes logind's locks and the compositor's idle inhibitor and keeps
+/// Takes logind's locks and the compositor's hold on idleness and keeps
 /// them, checking every second that logind still lists the locks (a
 /// restarted logind forgets them) and that the compositor is still there.
 /// Losing either ends this with an error, and systemd starts it again,
-/// taking them afresh.
+/// taking them afresh. So does a compositor that has `keep-awake` and
+/// doesn't grant it in time: the next try asks again.
 fn hold() -> Result<()> {
     let bus = system_bus()?;
     let _lock = inhibit(&bus)?;
@@ -171,7 +172,13 @@ fn hold() -> Result<()> {
     if !protected_by(&inhibitors(&bus)?, uid(), Some(me)) {
         return Err("logind doesn't list the inhibitor it gave".into());
     }
-    let mut idle = IdleInhibitor::new()?;
+    let mut idle = KeepAwakeHold::take()?;
+    if !idle.asked() {
+        // An older Aizome, or another desktop: held as an app would.
+        eprintln!(
+            "aizome-awake: this compositor has no keep-awake to ask for; holding a Wayland idle inhibitor instead"
+        );
+    }
     sd_notify("READY=1\nSTATUS=Sleep, idle and lid-close sleep are blocked");
     loop {
         idle.wait(Duration::from_secs(1))?;

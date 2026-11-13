@@ -16,6 +16,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut bench_json = false;
     let mut iterations = 10usize;
     let mut history = 0usize;
+    // Unset keeps the replay's historical policy: no byte limit.
+    let mut history_bytes = None;
+    let mut prefill = false;
     let mut chunk = 65536usize;
     let mut grapheme_width = hotaru_core::GraphemeWidthMethod::Legacy;
     let mut args = std::env::args().skip(1);
@@ -40,6 +43,17 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     .ok_or("--scrollback requires a number")?
                     .parse()?
             }
+            "--scrollback-bytes" => {
+                history_bytes = match args.next().as_deref() {
+                    Some("none") => None,
+                    Some("default") => Some(hotaru_core::DEFAULT_HISTORY_BYTES),
+                    Some(value) => Some(value.parse()?),
+                    None => {
+                        return Err("--scrollback-bytes requires a number, default or none".into());
+                    }
+                }
+            }
+            "--prefill" => prefill = true,
             "--chunk" => chunk = args.next().ok_or("--chunk requires a number")?.parse()?,
             "--grapheme-width" => {
                 grapheme_width = match args.next().as_deref() {
@@ -59,7 +73,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
             "--help" | "-h" => {
                 println!(
-                    "hotaru-replay [--data FILE] [--rows 80] [--cols 120] [--format plain|json] [--scrollback 0] [--chunk 65536] [--grapheme-width legacy|unicode] [--bench | --bench-json --iterations 10]\nReads stdin when --data is omitted. --bench suppresses serialization. --bench-json measures feed separately from setup/teardown with zero history."
+                    "hotaru-replay [--data FILE] [--rows 80] [--cols 120] [--format plain|json] [--scrollback 0] [--scrollback-bytes none|default|BYTES] [--chunk 65536] [--grapheme-width legacy|unicode] [--bench | --bench-json --iterations 10 [--prefill]]\nReads stdin when --data is omitted. --bench suppresses serialization. --bench-json measures feed separately from setup/teardown. --scrollback keeps that many history rows, and --scrollback-bytes adds a logical byte limit (default: none; `default` is hotaru-core's 50,000,000). --prefill feeds the data once, untimed, before each timed feed, so the timed feed starts with the history it left."
                 );
                 return Ok(());
             }
@@ -72,11 +86,16 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     if !matches!(format.as_str(), "plain" | "json") {
         return Err("format must be plain or json (VT formatter port is pending)".into());
     }
-    if bench_json && (history != 0 || bench || iterations == 0 || iterations > 100_000) {
-        return Err(
-            "--bench-json requires zero scrollback, 1..100000 iterations and no --bench".into(),
-        );
+    if bench_json && (bench || iterations == 0 || iterations > 100_000) {
+        return Err("--bench-json requires 1..100000 iterations and no --bench".into());
     }
+    if prefill && !bench_json {
+        return Err("--prefill applies only to --bench-json".into());
+    }
+    let limits = hotaru_core::HistoryLimits {
+        rows: history,
+        bytes: history_bytes,
+    };
     let mut bytes = Vec::new();
     if let Some(path) = data {
         bytes = std::fs::read(path)?;
@@ -89,17 +108,31 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         let mut feed = Vec::with_capacity(iterations);
         let mut teardown = Vec::with_capacity(iterations);
         let mut response_bytes = Vec::with_capacity(iterations);
+        let mut prefill_ns = Vec::with_capacity(iterations);
+        let mut history_before = Vec::with_capacity(iterations);
+        let mut history_after = Vec::with_capacity(iterations);
         for _ in 0..iterations {
             let start = Instant::now();
-            let mut terminal = Terminal::new(size, 0);
+            let mut terminal = Terminal::with_history_limits(size, limits);
             terminal.set_default_grapheme_width(grapheme_width);
             setup.push(start.elapsed().as_nanos() as u64);
+            if prefill {
+                let start = Instant::now();
+                for part in bytes.chunks(chunk) {
+                    terminal.feed(part);
+                }
+                terminal.take_responses();
+                terminal.take_events();
+                prefill_ns.push(start.elapsed().as_nanos() as u64);
+            }
+            history_before.push(terminal.scrollback_len());
             let start = Instant::now();
             for part in bytes.chunks(chunk) {
                 terminal.feed(part);
             }
             feed.push(start.elapsed().as_nanos() as u64);
             response_bytes.push(terminal.pending_response_bytes());
+            history_after.push(terminal.scrollback_len());
             std::hint::black_box(&terminal);
             let start = Instant::now();
             drop(terminal);
@@ -109,19 +142,15 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             io::stdout().lock(),
             &serde_json::json!({"schema":1,"engine":"hotaru",
             "timed_scope":"feed-only","input_bytes":bytes.len(),"rows":size.rows.get(),"cols":size.cols.get(),
-            "scrollback":0,"chunk_bytes":chunk,"samples_ns":feed,"setup_ns":setup,"teardown_ns":teardown,
+            "scrollback":history,"scrollback_bytes":history_bytes,"prefill":prefill,
+            "chunk_bytes":chunk,"samples_ns":feed,"setup_ns":setup,"prefill_ns":prefill_ns,"teardown_ns":teardown,
             "response_bytes":response_bytes,
+            "history_rows_before":history_before,"history_rows_after":history_after,
             "grapheme_width_method":if grapheme_width == hotaru_core::GraphemeWidthMethod::Unicode { "unicode" } else { "legacy" }}),
         )?;
         return Ok(());
     }
-    let mut terminal = Terminal::with_history_limits(
-        size,
-        hotaru_core::HistoryLimits {
-            rows: history,
-            bytes: None,
-        },
-    );
+    let mut terminal = Terminal::with_history_limits(size, limits);
     terminal.set_default_grapheme_width(grapheme_width);
     let mut responses = Vec::new();
     for part in bytes.chunks(chunk) {

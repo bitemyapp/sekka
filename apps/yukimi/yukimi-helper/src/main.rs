@@ -61,6 +61,7 @@ use yukimi_config::sekka;
 use yukimi_config::{branch, edit, lock};
 use yukimi_system::catalog;
 use yukimi_system::completion::{self, Receipt};
+use yukimi_system::people;
 use yukimi_system::setup::{Choice, Kind, Setup};
 
 const PROFILE: &str = "/nix/var/nix/profiles/system";
@@ -408,6 +409,11 @@ fn valid_host(name: &str) -> bool {
     !name.is_empty() && name.bytes().all(|b| b.is_ascii_alphanumeric() || b"-_.".contains(&b))
 }
 
+/// A name an existing account may have, safe to pass on: who is signed in,
+/// and `users.users.NAME` in the configuration, which needn't follow
+/// `useradd`'s rules. Whom the computer logs in as by itself does
+/// ([`people::valid_name`], as Settei makes accounts), so `--choose` checks
+/// that instead.
 fn valid_user(name: &str) -> bool {
     !name.is_empty() && name.len() <= 32 && name.bytes().all(|b| b.is_ascii_alphanumeric() || b"-_.".contains(&b))
 }
@@ -722,8 +728,9 @@ impl Change {
                     if !valid_setting(setting) || change.choices.iter().any(|(s, _)| s == setting) {
                         return Err(Failure(format!("Not a setting to choose: {setting:?}")));
                     }
+                    // An option, or a person's account (no value: no one).
                     let values = split_list(values);
-                    if let Some(bad) = values.iter().find(|v| !catalog::valid_id(v)) {
+                    if let Some(bad) = values.iter().find(|v| !catalog::valid_id(v) && !people::valid_name(v)) {
                         return Err(Failure(format!("Not a choice: {bad:?}")));
                     }
                     change.choices.push((setting.to_owned(), values));
@@ -800,10 +807,13 @@ fn valid_setting(name: &str) -> bool {
 }
 
 /// The main configuration file with one of the system's choices written as
-/// it is declared: a list of strings, a boolean, or a string.
+/// it is declared: a list of strings, a boolean, or a string (for a person,
+/// the empty string when no one is chosen).
 fn write_choice(text: &str, choice: &Choice, values: &[String]) -> Result<String> {
     let path: Vec<&str> = choice.setting.split('.').collect();
-    Ok(if choice.many {
+    Ok(if choice.people {
+        edit::set_string(text, &path, values.first().map_or("", String::as_str))?
+    } else if choice.many {
         edit::set_string_list(text, &path, values)?
     } else if choice.boolean {
         edit::set_bool(text, &path, values[0] == "true")?
@@ -850,7 +860,7 @@ fn change(args: &[String]) -> Result<String> {
             .iter()
             .find(|c| &c.setting == setting)
             .ok_or_else(|| Failure(format!("{setting} isn't a choice this system offers")))?;
-        declared.allows(values).map_err(Failure)?;
+        declared.allows_people(values, people::takes).map_err(Failure)?;
     }
     let main = setup.main.clone();
     let packages_file = setup.packages_file();
@@ -1513,6 +1523,12 @@ mod tests {
         assert!(early.edits_main());
         let desktops = Change::parse(&args("--choose calamares.desktops=aizome,tatami")).unwrap();
         assert_eq!(desktops.choices[0].1, vec!["aizome", "tatami"]);
+        // A person's account, or no one.
+        let person = Change::parse(&args("--choose calamares.autoLogin=kara_t")).unwrap();
+        assert_eq!(person.choices[0].1, vec!["kara_t"]);
+        let no_one = Change::parse(&args("--choose calamares.autoLogin=")).unwrap();
+        assert_eq!(no_one.choices, vec![("calamares.autoLogin".to_owned(), vec![])]);
+        assert!(no_one.edits_main());
         for bad in [
             "--choose calamares.loginScreen",
             "--choose calamares..x=a",
@@ -1631,6 +1647,14 @@ mod tests {
         );
         let off = write_choice(&text, &splash, &v(&["false"])).unwrap();
         assert_eq!(off, text.replace("enable = true", "enable = false"));
+        // A person, and no one: the empty string.
+        let auto = choice(
+            r#"{"setting":"calamares.autoLogin","title":"Log in automatically","people":true,"value":"","options":[]}"#,
+        );
+        let on = write_choice(installed, &auto, &v(&["kara"])).unwrap();
+        assert_eq!(on, "{ ... }:\n{\n  calamares.desktops = [ \"aizome\" ];\n  calamares.autoLogin = \"kara\";\n}\n");
+        let nobody = write_choice(&on, &auto, &v(&[])).unwrap();
+        assert_eq!(nobody, on.replace("\"kara\"", "\"\""));
     }
 
     #[test]
