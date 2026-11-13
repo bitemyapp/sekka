@@ -341,7 +341,8 @@ Notes for client authors:
   `[[outputs]]` entry, or wlr-output-management) takes an output out of the
   layout and, on udev, disables its CRTC; it stays listed (`enabled:
   false`) to be turned on again. Its Desk goes as a display's does when
-  unplugged (see Desks below), and comes back with it.
+  unplugged (see Desks below), and comes back with it. One that fails to
+  come on (the request is answered with the error) stays off and listed.
 - **Mirroring**: `mirror = "eDP-1"` in an `[[outputs]]` entry (or
   `mirror-output`) shows another output's picture, rendered afresh and
   scaled to fit with black bars, pointer included; the mirror has no place
@@ -555,7 +556,10 @@ nix develop .#aizome --command cargo test -p aizome-comp
 - `tests/displays.rs`: outputs off and on (from IPC and the settings),
   mirroring scaled and letterboxed, the main display, Night Light's IPC
   and schedule, the renderer setting, and a laptop's panel (a headless
-  output named `eDP-1`) dark while its lid is closed.
+  output named `eDP-1`) dark while its lid is closed. On udev, in a VM
+  (`nix build .#aizome-checks.output-enable`): a display off and on, and
+  one whose turning on fails (another VT has the seat) still off and
+  listed.
 - `tests/screens.rs`: displays with Desks of their own: switching on one
   leaves the other alone, a Desk another display shows swaps with it and
   its window scales to the larger display and back exactly, a window
