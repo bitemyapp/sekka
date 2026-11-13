@@ -1064,20 +1064,61 @@ pub fn auto_scale(width_px: i32, width_mm: i32) -> f64 {
     if dpi > 180.0 { 2.0 } else { 1.0 }
 }
 
+/// An output's entries in the two lists of outputs turned off (the
+/// backend's, with what turning it on needs, and the session's), taken out
+/// while it is turned on: setting it up afresh must not find them, and an
+/// attempt that fails must not lose them.
+struct TurningOn<T> {
+    name: String,
+    at: T,
+    /// The session's entry and where it stood in its list.
+    listed: Option<(usize, Output)>,
+}
+
+impl<T> TurningOn<T> {
+    fn take(off: &mut HashMap<String, T>, listed: &mut Vec<Output>, name: &str) -> Option<Self> {
+        let at = off.remove(name)?;
+        let place = listed.iter().position(|o| o.name() == name);
+        let kept = place.map(|i| (i, listed[i].clone()));
+        listed.retain(|o| o.name() != name);
+        Some(TurningOn { name: name.to_owned(), at, listed: kept })
+    }
+
+    /// The attempt is over. An output that didn't come on is still off: it
+    /// goes back on both lists as it was, for a later attempt to find.
+    fn settle(self, off: &mut HashMap<String, T>, listed: &mut Vec<Output>, came_on: bool) {
+        if came_on {
+            return;
+        }
+        off.insert(self.name, self.at);
+        if let Some((i, output)) = self.listed {
+            listed.insert(i.min(listed.len()), output);
+        }
+    }
+}
+
 /// Turns an output that was turned off back on: set up afresh, at the
-/// place asked for or right of the others.
+/// place asked for or right of the others. One that doesn't come on stays
+/// off and listed, to be tried again.
 pub fn enable_output(state: &mut State, name: &str, position: Option<(i32, i32)>) -> Result<(), String> {
     let crate::backend::Backend::Udev(u) = &mut state.backend else { return Err("not on udev".into()) };
-    let (node, conn, crtc) = u.disabled.remove(name).ok_or_else(|| format!("{name} isn't off"))?;
+    // Looked up, not taken yet: one that can't be tried at all stays listed.
+    let (node, conn, crtc) = *u.disabled.get(name).ok_or_else(|| format!("{name} isn't off"))?;
     let device = u.devices.get(&node).ok_or("its device is gone")?;
     let drm = match &device.manager {
         Manager::Gles(m) => m.device(),
         Manager::Pixman(m) => m.device(),
     };
     let info = drm.get_connector(conn, true).map_err(|e| e.to_string())?;
-    state.az.disabled_outputs.retain(|o| o.name() != name);
+    let Some(turning_on) = TurningOn::take(&mut u.disabled, &mut state.az.disabled_outputs, name) else {
+        return Err(format!("{name} isn't off"));
+    };
     connector_connected_as(state, node, info, crtc, true, position);
-    if state.az.output_by_name(name).is_none() {
+    let came_on = state.az.output_by_name(name).is_some();
+    if let crate::backend::Backend::Udev(u) = &mut state.backend {
+        turning_on.settle(&mut u.disabled, &mut state.az.disabled_outputs, came_on);
+    }
+    if !came_on {
         return Err(format!("{name} didn't come on"));
     }
     info!("output {name} turned on");
@@ -1399,6 +1440,39 @@ mod tests {
         assert_eq!(covered_by(None, [("DP-1", Some(left), Some((5120, 2880)))]), None);
         let wall = Some(Tile { single_monitor: false, ..right });
         assert_eq!(covered_by(wall, [("DP-1", Some(left), Some((5120, 2880)))]), None);
+    }
+
+    fn output(name: &str) -> Output {
+        let physical = PhysicalProperties {
+            size: (0, 0).into(),
+            subpixel: Subpixel::Unknown,
+            make: "Unknown".into(),
+            model: "Unknown".into(),
+        };
+        Output::new(name.into(), physical)
+    }
+
+    #[test]
+    fn an_output_that_fails_to_turn_on_stays_off_to_be_tried_again() {
+        let (panel, monitor) = (output("eDP-1"), output("DP-2"));
+        let mut off = HashMap::from([("eDP-1".to_string(), 1), ("DP-2".to_string(), 2)]);
+        let mut listed = vec![panel.clone(), monitor.clone()];
+
+        // Out of both lists while it is set up afresh.
+        let turning_on = TurningOn::take(&mut off, &mut listed, "eDP-1").expect("eDP-1 is off");
+        assert!(!off.contains_key("eDP-1"));
+        assert_eq!(listed, std::slice::from_ref(&monitor));
+        // The modeset failed: nothing came on.
+        turning_on.settle(&mut off, &mut listed, false);
+        assert_eq!(off.get("eDP-1"), Some(&1), "the backend forgot an output that didn't come on");
+        assert_eq!(listed, [panel, monitor.clone()], "an output that didn't come on is no longer listed as off");
+
+        // So a later attempt finds it, and one that works takes it off for good.
+        let again = TurningOn::take(&mut off, &mut listed, "eDP-1").expect("still off, to be tried again");
+        again.settle(&mut off, &mut listed, true);
+        assert_eq!(off, HashMap::from([("DP-2".to_string(), 2)]));
+        assert_eq!(listed, [monitor]);
+        assert!(TurningOn::take(&mut off, &mut listed, "eDP-1").is_none(), "an output that is on isn't off");
     }
 
     #[test]

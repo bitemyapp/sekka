@@ -319,7 +319,8 @@ Notes for client authors:
   `[[outputs]]` entry, or wlr-output-management) takes an output out of the
   layout and, on udev, disables its CRTC; it stays listed (`enabled:
   false`) to be turned on again. Its Desk goes as a display's does when
-  unplugged (see Desks below), and comes back with it.
+  unplugged (see Desks below), and comes back with it. One that fails to
+  come on (the request is answered with the error) stays off and listed.
 - **Mirroring**: `mirror = "eDP-1"` in an `[[outputs]]` entry (or
   `mirror-output`) shows another output's picture, rendered afresh and
   scaled to fit with black bars, pointer included; the mirror has no place
