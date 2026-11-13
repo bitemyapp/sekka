@@ -209,6 +209,20 @@ class JournalTest(unittest.TestCase):
             self.assertEqual(worker.journal()["status"], "ok")
             self.assertEqual(worker.journal_since, 200)
 
+    def test_install_messages_are_not_stall_evidence(self):
+        # "stall" inside "installed" is neither a symptom nor a trigger.
+        lines = ["the main loop is stalled", "stalling the main loop, as asked",
+                 "systemd's watchdog is on", "libinput resume: failed",
+                 "xwayland-satellite isn't installed; X11 apps won't run",
+                 "default terminal: none installed", "reinstalling the shell"]
+        output = "\n".join(json.dumps({"MESSAGE": line, "__CURSOR": str(number)})
+                           for number, line in enumerate(lines))
+        worker = recorder.DetailWorker({})
+        with patch.object(recorder, "bounded_command",
+                          return_value={"status": "ok", "returncode": 0, "output": output, "stderr": ""}):
+            report = worker.journal()
+        self.assertEqual([item["message"] for item in report["messages"]], lines[:4])
+
 
 class ProbeTest(unittest.TestCase):
     def probe(self, reply, allowed=True, hold=False, timeout=1):

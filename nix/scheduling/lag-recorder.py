@@ -38,7 +38,8 @@ CGROUP = SYS / "fs/cgroup"
 MAX_READ = 65536
 LOG_BYTES = 8 * 1024 * 1024
 LOG_BACKUPS = 4
-JOURNAL_PATTERN = r"(?i)(watchdog|libinput|stall(?:ed|ing)?)"
+# Whole words only: an unanchored "stall" also matches "installed".
+JOURNAL_PATTERN = r"(?i)(watchdog|libinput|\bstall(?:ed|ing|s)?\b)"
 VM_KEYS = {
     "pgfault", "pgmajfault", "pswpin", "pswpout", "oom_kill", "pgpgin", "pgpgout",
     "pgactivate", "pgdeactivate", "allocstall_normal", "allocstall_movable",
