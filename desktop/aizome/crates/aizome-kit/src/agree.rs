@@ -6,8 +6,11 @@
 //! the person it will act on. When a person activates it, with the
 //! pointer (a press and a release over it) or the keyboard (Space, or
 //! Return while it has the focus), the kit makes an [`Agreed`] of that
-//! target and sends it, in a [`Pressed`], with the button's message. A
-//! destructive step takes the `Agreed` by value and acts on its target, so:
+//! target and sends it, in a [`Pressed`], with the button's message. The
+//! key must go down while the button has the focus: one held since before,
+//! as the Return that moved the focus there from a field, presses nothing
+//! however long it repeats. A destructive step takes the `Agreed` by value
+//! and acts on its target, so:
 //!
 //! - only the kit makes one, and only from input: program code can't write
 //!   one, send a message carrying one, or press the button for itself (the
