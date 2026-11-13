@@ -3,9 +3,11 @@
 use std::path::PathBuf;
 
 use aizome_ipc::{LogicStats, ReloadPart, ReloadReport, Request, Response, Stats, Synthetic};
+use smithay::input::keyboard::{Keycode, keysyms, xkb};
 use smithay::utils::Point;
 
 use crate::Rect;
+use crate::input::MODIFIER_KEYS;
 use crate::outputs::{OutputChange, transform_from_ipc};
 use crate::state::State;
 
@@ -226,7 +228,7 @@ impl State {
                 self.keyboard_key(key_code(&key)?, pressed, time);
             }
             Synthetic::Chord { keys } => {
-                let codes: Vec<u32> = keys.split('+').map(|k| key_code(k.trim())).collect::<Result<_, _>>()?;
+                let codes = self.chord_codes(&keys)?;
                 self.key_from(None);
                 for c in &codes {
                     self.keyboard_key(*c, true, time);
@@ -252,6 +254,23 @@ impl State {
             Synthetic::Idle { seconds } => self.synthesize_idle(std::time::Duration::from_secs(seconds.into())),
         }
         Ok(())
+    }
+
+    /// A chord's keys as evdev codes, read against the keymap in force (the
+    /// last keyboard's, which the chord goes through): see
+    /// [`chord_codes_in`].
+    fn chord_codes(&mut self, keys: &str) -> Result<Vec<u32>, String> {
+        let Some(kb) = self.az.seat.get_keyboard() else {
+            return keys.split('+').map(|k| key_code(k.trim())).collect();
+        };
+        kb.with_xkb_state(self, |c| {
+            let xkb = c.xkb().lock().unwrap();
+            // SAFETY: the keymap is borrowed for these lookups, under the
+            // lock, on the seat's thread; the states made from it to try
+            // its keys are dropped before `chord_codes_in` returns.
+            let keymap = unsafe { xkb.keymap() };
+            chord_codes_in(keymap, xkb.active_layout().0, keys)
+        })
     }
 
     /// What the logic is and how it has fared, for `stats`.
@@ -517,4 +536,309 @@ pub fn key_code(name: &str) -> Result<u32, String> {
         _ => return Err(format!("unknown key {name}")),
     };
     Ok(code)
+}
+
+/// The modifiers a chord names, as xkb names them.
+const CHORD_MODIFIERS: [&str; 4] = [xkb::MOD_NAME_SHIFT, xkb::MOD_NAME_CTRL, xkb::MOD_NAME_ALT, xkb::MOD_NAME_LOGO];
+
+/// What a key's name asks for, whichever key does it.
+enum Named {
+    /// One of [`CHORD_MODIFIERS`], held.
+    Modifier(&'static str),
+    /// What the key types alone (a keysym).
+    Sym(u32),
+}
+
+/// What `name` means, apart from where a US keyboard has it. Nothing for
+/// an evdev code, which is that key whatever it does, nor for the keys
+/// with no meaning a layout could move (the volume keys, power).
+fn named(name: &str) -> Option<Named> {
+    use keysyms::*;
+    let lower = name.to_lowercase();
+    // A letter, a digit or a punctuation mark: itself.
+    let mut chars = lower.chars();
+    if let (Some(c), None) = (chars.next(), chars.next()) {
+        return Some(Named::Sym(xkb::utf32_to_keysym(c as u32).raw()));
+    }
+    // F1 to F12: their keysyms follow one another as they do.
+    if let Some(n) = lower.strip_prefix('f').and_then(|n| n.parse::<u32>().ok())
+        && (1..=12).contains(&n)
+    {
+        return Some(Named::Sym(KEY_F1 + n - 1));
+    }
+    Some(Named::Sym(match lower.as_str() {
+        "super" | "logo" | "cmd" | "leftmeta" => return Some(Named::Modifier(xkb::MOD_NAME_LOGO)),
+        "ctrl" | "control" | "leftctrl" => return Some(Named::Modifier(xkb::MOD_NAME_CTRL)),
+        "alt" | "option" | "leftalt" => return Some(Named::Modifier(xkb::MOD_NAME_ALT)),
+        "shift" | "leftshift" | "rightshift" => return Some(Named::Modifier(xkb::MOD_NAME_SHIFT)),
+        "esc" | "escape" => KEY_Escape,
+        "minus" => KEY_minus,
+        "equal" => KEY_equal,
+        "backspace" => KEY_BackSpace,
+        "tab" => KEY_Tab,
+        "leftbrace" => KEY_bracketleft,
+        "rightbrace" => KEY_bracketright,
+        "return" | "enter" => KEY_Return,
+        "semicolon" => KEY_semicolon,
+        "apostrophe" => KEY_apostrophe,
+        "grave" => KEY_grave,
+        "backslash" => KEY_backslash,
+        "comma" => KEY_comma,
+        "dot" | "period" => KEY_period,
+        "slash" => KEY_slash,
+        "space" => KEY_space,
+        "print" | "sysrq" => KEY_Print,
+        "home" => KEY_Home,
+        "up" => KEY_Up,
+        "pageup" => KEY_Prior,
+        "left" => KEY_Left,
+        "right" => KEY_Right,
+        "end" => KEY_End,
+        "down" => KEY_Down,
+        "pagedown" => KEY_Next,
+        "delete" => KEY_Delete,
+        _ => return None,
+    }))
+}
+
+/// Whether a key (an xkb code, as `held`), pressed with the chord's
+/// earlier keys held, holds this one of [`CHORD_MODIFIERS`] as well and
+/// changes nothing else: no other of them, nor the layout (Shift, then the
+/// Alt that switches layouts with it), nor what is locked (a Caps Lock
+/// that is Shift Lock). A keymap says what a key types; what it holds,
+/// only pressing it says, so the chord so far is pressed in a keyboard
+/// state of its own.
+fn holds(keymap: &xkb::Keymap, layout: xkb::LayoutIndex, held: &[u32], key: u32, modifier: &str) -> bool {
+    let mut state = xkb::State::new(keymap);
+    state.update_mask(0, 0, 0, 0, 0, layout);
+    let mut press = |key: u32| {
+        state.update_key(Keycode::new(key), xkb::KeyDirection::Down);
+        let mods = CHORD_MODIFIERS.map(|m| state.mod_name_is_active(m, xkb::STATE_MODS_DEPRESSED));
+        // And what the key must leave as it was.
+        let kept = (state.serialize_layout(xkb::STATE_LAYOUT_EFFECTIVE), state.serialize_mods(xkb::STATE_MODS_LOCKED));
+        (mods, kept)
+    };
+    let (before, kept) = held.iter().map(|k| press(*k)).last().unwrap_or(([false; 4], (layout, 0)));
+    let (after, kept_after) = press(key);
+    kept_after == kept && (0..4).all(|i| after[i] == (before[i] || CHORD_MODIFIERS[i] == modifier))
+}
+
+/// The key (an xkb code) that does, under `keymap` with `layout` in use
+/// and the chord's earlier keys `held`, what `name` says.
+fn key_in(keymap: &xkb::Keymap, layout: xkb::LayoutIndex, held: &[u32], name: &str) -> Result<u32, String> {
+    let usual = key_code(name)? + 8;
+    let Some(named) = named(name) else { return Ok(usual) };
+    let every = keymap.min_keycode().raw()..=keymap.max_keycode().raw();
+    let found = match named {
+        // After the usual key, the others a keyboard has for modifiers
+        // (the ones sticky keys know), then any.
+        Named::Modifier(m) => std::iter::once(usual)
+            .chain(MODIFIER_KEYS.map(|c| c + 8))
+            .chain(every)
+            .find(|c| holds(keymap, layout, held, *c, m)),
+        // In the layout in use, then in the keymap's others, where
+        // bindings too read the Latin letter of a key that types none.
+        Named::Sym(sym) => {
+            std::iter::once(layout).chain((0..keymap.num_layouts()).filter(|l| *l != layout)).find_map(|l| {
+                let types =
+                    |c: &u32| keymap.key_get_syms_by_level(Keycode::new(*c), l, 0).iter().any(|s| s.raw() == sym);
+                std::iter::once(usual).chain(every.clone()).find(types)
+            })
+        }
+    };
+    Ok(found.unwrap_or(usual))
+}
+
+/// A chord's keys (`"super+shift+3"`) as the evdev codes of the keys that
+/// do, under `keymap` with `layout` in use, what its names say: the
+/// modifier wherever a swap of modifier keys put it, the letter wherever
+/// the layout has it. A chord means what it says (❖V pastes), and the
+/// keymap of the keyboard that typed last reads it: with left Alt and
+/// Super swapped, the key [`key_code`] calls `super` holds Alt, and under
+/// Dvorak its `v` types k.
+///
+/// The key [`key_code`] gives comes first, so nothing moves while that key
+/// does the job (a US keyboard as it comes), and it is the answer when no
+/// key does (a layout without that letter). A modifier's key is one that
+/// holds it with the chord's earlier keys held ([`holds`]). An evdev code
+/// is that key.
+fn chord_codes_in(keymap: &xkb::Keymap, layout: xkb::LayoutIndex, keys: &str) -> Result<Vec<u32>, String> {
+    let mut held = Vec::new();
+    for name in keys.split('+') {
+        held.push(key_in(keymap, layout, &held, name.trim())?);
+    }
+    Ok(held.into_iter().map(|k| k - 8).collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const SHIFT: &str = xkb::MOD_NAME_SHIFT;
+    const CTRL: &str = xkb::MOD_NAME_CTRL;
+    const ALT: &str = xkb::MOD_NAME_ALT;
+    const SUPER: &str = xkb::MOD_NAME_LOGO;
+
+    /// A keymap as the compositor compiles one (`layouts` and `variants`
+    /// with commas between, as the settings join them).
+    fn keymap(layouts: &str, variants: &str, options: &str) -> xkb::Keymap {
+        let context = xkb::Context::new(xkb::CONTEXT_NO_FLAGS);
+        xkb::Keymap::new_from_names(
+            &context,
+            "",
+            "",
+            layouts,
+            variants,
+            Some(options.into()),
+            xkb::KEYMAP_COMPILE_NO_FLAGS,
+        )
+        .unwrap_or_else(|| panic!("no keymap for {layouts} ({variants}) with {options}"))
+    }
+
+    fn codes(keymap: &xkb::Keymap, layout: u32, chord: &str) -> Vec<u32> {
+        chord_codes_in(keymap, layout, chord).unwrap()
+    }
+
+    /// What an app reading `keymap` makes of the chord as the compositor
+    /// would press it: the modifiers held as its last key comes, and what
+    /// that key types alone. The layout stays the first.
+    fn read(keymap: &xkb::Keymap, chord: &str) -> (Vec<&'static str>, String) {
+        let codes = codes(keymap, 0, chord);
+        let (last, held) = codes.split_last().unwrap();
+        let mut state = xkb::State::new(keymap);
+        for c in held {
+            state.update_key(Keycode::new(c + 8), xkb::KeyDirection::Down);
+        }
+        assert_eq!(state.serialize_layout(xkb::STATE_LAYOUT_EFFECTIVE), 0, "{chord} changed the layout");
+        let mods =
+            CHORD_MODIFIERS.into_iter().filter(|m| state.mod_name_is_active(m, xkb::STATE_MODS_EFFECTIVE)).collect();
+        let typed = keymap.key_get_syms_by_level(Keycode::new(last + 8), 0, 0);
+        (mods, typed.iter().map(|s| xkb::keysym_get_name(*s)).collect::<Vec<_>>().join(" "))
+    }
+
+    #[test]
+    fn a_us_keyboard_as_it_comes_keeps_every_key_where_it_is() {
+        let names = "esc escape 1 2 3 4 5 6 7 8 9 0 minus - equal = backspace tab q w e r t y u i o p leftbrace [ \
+                     rightbrace ] return enter ctrl control leftctrl a s d f g h j k l semicolon ; apostrophe ' grave ` \
+                     shift leftshift backslash \\ z x c v b n m comma , dot period . slash / rightshift alt option \
+                     leftalt space f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12 print sysrq home up pageup left right end \
+                     down pagedown delete mute power volumedown volumeup super logo cmd leftmeta A V F5 Super 125 47";
+        let us = keymap("us", "", "");
+        for name in names.split_whitespace() {
+            assert_eq!(chord_codes_in(&us, 0, name), key_code(name).map(|c| vec![c]), "{name}");
+            // All but the media keys and the evdev codes were looked for,
+            // and found where they are.
+            let fixed = ["mute", "power", "volumedown", "volumeup", "125", "47"].contains(&name);
+            assert_eq!(named(name).is_none(), fixed, "{name}");
+        }
+        assert_eq!(codes(&us, 0, "ctrl + Shift+super+3"), [29, 42, 125, 4]);
+        assert!(chord_codes_in(&us, 0, "super+hyperspace").is_err());
+        assert!(chord_codes_in(&us, 0, "é").is_err());
+    }
+
+    #[test]
+    fn a_swapped_modifier_is_pressed_where_the_swap_put_it() {
+        // Each arrangement Settei offers, and Genkan's for a PC keyboard.
+        for options in [
+            "",
+            "altwin:swap_alt_win",
+            "altwin:swap_lalt_lwin",
+            "altwin:swap_ralt_rwin",
+            "ctrl:swap_lwin_lctl,ctrl:swap_rwin_rctl",
+            "ctrl:swap_lwin_lctl",
+            "ctrl:swap_rwin_rctl",
+            "ctrl:swap_lalt_lctl,ctrl:swap_ralt_rctl",
+            "ctrl:swap_lalt_lctl",
+            "ctrl:swap_ralt_rctl",
+            // Caps Lock and Control changed about; layout switching, on
+            // keys the chords hold.
+            "ctrl:swapcaps",
+            "ctrl:nocaps,grp:alt_shift_toggle,altwin:swap_lalt_lwin",
+            "grp:lctrl_lshift_toggle",
+        ] {
+            let k = keymap("us,de", "", options);
+            for (chord, mods) in [
+                // Koe's pastes.
+                ("super+v", vec![SUPER]),
+                ("ctrl+v", vec![CTRL]),
+                ("ctrl+shift+v", vec![SHIFT, CTRL]),
+                ("alt+v", vec![ALT]),
+                ("shift+super+v", vec![SHIFT, SUPER]),
+                ("ctrl+alt+super+v", vec![CTRL, ALT, SUPER]),
+            ] {
+                assert_eq!(read(&k, chord), (mods, "v".to_string()), "{chord} with {options}");
+            }
+        }
+        // Which keys those are: left Alt for Super once they are swapped
+        // (Genkan's swap for a PC keyboard), left Control likewise.
+        let swapped = |options: &str, chord: &str| codes(&keymap("us", "", options), 0, chord);
+        assert_eq!(swapped("altwin:swap_lalt_lwin", "super+v"), [56, 47]);
+        assert_eq!(swapped("altwin:swap_alt_win", "super+v"), [56, 47]);
+        assert_eq!(swapped("ctrl:swap_lwin_lctl", "super+v"), [29, 47]);
+        assert_eq!(swapped("ctrl:swap_lwin_lctl,ctrl:swap_rwin_rctl", "ctrl+super+v"), [125, 29, 47]);
+        // The side that wasn't swapped stays the answer.
+        assert_eq!(swapped("altwin:swap_ralt_rwin", "alt+super+v"), [56, 125, 47]);
+        // An evdev code is that key, whatever it holds now.
+        assert_eq!(swapped("altwin:swap_lalt_lwin", "125+47"), [125, 47]);
+    }
+
+    #[test]
+    fn a_modifier_is_one_that_holds_with_the_chords_earlier_keys() {
+        // Shift, then the Alt key that is Super now, switches layouts where
+        // Alt and Shift do: the other Super holds with Shift.
+        let k = keymap("us,de", "", "grp:alt_shift_toggle,altwin:swap_lalt_lwin");
+        assert_eq!(codes(&k, 0, "super+shift+3"), [56, 42, 4]);
+        assert_eq!(codes(&k, 0, "shift+super+3"), [42, 126, 4]);
+        // Koe's paste into a terminal, where left Control and left Shift
+        // switch layouts: the right Shift.
+        let k = keymap("us,de", "", "grp:lctrl_lshift_toggle");
+        assert_eq!(codes(&k, 0, "ctrl+shift+v"), [29, 54, 47]);
+        assert_eq!(codes(&k, 0, "shift+v"), [42, 47]);
+        // No Shift holds with Control where both sides switch: the usual.
+        let k = keymap("us,de", "", "grp:ctrl_shift_toggle");
+        assert_eq!(codes(&k, 0, "ctrl+shift+v"), [29, 42, 47]);
+        // Not Caps Lock as Shift Lock either, which holds Shift while it is
+        // down and leaves it locked.
+        let k = keymap("us,de", "", "grp:ctrl_shift_toggle,caps:shiftlock");
+        let mut state = xkb::State::new(&k);
+        state.update_key(Keycode::new(58 + 8), xkb::KeyDirection::Down);
+        for held in [xkb::STATE_MODS_DEPRESSED, xkb::STATE_MODS_LOCKED] {
+            assert!(state.mod_name_is_active(SHIFT, held), "Caps Lock as Shift Lock");
+        }
+        assert_eq!(codes(&k, 0, "ctrl+shift+v"), [29, 42, 47]);
+    }
+
+    #[test]
+    fn a_letter_is_pressed_where_the_layout_has_it() {
+        let dvorak = keymap("us", "dvorak", "");
+        assert_eq!(codes(&dvorak, 0, "super+v"), [125, 52], "Dvorak's v is where a US keyboard has the full stop");
+        assert_eq!(read(&dvorak, "super+v"), (vec![SUPER], "v".to_string()));
+        assert_eq!(read(&dvorak, "shift+super+]"), (vec![SHIFT, SUPER], "bracketright".to_string()));
+        assert_eq!(codes(&keymap("de", "", ""), 0, "ctrl+z"), [29, 21], "QWERTZ");
+        assert_eq!(codes(&keymap("fr", "", ""), 0, "super+a+q+m"), [125, 16, 30, 39], "AZERTY");
+        // With a swap as well.
+        assert_eq!(codes(&keymap("us", "dvorak", "altwin:swap_lalt_lwin"), 0, "super+v"), [56, 52]);
+        // A key no layout moves, moved by an option.
+        assert_eq!(codes(&keymap("us", "", "caps:swapescape"), 0, "escape"), [58]);
+    }
+
+    #[test]
+    fn a_key_the_layout_lacks_is_the_usual_one() {
+        // German types ] with AltGr and French types digits with Shift:
+        // no key types them alone.
+        assert_eq!(codes(&keymap("de", "", ""), 0, "super+]"), [125, 27]);
+        assert_eq!(codes(&keymap("fr", "", ""), 0, "ctrl+super+2"), [29, 125, 3]);
+        // Russian has no v: the key that types it in the keymap's other
+        // layout, whichever of the two is in use.
+        let two = keymap("us,ru", "", "");
+        assert_eq!(codes(&two, 0, "super+v"), [125, 47]);
+        assert_eq!(codes(&two, 1, "super+v"), [125, 47]);
+        let two = keymap("ru,us", ",dvorak", "");
+        assert_eq!(codes(&two, 0, "super+v"), [125, 52]);
+        assert_eq!(codes(&two, 1, "super+v"), [125, 52]);
+        // The layout in use comes first.
+        let two = keymap("us,us", ",dvorak", "");
+        assert_eq!(codes(&two, 0, "v"), [47]);
+        assert_eq!(codes(&two, 1, "v"), [52]);
+    }
 }
