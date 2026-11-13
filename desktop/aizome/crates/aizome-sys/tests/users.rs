@@ -2,13 +2,86 @@
 
 mod common;
 
-use aizome_sys::users::{AccountType, DeleteUser, Users};
+use aizome_sys::users::{AccountType, DeleteUser, Users, greetd_config};
 use aizome_sys::{Error, Wake};
 use common::{eventually, path};
 use std::sync::{Arc, Mutex};
 use zbus::fdo;
 use zbus::object_server::{ObjectServer, SignalEmitter};
 use zbus::zvariant::OwnedObjectPath;
+
+const GREETD_UNIT: &str = "/org/freedesktop/systemd1/unit/greetd_2eservice";
+
+struct SystemdManager;
+
+#[zbus::interface(name = "org.freedesktop.systemd1.Manager")]
+impl SystemdManager {
+    fn get_unit(&self, name: &str) -> OwnedObjectPath {
+        assert_eq!(name, "greetd.service");
+        path(GREETD_UNIT)
+    }
+}
+
+struct GreetdUnit(Arc<Mutex<bool>>);
+
+#[zbus::interface(name = "org.freedesktop.systemd1.Unit")]
+impl GreetdUnit {
+    #[zbus(property)]
+    fn active_state(&self) -> &str {
+        if *self.0.lock().unwrap() { "active" } else { "inactive" }
+    }
+}
+
+struct GreetdService(Arc<Mutex<Vec<String>>>);
+
+type ExecStart = (String, Vec<String>, bool, u64, u64, u64, u64, u32, i32, i32);
+
+#[zbus::interface(name = "org.freedesktop.systemd1.Service")]
+impl GreetdService {
+    #[zbus(property)]
+    fn exec_start(&self) -> Vec<ExecStart> {
+        let argv = self.0.lock().unwrap().clone();
+        vec![(argv[0].clone(), argv, false, 0, 0, 0, 0, 42, 0, 0)]
+    }
+}
+
+#[test]
+fn greetd_configuration_comes_from_the_active_service() {
+    let bus = test_bus!();
+    let active = Arc::new(Mutex::new(true));
+    let exe = "/nix/store/package-greetd/bin/greetd";
+    let config = "/nix/store/config-greetd.toml";
+    let argv = Arc::new(Mutex::new(vec![exe.into(), "--config".into(), config.into()]));
+    let _fake = bus
+        .builder()
+        .name("org.freedesktop.systemd1")
+        .unwrap()
+        .serve_at("/org/freedesktop/systemd1", SystemdManager)
+        .unwrap()
+        .serve_at(GREETD_UNIT, GreetdUnit(active.clone()))
+        .unwrap()
+        .serve_at(GREETD_UNIT, GreetdService(argv.clone()))
+        .unwrap()
+        .build()
+        .unwrap();
+    // NixOS never creates /etc/greetd: its store path is in ExecStart.
+    assert_eq!(greetd_config(&bus.bus()).unwrap(), Some(config.into()));
+    for args in [
+        vec![exe.into(), "-c".into(), "/custom path/login.toml".into()],
+        vec![exe.into(), "--config=/custom path/login.toml".into()],
+    ] {
+        *argv.lock().unwrap() = args;
+        assert_eq!(greetd_config(&bus.bus()).unwrap(), Some("/custom path/login.toml".into()));
+    }
+    *argv.lock().unwrap() = vec![exe.into()];
+    assert_eq!(greetd_config(&bus.bus()).unwrap(), Some("/etc/greetd/config.toml".into()));
+    // A disabled, still loaded greetd must not replace another login manager.
+    *active.lock().unwrap() = false;
+    assert_eq!(greetd_config(&bus.bus()).unwrap(), None);
+    *active.lock().unwrap() = true;
+    *argv.lock().unwrap() = vec!["/nix/store/package-gdm/bin/gdm".into()];
+    assert_eq!(greetd_config(&bus.bus()).unwrap(), None);
+}
 
 #[derive(Default)]
 struct Log {

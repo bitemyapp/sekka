@@ -1818,8 +1818,18 @@ impl Program for Yukimi {
             Msg::NoteGone(id) => self.notes.retain(|(n, _)| *n != id),
             Msg::Launched(args) => {
                 match launch_from_args(&args) {
+                    // Proposed once read, with the people read with it.
                     Ok(launch) if self.loading => self.launch = Some(launch),
-                    Ok(launch) => self.propose(launch, cx),
+                    Ok(launch) => {
+                        // Settei may propose someone added (or removed)
+                        // since Yukimi read the accounts.
+                        let choices = self.choices();
+                        if launch.choose.iter().any(|(s, _)| choices.iter().any(|c| c.people && &c.setting == s)) {
+                            let people = self.model.paths.people();
+                            Arc::make_mut(&mut self.model).setup.facts.offer_people(&people);
+                        }
+                        self.propose(launch, cx)
+                    }
                     Err(e) => self.note(e, cx),
                 }
                 cx.activate(self.window);
@@ -1905,14 +1915,19 @@ pub fn launch_from_args(args: &[String]) -> Result<Launch, String> {
             "--choose" => {
                 let value = it.next().ok_or("--choose takes SETTING=VALUE[,VALUE]")?;
                 let (setting, values) = value.split_once('=').ok_or("--choose takes SETTING=VALUE[,VALUE]")?;
-                let values: Vec<String> =
+                let mut values: Vec<String> =
                     values.split(',').map(str::trim).filter(|v| !v.is_empty()).map(str::to_owned).collect();
+                // No value: the empty one, which is no one for who logs in by
+                // themselves (other choices refuse it once read).
+                if values.is_empty() {
+                    values.push(String::new());
+                }
                 let named = |s: &str| {
                     !s.is_empty()
                         && s.split('.')
                             .all(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_alphanumeric() || c == '-'))
                 };
-                if !named(setting) || values.is_empty() || launch.choose.iter().any(|(s, _)| s == setting) {
+                if !named(setting) || launch.choose.iter().any(|(s, _)| s == setting) {
                     return Err(format!("--choose {value:?} isn't SETTING=VALUE[,VALUE]"));
                 }
                 launch.choose.push((setting.to_owned(), values));

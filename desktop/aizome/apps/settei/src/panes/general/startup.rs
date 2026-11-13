@@ -6,11 +6,11 @@
 
 use aizome_kit::prelude::*;
 use aizome_kit::row;
-use serde::Deserialize;
 
 use super::Msg as G;
 use crate::form;
 use crate::pane::{PaneCx, SettingEntry, ViewCx};
+use crate::system::choices;
 
 /// The setting Sekka declares for its boot splash.
 pub const SPLASH: &str = "calamares.bootSplash.enable";
@@ -46,31 +46,10 @@ pub fn entries() -> Vec<SettingEntry> {
     ])]
 }
 
-/// Whether a system's `yukimi/system.json` offers the boot splash, and if
-/// so whether it's on.
-pub fn offered(text: &str) -> Option<bool> {
-    #[derive(Deserialize)]
-    struct Facts {
-        #[serde(default)]
-        choices: Vec<Choice>,
-    }
-    #[derive(Deserialize)]
-    struct Choice {
-        setting: String,
-        value: serde_json::Value,
-    }
-    let facts: Facts = serde_json::from_str(text).ok()?;
-    let choice = facts.choices.into_iter().find(|c| c.setting == SPLASH)?;
-    Some(choice.value.as_str() == Some("true"))
-}
-
 /// The running system's boot splash (`/etc`) and the next start's (the
 /// system profile, which a change prepared for the next start moves).
 pub fn read() -> Option<Splash> {
-    let read = |path: &str| std::fs::read_to_string(path).ok().and_then(|text| offered(&text));
-    let now = read("/etc/yukimi/system.json")?;
-    let next = read("/nix/var/nix/profiles/system/etc/yukimi/system.json").unwrap_or(now);
-    Some(Splash { now, next })
+    choices::read(SPLASH).map(|c| Splash { now: c.now == "true", next: c.next == "true" })
 }
 
 /// "On", or "Off from the next start" while a change waits for one.
@@ -134,8 +113,12 @@ mod tests {
                    "options":[{{"id":"true","title":"On"}},{{"id":"false","title":"Off"}}]}}]}}"#
             )
         };
+        // Whether a system's `yukimi/system.json` offers it, and if so whether it's on.
+        let offered = |text: &str| choices::value(text, SPLASH).map(|v| v == "true");
         assert_eq!(offered(&facts("true")), Some(true));
         assert_eq!(offered(&facts("false")), Some(false));
+        // Given as a JSON boolean, it's still offered.
+        assert_eq!(offered(&facts("true").replace("\"value\":\"true\"", "\"value\":true")), Some(true));
         // Older Sekka, other systems, or no Yukimi.
         assert_eq!(offered(r#"{"choices":[]}"#), None);
         assert_eq!(offered("{}"), None);

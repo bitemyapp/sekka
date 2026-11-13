@@ -291,3 +291,145 @@ fn removing_a_user_names_their_home_and_fixed_accounts_keep_their_type() {
     let (kind, _) = row_of(&h, "Standard").expect("Guest's account type");
     assert!(kind.disabled, "the account type can be changed though the configuration fixes it");
 }
+
+#[test]
+fn on_sekka_yukimi_changes_who_logs_in_by_themselves() {
+    use aizome_kit::testing::Harness;
+    use settei::panes::users::{AutoLogin, Msg};
+    use settei::system::choices::Now;
+    let (mut h, _) = common::open("users-auto-login", "users");
+    let w = h.window();
+    let send = |h: &mut Harness<settei::Settei>, msg: Msg| {
+        let msg: settei::pane::PaneMsg = std::sync::Arc::new(msg);
+        h.send(settei::AppMsg::Pane("users", msg));
+    };
+    let choice = |now: &str, next: &str| AutoLogin::Choice(Now { now: now.into(), next: next.into() });
+    let launched = |h: &Harness<settei::Settei>| h.program().shared.launched.last().cloned().unwrap_or_default();
+    let says =
+        |h: &Harness<settei::Settei>, w: aizome_kit::WindowKey, what: &str| h.texts(w).iter().any(|t| t.contains(what));
+    // Sekka's choice: Yukimi is handed the person, and AccountsService's
+    // flag (GDM's) stays as it is.
+    send(&mut h, Msg::AutoLoginRead(choice("", "")));
+    send(&mut h, Msg::AutoLoginConfirmed(Some("ren".into())));
+    assert_eq!(launched(&h), ["aizome-yukimi", "--choose", "calamares.autoLogin=ren"]);
+    assert!(h.program().shared.sys.accounts.snapshot().users.iter().all(|u| !u.automatic_login));
+    assert!(says(&h, w, "Proposed in Yukimi: Ren Ishida."), "{:?}", h.texts(w));
+    // Applied for the next start: the row says so, and the proposal is done.
+    send(&mut h, Msg::AutoLoginRead(choice("", "ren")));
+    assert!(says(&h, w, "From the next start: Ren Ishida."), "{:?}", h.texts(w));
+    assert!(!says(&h, w, "Proposed in Yukimi"), "{:?}", h.texts(w));
+    // Removing them waits until the computer no longer starts into their
+    // account: the sheet offers to turn that off first, which proposes no
+    // one in Yukimi, and nobody is removed meanwhile.
+    let has_ren = |h: &Harness<settei::Settei>| h.program().shared.sys.accounts.snapshot().user("ren").is_some();
+    send(&mut h, Msg::Remove("ren".into()));
+    let s = h.program().sheet_window().expect("the sheet");
+    assert!(says(&h, s, "Turn that off first"), "{:?}", h.texts(s));
+    assert!(!says(&h, s, "Remove User"), "{:?}", h.texts(s));
+    // Not even when asked without the sheet's button.
+    send(&mut h, Msg::RemoveConfirmed);
+    assert!(has_ren(&h));
+    send(&mut h, Msg::Remove("ren".into()));
+    let s = h.program().sheet_window().expect("the sheet");
+    assert!(h.click_text(s, "Turn Off in Yukimi…"), "{:?}", h.texts(s));
+    assert!(h.settle(std::time::Duration::from_secs(5), |p| p.shared.launched.len() == 2));
+    assert_eq!(launched(&h), ["aizome-yukimi", "--choose", "calamares.autoLogin="]);
+    assert!(says(&h, w, "Proposed in Yukimi: no one."), "{:?}", h.texts(w));
+    assert!(has_ren(&h));
+    // Once Yukimi has made the change, they are removed as anyone is, and
+    // nothing more is proposed.
+    send(&mut h, Msg::AutoLoginRead(choice("ren", "")));
+    send(&mut h, Msg::Remove("ren".into()));
+    let s = h.program().sheet_window().expect("the sheet");
+    assert!(!says(&h, s, "Turn that off first"), "{:?}", h.texts(s));
+    assert!(h.click_text(s, "Remove User"));
+    assert!(
+        h.settle(std::time::Duration::from_secs(5), |p| { p.shared.sys.accounts.snapshot().user("ren").is_none() })
+    );
+    assert_eq!(h.program().shared.launched.len(), 2);
+}
+
+#[test]
+fn someone_who_must_set_a_password_is_not_offered_to_log_in_by_themselves() {
+    use aizome_kit::testing::Harness;
+    use aizome_sys::users::PasswordMode;
+    use settei::panes::users::{AutoLogin, Msg};
+    use settei::system::Accounts;
+    use settei::system::choices::Now;
+    let (mut h, _) = common::open("users-auto-login-password", "users");
+    let w = h.window();
+    let send = |h: &mut Harness<settei::Settei>, msg: Msg| {
+        let msg: settei::pane::PaneMsg = std::sync::Arc::new(msg);
+        h.send(settei::AppMsg::Pane("users", msg));
+    };
+    let says = |h: &Harness<settei::Settei>, what: &str| h.texts(w).iter().any(|t| t.contains(what));
+    send(&mut h, Msg::AutoLoginRead(AutoLogin::Choice(Now { now: String::new(), next: String::new() })));
+    assert!(!says(&h, "can't be chosen yet"), "{:?}", h.texts(w));
+    // As Settei leaves a person added with the password left empty.
+    if let Accounts::Sample(c) = &h.program().shared.sys.accounts {
+        let _ = c
+            .update(|s| {
+                let ren = s.users.iter_mut().find(|u| u.name == "ren").expect("Ren");
+                ren.password_mode = PasswordMode::SetAtLogin;
+            })
+            .wait();
+    }
+    h.send(settei::AppMsg::SystemChanged);
+    assert!(says(&h, "Ren Ishida can't be chosen yet"), "{:?}", h.texts(w));
+}
+
+#[test]
+fn removing_someone_goes_by_who_logs_in_by_themselves_then() {
+    use aizome_kit::testing::Harness;
+    use settei::panes::users::{AutoLogin, Msg};
+    use settei::system::choices::{Files, Now};
+    use std::time::Duration;
+    let (mut h, settings) = common::open("users-remove-reads-again", "users");
+    let w = h.window();
+    // The system's choices as Yukimi leaves them, in files of this test's:
+    // the running system's, and those of the one the computer starts next.
+    let dir = settings.parent().expect("the test's directory");
+    let files = Files { now: dir.join("now.json"), next: dir.join("next.json") };
+    let choose = |file: &std::path::Path, who: &str| {
+        let choice = format!(
+            r#"{{"choices":[{{"setting":"calamares.autoLogin","title":"Log in automatically","people":true,"value":"{who}","options":[]}}]}}"#
+        );
+        std::fs::write(file, choice).expect("the choices");
+    };
+    choose(&files.now, "");
+    choose(&files.next, "");
+    h.program_mut().shared.choices = Some(files.clone());
+    let send = |h: &mut Harness<settei::Settei>, msg: Msg| {
+        let msg: settei::pane::PaneMsg = std::sync::Arc::new(msg);
+        h.send(settei::AppMsg::Pane("users", msg));
+    };
+    let says =
+        |h: &Harness<settei::Settei>, w: aizome_kit::WindowKey, what: &str| h.texts(w).iter().any(|t| t.contains(what));
+    let has_ren = |h: &Harness<settei::Settei>| h.program().shared.sys.accounts.snapshot().user("ren").is_some();
+    let sheet = |h: &mut Harness<settei::Settei>| {
+        assert!(h.settle(Duration::from_secs(5), |p| p.sheet_window().is_some()), "no sheet");
+        h.program().sheet_window().expect("the sheet")
+    };
+    // As the pane read it when it opened: no one logs in by themselves.
+    send(&mut h, Msg::AutoLoginRead(AutoLogin::Choice(Now { now: String::new(), next: String::new() })));
+    // Then Ren is chosen in Yukimi itself, and applied for the next start,
+    // while this pane stays open. Removing Ren goes by that, not by what
+    // the pane read before: only turning it off first is offered.
+    choose(&files.next, "ren");
+    send(&mut h, Msg::Remove("ren".into()));
+    let s = sheet(&mut h);
+    assert!(says(&h, s, "Turn that off first"), "{:?}", h.texts(s));
+    assert!(!says(&h, s, "Remove User"), "{:?}", h.texts(s));
+    send(&mut h, Msg::RemoveConfirmed);
+    assert!(has_ren(&h));
+    // The row has it as read then, too.
+    assert!(says(&h, w, "From the next start: Ren Ishida."), "{:?}", h.texts(w));
+    // Turned off in Yukimi again: Ren is removed as anyone is.
+    choose(&files.next, "");
+    send(&mut h, Msg::Remove("ren".into()));
+    let s = sheet(&mut h);
+    assert!(!says(&h, s, "Turn that off first"), "{:?}", h.texts(s));
+    assert!(h.click_text(s, "Remove User"));
+    assert!(h.settle(Duration::from_secs(5), |p| p.shared.sys.accounts.snapshot().user("ren").is_none()));
+    assert!(h.program().shared.launched.is_empty());
+}

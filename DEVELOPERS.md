@@ -1144,17 +1144,85 @@ previous version.
 The system's own choices travel with an update or go alone: the Nix module
 declares which settings of the main configuration file Yukimi may write, and
 to which values (`programs.yukimi.choices`, listed in `/etc/yukimi/system.json`;
-Sekka declares `calamares.desktops`, `calamares.defaultDesktop` and
-`calamares.loginScreen` in `installer/genkan/rust/system/desktops.nix`, and
-`calamares.bootSplash.enable` in `installer/genkan/rust/system/boot-splash/`).
+Sekka declares `calamares.desktops`, `calamares.defaultDesktop`,
+`calamares.loginScreen` and `calamares.autoLogin` in
+`installer/genkan/rust/system/desktops.nix`, and `calamares.bootSplash.enable`
+in `installer/genkan/rust/system/boot-splash/`).
 `yukimi-helper change --choose SETTING=VALUE[,VALUE]` (and `sekka-update
 --choose`) refuses any other setting or value, writes a string, a list of
 strings or a boolean as declared (a `boolean` choice's options are `true` and
-`false`, given as strings so older readers of `system.json` still parse it),
-and builds once with the rest of the change, so choosing
+`false`, given as strings so older readers of `system.json` still parse it).
+A `people` choice (`calamares.autoLogin`, who logs in by themselves) takes no
+value for no one, written as `""`, or a name the helper checks against
+`/etc/passwd` as it writes it: an account from uid 1000 to 59999 with a login
+shell, so people added in Settei after installing count. It also reads
+`/etc/shadow` and refuses an account that can't open a session with nobody
+asked anything, by pam_unix's account rules (`check_shadow_expiry`): an
+expired account, or a password that has to be set at the next login (a
+person added without one) or changed (`chage -d 0`, or one as old as the
+account's maximum, from that day on; one with no last change doesn't age).
+It refuses a locked password too (`!` before a hash: `passwd -l`, and
+AccountsService's `SetLocked`), though PAM's account check passes it and an
+automatic login would open that session: an account locked after it was
+chosen still logs in by itself. A bare `!`, as NixOS writes an account
+declared without a password, is taken. The helper builds
+once with the rest of the change, so choosing
 Aizome's login screen is a click and a password, with the same switch-or-boot
 planning and Restart button as an update. A changed login screen always stages
 for the next start.
+`calamares.autoLogin` defaults to `null`, preserving an existing
+`services.displayManager.autoLogin` configuration. Its choice reports the
+effective display-manager setting. Selecting a person or no one explicitly
+overrides ordinary definitions of that setting (priority 90), including
+disabling an existing automatic login; `mkForce` policy still wins.
+Settei offers only the accounts the helper takes (local, uid 1000 to 59999,
+a `useradd`-style name, a login shell; an empty shell field is `/bin/sh`;
+with no password still to set, naming whoever that leaves out;
+AccountsService's `Locked` is also true of an account declared without a
+password, so a locked or expired one is left to the helper to refuse), and
+re-reads `system.json` every two seconds while a proposal waits in Yukimi.
+It doesn't remove the person the choice names: the remove sheet offers to
+turn automatic login off in Yukimi first, and removes them once the next
+start's choice no longer names them. It reads the choice again when Remove
+is pressed, so one applied in Yukimi while the pane stayed open counts.
+On Aizome's login screen the choice is greetd's initial session
+(`desktop/aizome/nix/greeter.nix`). greetd exits with status 1 when that
+session can't start, before it notes its first run. So whenever greetd has
+an initial session (from this choice, from
+`services.displayManager.autoLogin`, or set as greetd's own
+`settings.initial_session`), the unit marks greetd's run file whenever
+greetd stops and restarts it after that exit (and after a clean one, as
+NixOS does without an initial session): the login screen comes up instead,
+and no restart logs anyone in again. Those units also stop after five starts
+in three minutes (the greeter waits up to 20 s for its compositor before it
+gives up), so a greeter that can't start leaves the unit failed and a text
+console usable, where restarting without end would take the console back
+each time. The live image's greetd unit is one of them: it logs in by
+itself. A unit without an initial session is as NixOS makes it.
+`checks.x86_64-linux.aizome-automatic-login` boots the fallback: an account
+that is gone, one that has to set a password, then one that can log in.
+The other two login screens show themselves for some of these and not for
+others. GDM does only for an account that is gone: for one that has expired
+or has a password to set or change, its automatic login fails and no login
+screen follows. Plasma Login does for one that is gone or has expired, and
+for a password to set where there is none; where a password exists and has
+to be changed, its automatic login waits for the old one, which nobody is
+asked for, and no login screen follows either. So each of their units'
+`preStart` (`installer/genkan/rust/system/desktops.nix`, `canLogInByItself`)
+reads `/etc/shadow` by the helper's account rules and, for such an account,
+turns automatic login off for that start: in GDM's runtime configuration
+(`gdm-runtime-config`, `/run/gdm/custom.conf`), and for Plasma Login, which
+reads no settings from `/run`, through the last of its drop-ins
+(`/etc/plasmalogin.conf.d/zz-this-start.conf`, a link to
+`/run/plasmalogin-this-start.conf`). Keep that script and
+`yukimi_system::people::blocked` alike. No check boots GDM or Plasma Login
+this way; they were run in disposable VMs. On standalone
+Aizome, Settei queries the active greetd service through systemd and reads
+the configuration named by its `ExecStart` arguments, including NixOS's
+store path. Under greetd, and on NixOS under any login screen (NixOS writes
+GDM's `custom.conf` read-only, and SDDM and Plasma Login never read
+AccountsService), it shows the setting as controlled by the configuration;
+only other systems use AccountsService's flag.
 `sekka-update --boot` explicitly
 stages the update; `--switch` requests live activation but refuses an unsafe
 transition before committing configuration edits. A target-side NixOS
@@ -1229,7 +1297,7 @@ changing the host desktop.
 helper in a rootless bubblewrap namespace. It covers migration, repeat updates,
 following Sekka and the new system's caches, a Nixpkgs of the system's own,
 early updates and the system's declared choices (and refusing undeclared
-ones), refusing to start without room, failed builds, cancellation, concurrent operations, closed progress pipes, unsafe
+ones), who logs in automatically (and refusing someone whose account can't), refusing to start without room, failed builds, cancellation, concurrent operations, closed progress pipes, unsafe
 explicit switches and rollbacks, and UWSM session identity. Nix and
 systemd actions are stubbed; also evaluate/build a copy of the installed host
 flake to check actual module and dependency compatibility before deployment.
@@ -1711,7 +1779,8 @@ manager cannot run the launcher's cleanup trap.
 `aizome-checks` holds the 24 VM checks Aizome's flake had, under the names it
 gave them. They are in `legacyPackages`, not `checks`, so `nix flake check` and
 CI don't run them, just as they didn't run in Aizome's repository. Sekka's own
-Aizome checks (`aizome-login`, `aizome-greeter-desktops`, `aizome-ibus`,
+Aizome checks (`aizome-login`, `aizome-automatic-login`,
+`aizome-greeter-desktops`, `aizome-ibus`,
 `aizome-ibus-policy`) still run with the others.
 
 The package version is a plain `0.1.0`. Aizome's flake added its own revision

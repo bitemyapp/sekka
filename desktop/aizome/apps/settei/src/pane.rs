@@ -604,6 +604,12 @@ impl<'a, 'c, Msg: Clone + Send + Sync + 'static> PaneCx<'a, 'c, Msg> {
         self.shared.sample
     }
 
+    /// Where the system's own choices are read from, to read them off the
+    /// main thread: none in the sample, unless a test gave it some.
+    pub fn choices(&self) -> Option<crate::system::choices::Files> {
+        self.shared.choices.clone()
+    }
+
     /// The keyboard the launch opening this pane named (`--keyboard`):
     /// for the keyboard pane's setup sheet, in [`Pane::focus_entry`].
     pub fn keyboard_named(&self) -> Option<&str> {
