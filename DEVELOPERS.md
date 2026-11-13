@@ -223,6 +223,13 @@ Release publication settings are unrelated and remain unchanged.
 
 ## Build and check
 
+The [Bazel and Nix build plan](docs/bazel-build-plan.md) defines the proposed
+workstation-first migration: qualify compilation and artifact sharing across
+worktrees on `ssh wx-workstation`, then evaluate laptop reuse and local
+deduplication before integrating packaging and CI. It records the initial
+probe evidence, implementation stages and acceptance gates; the commands
+below remain the current supported build workflow.
+
 Sekka's PipeWire service uses `sekka-pipewire-daemon`, with the X11 bell
 disconnect fix in `nix/patches/pipewire-x11-bell-disconnect.patch`. Xlib can
 report a lost display more than once during logout. The fix makes removal of
