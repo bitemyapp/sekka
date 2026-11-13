@@ -97,9 +97,12 @@ impl Font {
         fonts::install(bytes.into()).iter().map(|f| f.to_string()).collect()
     }
 
-    /// Read a font file and [`install`](Font::install) it.
+    /// [`install`](Font::install) a font file. The file is mapped into
+    /// memory rather than read, as the system's font files are: it must
+    /// not be cut short or rewritten in place while the program runs
+    /// (removing or replacing it is fine).
     pub fn install_file(path: impl AsRef<std::path::Path>) -> std::io::Result<Vec<String>> {
-        Ok(Font::install(std::fs::read(path)?))
+        Ok(fonts::install_file(path.as_ref())?.iter().map(|f| f.to_string()).collect())
     }
 
     /// Face `index` of a font file (0 unless it's a collection: see
@@ -821,6 +824,24 @@ mod tests {
         assert_eq!(named.family_name(), "DejaVu Sans");
         // By its full name too, as names go.
         assert!(Font::named("DejaVu Sans Bold", 14.0).is_some());
+    }
+
+    #[test]
+    fn font_files_install_from_their_paths() {
+        let fixtures = concat!(env!("CARGO_MANIFEST_DIR"), "/../../fixtures");
+        // Mapped rather than read, with the family the bytes give.
+        assert_eq!(Font::install_file(format!("{fixtures}/DejaVuSans.ttf")).unwrap(), ["DejaVu Sans"]);
+        let named = Font::named("DejaVu Sans", 20.0).expect("the installed family");
+        let w = measure("W", &TextStyle::new(named, Color::BLACK)).width;
+        assert!((18.0..21.0).contains(&w), "{w}");
+        // A file that isn't a font installs nothing, mapped or (empty)
+        // read; one that isn't there is an error.
+        assert!(Font::install_file(format!("{fixtures}/DejaVuSans-LICENSE.txt")).unwrap().is_empty());
+        let empty = std::env::temp_dir().join(format!("sidestep-empty-font-{}", std::process::id()));
+        std::fs::write(&empty, b"").unwrap();
+        assert!(Font::install_file(&empty).unwrap().is_empty());
+        std::fs::remove_file(&empty).unwrap();
+        assert!(Font::install_file(format!("{fixtures}/no-such-font.ttf")).is_err());
     }
 
     /// Archivo's variable font (`Archivo[wdth,wght].ttf`, from Google

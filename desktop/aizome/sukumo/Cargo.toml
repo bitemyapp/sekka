@@ -5,6 +5,9 @@
 [workspace]
 resolver = "3"
 members = ["crates/*"]
+# Crates.io crates carried with a change (vendor/README.md), patched in
+# below rather than built as members.
+exclude = ["vendor/fontique"]
 
 [workspace.package]
 version = "0.0.1"
@@ -22,3 +25,11 @@ sidestep-ui = { path = "crates/sidestep-ui" }
 # in debug builds turn some blend modes into panics on x86_64.
 [profile.dev.package.tiny-skia]
 overflow-checks = false
+
+# fontique 0.11.1 finding the system's generic families (sans-serif,
+# monospace, emoji...) when each is first asked for rather than all eight
+# as the collection opens, which took most of an app's start
+# (vendor/README.md). Every workspace that builds the engine patches it in
+# the same way: Aizome's, Genkan's window's.
+[patch.crates-io]
+fontique = { path = "vendor/fontique" }
