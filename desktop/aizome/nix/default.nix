@@ -174,6 +174,10 @@ let
       # Utsushi playing a video opened as the desktop opens one, and a song
       # paused and resumed, through PipeWire (vm-utsushi-test.nix).
       utsushi = import ./vm-utsushi-test.nix { inherit pkgs self; };
+      # A display turned off and on, and one whose turning on fails (the
+      # session paused on another VT) still off and listed
+      # (vm-output-enable-test.nix).
+      output-enable = import ./vm-output-enable-test.nix { inherit pkgs self; };
       # A video playing in Utsushi, mpv or VLC holds off the idle lock and
       # the displays' turning off; paused or gone, it doesn't
       # (vm-idle-inhibit-test.nix).

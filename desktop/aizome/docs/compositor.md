@@ -531,7 +531,10 @@ nix develop .#aizome --command cargo test -p aizome-comp
 - `tests/displays.rs`: outputs off and on (from IPC and the settings),
   mirroring scaled and letterboxed, the main display, Night Light's IPC
   and schedule, the renderer setting, and a laptop's panel (a headless
-  output named `eDP-1`) dark while its lid is closed.
+  output named `eDP-1`) dark while its lid is closed. On udev, in a VM
+  (`nix build .#aizome-checks.output-enable`): a display off and on, and
+  one whose turning on fails (another VT has the seat) still off and
+  listed.
 - `tests/screens.rs`: displays with Desks of their own: switching on one
   leaves the other alone, a Desk another display shows swaps with it and
   its window scales to the larger display and back exactly, a window
