@@ -2,10 +2,12 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import signal
 import sys
 import socket
 import tempfile
 import threading
+import time
 import unittest
 from unittest.mock import patch
 
@@ -231,6 +233,33 @@ class StorageTest(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 recorder.PrivateLog(directory)
             self.assertEqual(target.read_text(), "preserve")
+
+
+class ScheduleTest(unittest.TestCase):
+    def test_a_late_sample_is_followed_by_a_full_interval(self):
+        saved = {number: signal.getsignal(number)
+                 for number in (signal.SIGTERM, signal.SIGINT, signal.SIGUSR1)}
+        self.addCleanup(lambda: [signal.signal(number, handler) for number, handler in saved.items()])
+        self.addCleanup(os.umask, os.umask(0o077))
+        sleep, waits = time.sleep, []
+
+        def stalled_once(seconds):
+            # The fourth wait stands in for a recorder that could not run.
+            waits.append(seconds)
+            sleep(0.35 if len(waits) == 4 else seconds)
+
+        with tempfile.TemporaryDirectory() as root, \
+                patch.object(recorder.Sampler, "sample", lambda self, now: {}), \
+                patch.object(recorder.DetailWorker, "collect",
+                             lambda self, *args: {"reports": [], "duration_seconds": 0}), \
+                patch.object(recorder.time, "sleep", stalled_once):
+            self.assertEqual(recorder.main(["--output-dir", root, "--interval", "0.1", "--samples", "7"]), 0)
+            rows = sorted(recorder.query_records(root, kinds=["summary"]), key=lambda row: row["sample_id"])
+        elapsed = [row["elapsed_seconds"] for row in rows[1:]]
+        late = max(range(len(elapsed)), key=elapsed.__getitem__)
+        self.assertGreaterEqual(elapsed[late], 0.3)
+        self.assertLess(late + 1, len(elapsed))
+        self.assertGreaterEqual(elapsed[late + 1], 0.1)
 
 
 class StateDirectoryTest(unittest.TestCase):

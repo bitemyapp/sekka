@@ -1160,7 +1160,11 @@ def main(argv=None):
                 if regular_tick:
                     deadline += args.interval
                 if deadline <= finished:
-                    deadline = finished
+                    # A whole interval late (a stall, or a slow sample): drop the
+                    # missed ticks and wait an interval. Sampling again at once
+                    # measured rates over a few milliseconds, and never slept
+                    # while samples took longer than the interval.
+                    deadline = finished + args.interval
             if future is not None:
                 try:
                     receive(future.result())
