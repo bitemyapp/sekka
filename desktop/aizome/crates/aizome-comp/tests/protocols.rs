@@ -1,8 +1,8 @@
 //! What Sidestep's fast paths ask of the compositor: wl_shm in ABGR and
 //! XBGR, shm buffers released once, as soon as their pixels are uploaded
-//! (GLES), a sync subsurface's with its parent's commit, and drag and drop
-//! with an icon surface that moves by wl_surface.offset and data source
-//! actions (version 3).
+//! (GLES) and not before, a sync subsurface's with its parent's commit,
+//! and drag and drop with an icon surface that moves by wl_surface.offset
+//! and data source actions (version 3).
 
 mod common;
 
@@ -31,6 +31,7 @@ use wl_data_device_manager::DndAction;
 struct Probe {
     formats: Vec<wl_shm::Format>,
     configured: bool,
+    configures: Vec<xdg_surface::XdgSurface>,
     button_serial: Option<u32>,
     // As a drag target.
     offer: Option<wl_data_offer::WlDataOffer>,
@@ -244,6 +245,71 @@ fn sync_subsurface_buffer_kept_while_drawn_pixman() {
     sync_subsurface_release("pixman");
 }
 
+/// A sync subsurface's first frame under a toplevel that has no buffer yet.
+/// Nothing draws either, and the import at the parent's commit stops at a
+/// surface without a buffer, so nothing has read the child's buffer: it is
+/// kept, under GLES too, until a commit replaces it. Released there, a
+/// client would draw its next frame into it, and that would show when the
+/// toplevel maps instead of the frame it committed.
+fn unread_subsurface_buffer_kept(renderer_name: &str) {
+    let c = Compositor::start(Options { renderer: Some(renderer_name), ..Default::default() });
+    let mut a = Client::new(&c, "org.example.probe");
+    let wm: xdg_wm_base::XdgWmBase = a.globals.bind(&a.qh, 1..=6, ()).unwrap();
+    let subcompositor: wl_subcompositor::WlSubcompositor = a.globals.bind(&a.qh, 1..=1, ()).unwrap();
+    let root = a.compositor.create_surface(&a.qh, ());
+    let xs = wm.get_xdg_surface(&root, &a.qh, ());
+    let tl = xs.get_toplevel(&a.qh, ());
+    tl.set_app_id("org.example.late".into());
+    root.commit();
+    a.wait("the second toplevel's configure", |s| s.configures.contains(&xs));
+    let child = a.compositor.create_surface(&a.qh, ());
+    let sub = subcompositor.get_subsurface(&child, &root, &a.qh, ());
+    sub.set_position(20, 20);
+    let releases = Arc::new(AtomicUsize::new(0));
+    let b = a.buffer(60, 40, 0x22aa44, Some(releases.clone()));
+    child.attach(Some(&b), 0, 0);
+    child.damage_buffer(0, 0, 60, 40);
+    child.commit();
+    root.commit();
+    a.roundtrip();
+    c.settle();
+    a.roundtrip();
+    assert_eq!(releases.load(Ordering::SeqCst), 0, "a buffer nothing has read yet is kept");
+
+    // The toplevel maps: the child's frame shows as it was committed.
+    let rb = a.buffer(300, 200, 0x2266cc, None);
+    root.attach(Some(&rb), 0, 0);
+    root.commit();
+    a.roundtrip();
+    let w = c.wait_window("org.example.late");
+    c.settle();
+    let img = c.screenshot();
+    assert_px(&img, w.geometry.x + 50, w.geometry.y + 40, rgb(0x22aa44), "the subsurface's pixels shown");
+    a.roundtrip();
+    assert_eq!(releases.load(Ordering::SeqCst), 0, "kept until a commit replaces it");
+
+    // Replaced: smithay's release, the only one.
+    let b2 = a.buffer(60, 40, 0xaa2244, None);
+    child.attach(Some(&b2), 0, 0);
+    child.damage_buffer(0, 0, 60, 40);
+    child.commit();
+    root.commit();
+    a.wait("the replaced buffer released", |_| releases.load(Ordering::SeqCst) > 0);
+    c.settle();
+    a.roundtrip();
+    assert_eq!(releases.load(Ordering::SeqCst), 1, "one release for one commit");
+}
+
+#[test]
+fn unread_subsurface_buffer_kept_gles() {
+    unread_subsurface_buffer_kept("gles");
+}
+
+#[test]
+fn unread_subsurface_buffer_kept_pixman() {
+    unread_subsurface_buffer_kept("pixman");
+}
+
 #[test]
 fn drag_and_drop_with_an_icon_and_actions() {
     let c = Compositor::start(Options::default());
@@ -406,6 +472,7 @@ impl Dispatch<xdg_surface::XdgSurface, ()> for Probe {
         if let xdg_surface::Event::Configure { serial } = event {
             xs.ack_configure(serial);
             p.configured = true;
+            p.configures.push(xs.clone());
         }
     }
 }
