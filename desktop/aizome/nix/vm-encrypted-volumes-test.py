@@ -70,9 +70,13 @@ def click_label(label):
     click(until(label, lambda: find(label=label, role="tab")))
 
 
+def auth_prompt():
+    return any(any(e.get("name") == "auth-password" and e["visible"] for e in d["elements"]) for d in documents())
+
+
 def authenticate_if_needed():
     for _ in range(30):
-        if any(any(e.get("name") == "auth-password" and e["visible"] for e in d["elements"]) for d in documents()):
+        if auth_prompt():
             machine.screenshot("authentication")
             input_("type test-only")
             input_("key Return")
@@ -131,7 +135,7 @@ try:
     machine.succeed("systemctl start udisks2")
     machine.succeed("udevadm settle")
     visible, clear = seed("QA_VISIBLE", "QA_PRIVATE")
-    seed("QA_INTERNAL", "QA_SYSTEM")
+    _, internal = seed("QA_INTERNAL", "QA_SYSTEM")
     seed("QA_IGNORED", "QA_IGNORED")
     point = "/run/media/alice/QA_PRIVATE"
     machine.succeed("mkdir -p " + point)
@@ -147,8 +151,33 @@ try:
             click_label("QA_PRIVATE")
             machine.wait_for_text(r"encrypted\.txt", timeout=30)
             machine.screenshot("02-unlocked-content")
-            assert not find(label="QA_SYSTEM") and not find(label="QA_IGNORED")
+            assert not find(label="QA_IGNORED")
             machine.succeed("aizome-encrypted-volumes-fixture --ignored --nocapture > /tmp/encrypted-api.log 2>&1")
+            quit_hako()
+        with subtest("internal drive's volume mounts after the administrator prompt and is unmounted, not ejected"):
+            launch_hako()
+            row = until("internal volume in sidebar", lambda: find(label="QA_SYSTEM", role="tab"))
+            machine.screenshot("02a-internal-sidebar")
+            click(row)
+            until("administrator prompt", auth_prompt)
+            machine.fail("findmnt -rn --source " + internal)
+            machine.screenshot("02b-internal-authentication")
+            input_("type test-only")
+            input_("key Return")
+            mounted = "/run/media/alice/QA_SYSTEM"
+            machine.wait_until_succeeds("test \"$(findmnt -rn -o TARGET --source " + internal + ")\" = " + mounted, timeout=30)
+            until("Hako opens the mounted volume", lambda: find(label="QA_SYSTEM", role="button"))
+            machine.screenshot("02c-internal-mounted")
+            w, e = find(label="QA_SYSTEM", role="tab")
+            x, y, width, height = e["rect"]
+            g = w["geometry"]
+            input_(f"motion {g['x'] + x + width - 17} {g['y'] + y + height / 2}")
+            input_("click")
+            machine.wait_until_fails("findmnt -rn --source " + internal, timeout=30)
+            machine.succeed("test -b " + internal)
+            until("unmounted volume stays listed", lambda: find(label="QA_SYSTEM", role="tab"))
+            assert not any("couldn't be" in e.get("text", "") for _, e in elements())
+            machine.screenshot("02d-internal-unmounted")
             quit_hako()
     with subtest("locked volume offers cancel and wrong-passphrase recovery"):
         machine.succeed("umount " + point)

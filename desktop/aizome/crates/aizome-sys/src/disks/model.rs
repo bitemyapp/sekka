@@ -2,7 +2,7 @@
 //! questions Tansu and the desktop ask of it (a drive's devices, a table's
 //! partitions and free space, the volumes to show as icons).
 
-use super::types::{filesystem_name, flag_names, partition_type_name};
+use super::types::{filesystem_name, flag_names, flags, partition_type_name, reserved_partition_type};
 use crate::bus::{Objects, Props, PropsExt, value_str};
 use std::time::Duration;
 
@@ -165,6 +165,7 @@ impl DisksState {
                     can_power_off: drive.is_some_and(|d| d.can_power_off),
                     image_file: image.map(|l| l.backing_file.clone()),
                     system: false,
+                    internal: false,
                 }
             })
             .collect();
@@ -288,6 +289,107 @@ impl DisksState {
         }
         None
     }
+
+    /// Internal data volumes, for a file manager's sidebar: filesystems
+    /// (and locked encrypted volumes) on built-in drives other than the
+    /// ones the system runs from. UDisks marks them `HintSystem`, so
+    /// [`Self::volumes`] leaves them out, and mounting or unlocking one
+    /// asks for administrator rights. They are never ejected or powered
+    /// off, whatever their drive says.
+    ///
+    /// Nothing the system uses can be among them: no drive holding a
+    /// filesystem mounted outside the media folders, active swap, or
+    /// another device of such a filesystem; no firmware, boot, recovery or
+    /// swap partition on any drive; and nothing at all unless `/` is found
+    /// on a drive (not so on LVM, or in a container), since then the
+    /// system's drives cannot be told from the others.
+    pub fn internal_volumes(&self) -> Vec<Volume> {
+        let Some(system) = self.system_drives() else { return Vec::new() };
+        let mut volumes: Vec<Volume> = self
+            .blocks
+            .iter()
+            // A filesystem or a locked encrypted volume; an unlocked one
+            // shows through its cleartext device.
+            .filter(|b| b.encrypted.as_ref().map_or(b.filesystem.is_some(), |e| e.cleartext_device.is_none()))
+            .filter(|b| b.swap.is_none() && b.id_type != "swap")
+            // Not what `volumes` shows already, nor what the system uses.
+            .filter(|b| !self.visible_volume(b) && !self.system_block(b))
+            .filter_map(|b| {
+                let drive = self.internal_drive(b).filter(|d| !system.contains(&d.path.as_str()))?;
+                Some(Volume {
+                    block: b.path.clone(),
+                    name: b.display_name(Some(drive)),
+                    icon_name: b.icon_name(Some(drive), false),
+                    mount_point: b.filesystem.as_ref().and_then(|f| f.mount_points.first().cloned()),
+                    locked: b.encrypted.is_some(),
+                    drive: Some(drive.path.clone()),
+                    internal: true,
+                    ..Volume::default()
+                })
+            })
+            .collect();
+        volumes.sort_by(|a, b| a.name.cmp(&b.name));
+        volumes
+    }
+
+    /// Whether the system itself uses a block: a filesystem mounted
+    /// outside the media folders, active swap, or another device of such a
+    /// filesystem (Btrfs across drives shows its mount point on one device
+    /// only; the others share its UUID).
+    fn system_block(&self, block: &BlockDevice) -> bool {
+        let used = |b: &BlockDevice| {
+            b.swap.as_ref().is_some_and(|s| s.active)
+                || b.filesystem.as_ref().is_some_and(|f| f.mount_points.iter().any(|m| !media_mount(m)))
+        };
+        used(block) || (!block.id_uuid.is_empty() && self.blocks.iter().any(|b| b.id_uuid == block.id_uuid && used(b)))
+    }
+
+    /// The drives the system uses ([`Self::system_block`]); `None` unless
+    /// the filesystem at `/` is on one of them.
+    fn system_drives(&self) -> Option<Vec<&str>> {
+        let root = self
+            .blocks
+            .iter()
+            .find(|b| b.filesystem.as_ref().is_some_and(|f| f.mount_points.iter().any(|m| m == "/")))?;
+        self.drive_of(root)?;
+        let used = self.blocks.iter().filter(|b| self.system_block(b));
+        Some(used.filter_map(|b| self.drive_of(b)).map(|d| d.path.as_str()).collect())
+    }
+
+    /// The built-in drive a block is on, when its whole ancestry (its
+    /// encrypted backing device, its partition table) is known, none of it
+    /// is to be ignored and none of it is a reserved partition.
+    fn internal_drive(&self, block: &BlockDevice) -> Option<&Drive> {
+        let mut current = block;
+        for _ in 0..=self.blocks.len() {
+            if current.hint_ignore || current.partition.as_ref().is_some_and(reserved_partition) {
+                return None;
+            }
+            let parent = match (&current.crypto_backing_device, &current.partition) {
+                (Some(backing), _) => backing,
+                (None, Some(partition)) => &partition.table,
+                (None, None) => {
+                    let drive = self.drive(current.drive.as_deref()?)?;
+                    return (!drive.external() && !drive.media_removable && !drive.optical).then_some(drive);
+                }
+            };
+            current = self.block(parent)?;
+        }
+        None
+    }
+}
+
+/// Whether a mount point is where people's volumes go (UDisks's
+/// `/run/media/USER`, `/media`, `/mnt`) rather than part of the system.
+fn media_mount(point: &str) -> bool {
+    ["/run/media", "/media", "/mnt"].iter().any(|dir| path_within(point, dir))
+}
+
+/// A partition of the firmware's, a boot loader's, a recovery system's or
+/// swap, by its type or its GPT attributes (required by the platform, or
+/// hidden).
+fn reserved_partition(partition: &Partition) -> bool {
+    reserved_partition_type(&partition.type_id) || partition.flags & (flags::GPT_SYSTEM | flags::GPT_HIDDEN) != 0
 }
 
 /// Unallocated stretches between `used` ranges in `[start, end)`, aligned
@@ -350,6 +452,10 @@ pub struct Volume {
     /// The disk the system runs from: opened at its mount point, never
     /// unmounted or ejected.
     pub system: bool,
+    /// On a built-in drive other than the system's
+    /// ([`DisksState::internal_volumes`]): mounting it asks for
+    /// administrator rights, and it is never ejected or powered off.
+    pub internal: bool,
 }
 
 /// A drive.

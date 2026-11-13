@@ -330,6 +330,8 @@ parent when needed.
 
 Encrypted removable volumes stay in the file sidebar after unlocking. Hako asks for a volume passphrase before mounting a locked one; Cancel leaves it locked, and an incorrect passphrase can be retried. While unlocking, the prompt waits for the device operation to finish. System volumes and devices hidden by UDisks policy stay excluded from the removable list.
 
+The sidebar also lists, after the system's disk, the volumes of built-in drives the system doesn't run from (a second internal drive; `DisksState::internal_volumes`). UDisks treats them as system devices, so mounting or unlocking one asks for an administrator's password; the sidebar unmounts them and never ejects their drive. Everything on a drive the system uses (a filesystem mounted outside `/run/media`, `/media` and `/mnt`, or active swap), EFI, boot, recovery and swap partitions on any drive, and devices hidden by UDisks policy stay out, as does every built-in volume when `/` can't be traced to a drive (LVM, a live image). The desktop's icons are as before. `nix build .#aizome-checks.encrypted-volumes` checks both lists against real UDisks on disposable VM disks.
+
 ### Sumi (Text Editor)
 
 The board's editor: a toolbar with the language pop-up ("Markdown ⌄"), B,

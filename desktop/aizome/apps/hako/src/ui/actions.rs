@@ -369,7 +369,7 @@ impl Hako {
 
     pub(crate) fn disks_changed(&mut self, cx: &mut Cx<Msg>) {
         if let Some(d) = &self.disks {
-            self.volumes = d.snapshot().volumes();
+            self.volumes = sidebar_volumes(&d.snapshot());
         }
         let mut unlocked = Vec::new();
         self.unlock_tasks.retain(|(sheet, block, task)| match task.try_result() {
@@ -416,6 +416,8 @@ impl Hako {
                     self.go(cx, window, Loc::Folder(PathBuf::from(point)), None, true);
                 }
                 Ok(_) => {}
+                // The administrator prompt was dismissed: nothing to say.
+                Err(aizome_sys::Error::Cancelled) => {}
                 Err(e) if self.windows.contains_key(&window) => {
                     self.open_sheet(
                         cx,
@@ -512,8 +514,9 @@ impl Hako {
                 }
             }
         }
-        // Unmount, then (once that's done) eject the drive.
-        let drive = v.drive.clone().filter(|_| v.ejectable);
+        // Unmount, then (once that's done) eject the drive; a built-in
+        // drive's volume is only ever unmounted.
+        let drive = v.drive.clone().filter(|_| v.ejectable && !v.internal);
         let task = if v.mount_point.is_some() {
             d.unmount(&block, false)
         } else if let Some(drive) = &drive {
@@ -545,7 +548,7 @@ impl Hako {
         let disks = aizome_sys::disks::Disks::new(aizome_sys::Wake::new(move || {
             tx.send(Msg::DisksChanged);
         }));
-        self.volumes = disks.snapshot().volumes();
+        self.volumes = sidebar_volumes(&disks.snapshot());
         self.disks = Some(disks);
         self.system_disk = crate::model::places::system_disk(&self.opts.home);
         // The Desks, from the compositor.
@@ -636,6 +639,14 @@ impl Hako {
         }
         self.after_change(cx, w);
     }
+}
+
+/// What the sidebar lists after the system's disk: the volumes of other
+/// built-in drives, then removable and external ones and images.
+pub fn sidebar_volumes(disks: &aizome_sys::disks::DisksState) -> Vec<aizome_sys::disks::Volume> {
+    let mut volumes = disks.internal_volumes();
+    volumes.extend(disks.volumes());
+    volumes
 }
 
 /// Follow the compositor's Desks, telling the program the current one.
@@ -782,6 +793,60 @@ mod encrypted_tests {
         assert!(h.program().sheets.is_empty());
         assert!(h.program().mount_tasks.is_empty());
         assert!(h.program().mounting.is_empty());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn dismissed_administrator_prompt_ends_a_mount_quietly() {
+        let root = std::env::temp_dir().join(format!("hako-mount-dismissed-{}", std::process::id()));
+        std::fs::create_dir_all(root.join("home")).unwrap();
+        let mut h = Harness::new(Hako::new(super::super::app::Options::sandbox(&root)));
+        let window = h.window();
+        h.program_mut().mounting.insert("data".into());
+        h.program_mut().mount_tasks.push(("data".into(), window, Task::ready(Err(aizome_sys::Error::Cancelled))));
+        h.send(Msg::DisksChanged);
+        assert!(h.program().sheets.is_empty(), "no error for a prompt the person closed");
+        assert!(h.program().mounting.is_empty() && h.program().mount_tasks.is_empty());
+        assert_eq!(h.program().windows[&window].location(), Some(&Loc::Folder(root.join("home"))));
+        h.program_mut().mount_tasks.push((
+            "data".into(),
+            window,
+            Task::ready(Err(aizome_sys::Error::NotAuthorized("no".into()))),
+        ));
+        h.send(Msg::DisksChanged);
+        assert_eq!(h.program().sheets.len(), 1, "a refusal is still explained");
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn internal_volume_is_unmounted_but_its_drive_never_ejected() {
+        use aizome_sys::disks::{Disks, Volume};
+        let root = std::env::temp_dir().join(format!("hako-internal-eject-{}", std::process::id()));
+        std::fs::create_dir_all(root.join("home")).unwrap();
+        let mut h = Harness::new(Hako::new(super::super::app::Options::sandbox(&root)));
+        // No bus: every operation fails at once, and is seen in the tasks.
+        h.program_mut().disks = Some(Disks::with_bus(None, aizome_sys::Wake::none()));
+        // Even a built-in drive that claims it can be ejected.
+        let internal = |block: &str, mount_point: Option<&str>| Volume {
+            block: block.into(),
+            drive: Some("nvme1".into()),
+            mount_point: mount_point.map(Into::into),
+            ejectable: true,
+            internal: true,
+            ..Default::default()
+        };
+        h.program_mut().volumes = vec![
+            internal("idle", None),
+            internal("mounted", Some("/run/media/u/DATA")),
+            Volume { block: "stick".into(), drive: Some("usb".into()), ejectable: true, ..Default::default() },
+        ];
+        h.send(Msg::Eject("idle".into()));
+        assert!(h.program().eject_tasks.is_empty() && h.program().mounting.is_empty(), "nothing to do");
+        h.send(Msg::Eject("mounted".into()));
+        assert_eq!(h.program().eject_tasks.len(), 1);
+        assert_eq!(h.program().eject_tasks[0].1, None, "unmounted, with no drive to eject afterwards");
+        h.send(Msg::Eject("stick".into()));
+        assert_eq!(h.program().eject_tasks.len(), 2, "a removable drive is still ejected");
         std::fs::remove_dir_all(root).unwrap();
     }
 }

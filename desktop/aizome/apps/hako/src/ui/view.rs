@@ -224,7 +224,7 @@ fn crumbs(h: &Hako, b: &Browser) -> Vec<(String, Option<Icon>, Option<PathBuf>)>
                 .filter(|(m, _)| p.starts_with(m) && m != Path::new("/"))
                 .max_by_key(|(m, _)| m.as_os_str().len());
             let (start, rest) = if let Some((m, v)) = volume.filter(|(m, _)| !home.starts_with(m)) {
-                let icon = if v.image_file.is_some() { Icon::Disc } else { Icon::Usb };
+                let icon = look::place_icon(volume_kind(v)).0;
                 out.push((v.name.clone(), Some(icon), Some(m.clone())));
                 (m.clone(), p.strip_prefix(&m).unwrap_or(Path::new("")).to_path_buf())
             } else if p.starts_with(home) {
@@ -255,6 +255,18 @@ fn crumbs(h: &Hako, b: &Browser) -> Vec<(String, Option<Icon>, Option<PathBuf>)>
         out.push((e.display.clone(), None, None));
     }
     out
+}
+
+/// A volume's kind, for its icon: an image, a built-in drive's, or a
+/// removable or external one.
+fn volume_kind(v: &aizome_sys::disks::Volume) -> PlaceKind {
+    if v.image_file.is_some() {
+        PlaceKind::Image
+    } else if v.internal {
+        PlaceKind::Disk
+    } else {
+        PlaceKind::Volume
+    }
 }
 
 fn drop_fn(w: WindowKey) -> Rc<dyn Fn(Dest, Vec<String>) -> Msg> {
@@ -318,7 +330,7 @@ fn sidebar(h: &Hako, w: WindowKey, b: &Browser) -> Element<Msg> {
         place(&mut items, PlaceKind::Disk, "Computer".into(), None, Loc::Folder(PathBuf::from("/")), None, false);
     }
     for v in &h.volumes {
-        let kind = if v.image_file.is_some() { PlaceKind::Image } else { PlaceKind::Volume };
+        let kind = volume_kind(v);
         let busy = h.mounting.contains(&v.block);
         let can_eject = v.mount_point.is_some() || v.ejectable;
         match &v.mount_point {
