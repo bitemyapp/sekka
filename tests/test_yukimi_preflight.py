@@ -226,6 +226,14 @@ class Preflight(unittest.TestCase):
         self.before = self.configuration()
         self.assertEqual(self.check()['builds'], [])
 
+    def test_generated_configuration_with_structured_attributes_does_not_warn(self):
+        # As Nixpkgs makes most configuration files now. Nix then prints the
+        # derivation's settings apart from its environment.
+        (self.config / 'flake.nix').write_text(
+            FLAKE.replace('package = dependency.package;', '__structuredAttrs = true;'))
+        self.before = self.configuration()
+        self.assertEqual(self.check()['builds'], [])
+
     def test_single_configuration_may_differ_from_the_hostname(self):
         (self.config / 'flake.nix').write_text(FLAKE.replace('nixosConfigurations.preflight-host', 'nixosConfigurations.custom'))
         self.before = self.configuration()

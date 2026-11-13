@@ -310,7 +310,15 @@ pub fn build_names(value: &serde_json::Value) -> Result<Vec<String>, String> {
             .transpose()
             .map_err(|e| format!("Invalid derivation settings: {e}"))?
             .unwrap_or(serde_json::Value::Null);
-        let setting = |name: &str| structured.get(name).or_else(|| env.get(name));
+        // Current Nix prints a derivation's structured attributes beside
+        // `env`, as `structuredAttrs`, where older Nix put them inside it as
+        // `__json`. Nixpkgs now builds most derivations that way, and their
+        // `env` then holds only the output paths: without this, every
+        // generated configuration file would be named as a package to build.
+        let attributes = info.get("structuredAttrs").filter(|attributes| attributes.is_object());
+        let setting = |name: &str| {
+            attributes.and_then(|a| a.get(name)).or_else(|| structured.get(name)).or_else(|| env.get(name))
+        };
         let yes = |v: Option<&serde_json::Value>| v.is_some_and(|v| v == "1" || v == true);
         let fixed = info["outputs"]
             .as_object()
@@ -414,6 +422,111 @@ mod tests {
         }});
         assert_eq!(build_names(&drvs).unwrap(), ["cargo-geiger-0.13.0"]);
         assert!(build_names(&json!({"broken.drv": {}})).is_err());
+    }
+
+    /// What `nix build --dry-run` printed with the options `command` passes,
+    /// on Determinate Nix 3.24.1 (Nix 2.35.3): copied from real runs, the
+    /// list of 52 cut to its first three.
+    #[test]
+    fn reads_the_dry_runs_current_nix_prints() {
+        let warnings = "warning: ignoring untrusted flake configuration setting 'extra-substituters'.\n\
+             Pass '--accept-flake-config' to trust it\n\
+             warning: Nix search path entry '/nix/var/nix/profiles/per-user/root/channels' does not exist, ignoring\n";
+        let package = "/nix/store/x9myq8cg204yhv3qaaiw7x0i45xzlsnn-cowsay-pr368-probe-3.8.4.drv";
+        let one = format!(
+            "{warnings}this derivation will be built:\n  {package}\n\
+             this path will be fetched (34.3 KiB download, 133.6 KiB unpacked):\n  \
+             /nix/store/y0gicmliwz659c2xcpv0q6cg81f32ygv-source\n"
+        );
+        assert_eq!(planned_builds(&one).unwrap(), [package]);
+        let several = format!(
+            "{warnings}these 52 derivations will be built:\n  \
+             /nix/store/9hhkjm7s3rhlnrqjc9lbbx027gkx5b7n-aizome-source.drv\n  \
+             /nix/store/kyv672gflxgs7nwabxga85dlqwkrr4h2-aizome-0.1.0.drv\n  \
+             /nix/store/1jwr5a33cwswq1s4jbxrn02yr3r4ix7x-unit-aizome-power-meter.service.drv\n"
+        );
+        assert_eq!(
+            planned_builds(&several).unwrap(),
+            [
+                "/nix/store/1jwr5a33cwswq1s4jbxrn02yr3r4ix7x-unit-aizome-power-meter.service.drv",
+                "/nix/store/9hhkjm7s3rhlnrqjc9lbbx027gkx5b7n-aizome-source.drv",
+                "/nix/store/kyv672gflxgs7nwabxga85dlqwkrr4h2-aizome-0.1.0.drv",
+            ]
+        );
+        // Only downloads, and nothing to do at all: no builds.
+        let fetched = format!(
+            "{warnings}these 2 paths will be fetched (16.1 KiB download, 51.2 KiB unpacked):\n  \
+             /nix/store/2yyf4zwwag7l9bm8hx41vc9rdm2zjg1b-cowsay-3.8.4\n  \
+             /nix/store/zwql6b6lrjsgsxdinsgl8r6mn2nv5aap-cowsay-3.8.4-man\n"
+        );
+        assert!(planned_builds(&fetched).unwrap().is_empty());
+        assert!(planned_builds(warnings).unwrap().is_empty());
+    }
+
+    /// `nix derivation show` from the same Nix (its format's version 4), each
+    /// derivation reduced to the fields read here. One made with structured
+    /// attributes, as Nixpkgs 26.11 makes most, keeps its settings in
+    /// `structuredAttrs`, and its `env` has only the output paths.
+    #[test]
+    fn reads_settings_where_current_nix_keeps_them() {
+        let mut drvs = json!({"version": 4, "derivations": {
+            // Generated configuration, with structured attributes…
+            "x8rixhrqrnhhf5460i51xksribapmqgx-nixos-system-nixos-26.11.20261111.d4f25a3.drv": {
+                "env": {"out": "/nix/store/x027v0ffgj5j6v1fjf6bdakxncyi4qxw-nixos-system-nixos-26.11.20261111.d4f25a3"},
+                "name": "nixos-system-nixos-26.11.20261111.d4f25a3",
+                "outputs": {"out": {"path": "x027v0ffgj5j6v1fjf6bdakxncyi4qxw-nixos-system-nixos-26.11.20261111.d4f25a3"}},
+                "structuredAttrs": {
+                    "allowSubstitutes": false,
+                    "name": "nixos-system-nixos-26.11.20261111.d4f25a3",
+                    "preferLocalBuild": true
+                }
+            },
+            "2a9a5pqygqha32q70njwgskfjnzxm0jy-unit-dbus-broker.service.drv": {
+                "env": {"out": "/nix/store/9mhn03gjsfgmks14kfamcb9may2235kl-unit-dbus-broker.service"},
+                "name": "unit-dbus-broker.service",
+                "outputs": {"out": {"path": "9mhn03gjsfgmks14kfamcb9may2235kl-unit-dbus-broker.service"}},
+                "structuredAttrs": {"allowSubstitutes": false, "name": "unit-dbus-broker.service", "preferLocalBuild": true}
+            },
+            // …and without.
+            "xhb84ya3lif5z0s6yhgq2dfi517gcs4a-etc.drv": {
+                "env": {
+                    "allowSubstitutes": "",
+                    "name": "etc",
+                    "out": "/nix/store/ih1f79x8sih79r67zi4c7yb4hlh3shrl-etc",
+                    "preferLocalBuild": "1"
+                },
+                "name": "etc",
+                "outputs": {"out": {"path": "ih1f79x8sih79r67zi4c7yb4hlh3shrl-etc"}}
+            },
+            // A download.
+            "zk2j5xxc06y960csm5sgdwxjphqrbhcr-hello-2.12.3.tar.gz.drv": {
+                "env": {"out": "/nix/store/wj7phsmi7ncidl8k00p489krqss7n9sd-hello-2.12.3.tar.gz"},
+                "name": "hello-2.12.3.tar.gz",
+                "outputs": {"out": {"hash": "sha256-DV9gFUOC/uELEUocNOeF2LH0kgc64tOm97FHaHs2aqA=", "method": "flat"}},
+                "structuredAttrs": {"name": "hello-2.12.3.tar.gz", "preferLocalBuild": true}
+            },
+            // Packages, with structured attributes and without.
+            "0mvzg2dqivqc8ndvy2dxsh1zx9385ysn-hello-2.12.3.drv": {
+                "env": {"out": "/nix/store/sd779x86bjaqxj2lzh2jsir4h0zjz6d1-hello-2.12.3"},
+                "name": "hello-2.12.3",
+                "outputs": {"out": {"path": "sd779x86bjaqxj2lzh2jsir4h0zjz6d1-hello-2.12.3"}},
+                "structuredAttrs": {"name": "hello-2.12.3"}
+            },
+            "kyv672gflxgs7nwabxga85dlqwkrr4h2-aizome-0.1.0.drv": {
+                "env": {"name": "aizome-0.1.0", "out": "/nix/store/xa5hqivjn038p2pcpia1ai39cq9vpdkc-aizome-0.1.0"},
+                "name": "aizome-0.1.0",
+                "outputs": {"out": {"path": "xa5hqivjn038p2pcpia1ai39cq9vpdkc-aizome-0.1.0"}}
+            }
+        }});
+        assert_eq!(build_names(&drvs).unwrap(), ["aizome-0.1.0", "hello-2.12.3"]);
+        // The download is one by its output's hash, whatever else it says.
+        let download = &mut drvs["derivations"]["zk2j5xxc06y960csm5sgdwxjphqrbhcr-hello-2.12.3.tar.gz.drv"];
+        download["structuredAttrs"].as_object_mut().unwrap().remove("preferLocalBuild");
+        assert_eq!(build_names(&drvs).unwrap(), ["aizome-0.1.0", "hello-2.12.3"]);
+        // A structured derivation that names itself nowhere is named from its path.
+        let hello = &mut drvs["derivations"]["0mvzg2dqivqc8ndvy2dxsh1zx9385ysn-hello-2.12.3.drv"];
+        hello["structuredAttrs"].as_object_mut().unwrap().remove("name");
+        assert_eq!(build_names(&drvs).unwrap(), ["aizome-0.1.0", "hello-2.12.3"]);
     }
 
     #[test]
