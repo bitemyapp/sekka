@@ -135,7 +135,10 @@ impl Shell {
                 }
                 Panel::Display(p)
             }
-            TrayWidget::Awake => Panel::Awake(AwakePanel { status: self.awake }),
+            TrayWidget::Awake => Panel::Awake(AwakePanel {
+                status: self.awake,
+                holders: self.holders.listed().into_iter().map(panels::HolderRow::from).collect(),
+            }),
             TrayWidget::Battery => {
                 let mut p = BatteryPanel { keep_awake: self.awake, ..BatteryPanel::default() };
                 if let Some(u) = &self.sys.upower {
@@ -389,6 +392,18 @@ impl Shell {
                 if (self.awake != aizome_awake::Status::Off) != on {
                     self.set_keep_awake(on, cx);
                 }
+            }
+            // The ways to an app that holds the screen on: its window, as
+            // a switch to it shows it, and its process in Myaku, which
+            // has Quit and Force Quit.
+            PanelMsg::ShowHolder(window) => {
+                self.close_panel(cx);
+                self.run(crate::actions::Action::Wm(aizome_ipc::Request::Focus { id: window }), cx);
+            }
+            PanelMsg::HolderInMyaku(pid) => {
+                self.close_panel(cx);
+                let argv = vec!["aizome-myaku".into(), "--pid".into(), pid.get().to_string()];
+                self.run(crate::actions::Action::Spawn { argv }, cx);
             }
             PanelMsg::DoNotDisturb(on) => {
                 if self.notes_cfg.do_not_disturb != on {

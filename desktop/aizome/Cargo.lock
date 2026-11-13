@@ -54,6 +54,7 @@ dependencies = [
 name = "aizome-awake"
 version = "0.1.0"
 dependencies = [
+ "aizome-ipc",
  "libc",
  "serde_json",
  "wayland-client",

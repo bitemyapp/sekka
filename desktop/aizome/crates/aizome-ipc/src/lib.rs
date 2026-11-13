@@ -444,6 +444,51 @@ pub enum Request {
         #[serde(default)]
         id: Option<u64>,
     },
+    /// Who holds idleness off: the clients with a Wayland idle inhibitor
+    /// (a video player; the shell, for apps that ask the session bus) and
+    /// Keep Awake. → [`Response::IdleInhibitors`].
+    IdleInhibitors,
+    /// Holds idleness off as the user's own Keep Awake does, for as long
+    /// as the connection that asks stays open. Unlike an app's idle
+    /// inhibitor it still holds once the session is locked. Answered at
+    /// once with `ok`. Keep Awake's service asks it; any program of the
+    /// session can, and is listed as the holder it is.
+    KeepAwake,
+}
+
+/// What kind of hold on idleness one is.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum IdleHolder {
+    /// A client's Wayland idle inhibitor: an app's. It holds off the idle
+    /// lock and the displays' turning off until the session is locked.
+    #[default]
+    App,
+    /// Asked for with [`Request::KeepAwake`], as the user's own Keep Awake
+    /// asks for its hold: it holds while the session is locked too. Whose
+    /// it is, its process says.
+    KeepAwake,
+}
+
+/// One hold on idleness, and what identifies its holder.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct IdleInhibitorInfo {
+    pub kind: IdleHolder,
+    /// The window the inhibitor's surface belongs to, when it is a
+    /// window's (or a subsurface of one).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub window: Option<WindowId>,
+    /// That window's app ID, when it has said one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub app_id: Option<String>,
+    /// That window's title, when it has one, as it was when the
+    /// compositor last looked ([`Event::WindowChanged`] follows a title).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    /// The holder's process: the Wayland client's, or for Keep Awake the
+    /// one at the other end of its connection.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pid: Option<i32>,
 }
 
 /// What [`Request::PickArea`] may pick.
@@ -508,6 +553,10 @@ pub enum Synthetic {
     /// Presses or releases a key, as [`Synthetic::Key`] does, on a keyboard
     /// [`Synthetic::PlugKeyboard`] plugged in: its own keys' settings apply.
     KeyOn { keyboard: String, key: String, pressed: bool },
+    /// Nobody has touched anything for this long: the compositor's idle
+    /// clock is put back that far and read at once, as its timer reads it
+    /// every few seconds. Whatever holds idleness off still does.
+    Idle { seconds: u32 },
 }
 
 fn yes() -> bool {
@@ -575,6 +624,10 @@ pub enum Response {
     },
     Shares {
         shares: Vec<ShareInfo>,
+    },
+    /// Who holds idleness off, in the order they began.
+    IdleInhibitors {
+        inhibitors: Vec<IdleInhibitorInfo>,
     },
     Reload {
         report: ReloadReport,
@@ -999,6 +1052,12 @@ pub enum Event {
     SharesChanged {
         shares: Vec<ShareInfo>,
     },
+    /// Who holds idleness off changed (see [`Request::IdleInhibitors`]):
+    /// a hold began or ended, or a holder's window, app ID or title is
+    /// another.
+    IdleInhibitorsChanged {
+        inhibitors: Vec<IdleInhibitorInfo>,
+    },
     /// A keyboard that types appeared, for the first time since the
     /// compositor started: one plugged in again isn't new.
     KeyboardAdded {
@@ -1240,6 +1299,36 @@ mod tests {
         let e = Event::AreaPicked { tag: "record".into(), area: None, output: None, window: None, toplevel: None };
         assert_eq!(serde_json::to_string(&e).unwrap(), r#"{"event":"area-picked","tag":"record","area":null}"#);
         assert_eq!(serde_json::from_str::<Event>(r#"{"event":"area-picked","tag":"t"}"#).unwrap(), e_tag("t"));
+    }
+
+    #[test]
+    fn idle_holders_say_whose_they_are() {
+        let r: Request = serde_json::from_str(r#"{"request":"idle-inhibitors"}"#).unwrap();
+        assert_eq!(r, Request::IdleInhibitors);
+        let r: Request = serde_json::from_str(r#"{"request":"keep-awake"}"#).unwrap();
+        assert_eq!(r, Request::KeepAwake);
+        let player = IdleInhibitorInfo {
+            kind: IdleHolder::App,
+            window: Some(7),
+            app_id: Some("mpv".into()),
+            title: Some("Test Pattern - mpv".into()),
+            pid: Some(4242),
+        };
+        let keep_awake = IdleInhibitorInfo { kind: IdleHolder::KeepAwake, pid: Some(77), ..Default::default() };
+        let e = Event::IdleInhibitorsChanged { inhibitors: vec![player, keep_awake] };
+        assert_eq!(
+            serde_json::to_string(&e).unwrap(),
+            concat!(
+                r#"{"event":"idle-inhibitors-changed","inhibitors":["#,
+                r#"{"kind":"app","window":7,"app_id":"mpv","title":"Test Pattern - mpv","pid":4242},"#,
+                r#"{"kind":"keep-awake","pid":77}]}"#
+            )
+        );
+        // A bare surface's inhibitor says only whose process it is.
+        let bare: IdleInhibitorInfo = serde_json::from_str(r#"{"kind":"app","pid":9}"#).unwrap();
+        assert_eq!(bare, IdleInhibitorInfo { pid: Some(9), ..Default::default() });
+        let s: Synthetic = serde_json::from_str(r#"{"type":"idle","seconds":900}"#).unwrap();
+        assert_eq!(s, Synthetic::Idle { seconds: 900 });
     }
 
     fn e_tag(tag: &str) -> Event {

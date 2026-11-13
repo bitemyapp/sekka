@@ -7,9 +7,11 @@
 //!   `handle-lid-switch`, so neither suspending, hibernating, logind's own
 //!   idle action nor closing the lid puts the computer to sleep (the
 //!   compositor still turns the laptop's panel off behind a closed lid);
-//! - the compositor's **idle inhibitor** (`zwp_idle_inhibit_manager_v1`),
-//!   so Aizome doesn't lock the screen or turn the displays off when the
-//!   computer is left alone.
+//! - the compositor's **hold on idleness** ([`KeepAwakeHold`]), so Aizome
+//!   doesn't lock the screen or turn the displays off when the computer is
+//!   left alone. Aizome is asked over its IPC, which marks the hold as the
+//!   user's own: unlike an app's idle inhibitor, it goes on holding once
+//!   the session is locked.
 //!
 //! Whether it's on is a file, `$XDG_STATE_HOME/aizome/keep-awake`: it
 //! survives logging out, and the service starts at the next login when
@@ -21,13 +23,17 @@
 //! (`systemctl suspend -i`), and nothing here stops a flat battery,
 //! firmware or thermal shutdown.
 //!
-//! The idle inhibitor is [`IdleInhibitor`], which the shell holds too,
-//! while an app asks the session bus to keep the screen awake.
+//! [`IdleInhibitor`] is a Wayland idle inhibitor, as apps hold: the shell
+//! holds one while an app asks the session bus to keep the screen awake,
+//! and Keep Awake falls back to one under a compositor that doesn't know
+//! its request.
 
+mod hold;
 mod idle;
 
 use std::path::PathBuf;
 
+pub use hold::KeepAwakeHold;
 pub use idle::IdleInhibitor;
 
 /// The service that holds the locks.

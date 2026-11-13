@@ -14,8 +14,8 @@ StartLimitIntervalSec=0
 
 [Service]
 Slice=session.slice
-# Ready only once logind lists its locks and the compositor has its idle
-# inhibitor.
+# Ready only once logind lists its locks and the compositor holds idleness
+# off for it.
 Type=notify
 NotifyAccess=main
 # The package's own (NixOS gives units it configures a PATH of its own,

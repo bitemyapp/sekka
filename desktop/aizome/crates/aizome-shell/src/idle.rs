@@ -2,8 +2,9 @@
 //! the desktop portal's Inhibit: `aizome_sys::screensaver`). The
 //! compositor decides idleness and hears only Wayland's idle inhibitors,
 //! so while any such app holds, the shell holds one for them: the screen
-//! neither locks nor turns off, as with a Wayland video player or Keep
-//! Awake.
+//! neither locks nor turns off by itself, as with a Wayland video player's
+//! own inhibitor (and as with it, not once the session is locked). Who
+//! those apps are, for the cup's panel, is `holders.rs`.
 //!
 //! The inhibitor is held from a thread of its own, on its own connection
 //! to the compositor ([`aizome_awake::IdleInhibitor`]). It goes when the
@@ -118,8 +119,8 @@ mod tests {
         assert_eq!(Screen::from(&holds.state()), Screen::MayIdle);
         let vlc = aizome_sys::screensaver::Peer::new(":1.7").unwrap();
         let firefox = aizome_sys::screensaver::Peer::new(":1.9").unwrap();
-        let first = holds.take(vlc.clone(), "vlc", "Playing some media.").unwrap();
-        holds.take(firefox.clone(), "firefox", "Playing video").unwrap();
+        let first = holds.take(vlc.clone(), None, "vlc", "Playing some media.").unwrap();
+        holds.take(firefox.clone(), None, "firefox", "Playing video").unwrap();
         assert_eq!(Screen::from(&holds.state()), Screen::Awake);
         holds.release(&vlc, first.cookie);
         assert_eq!(Screen::from(&holds.state()), Screen::Awake, "another app still holds");
