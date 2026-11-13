@@ -197,6 +197,7 @@ pub fn toolchest(input: &ToolchestInput) -> Menu {
                         .unwrap_or_else(|| catalog::glyph_by_category(&a.categories));
                     let mut e = Entry::action(a.name.clone(), Action::Launch { app_id: a.app_id().to_owned() })
                         .glyph(glyph)
+                        .mark(catalog::is_aizome(a))
                         .with_id(super::model::hash_id(&("app", a.app_id())));
                     if let Some(g) = &a.generic_name {
                         e = e.detail(g.clone());
@@ -438,12 +439,13 @@ fn push_items<Msg: Clone + Send + 'static>(
                 m.push(item);
             }
             Kind::Action => {
-                let label = match &e.detail {
-                    Some(d) => format!("{}  —  {d}", e.label),
-                    None => e.label.clone(),
-                };
-                let mut item =
-                    aizome_kit::MenuItem::new(label, wrap(e.action.clone())).enabled(e.enabled).checked(e.checked);
+                let mut item = aizome_kit::MenuItem::new(e.label.clone(), wrap(e.action.clone()))
+                    .enabled(e.enabled)
+                    .checked(e.checked)
+                    .mark(e.mark);
+                if let Some(d) = &e.detail {
+                    item = item.detail(d.clone());
+                }
                 if let Some(s) = e.shortcut.as_ref().and_then(kit_shortcut) {
                     item = item.shortcut(s);
                 }

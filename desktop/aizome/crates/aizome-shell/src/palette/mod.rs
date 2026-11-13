@@ -416,6 +416,7 @@ impl Shell {
                         .keywords(kw)
                         .key(key.clone());
                 item.boost = self.frecency.boost(&key);
+                item.mark = crate::apps::catalog::is_aizome(a);
                 item.purposes = defaults.iter().filter(|(id, _)| *id == a.id).map(|(_, purpose)| *purpose).collect();
                 out.push(item);
             }

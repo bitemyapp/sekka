@@ -25,10 +25,11 @@
 //! at either end where there's more, which scrolls while the pointer rests
 //! on it, the wheel, and the keys bringing the row they reach into sight.
 
+use std::borrow::Cow;
 use std::marker::PhantomData;
 use std::time::Duration;
 
-use sidestep_ui::{Key, NamedKey, PointerButton};
+use sidestep_ui::{Canvas, Key, NamedKey, PointerButton};
 
 use crate::draw;
 use crate::element::{Common, Element, MsgFn, MsgMap, RawElement};
@@ -36,7 +37,7 @@ use crate::engine::KitMsg;
 use crate::hash::PaintHasher;
 use crate::icons::Icon;
 use crate::layout::{Align, Constraints, Length, Point, Rect, Size, Vec2};
-use crate::menu::{ItemSpec, Menu, MenuSpec};
+use crate::menu::{ActionSpec, ItemSpec, Menu, MenuSpec};
 use crate::platform::{Placement, WinId};
 use crate::program::AppInfo;
 use crate::text::TextSpec;
@@ -49,6 +50,9 @@ const ARROW: f64 = 16.0;
 const STRIP: f64 = 22.0;
 const SWATCH: f64 = 8.0;
 const SWATCH_GAP: f64 = 6.0;
+/// Aizome's mark: 12pt square, as in the title strip.
+const MARK: f64 = 12.0;
+const MARK_GAP: f64 = 6.0;
 /// How long the pointer may cross other rows on its way to a submenu.
 const AIM: Duration = Duration::from_millis(220);
 /// The band at a scrolling menu's end: how tall, and how far it scrolls
@@ -337,6 +341,30 @@ pub(crate) fn fuzzy(query: &str, text: &str) -> Option<u32> {
     (qi == q.len()).then(|| score + t.len() as u32 / 16)
 }
 
+/// An action's label with its detail after it, as it reads.
+fn shown(a: &ActionSpec) -> Cow<'_, str> {
+    match &a.detail {
+        Some(d) => format!("{}  —  {d}", a.label).into(),
+        None => a.label.as_str().into(),
+    }
+}
+
+/// Aizome's mark at `at`, `MARK` square: its tab and three stripes, on
+/// whole points.
+fn mark(canvas: &mut Canvas, t: &Theme, at: Point) {
+    let brand = aizome_theme::Brand::for_theme(t.palette.name);
+    let m = MARK / 4.0;
+    for ([rx, ry, rw, rh], c) in brand.mark_rects() {
+        let r = Rect::new(
+            at.x + rx as f64 * m,
+            at.y + ry as f64 * m,
+            at.x + (rx + rw) as f64 * m,
+            at.y + (ry + rh) as f64 * m,
+        );
+        canvas.fill_rect(r, crate::theme::color(c));
+    }
+}
+
 fn label_of(item: &ItemSpec) -> &str {
     match item {
         ItemSpec::Action(a) => &a.label,
@@ -429,7 +457,7 @@ impl MenuView {
                 path.push(i);
                 match it {
                     ItemSpec::Action(a) => {
-                        if let Some(s) = fuzzy(query, &a.label) {
+                        if let Some(s) = fuzzy(query, &shown(a)) {
                             found.push((s, path.clone(), a.enabled, trail.to_owned()));
                         }
                     }
@@ -699,7 +727,13 @@ impl Widget for MenuView {
             let item = self.item(&path).cloned();
             let (h, w) = match (&item, kind) {
                 (Some(ItemSpec::Action(a)), _) => {
-                    let lw = cx.measure(&a.label, &label).width;
+                    let lw = if a.mark {
+                        let dw =
+                            a.detail.as_ref().map_or(0.0, |d| MARK_GAP + cx.measure(&format!("—  {d}"), &label).width);
+                        cx.measure(&a.label, &label).width + MARK_GAP + MARK + dw
+                    } else {
+                        cx.measure(&shown(a), &label).width
+                    };
                     let tw = if trail.is_empty() { 0.0 } else { cx.measure(&trail, &shortcut).width + 12.0 };
                     let sw = a.shortcut.map_or(0.0, |s| cx.measure(&s.label(), &shortcut).width + 24.0);
                     let swatch = if a.swatch.is_some() { SWATCH + SWATCH_GAP } else { 0.0 };
@@ -761,19 +795,7 @@ impl Widget for MenuView {
             let right = if self.has_pin() { self.pin_box().x0 } else { strip.x1 - 6.0 };
             let mut x = if self.has_close() { close.x1 + 7.0 } else { PAD };
             if self.look.mark {
-                // The mark at 12pt: its tab and three stripes, on whole points.
-                let brand = aizome_theme::Brand::for_theme(t.palette.name);
-                let m = 3.0;
-                let y = (strip.y0 + (strip.height() - 12.0) / 2.0).round();
-                for ([rx, ry, rw, rh], c) in brand.mark_rects() {
-                    let r = Rect::new(
-                        x + rx as f64 * m,
-                        y + ry as f64 * m,
-                        x + (rx + rw) as f64 * m,
-                        y + (ry + rh) as f64 * m,
-                    );
-                    cx.canvas.fill_rect(r, crate::theme::color(c));
-                }
+                mark(cx.canvas, t, Point::new(x, (strip.y0 + (strip.height() - MARK) / 2.0).round()));
                 x += 18.0;
             }
             cx.draw_text_in(title, &spec, Rect::new(x, strip.y0, right, strip.y1), Align::Start);
@@ -899,12 +921,24 @@ impl Widget for MenuView {
                         }
                     }
                     let spec = TextSpec { color: fg, ..label_spec.clone() };
-                    let w = cx.draw_text_in(
-                        item.map(label_of).unwrap_or(""),
-                        &spec,
-                        Rect::new(x, r.y0, right.max(x), r.y1),
-                        Align::Start,
-                    );
+                    let bounds = Rect::new(x, r.y0, right.max(x), r.y1);
+                    let w = match item {
+                        // The label, Aizome's mark, then the detail.
+                        Some(ItemSpec::Action(a)) if a.mark => {
+                            let mut w = cx.draw_text_in(&a.label, &spec, bounds, Align::Start) + MARK_GAP;
+                            let at = Point::new((x + w).round(), (r.y0 + (r.height() - MARK) / 2.0).round());
+                            mark(cx.canvas, t, at);
+                            w += MARK;
+                            if let Some(d) = &a.detail {
+                                w += MARK_GAP;
+                                let rest = Rect::new(x + w, r.y0, right.max(x + w), r.y1);
+                                w += cx.draw_text_in(&format!("—  {d}"), &spec, rest, Align::Start);
+                            }
+                            w
+                        }
+                        Some(ItemSpec::Action(a)) => cx.draw_text_in(&shown(a), &spec, bounds, Align::Start),
+                        _ => cx.draw_text_in(item.map(label_of).unwrap_or(""), &spec, bounds, Align::Start),
+                    };
                     if !row.trail.is_empty() {
                         let c = if hot { t.on_selection() } else { t.text3() };
                         let spec = TextSpec { color: c, ..sc_spec.clone() };
@@ -940,7 +974,7 @@ impl Widget for MenuView {
         for i in &self.spec.items {
             match i {
                 ItemSpec::Action(a) => {
-                    h.str(&a.label).add(&(a.enabled, a.checked, a.shortcut, a.icon));
+                    h.str(&a.label).add(&(a.enabled, a.checked, a.shortcut, a.icon, &a.detail, a.mark));
                     h.add(&a.swatch.is_some());
                     if let Some(color) = a.swatch {
                         h.color(color);
