@@ -9,9 +9,10 @@
 //! Click a Desk to go there, drag a window's thumbnail to another Desk
 //! (a label says where it goes), 1…9 to go to that Desk, p to park the
 //! Desk under the pointer (its windows are told they're suspended, so they
-//! draw nothing until it's visited) or wake it, ❖-scroll to zoom, type (or
-//! / then type) to filter windows by title (Return goes to the first
-//! match), Esc to close.
+//! draw nothing until it's visited) or wake it, Delete to remove the Desk
+//! under the pointer while no filter is typed (as the bar's Remove does),
+//! ❖-scroll to zoom, type (or / then type) to filter windows by title
+//! (Return goes to the first match), Esc to close.
 
 use smithay::input::keyboard::{Keysym, keysyms};
 use smithay::output::Output;
@@ -160,6 +161,13 @@ pub fn key(state: &mut State, syms: &[Keysym], mods: Mods, pressed: bool, utf8: 
         // "/" starts a filter (as typing does), and isn't part of it.
     } else if let Some(c) = utf8.filter(|c| !c.is_control() && !mods.ctrl && !mods.logo) {
         state.lg.m().overlays.overview.as_mut().unwrap().filter.push(c);
+    } else if !filtering
+        && !(mods.ctrl || mods.alt || mods.shift || mods.logo)
+        && (is(keysyms::KEY_Delete) || is(keysyms::KEY_KP_Delete))
+    {
+        // After the filter's keys, so a keypad's "." is typed; and with a
+        // filter typed, Delete is left to its field.
+        remove_under_pointer(state);
     }
     let o = state.lg.m().overlays.overview.as_ref().unwrap().output.clone();
     state.az.queue_redraw(&o);
@@ -178,6 +186,19 @@ fn park_under_pointer(state: &mut State) -> bool {
     }
     let parked = l.wm.desk(desk).is_some_and(|d| d.parked.is_some());
     state.set_desk_parked(desk, !parked)
+}
+
+/// Removes the Desk under the pointer, as Remove in the bar's Desk menu
+/// does (#229): its windows join the Desk before it, and the last Desk
+/// stays. Not while a thumbnail is being dragged. The overview stays up.
+fn remove_under_pointer(state: &mut State) {
+    let Some(ov) = state.lg.m().overlays.overview.as_ref() else { return };
+    if ov.drag.is_some() {
+        return;
+    }
+    let (x, y) = ov.pointer;
+    let Some(desk) = ov.cards.iter().find(|(_, b)| b.contains(x, y)).and_then(|(d, _)| *d) else { return };
+    state.remove_desk(desk);
 }
 
 /// The wheel over the overview: ❖-scroll (or a plain one) zooms, a step
@@ -505,6 +526,7 @@ pub fn items(st: &mut State, output: &Output, scale: f64) -> aizome_comp_core::s
         ("drag", "move a window to another Desk"),
         ("1…9", "go to a Desk"),
         ("p", "park a Desk"),
+        ("Del", "remove a Desk"),
         ("type", "filter"),
         ("Esc", "close"),
     ] {
