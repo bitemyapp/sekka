@@ -1545,6 +1545,13 @@ build script newer than that fails the build and names the crates. After
 changing a package's build, that failure says the two derivations differ in
 something Cargo fingerprints; even it out in both, as `sameEnvironment` does.
 
+A derivation that overrides the package to run a Cargo command of its own
+shares nothing with the dependency build. The VM checks' test binaries
+(`encrypted-volumes-fixture.nix`, `loop-images-fixture.nix`) are such: they
+clear `preBuild` and `postBuild`, so nothing is restored or compared, and
+turn off the package's check phase, which tests the compositor they don't
+build.
+
 Yukimi's app is a package of its own (`desktop/aizome/nix/yukimi.nix`), and
 `hotaru` builds from a source with only its crates real. `workspace.withCrates`
 keeps the real source of the crates a package builds and every first-party
