@@ -316,3 +316,62 @@ fn brightness_keys_reach_only_a_built_in_panel() {
     assert!(h.program().osd.is_none(), "no OSD, and no backlight changed, on HEADLESS-1");
     assert!(aizome_shell::shell::builtin_panel("LVDS-1") && !aizome_shell::shell::builtin_panel("DP-2"));
 }
+
+#[test]
+fn brightness_keys_reach_the_monitor_under_the_pointer() {
+    use aizome_sys::monitors::{Control, Monitor, Monitors};
+    let mut h = scene(false);
+    let at = |x: f64, id: u32, name: &str| {
+        let mut o = output();
+        o.id = id;
+        o.name = name.into();
+        o.connector = Some(name.into());
+        o.frame = Rect::new(x, 0.0, x + 1280.0, 800.0);
+        o
+    };
+    // DP-2: the Studio Display's hidden tile, an output until #279.
+    let outputs = vec![output(), at(3000.0, 2, "DP-1"), at(6000.0, 3, "HDMI-A-1"), at(4280.0, 4, "DP-2")];
+    h.set_outputs(outputs);
+    h.send(Msg::Nothing);
+    // The Studio Display takes a level; the BenQ doesn't.
+    let studio = Monitor {
+        id: "card0-DP-1".into(),
+        connectors: vec!["DP-1".into(), "DP-2".into()],
+        make: "APP".into(),
+        model: "StudioDisplay".into(),
+        serial: "1".into(),
+        control: Control::Sample,
+        // Half way: (30200 - 400) / (60000 - 400).
+        level: 30200,
+        min: 400,
+        max: 60000,
+    };
+    h.program_mut().sys.monitors = Some(Monitors::sample(vec![studio], aizome_sys::Wake::none()));
+    let level = |h: &H| h.program().sys.monitors.as_ref().unwrap().snapshot().monitors[0].fraction();
+    let key = |h: &mut H, action: &str, output: &str| {
+        h.send(Msg::Ipc(IpcEvent::Event(Event::Binding {
+            action: action.into(),
+            pointer: None,
+            output: Some(output.into()),
+        })));
+    };
+    let osd_on = |h: &H| h.program().osd.as_ref().map(|o| o.output);
+    key(&mut h, "brightness-up", "DP-1");
+    assert!((level(&h) - 0.55).abs() < 1e-3, "a step up from half: {}", level(&h));
+    assert_eq!(osd_on(&h), Some(2), "the OSD shows on the Studio Display");
+    let lit = h.program().osd.as_ref().unwrap().osd.value;
+    assert!((lit - level(&h)).abs() < 1e-6, "at its new level");
+    // Over its hidden tile: the same monitor, the OSD on the tile that shows.
+    key(&mut h, "brightness-up", "DP-2");
+    assert!((level(&h) - 0.6).abs() < 1e-3, "another step: {}", level(&h));
+    assert_eq!(osd_on(&h), Some(2));
+    // A display without a control: the built-in panel, as before.
+    let now = level(&h);
+    key(&mut h, "brightness-down", "HDMI-A-1");
+    assert_eq!(level(&h), now, "the Studio Display stays");
+    assert_eq!(osd_on(&h), Some(1), "the OSD moved to the built-in panel");
+    // The panel lists both, each named.
+    let Panel::Display(d) = h.program().panel_data(aizome_shell::menubar::TrayWidget::Display) else { unreachable!() };
+    assert_eq!(d.monitors.len(), 1);
+    assert_eq!(d.monitors[0].1, "APP StudioDisplay");
+}

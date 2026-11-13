@@ -18,6 +18,8 @@ let
   cfg = config.programs.aizome;
   system = pkgs.stdenv.hostPlatform.system;
   archivo = pkgs.callPackage ./fonts.nix { };
+  # udev rules for external monitors' brightness (monitor-brightness-udev.nix).
+  monitorBrightnessRules = pkgs.callPackage ./monitor-brightness-udev.nix { };
   # The login entry runs the session from the system profile rather than a
   # store path, so an update switches without logging out and the next
   # login starts the new Aizome (as Sekka's Tatami entry does).
@@ -231,6 +233,19 @@ in
       default = true;
       description = "Let Tokei's alarms wake the computer from sleep (CAP_WAKE_ALARM for user services).";
     };
+    monitorBrightness = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = ''
+        Let whoever is at the computer set external monitors' brightness
+        from Settings, the menu bar and the brightness keys: DDC/CI monitors
+        over their connector's I2C bus, and Apple Studio Displays over USB.
+        Loads `i2c-dev`, and has udev give the active local session
+        (`uaccess`) the display adapters' I2C buses and the Studio
+        Displays' brightness interface. Nothing runs as root. A laptop's
+        own panel needs none of it (logind sets its backlight).
+      '';
+    };
     wallpapers = {
       night = lib.mkOption {
         type = lib.types.nullOr lib.types.path;
@@ -331,6 +346,9 @@ in
     hardware.graphics.enable = lib.mkDefault true;
     hardware.graphics.extraPackages = lib.mkIf cfg.videoAcceleration [ pkgs.intel-media-driver ];
     services.displayManager.sessionPackages = [ session ];
+    # External monitors' brightness, as the user (monitorBrightness).
+    boot.kernelModules = lib.mkIf cfg.monitorBrightness [ "i2c-dev" ];
+    services.udev.packages = lib.mkIf cfg.monitorBrightness [ monitorBrightnessRules ];
     systemd.packages = [
       cfg.package
       nmAppletDropIns

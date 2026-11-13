@@ -65,6 +65,7 @@ fn fixture() -> aizome_shell::systray::glue::Fixture {
         TrayWidget::Display,
         Panel::Display(DisplayPanel {
             backlights: vec![("intel_backlight".into(), 0.7)],
+            monitors: vec![("card0-DP-1".into(), "APP StudioDisplay".into(), 0.45)],
             theme: 0,
             size: 1,
             night_light: Some(false),

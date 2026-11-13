@@ -48,6 +48,7 @@
 //! | [`apps`] | desktop entries, icons, default apps (`aizome-apps`), and launching | XDG files, `systemd-run` | — |
 //! | [`keyboard`] | layouts, variants, XKB options | xkeyboard-config's `evdev.xml` | — |
 //! | [`location`] | where the computer is, for sunrise and sunset | GeoClue 2 | `services.geoclue2.enable` |
+//! | [`monitors`] | external monitors' brightness: DDC/CI, Apple Studio Displays | `/dev/i2c-*`, `/dev/hidraw*`, sysfs | `programs.aizome.monitorBrightness` (Aizome's module) |
 //!
 //! Each module's documentation says more about what it needs and how it
 //! degrades without it.
@@ -62,6 +63,7 @@ pub mod error;
 pub mod keyboard;
 pub mod location;
 pub mod meter;
+pub mod monitors;
 pub mod mpris;
 pub mod network;
 pub mod notifications;

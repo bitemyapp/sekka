@@ -111,9 +111,12 @@ menu opening closes it too. The panels:
   "Sound Settings…".
 - **Bluetooth**: switch; paired devices with connect/disconnect and battery;
   "Bluetooth Settings…".
-- **Display**: brightness slider (each built-in panel), Night / Day / Auto
-  segmented control, Size (small, medium, large), Night Light switch if
-  available; "Displays Settings…".
+- **Display**: brightness sliders (each built-in panel, and each external
+  monitor showing that takes a level over DDC/CI or, for a Studio Display,
+  USB; named when there's more than one), Night / Day / Auto segmented
+  control, Size (small, medium, large), Night Light switch if available;
+  "Displays Settings…". Opening it asks the monitors again
+  (`aizome-sys`'s `monitors`).
 - **Battery & power**: charge, state and time left, a 24h charge sparkline
   if cheap, power mode (Power Saver, Balanced, Performance); "Battery
   Settings…".
@@ -512,6 +515,12 @@ the compositor) change the value through `aizome-sys` at once and show a
 `raised` square at the bottom centre: a 32pt Lucide glyph and a 16-segment
 level bar, for 1.2 s. Sound plays a click at each step unless muted
 (optional).
+
+The brightness keys change the external monitor under the pointer (the
+compositor names that output with the binding), else the focused one,
+when it takes a level; otherwise the built-in panel's backlight, as they
+did before, when a built-in panel shows. Their OSD opens on the display
+whose brightness changed.
 
 ## Desktop
 
