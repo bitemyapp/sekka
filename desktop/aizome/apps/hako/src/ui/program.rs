@@ -239,8 +239,16 @@ impl Program for Hako {
             Msg::EditPath(w) => {
                 let w = self.owner(w);
                 if let Some(b) = self.windows.get_mut(&w) {
+                    // The folder shown and a slash, the caret after them
+                    // (the field's doing): what's typed goes on below it.
                     let text = match b.location() {
-                        Some(Loc::Folder(p)) => p.display().to_string(),
+                        Some(Loc::Folder(p)) => {
+                            let mut text = p.display().to_string();
+                            if !text.ends_with('/') {
+                                text.push('/');
+                            }
+                            text
+                        }
                         _ => String::new(),
                     };
                     b.path_edit = Some(text);
@@ -262,7 +270,18 @@ impl Program for Hako {
                 } else {
                     self.focused_folder(w).unwrap_or_else(|| self.opts.home.clone()).join(p)
                 };
-                if std::fs::symlink_metadata(&p).is_ok() {
+                // The folder already shown (the text as the field opened,
+                // say): the bar comes back as Escape brings it, and Back
+                // has nothing new to remember.
+                let shown = self.windows.get(&w).filter(|b| b.search.is_none()).and_then(|b| b.location());
+                if p.is_dir() && shown == Some(&self.loc_for(&p)) {
+                    if let Some(b) = self.windows.get_mut(&w) {
+                        b.path_edit = None;
+                        b.path_error = None;
+                        let f = b.focus;
+                        cx.focus(&format!("col-{f}"));
+                    }
+                } else if std::fs::symlink_metadata(&p).is_ok() {
                     if let Some(b) = self.windows.get_mut(&w) {
                         b.path_edit = None;
                     }

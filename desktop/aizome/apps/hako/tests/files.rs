@@ -476,6 +476,103 @@ fn the_location_bar_and_reveal() {
     assert_eq!(h.platform.activations.last().unwrap().1.as_deref(), Some("launchers-token"));
 }
 
+/// Go to Folder starts with the folder's path, a slash and the caret
+/// after them, so what's typed goes on below the folder.
+#[test]
+fn go_to_folder_starts_below_the_folder() {
+    let s = Sandbox::new("go-to-folder");
+    populate(&s);
+    s.dir("home/work/.cache");
+    s.dir("home/work/日本 語/sub");
+    let (mut h, w) = open(&s, "work", Layout::Column);
+    let work = s.home().join("work");
+    let field = |h: &Harness<Hako>| h.program().browser(w).unwrap().path_edit.clone();
+    let here = |h: &Harness<Hako>| h.program().browser(w).unwrap().location().cloned();
+    let slashed = |p: &std::path::Path| Some(format!("{}/", p.display()));
+
+    // ❖L: the folder and one slash, nothing selected, the caret at the
+    // end (⇧← from there selects the slash).
+    h.command(w, 'l');
+    assert_eq!(h.focused_name(w).as_deref(), Some("location"));
+    assert_eq!(field(&h), slashed(&work));
+    assert_eq!(h.selection(w), None);
+    h.named(w, NamedKey::ArrowLeft, Modifiers::SHIFT);
+    assert_eq!(h.selection(w).as_deref(), Some("/"));
+    h.named(w, NamedKey::ArrowRight, Modifiers::NONE);
+    // What's typed goes on below the folder: a hidden one, say.
+    h.type_text(w, ".cache");
+    assert_eq!(field(&h), Some(format!("{}/.cache", work.display())));
+    h.type_text(w, "\n");
+    settle(&mut h);
+    assert_eq!(here(&h), Some(Loc::Folder(work.join(".cache"))));
+    assert_eq!(field(&h), None);
+
+    // Return on the text as it stands stays put: the columns and the
+    // selection are kept, and Back has nothing new to remember.
+    h.send(Msg::GoPath(w, work.clone()));
+    settle(&mut h);
+    h.named(w, NamedKey::Home, Modifiers::NONE);
+    settle(&mut h);
+    let chosen = selected(&h, w);
+    assert_eq!(chosen.len(), 1);
+    let b = h.program().browser(w).unwrap();
+    let (columns, back, focus) = (b.columns.len(), b.back.clone(), b.focus);
+    h.command(w, 'l');
+    assert_eq!(field(&h), slashed(&work));
+    h.type_text(w, "\n");
+    settle(&mut h);
+    let b = h.program().browser(w).unwrap();
+    assert_eq!((b.path_edit.as_ref(), b.path_error.as_ref()), (None, None));
+    assert_eq!(b.location(), Some(&Loc::Folder(work.clone())));
+    assert_eq!((b.columns.len(), &b.back), (columns, &back));
+    assert_eq!(selected(&h, w), chosen);
+    assert_eq!(h.focused_name(w), Some(format!("col-{focus}")));
+
+    // Escape puts the folders back, whatever was typed, and the field
+    // starts at the end again however it was left. ⇧❖G opens it too,
+    // though the Go menu lists the command once.
+    h.command(w, 'l');
+    h.type_text(w, "nowhere");
+    h.named(w, NamedKey::Home, Modifiers::NONE);
+    h.named(w, NamedKey::Escape, Modifiers::NONE);
+    assert_eq!(field(&h), None);
+    assert!(h.find_id(w, "location").is_none());
+    assert_eq!(here(&h), Some(Loc::Folder(work.clone())));
+    assert_eq!(h.focused_name(w), Some(format!("col-{focus}")));
+    h.key(w, Key::Character("G".into()), Modifiers::SUPER | Modifiers::SHIFT);
+    assert_eq!(h.focused_name(w).as_deref(), Some("location"));
+    assert_eq!(field(&h), slashed(&work));
+    let bar = hako::ui::menus::menu_bar(h.program());
+    let listed = bar.menus().iter().flat_map(|m| m.actions()).filter(|a| a.label == "Go to Folder…").count();
+    assert_eq!(listed, 1);
+    // A name with a space in it, not ASCII, and a slash typed after it.
+    h.type_text(w, "日本 語/\n");
+    settle(&mut h);
+    let odd = work.join("日本 語");
+    assert_eq!(here(&h), Some(Loc::Folder(odd.clone())));
+    h.command(w, 'l');
+    assert_eq!(field(&h), slashed(&odd), "one slash");
+    h.type_text(w, "sub\n");
+    settle(&mut h);
+    assert_eq!(here(&h), Some(Loc::Folder(odd.join("sub"))));
+
+    // The top of the disk is its one slash; the Trash and Recent have no
+    // path, so the field starts empty there.
+    h.send(Msg::GoPath(w, "/".into()));
+    settle(&mut h);
+    h.command(w, 'l');
+    assert_eq!(field(&h).as_deref(), Some("/"));
+    h.named(w, NamedKey::Escape, Modifiers::NONE);
+    for loc in [Loc::Trash, Loc::Recent] {
+        h.send(Msg::Go(w, loc.clone()));
+        settle(&mut h);
+        h.command(w, 'l');
+        assert_eq!(field(&h).as_deref(), Some(""), "{loc:?}");
+        h.named(w, NamedKey::Escape, Modifiers::NONE);
+        assert_eq!(field(&h), None);
+    }
+}
+
 #[test]
 fn search_finds_by_name_under_the_folder() {
     let s = Sandbox::new("search");

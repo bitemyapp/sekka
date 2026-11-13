@@ -183,8 +183,8 @@ pub fn menu_bar(h: &Hako) -> MenuBar<Msg> {
     go = go
         .item(item("Trash", Msg::Go(w, Loc::Trash)))
         .separator()
-        .item(item("Go to Folder…", Msg::EditPath(w)).shortcut(Shortcut::cmd('L')))
-        .item(item("Go to Folder…", Msg::EditPath(w)).shortcut(Shortcut::cmd('G').shift()));
+        // Listed once; ⇧❖G does it too (`view::window_key`).
+        .item(item("Go to Folder…", Msg::EditPath(w)).shortcut(Shortcut::cmd('L')));
 
     MenuBar::standard(&aizome_kit::AppInfo::new(crate::APP_ID, "Hako", "Files"))
         .with_file_menu(file)
