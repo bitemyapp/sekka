@@ -70,10 +70,11 @@ impl Children {
     }
 }
 
-/// What the session tells everything it starts, and, under systemd, the
-/// user manager. `aizome.service` unsets every one of these names when the
-/// compositor stops, however it stops (`ExecStopPost=`), so the names live
-/// here and in the unit; a test keeps the two lists equal.
+/// What the session tells everything it starts, and, where it owns the
+/// login session under systemd, the user manager. `aizome.service` unsets
+/// every one of these names when the compositor stops, however it stops
+/// (`ExecStopPost=`), so the names live here and in the unit; a test keeps
+/// the two lists equal.
 struct SessionEnv<'a> {
     wayland_display: &'a str,
     x_display: Option<&'a str>,
@@ -189,7 +190,7 @@ fn free_x_display() -> Option<u32> {
 /// A headless or nested run (tests, screenshots, trying Aizome inside
 /// another desktop) runs as the same user inside that user's real login
 /// session, and must leave all of that alone.
-pub(crate) fn real_session(opts: &crate::cli::Options) -> bool {
+pub fn real_session(opts: &crate::cli::Options) -> bool {
     opts.backend == crate::cli::BackendKind::Udev && !opts.no_session
 }
 
