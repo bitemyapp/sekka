@@ -9,6 +9,7 @@ import argparse
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
+import errno
 import fcntl
 import gzip
 import json
@@ -689,10 +690,24 @@ class PrivateLog:
             raise
 
     def _open(self):
-        fd = os.open(self.path, os.O_CREAT | os.O_APPEND | os.O_WRONLY | os.O_NOFOLLOW, 0o600)
+        fd = os.open(self.path, os.O_CREAT | os.O_APPEND | os.O_RDWR | os.O_NOFOLLOW, 0o600)
         os.fchmod(fd, 0o600)
         self.size = os.fstat(fd).st_size
         self.stream = os.fdopen(fd, "ab", buffering=0)
+        # A crash, a full disk or a size limit can leave a partial last record.
+        # End that line, so the next record is not lost along with it.
+        if self.size and os.pread(fd, 1, self.size - 1) != b"\n":
+            self._write_all(b"\n")
+
+    def _write_all(self, data):
+        # The stream is unbuffered: one write() may store only part of a record.
+        view = memoryview(data)
+        while view:
+            written = self.stream.write(view)
+            if not written:
+                raise OSError(errno.EIO, "recorder log write made no progress")
+            self.size += written
+            view = view[written:]
 
     def write(self, record):
         data = (json.dumps(record, ensure_ascii=True, separators=(",", ":"), allow_nan=False) + "\n").encode()
@@ -706,8 +721,7 @@ class PrivateLog:
                 if source.exists():
                     os.replace(source, Path(f"{self.path}.{number}"))
             self._open()
-        self.stream.write(data)
-        self.size += len(data)
+        self._write_all(data)
 
     def close(self):
         if self.stream is not None:

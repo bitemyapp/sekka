@@ -182,6 +182,45 @@ class StorageTest(unittest.TestCase):
             self.assertEqual([json.loads(line)["sequence"] for line in
                               (Path(root) / "recorder.jsonl").read_text().splitlines()], [1, 2])
 
+    def test_partial_last_record_does_not_swallow_the_next_writers_records(self):
+        # What a crash, a full disk or RLIMIT_FSIZE leaves behind mid-record.
+        with tempfile.TemporaryDirectory() as root:
+            with recorder.PrivateLog(root) as first:
+                first.write({"sequence": 1})
+            path = Path(root) / "recorder.jsonl"
+            with open(path, "ab") as torn:
+                torn.write(b'{"sequence":2,"data":"xxx')
+            with recorder.PrivateLog(root) as second:
+                second.write({"sequence": 3})
+                self.assertEqual(second.size, path.stat().st_size)
+            lines = path.read_text().splitlines()
+            self.assertEqual([json.loads(lines[0])["sequence"], json.loads(lines[2])["sequence"]], [1, 3])
+            self.assertEqual(lines[1], '{"sequence":2,"data":"xxx')
+            # A complete tail is left alone.
+            with recorder.PrivateLog(root) as third:
+                third.write({"sequence": 4})
+            self.assertEqual(len(path.read_text().splitlines()), 4)
+
+    def test_short_writes_are_completed_and_counted(self):
+        class Dribble:
+            def __init__(self, stream):
+                self.stream = stream
+
+            def write(self, data):
+                return self.stream.write(bytes(data[:7]))
+
+            def close(self):
+                self.stream.close()
+
+        with tempfile.TemporaryDirectory() as root:
+            with recorder.PrivateLog(root) as log:
+                log.stream = Dribble(log.stream)
+                for number in range(3):
+                    log.write({"sequence": number, "data": "x" * 40})
+                path = Path(root) / "recorder.jsonl"
+                self.assertEqual(log.size, path.stat().st_size)
+            self.assertEqual([json.loads(line)["sequence"] for line in path.read_text().splitlines()], [0, 1, 2])
+
     def test_symlink_log_is_refused_without_touching_its_target(self):
         with tempfile.TemporaryDirectory() as root:
             directory = Path(root) / "capture"
