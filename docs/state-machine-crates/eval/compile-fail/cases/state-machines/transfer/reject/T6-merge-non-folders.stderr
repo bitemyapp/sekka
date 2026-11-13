@@ -1,0 +1,5 @@
+error[E0599]: no variant, associated function, or constant named `Listing` found for enum `JobAskingUnmergeableAnsweredOutcome` in the current scope
+ --> $WORKSPACE/compile-fail/cases/state-machines/transfer/reject/T6-merge-non-folders.rs
+  |
+  |         JobAskingUnmergeableAnsweredOutcome::Listing(_merging) => {}
+  |                                              ^^^^^^^ variant, associated function, or constant not found in `JobAskingUnmergeableAnsweredOutcome`

@@ -1,0 +1,7 @@
+error[E0599]: no method named `pressed_data` found for struct `Router<impl_state_machines::pointer::NativeDrag>` in the current scope
+ --> $WORKSPACE/compile-fail/cases/state-machines/pointer/reject/P2-owner-after-native-drag.rs
+  |
+  |     let _ = native.pressed_data();
+  |                    ^^^^^^^^^^^^ method not found in `Router<impl_state_machines::pointer::NativeDrag>`
+  |
+  = note: the method was found for `Router<impl_state_machines::pointer::Pressed>`

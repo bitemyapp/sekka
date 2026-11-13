@@ -1,0 +1,15 @@
+error[E0308]: mismatched types
+ --> $WORKSPACE/compile-fail/cases/statum/polkit/reject/K1-answer-without-prompt.rs
+  |
+  |     let _ = Session::<Prompted>::answer(starting, out);
+  |             --------------------------- ^^^^^^^^ expected `Session<Prompted>`, found `Session<Starting>`
+  |             |
+  |             arguments to this function are incorrect
+  |
+  = note: expected struct `Session<impl_statum::polkit::Prompted>`
+             found struct `Session<impl_statum::polkit::Starting>`
+note: method defined here
+ --> src/polkit.rs
+  |
+  |     pub fn answer(self, out: &mut impl Sink<Effect>) -> Session<Checking> {
+  |            ^^^^^^

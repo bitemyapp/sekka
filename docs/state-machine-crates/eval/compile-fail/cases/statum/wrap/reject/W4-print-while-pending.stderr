@@ -1,0 +1,15 @@
+error[E0308]: mismatched types
+ --> $WORKSPACE/compile-fail/cases/statum/wrap/reject/W4-print-while-pending.rs
+  |
+  |     let _ = Screen::<Normal>::print(pending, false, &mut out);
+  |             ----------------------- ^^^^^^^ expected `Screen<Normal>`, found `Screen<Pending>`
+  |             |
+  |             arguments to this function are incorrect
+  |
+  = note: expected struct `Screen<impl_statum::wrap::Normal>`
+             found struct `Screen<impl_statum::wrap::Pending>`
+note: method defined here
+ --> src/wrap.rs
+  |
+  |     pub fn print(mut self, wide: bool, out: &mut impl Sink<Effect>) -> Ready {
+  |            ^^^^^

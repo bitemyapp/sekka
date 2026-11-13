@@ -1,0 +1,5 @@
+error[E0599]: no method named `hover` found for struct `impl_typestate::pointer::Outside` in the current scope
+ --> $WORKSPACE/compile-fail/cases/typestate/pointer/reject/P5-hover-outside.rs
+  |
+  |     let _ = outside.hover();
+  |                     ^^^^^ method not found in `impl_typestate::pointer::Outside`

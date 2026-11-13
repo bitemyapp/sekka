@@ -1,0 +1,7 @@
+error[E0599]: no method named `retry_timer` found for struct `Auth<impl_state_machines::polkit::Unavailable>` in the current scope
+ --> $WORKSPACE/compile-fail/cases/state-machines/polkit/reject/K6-conversation-after-unavailable.rs
+  |
+  |     let _ = unavailable.retry_timer();
+  |                         ^^^^^^^^^^^ method not found in `Auth<impl_state_machines::polkit::Unavailable>`
+  |
+  = note: the method was found for `Auth<impl_state_machines::polkit::RetryWait>`

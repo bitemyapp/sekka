@@ -1,0 +1,5 @@
+error[E0599]: no method named `placed` found for struct `impl_typestate::transfer::Restoring` in the current scope
+ --> $WORKSPACE/compile-fail/cases/typestate/transfer/reject/T1-dispose-before-placed.rs
+  |
+  |     restoring.placed(job, out)
+  |               ^^^^^^ method not found in `impl_typestate::transfer::Restoring`

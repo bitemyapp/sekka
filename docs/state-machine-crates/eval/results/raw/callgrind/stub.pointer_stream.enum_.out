@@ -1,0 +1,200 @@
+# callgrind format
+version: 1
+creator: callgrind-3.27.1
+pid: 2069535
+cmd:  /tmp/claude-1000/tk/i/t/sme-eval/release/deps/instructions-2a4a0b05475e6bfd --gungraun-run d:d:000000 00000 00000 00001
+part: 1
+thread: 1
+
+
+desc: I1 cache: 32768 B, 64 B, 8-way associative
+desc: D1 cache: 32768 B, 64 B, 8-way associative
+desc: LL cache: 8388608 B, 64 B, 16-way associative
+
+desc: Timerange: Basic block 0 - 681120
+desc: Trigger: Program termination
+
+positions: line
+events: Ir Dr Dw I1mr D1mr D1mw ILmr DLmr DLmw
+summary: 1894090 544963 227522 76 7524 2 76 2
+
+
+ob=/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/ld-linux-x86-64.so.2
+fl=???
+fn=0x0000000000022be0
+cob=/tmp/claude-1000/tk/i/t/sme-eval/release/deps/instructions-2a4a0b05475e6bfd
+cfi=???
+cfn=(below main)
+calls=1 0 
+0 1894090 544963 227522 76 7524 2 76 2
+
+ob=/tmp/claude-1000/tk/i/t/sme-eval/release/deps/instructions-2a4a0b05475e6bfd
+fl=???
+fn=instructions::pointer_stream::__run_enum_
+cfn=instructions::pointer_stream::__gungraun_wrapper_id_mod_enum_::enum_
+calls=1 0 
+0 1894090 544963 227522 76 7524 2 76 2
+
+fn=bench::drive::pointer::run::<impl_enum::pointer::Pointer>
+0 418752 219148 99590 4 7503 2 4 1
+cfn=<impl_enum::pointer::Pointer>::inside
+calls=19858 0 
+0 158924 39716 45 2 0 0 2
+0 278012 39716 99290 1 0 0 1
+cfn=impl_enum::pointer::track::<spec::Digest>
+calls=19858 0 
+0 485661 154589 11608 7 0 0 7
+0 476447 88737 15744 4 1 0 4 1
+cfn=<impl_enum::pointer::Pointer>::inside
+calls=51 0 
+0 408 102
+0 2267 878 407 6 0 0 6
+cfn=<impl_enum::pointer::Pointer>::inside
+calls=57 0 
+0 456 114
+0 627 57 228 1 0 0 1
+cfn=impl_enum::pointer::track::<spec::Digest>
+calls=57 0 
+0 1314 486 12
+0 68678 867 490 17 0 0 17
+cfn=impl_enum::pointer::track::<spec::Digest>
+calls=25 0 
+0 518 184
+0 638 44 44
+cfn=impl_enum::pointer::track::<spec::Digest>
+calls=22 0 
+0 484 176
+0 48 0 8
+cfn=impl_enum::pointer::track::<spec::Digest>
+calls=4 0 
+0 112 44 4
+0 389 26 13 8 0 0 8
+cfn=<core::hash::sip::Hasher<core::hash::sip::Sip13Rounds> as core::hash::Hasher>::write
+calls=1 0 
+0 52 7 7 6 0 0 6
+0 75 14 0 4 1 0 4
+
+fn=main
+cfn=std::rt::lang_start_internal
+calls=1 0 
+0 1894090 544963 227522 76 7524 2 76 2
+
+fn=instructions::main
+cfn=instructions::machines::__run
+calls=1 0 
+0 1894090 544963 227522 76 7524 2 76 2
+
+fn=__rustc::__rdl_dealloc
+0 8 4 2 0 1
+cob=/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/libc.so.6
+cfi=???
+cfn=free
+calls=9 0 
+0 130 28 13 10 12 0 10
+
+fn=<core::hash::sip::Hasher<core::hash::sip::Sip13Rounds> as core::hash::Hasher>::write
+0 52 7 7 6 0 0 6
+
+fn=__rustc::__rust_dealloc
+0 2
+cfn=__rustc::__rdl_dealloc
+calls=9 0 
+0 138 32 15 10 13 0 10
+
+fn=instructions::machines::__run
+cfn=instructions::pointer_stream::__run_enum_
+calls=1 0 
+0 1894090 544963 227522 76 7524 2 76 2
+
+fn=instructions::pointer_stream::__gungraun_wrapper_id_mod_enum_::enum_
+cfn=instructions::pointer_stream::__gungraun_wrapper_mod::pointer_stream
+calls=1 0 
+0 1894090 544963 227522 76 7524 2 76 2
+
+fn=<impl_enum::pointer::Pointer>::inside
+0 159788 39932 45 2 0 0 2
+
+fn=instructions::pointer_stream::__gungraun_wrapper_mod::pointer_stream
+0 24 8 8 2 2 0 2
+cfn=bench::drive::pointer::replay::<impl_enum::pointer::Pointer>
+calls=1 0 
+0 1893892 544913 227496 62 7506 2 62 2
+0 18 2 2 1 1 0 1
+cfn=__rustc::__rust_dealloc
+calls=1 0 
+0 93 21 10 10 8 0 10
+0 8 1 1 1 1 0 1
+cfn=__rustc::__rust_dealloc
+calls=1 0 
+0 47 11 5 0 5
+0 8 7 0 0 1
+
+fn=bench::drive::pointer::replay::<impl_enum::pointer::Pointer>
+0 18 3 6 1 0 0 1
+cfn=bench::drive::pointer::run::<impl_enum::pointer::Pointer>
+calls=1 0 
+0 1893862 544905 227490 60 7505 2 60 2
+0 12 5 0 1 1 0 1
+
+fn=impl_enum::pointer::track::<spec::Digest>
+0 488089 155479 11624 7 0 0 7
+
+fn=(below main)
+cob=/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/libc.so.6
+cfi=???
+cfn=__libc_start_main@@GLIBC_2.34
+calls=1 0 
+0 1894090 544963 227522 76 7524 2 76 2
+
+fn=std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+cfn=instructions::main
+calls=1 0 
+0 1894090 544963 227522 76 7524 2 76 2
+
+fn=std::rt::lang_start_internal
+cfn=std::rt::lang_start::<()>::{closure#0}
+calls=1 0 
+0 1894090 544963 227522 76 7524 2 76 2
+
+fn=std::rt::lang_start::<()>::{closure#0}
+cfn=std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+calls=1 0 
+0 1894090 544963 227522 76 7524 2 76 2
+
+ob=/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/libc.so.6
+fl=???
+fn=munmap_chunk
+0 31 7 3 3 2 0 3
+cfn=munmap
+calls=1 0 
+0 6 1 0 2 0 0 2
+
+fn=_int_free_chunk
+0 22 5 5 3 3 0 3
+cfn=munmap_chunk
+calls=1 0 
+0 37 8 3 5 2 0 5
+0 10 4 1 1 0 0 1
+
+fn=free
+0 61 11 4 1 7 0 1
+cfn=_int_free_chunk
+calls=1 0 
+0 69 17 9 9 5 0 9
+
+fn=munmap
+0 6 1 0 2 0 0 2
+
+fn=(below main)
+cob=/tmp/claude-1000/tk/i/t/sme-eval/release/deps/instructions-2a4a0b05475e6bfd
+cfi=???
+cfn=main
+calls=1 0 
+0 1894090 544963 227522 76 7524 2 76 2
+
+fn=__libc_start_main@@GLIBC_2.34
+cfn=(below main)
+calls=1 0 
+0 1894090 544963 227522 76 7524 2 76 2
+
+totals: 1894090 544963 227522 76 7524 2 76 2

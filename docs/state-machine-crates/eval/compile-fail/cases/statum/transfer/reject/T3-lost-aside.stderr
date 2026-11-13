@@ -1,0 +1,19 @@
+error[E0308]: mismatched types
+ --> $WORKSPACE/compile-fail/cases/statum/transfer/reject/T3-lost-aside.rs
+  |
+  |     let _ = Job::<AskingFiles>::skip(restoring, out);
+  |             ------------------------ ^^^^^^^^^ expected `Job<AskingFiles>`, found `Job<Restoring>`
+  |             |
+  |             arguments to this function are incorrect
+  |
+  = note: expected struct `Job<impl_statum::transfer::AskingFiles>`
+             found struct `Job<impl_statum::transfer::Restoring>`
+note: method defined here
+ --> src/transfer.rs
+  |
+  |             pub fn skip(self, out: &mut impl Sink<Effect>) -> Next {
+  |                    ^^^^
+...
+  | asking!(AskingFiles {});
+  | ----------------------- in this macro invocation
+  = note: this error originates in the macro `asking` (in Nightly builds, run with -Z macro-backtrace for more info)

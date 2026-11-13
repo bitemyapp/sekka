@@ -1,0 +1,12 @@
+[package]
+name = "compile-fail"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# The runner only. Each implementation crate runs its own cases from
+# `tests/compile_fail.rs`, so trybuild compiles them against that crate, and
+# one slot's state can't break another slot's run.
+[dependencies]
+trybuild.workspace = true

@@ -1,0 +1,5 @@
+error[E0599]: no method named `take_delay` found for struct `impl_fsmentry::lock::delay::Held<'state>` in the current scope
+ --> $WORKSPACE/compile-fail/cases/fsmentry/lock/reject/L7-double-delay.rs
+  |
+  |         held.take_delay();
+  |              ^^^^^^^^^^ method not found in `impl_fsmentry::lock::delay::Held<'_>`

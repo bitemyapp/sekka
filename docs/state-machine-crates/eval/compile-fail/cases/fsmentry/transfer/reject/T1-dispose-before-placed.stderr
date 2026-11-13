@@ -1,0 +1,5 @@
+error[E0599]: no method named `placed` found for struct `impl_fsmentry::transfer::job::Restoring<'state>` in the current scope
+ --> $WORKSPACE/compile-fail/cases/fsmentry/transfer/reject/T1-dispose-before-placed.rs
+  |
+  |         restoring.placed(replaced);
+  |                   ^^^^^^ method not found in `impl_fsmentry::transfer::job::Restoring<'_>`

@@ -1,0 +1,13 @@
+error[E0023]: this pattern has 2 fields, but the corresponding tuple variant has 1 field
+ --> $WORKSPACE/compile-fail/cases/sml/install/reject/I6-closure-on-deferred-route.rs
+  |
+  |         if let InstallStates::Prepared(true, closure) = state {
+  |                                        ^^^^  ^^^^^^^ expected 1 field, found 2
+  |
+ ::: src/install.rs
+  |
+  |          state<Preparing> + event<Ready> / prepare = Prepared(bool),
+  |                                                               ---- tuple variant has 1 field
+...
+  |          Prepared(bool) + Confirm(bool) / wrong_phrase = Failed,
+  |          -------- tuple variant defined here

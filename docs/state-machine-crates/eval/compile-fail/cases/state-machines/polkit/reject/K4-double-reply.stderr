@@ -1,0 +1,12 @@
+error[E0599]: no method named `dismiss` found for struct `Auth<impl_state_machines::polkit::Idle>` in the current scope
+ --> $WORKSPACE/compile-fail/cases/state-machines/polkit/reject/K4-double-reply.rs
+  |
+  |     let _ = idle.dismiss();
+  |                  ^^^^^^^ method not found in `Auth<impl_state_machines::polkit::Idle>`
+  |
+  = note: the method was found for
+          - `Auth<impl_state_machines::polkit::Checking>`
+          - `Auth<impl_state_machines::polkit::Prompted>`
+          - `Auth<impl_state_machines::polkit::RetryWait>`
+          - `Auth<impl_state_machines::polkit::Starting>`
+          - `Auth<impl_state_machines::polkit::Unavailable>`

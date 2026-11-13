@@ -1,0 +1,7 @@
+error[E0559]: variant `impl_statig::pointer::State::Outside` has no field named `hover`
+ --> $WORKSPACE/compile-fail/cases/statig/pointer/reject/P5-hover-outside.rs
+  |
+  |     let _ = State::Outside { hover: Hover::default() };
+  |                              ^^^^^ `impl_statig::pointer::State::Outside` does not have this field
+  |
+  = note: all struct fields are already assigned

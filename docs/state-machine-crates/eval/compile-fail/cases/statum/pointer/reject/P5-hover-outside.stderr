@@ -1,0 +1,7 @@
+error[E0308]: mismatched types
+ --> $WORKSPACE/compile-fail/cases/statum/pointer/reject/P5-hover-outside.rs
+  |
+  |     outside.state_data = hovering.state_data;
+  |     ------------------   ^^^^^^^^^^^^^^^^^^^ expected `OutsideTok`, found `HoveringData`
+  |     |
+  |     expected due to the type of this binding

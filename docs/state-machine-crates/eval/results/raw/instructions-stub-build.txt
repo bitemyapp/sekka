@@ -1,0 +1,21 @@
+   Compiling syn v3.0.9
+   Compiling proc-macro-error-attr3 v3.1.1
+   Compiling zerocopy-derive v0.8.63
+   Compiling derive_more v0.99.20
+   Compiling zerocopy v0.8.63
+   Compiling proc-macro-error3 v3.1.1
+   Compiling serde_derive v1.0.229
+   Compiling half v2.7.1
+   Compiling serde v1.0.229
+   Compiling ciborium-ll v0.2.2
+   Compiling gungraun-macros v0.10.0
+   Compiling either-or-both v0.3.1
+   Compiling bincode-next v3.1.1
+   Compiling ciborium v0.2.2
+   Compiling tinytemplate v1.2.1
+   Compiling gungraun-runner v0.20.0
+   Compiling criterion v0.8.2
+   Compiling gungraun v0.20.0
+   Compiling bench v0.1.0 (/tmp/claude-1000/tk/sme/bench)
+    Finished `bench` profile [optimized] target(s) in 11.84s
+  Executable benches/instructions.rs (/tmp/claude-1000/tk/i/t/sme-eval/release/deps/instructions-2a4a0b05475e6bfd)

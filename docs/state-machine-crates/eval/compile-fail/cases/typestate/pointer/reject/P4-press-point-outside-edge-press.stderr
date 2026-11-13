@@ -1,0 +1,5 @@
+error[E0599]: no method named `press_point` found for struct `impl_typestate::pointer::Pressed` in the current scope
+ --> $WORKSPACE/compile-fail/cases/typestate/pointer/reject/P4-press-point-outside-edge-press.rs
+  |
+  |     let _ = pressed.press_point();
+  |                     ^^^^^^^^^^^ method not found in `impl_typestate::pointer::Pressed`

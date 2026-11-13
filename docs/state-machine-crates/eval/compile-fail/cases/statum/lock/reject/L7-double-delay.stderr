@@ -1,0 +1,15 @@
+error[E0308]: mismatched types
+ --> $WORKSPACE/compile-fail/cases/statum/lock/reject/L7-double-delay.rs
+  |
+  |     Inhibitor::<NotHeld>::take(fd, out)
+  |     -------------------------- ^^ expected `Inhibitor<NotHeld>`, found `Inhibitor<Held>`
+  |     |
+  |     arguments to this function are incorrect
+  |
+  = note: expected struct `Inhibitor<impl_statum::lock::NotHeld>`
+             found struct `Inhibitor<impl_statum::lock::Held>`
+note: method defined here
+ --> src/lock.rs
+  |
+  |     pub fn take(self, out: &mut impl Sink<Effect>) -> Inhibitor<Held> {
+  |            ^^^^

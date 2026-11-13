@@ -1,0 +1,5 @@
+error[E0599]: no method named `bootloader` found for struct `impl_fsmentry::install::exec::Files<'state>` in the current scope
+ --> $WORKSPACE/compile-fail/cases/fsmentry/install/reject/I2-bootloader-before-copy.rs
+  |
+  |         files.bootloader();
+  |               ^^^^^^^^^^ method not found in `impl_fsmentry::install::exec::Files<'_>`

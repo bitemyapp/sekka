@@ -1,0 +1,5 @@
+error[E0609]: no field `beneath` on type `EdgeDraggingData`
+ --> $WORKSPACE/compile-fail/cases/statum/pointer/reject/P3-click-under-after-drag.rs
+  |
+  |     let _ = dragging.state_data.beneath;
+  |                                 ^^^^^^^ unknown field

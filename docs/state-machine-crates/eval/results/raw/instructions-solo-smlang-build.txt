@@ -1,0 +1,4 @@
+   Compiling impl-smlang v0.1.0 (/tmp/claude-1000/tk/sme/impl-smlang)
+   Compiling bench v0.1.0 (/tmp/claude-1000/tk/sme/bench)
+    Finished `bench` profile [optimized] target(s) in 7.31s
+  Executable benches/instructions.rs (/tmp/claude-1000/tk/i/t/sme-eval/release/deps/instructions-3d659488380c2de9)

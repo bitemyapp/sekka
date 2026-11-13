@@ -1,0 +1,9 @@
+error[E0599]: no method named `shake_tick` found for struct `Locker<impl_state_machines::lock::Locking>` in the current scope
+ --> $WORKSPACE/compile-fail/cases/state-machines/lock/reject/L6-shake-outside-locked.rs
+  |
+  |     let _ = locking.shake_tick();
+  |                     ^^^^^^^^^^ method not found in `Locker<impl_state_machines::lock::Locking>`
+  |
+  = note: the method was found for
+          - `Locker<impl_state_machines::lock::Checking>`
+          - `Locker<impl_state_machines::lock::Idle>`

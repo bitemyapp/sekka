@@ -1,0 +1,7 @@
+error[E0599]: no method named `submit` found for struct `Locker<impl_state_machines::lock::Locking>` in the current scope
+ --> $WORKSPACE/compile-fail/cases/state-machines/lock/reject/L3-check-while-unlocked.rs
+  |
+  |     let _ = locking.submit();
+  |                     ^^^^^^ method not found in `Locker<impl_state_machines::lock::Locking>`
+  |
+  = note: the method was found for `Locker<impl_state_machines::lock::Idle>`

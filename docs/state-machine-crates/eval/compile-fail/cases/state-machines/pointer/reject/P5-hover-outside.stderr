@@ -1,0 +1,11 @@
+error[E0599]: no method named `with_inside_data` found for struct `Router<impl_state_machines::pointer::Outside>` in the current scope
+ --> $WORKSPACE/compile-fail/cases/state-machines/pointer/reject/P5-hover-outside.rs
+  |
+  |     let _ = outside.with_inside_data(hover);
+  |                     ^^^^^^^^^^^^^^^^ method not found in `Router<impl_state_machines::pointer::Outside>`
+  |
+  = note: the method was found for
+          - `Router<impl_state_machines::pointer::DragsOnlyDragging>`
+          - `Router<impl_state_machines::pointer::DragsOnlyPressed>`
+          - `Router<impl_state_machines::pointer::Hovering>`
+          - `Router<impl_state_machines::pointer::Pressed>`

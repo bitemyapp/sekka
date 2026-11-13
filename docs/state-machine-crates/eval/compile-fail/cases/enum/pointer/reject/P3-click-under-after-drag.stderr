@@ -1,0 +1,5 @@
+error[E0026]: variant `EdgeDrag` does not have a field named `beneath`
+ --> $WORKSPACE/compile-fail/cases/enum/pointer/reject/P3-click-under-after-drag.rs
+  |
+  |     if let State::Inside { press: Press::EdgeDrag { edge, beneath }, .. } = m.typed() {
+  |                                                           ^^^^^^^ variant `EdgeDrag` does not have this field

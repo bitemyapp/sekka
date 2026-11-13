@@ -1,0 +1,41 @@
+impl-implicit: tests pass
+impl-enum: tests pass
+impl-typestate: tests pass
+impl-statig: tests pass
+impl-smlang: tests pass
+impl-sml: tests pass
+impl-finny: tests pass
+impl-fsmentry: tests pass
+impl-statum: tests pass
+impl-state-machines: tests pass
+impl-rust-fsm: tests pass
+
+| impl | pointer | wrap | polkit | transfer | lock | install |
+|---|---|---|---|---|---|---|
+| impl_implicit | 17/21 | 14/14 | 10/16 | 18/20 | 15/18 | 15/16 |
+| impl_enum | 21/21 | 14/14 | 16/16 | 20/20 | 18/18 | 16/16 |
+| impl_typestate | 21/21 | 14/14 | 16/16 | 20/20 | 18/18 | 16/16 |
+| impl_statig | 21/21 | 14/14 | 16/16 | 20/20 | 18/18 | 16/16 |
+| impl_smlang | 21/21 | 14/14 | 16/16 | 20/20 | 18/18 | 16/16 |
+| impl_sml | 21/21 | 14/14 | 16/16 | 20/20 | 18/18 | 16/16 |
+| impl_finny | 21/21 | 14/14 | 16/16 | 20/20 | 18/18 | 16/16 |
+| impl_fsmentry | 21/21 | 14/14 | 16/16 | 20/20 | 18/18 | 16/16 |
+| impl_statum | 21/21 | 14/14 | 16/16 | 20/20 | 18/18 | 16/16 |
+| impl_state_machines | 21/21 | 14/14 | 16/16 | 20/20 | 18/18 | 16/16 |
+| impl_rust_fsm | 21/21 | 14/14 | 16/16 | 20/20 | 18/18 | 16/16 |
+  impl_implicit lock: fails a-lockout-says-why (SHB-12)
+  impl_implicit lock: fails an-expired-password-says-why (SHB-12)
+  impl_implicit lock: fails lock-confirmed-after-resume-keeps-the-next-delay (SYB-12)
+  impl_implicit polkit: fails unreachable-helper-backs-off (SHB-03)
+  impl_implicit polkit: fails helper-exits-without-a-verdict-backs-off (SYB-09)
+  impl_implicit polkit: fails a-prompt-resets-the-count (SYB-09)
+  impl_implicit polkit: fails waiting-retry-dismissed (SYB-09)
+  impl_implicit polkit: fails choosing-an-identity-retries-by-hand (SHB-03)
+  impl_implicit polkit: fails identity-change-during-the-back-off (SYB-09)
+  impl_implicit transfer: fails put-back-replace-goes-to-the-trash (HAKO-05)
+  impl_implicit transfer: fails put-back-merge-replaces-into-the-trash (HAKO-05)
+  impl_implicit pointer: fails program-started-drag-releases-the-press (KIT-13)
+  impl_implicit pointer: fails release-without-a-press-fires-nothing (UIW-01)
+  impl_implicit pointer: fails release-after-the-pressed-node-is-rebuilt-away (UIW-01)
+  impl_implicit pointer: fails release-after-uncapture (UIW-01)
+  impl_implicit install: fails deferred-route-checks-the-root-space (GEN-07)

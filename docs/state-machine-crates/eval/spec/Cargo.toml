@@ -1,0 +1,13 @@
+[package]
+name = "spec"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+# Conformance runner and property-test drivers (for impl crates' tests).
+testing = ["dep:proptest"]
+
+[dependencies]
+proptest = { workspace = true, optional = true }

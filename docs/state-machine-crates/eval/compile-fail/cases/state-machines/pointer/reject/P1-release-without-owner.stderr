@@ -1,0 +1,15 @@
+error[E0308]: mismatched types
+ --> $WORKSPACE/compile-fail/cases/state-machines/pointer/reject/P1-release-without-owner.rs
+  |
+  |     let _ = Router::<Pressed>::release(hovering, lift);
+  |             -------------------------- ^^^^^^^^ expected `Router<Pressed>`, found `Router<Hovering>`
+  |             |
+  |             arguments to this function are incorrect
+  |
+  = note: expected struct `Router<impl_state_machines::pointer::Pressed>`
+             found struct `Router<impl_state_machines::pointer::Hovering>`
+note: method defined here
+ --> src/pointer.rs
+  |
+  |             release {
+  |             ^^^^^^^

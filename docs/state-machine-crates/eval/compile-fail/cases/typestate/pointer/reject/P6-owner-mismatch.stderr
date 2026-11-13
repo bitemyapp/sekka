@@ -1,0 +1,14 @@
+error[E0308]: mismatched types
+ --> $WORKSPACE/compile-fail/cases/typestate/pointer/reject/P6-owner-mismatch.rs
+  |
+  | fn ownerless(pressed: &Pressed) -> Option<Node> {
+  |                                    ------------ expected `Option<Node>` because of return type
+  |     pressed.owner()
+  |     ^^^^^^^^^^^^^^^ expected `Option<Node>`, found `Node`
+  |
+  = note: expected enum `Option<Node>`
+           found struct `Node`
+help: try wrapping the expression in `Some`
+  |
+7 |     Some(pressed.owner())
+  |     +++++               +

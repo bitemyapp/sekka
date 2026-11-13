@@ -1,0 +1,96 @@
+
+pointer
+
+| impl | P1 | P2 | P3 | P4 | P5 | P6 | forge |
+|---|---|---|---|---|---|---|---|
+| implicit (ok) | A | A | A | A | A | A | - |
+| enum (ok) | T | R | R | R | R | R | - |
+| typestate (ok) | R | R | R | R | R | R | - |
+| statig (ok) | T | R | R | R | R | R | - |
+| smlang (ok) | T | R | R | R | R | R | - |
+| sml (ok) | T | R | R | R | T | R | - |
+| finny (ok) | T | A | T | A | T | T | - |
+| fsmentry (ok) | T | R | R | R | R | R | F-as-mut |
+| statum (ok) | R | R | R | R | R | R | F-transition-with |
+| state-machines (ok) | R | R | R | R | R | T | F-pressed-data-mut |
+| rust-fsm (ok) | T | A | T | A | T | A | F-from-state |
+
+wrap
+
+| impl | W1 | W2 | W3 | W4 | W5 | forge |
+|---|---|---|---|---|---|---|
+| implicit (ok) | T | T | T | T | T | - |
+| enum (ok) | T | T | T | T | T | - |
+| typestate (ok) | R | R | R | R | R | - |
+| statig (ok) | T | T | T | T | T | - |
+| smlang (ok) | T | T | T | T | T | - |
+| sml (ok) | T | T | T | T | T | - |
+| finny (ok) | T | T | T | T | T | - |
+| fsmentry (ok) | A | T | A | T | T | - |
+| statum (ok) | R | R | R | R | R | F-transition-with |
+| state-machines (ok) | T | T | R | T | T | - |
+| rust-fsm (ok) | T | T | T | T | T | F-from-state |
+
+polkit
+
+| impl | K1 | K2 | K3 | K4 | K5 | K6 | forge |
+|---|---|---|---|---|---|---|---|
+| implicit (ok) | T | T | A | T | T | A | - |
+| enum (ok) | T | T | T | T | T | T | - |
+| typestate (ok) | R | T | R | R | R | R | - |
+| statig (ok) | T | T | T | T | T | T | - |
+| smlang (ok) | T | T | T | T | T | T | - |
+| sml (ok) | T | T | T | T | T | T | - |
+| finny (ok) | T | T | T | T | T | T | - |
+| fsmentry (ok) | R | T | R | R | R | R | F-as-mut |
+| statum (ok) | R | T | R | R | R | R | F-transition-with |
+| state-machines (ok) | R | T | R | R | R | R | F-starting-data-mut |
+| rust-fsm (ok) | T | T | T | T | T | T | F-from-state |
+
+transfer
+
+| impl | T1 | T2 | T3 | T4 | T5 | T6 | forge |
+|---|---|---|---|---|---|---|---|
+| implicit (ok) | T | A | T | T | T | T | - |
+| enum (ok) | T | T | T | T | T | T | - |
+| typestate (ok) | R | R | R | R | T | R | - |
+| statig (ok) | T | T | T | T | T | T | - |
+| smlang (ok) | T | T | T | T | T | T | - |
+| sml (ok) | T | T | T | T | T | T | - |
+| finny (ok) | T | T | T | T | T | T | - |
+| fsmentry (ok) | R | T | R | R | T | R | F-as-mut |
+| statum (ok) | R | R | R | R | T | R | F-transition-with |
+| state-machines (ok) | R | T | R | R | T | R | F-probing-data-mut |
+| rust-fsm (ok) | T | T | T | T | T | T | F-from-state |
+
+lock
+
+| impl | L1 | L2 | L3 | L4 | L5 | L6 | L7 | forge |
+|---|---|---|---|---|---|---|---|---|
+| implicit (ok) | T | T | T | A | A | A | A | - |
+| enum (ok) | T | T | T | T | T | R | T | - |
+| typestate (ok) | R | T | R | R | T | R | R | - |
+| statig (ok) | T | T | T | T | T | R | T | - |
+| smlang (ok) | T | T | T | T | T | R | T | - |
+| sml (ok) | T | T | T | T | T | T | T | - |
+| finny (ok) | T | T | T | T | T | A | T | - |
+| fsmentry (ok) | A | T | R | T | T | R | R | F-as-mut |
+| statum (ok) | R | T | R | R | T | R | R | F-transition-with |
+| state-machines (ok) | R | T | R | R | T | R | R | F-checking-data-mut |
+| rust-fsm (ok) | T | T | T | T | T | T | T | F-from-state |
+
+install
+
+| impl | I1 | I2 | I3 | I4 | I5 | I6 | forge |
+|---|---|---|---|---|---|---|---|
+| implicit (ok) | T | T | T | A | T | A | - |
+| enum (ok) | T | T | T | T | T | R | - |
+| typestate (ok) | R | R | R | R | R | R | - |
+| statig (ok) | T | T | T | T | T | R | - |
+| smlang (ok) | T | T | T | T | T | R | - |
+| sml (ok) | T | T | T | T | T | R | - |
+| finny (ok) | T | T | T | T | T | A | - |
+| fsmentry (ok) | R | R | R | R | R | R | F-as-mut |
+| statum (ok) | R | R | R | R | R | R | F-transition-with |
+| state-machines (ok) | R | R | R | R | R | R | F-with-prepared-data |
+| rust-fsm (ok) | T | T | T | T | T | A | F-from-state |

@@ -1,0 +1,168 @@
+== compile dev 1: before 2026-11-04T17:08:14-06:00
+1.71 3.02 4.29 2/2450 2025066
+    PID %CPU COMMAND
+1817000 57.8 llama-server
+1820177 23.4 qemu-system-x86
+  61989  6.0 .claude-wrapped
+1871301  3.0 qemu-system-x86
+  64225  2.9 .claude-wrapped
+  62459  1.8 .Discord-wrappe
+   4219  1.8 chrome
+  98041  1.7 .claude-wrapped
+1820197  1.7 virtiofsd
+cpu3 121789 231581 98970 9727979 25261 10632 1806 0 222 85416
+cpu11 133249 351775 144283 9572253 15775 12783 1767 0 252 170584
+== compile dev 1: after 2026-11-04T17:08:50-06:00
+2.06 2.97 4.22 1/2478 2031674
+    PID %CPU COMMAND
+1817000 56.4 llama-server
+1820177 22.9 qemu-system-x86
+  61989  6.0 .claude-wrapped
+1871301  3.0 qemu-system-x86
+  64225  2.9 .claude-wrapped
+  62459  1.8 .Discord-wrappe
+   4219  1.8 chrome
+  98041  1.7 .claude-wrapped
+1820197  1.6 virtiofsd
+cpu3 122070 231750 99041 9731047 25264 10637 1807 0 222 85420
+cpu11 133439 351868 144335 9575489 15805 12789 1768 0 252 170587
+== compile release 1: before 2026-11-04T17:08:50-06:00
+2.06 2.97 4.22 3/2478 2031686
+    PID %CPU COMMAND
+1817000 56.4 llama-server
+1820177 22.9 qemu-system-x86
+  61989  6.0 .claude-wrapped
+1871301  3.0 qemu-system-x86
+  64225  2.9 .claude-wrapped
+  62459  1.8 .Discord-wrappe
+   4219  1.8 chrome
+  98041  1.7 .claude-wrapped
+1820197  1.6 virtiofsd
+cpu3 122070 231750 99041 9731053 25264 10637 1807 0 222 85420
+cpu11 133439 351868 144335 9575494 15805 12789 1768 0 252 170587
+== compile release 1: after 2026-11-04T17:09:27-06:00
+1.96 2.85 4.13 3/2446 2038187
+    PID %CPU COMMAND
+1817000 55.0 llama-server
+1820177 22.4 qemu-system-x86
+  61989  6.0 .claude-wrapped
+1871301  2.9 qemu-system-x86
+  64225  2.9 .claude-wrapped
+  62459  1.8 .Discord-wrappe
+   4219  1.8 chrome
+  98041  1.7 .claude-wrapped
+1820197  1.6 virtiofsd
+cpu3 122270 231953 99102 9734275 25266 10643 1808 0 222 85423
+cpu11 133612 352038 144379 9578808 15806 12794 1768 0 252 170589
+== compile dev 2: before 2026-11-04T17:09:27-06:00
+1.96 2.85 4.13 7/2446 2038199
+    PID %CPU COMMAND
+1817000 55.0 llama-server
+1820177 22.4 qemu-system-x86
+  61989  6.0 .claude-wrapped
+1871301  2.9 qemu-system-x86
+  64225  2.9 .claude-wrapped
+  62459  1.8 .Discord-wrappe
+   4219  1.8 chrome
+  98041  1.7 .claude-wrapped
+1820197  1.6 virtiofsd
+cpu3 122271 231953 99102 9734281 25266 10643 1808 0 222 85423
+cpu11 133619 352038 144379 9578809 15806 12795 1768 0 252 170589
+== compile dev 2: after 2026-11-04T17:10:02-06:00
+1.88 2.73 4.04 1/2441 2044687
+    PID %CPU COMMAND
+1817000 53.7 llama-server
+1820177 21.9 qemu-system-x86
+  61989  6.0 .claude-wrapped
+  64225  2.9 .claude-wrapped
+1871301  2.9 qemu-system-x86
+  62459  1.8 .Discord-wrappe
+   4219  1.8 chrome
+  98041  1.7 .claude-wrapped
+ 408495  1.6 chrome
+cpu3 122456 232074 99159 9737371 25271 10646 1809 0 222 85427
+cpu11 133753 352115 144419 9582014 15807 12799 1769 0 252 170591
+== compile release 2: before 2026-11-04T17:10:02-06:00
+1.88 2.73 4.04 1/2441 2044699
+    PID %CPU COMMAND
+1817000 53.7 llama-server
+1820177 21.9 qemu-system-x86
+  61989  6.0 .claude-wrapped
+  64225  2.9 .claude-wrapped
+1871301  2.9 qemu-system-x86
+  62459  1.8 .Discord-wrappe
+   4219  1.8 chrome
+  98041  1.7 .claude-wrapped
+ 408495  1.6 chrome
+cpu3 122456 232074 99161 9737375 25271 10646 1809 0 222 85427
+cpu11 133753 352115 144419 9582020 15807 12799 1769 0 252 170591
+== compile release 2: after 2026-11-04T17:10:38-06:00
+1.69 2.59 3.94 1/2425 2051213
+    PID %CPU COMMAND
+1817000 52.5 llama-server
+1820177 21.5 qemu-system-x86
+  61989  5.9 .claude-wrapped
+  64225  2.9 .claude-wrapped
+1871301  2.8 qemu-system-x86
+  62459  1.8 .Discord-wrappe
+   4219  1.8 chrome
+  98041  1.7 .claude-wrapped
+ 408495  1.6 chrome
+cpu3 122619 232288 99219 9740545 25275 10650 1809 0 222 85431
+cpu11 133924 352232 144460 9585299 15807 12802 1769 0 252 170593
+== compile dev 3: before 2026-11-04T17:10:38-06:00
+1.69 2.59 3.94 1/2425 2051225
+    PID %CPU COMMAND
+1817000 52.5 llama-server
+1820177 21.5 qemu-system-x86
+  61989  5.9 .claude-wrapped
+  64225  2.9 .claude-wrapped
+1871301  2.8 qemu-system-x86
+  62459  1.8 .Discord-wrappe
+   4219  1.8 chrome
+  98041  1.7 .claude-wrapped
+ 408495  1.6 chrome
+cpu3 122619 232289 99219 9740551 25275 10650 1809 0 222 85431
+cpu11 133924 352232 144460 9585305 15807 12802 1769 0 252 170593
+== compile dev 3: after 2026-11-04T17:11:13-06:00
+1.46 2.43 3.84 1/2437 2057748
+    PID %CPU COMMAND
+1817000 51.3 llama-server
+1820177 21.1 qemu-system-x86
+  61989  5.9 .claude-wrapped
+  64225  2.9 .claude-wrapped
+1871301  2.8 qemu-system-x86
+  62459  1.8 .Discord-wrappe
+   4219  1.8 chrome
+  98041  1.7 .claude-wrapped
+ 408495  1.6 chrome
+cpu3 122843 232424 99281 9743614 25276 10655 1810 0 222 85434
+cpu11 134068 352325 144504 9588520 15807 12807 1770 0 252 170596
+== compile release 3: before 2026-11-04T17:11:13-06:00
+1.46 2.43 3.84 4/2437 2057760
+    PID %CPU COMMAND
+1817000 51.3 llama-server
+1820177 21.1 qemu-system-x86
+  61989  5.9 .claude-wrapped
+  64225  2.9 .claude-wrapped
+1871301  2.8 qemu-system-x86
+  62459  1.8 .Discord-wrappe
+   4219  1.8 chrome
+  98041  1.7 .claude-wrapped
+ 408495  1.6 chrome
+cpu3 122843 232424 99281 9743620 25276 10655 1810 0 222 85434
+cpu11 134068 352325 144504 9588525 15807 12807 1770 0 252 170596
+== compile release 3: after 2026-11-04T17:11:50-06:00
+2.03 2.45 3.79 2/2455 2064321
+    PID %CPU COMMAND
+1817000 50.2 llama-server
+1820177 20.6 qemu-system-x86
+  61989  5.9 .claude-wrapped
+2064231  3.2 chrome
+  64225  2.9 .claude-wrapped
+1871301  2.8 qemu-system-x86
+   4219  1.8 chrome
+  62459  1.8 .Discord-wrappe
+  98041  1.7 .claude-wrapped
+cpu3 123148 232642 99352 9746747 25277 10661 1812 0 222 85437
+cpu11 134303 352486 144555 9591825 15808 12813 1770 0 252 170598

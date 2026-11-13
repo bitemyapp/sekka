@@ -1,0 +1,7 @@
+error[E0609]: no field `kind` on type `Job<impl_statum::transfer::PlacingReplacement>`
+ --> $WORKSPACE/compile-fail/cases/statum/transfer/reject/T2-dispose-by-kind.rs
+  |
+  |     if replacement.kind == JobKind::Restore {
+  |                    ^^^^ unknown field
+  |
+  = note: available field is: `state_data`

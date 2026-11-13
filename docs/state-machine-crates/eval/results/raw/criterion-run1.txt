@@ -1,0 +1,821 @@
+Benchmarking pointer-stream/implicit
+Benchmarking pointer-stream/implicit: Warming up for 3.0000 s
+Benchmarking pointer-stream/implicit: Collecting 100 samples in estimated 5.1084 s (1100 iterations)
+Benchmarking pointer-stream/implicit: Analyzing
+pointer-stream/implicit time:   [4.6100 ms 4.6160 ms 4.6234 ms]
+                        thrpt:  [216.29 Melem/s 216.64 Melem/s 216.92 Melem/s]
+Found 2 outliers among 100 measurements (2.00%)
+  2 (2.00%) high severe
+Benchmarking pointer-stream/enum
+Benchmarking pointer-stream/enum: Warming up for 3.0000 s
+Benchmarking pointer-stream/enum: Collecting 100 samples in estimated 5.4303 s (800 iterations)
+Benchmarking pointer-stream/enum: Analyzing
+pointer-stream/enum     time:   [6.8170 ms 6.8287 ms 6.8400 ms]
+                        thrpt:  [146.20 Melem/s 146.44 Melem/s 146.69 Melem/s]
+Benchmarking pointer-stream/typestate
+Benchmarking pointer-stream/typestate: Warming up for 3.0000 s
+Benchmarking pointer-stream/typestate: Collecting 100 samples in estimated 5.3205 s (500 iterations)
+Benchmarking pointer-stream/typestate: Analyzing
+pointer-stream/typestate
+                        time:   [10.648 ms 10.661 ms 10.678 ms]
+                        thrpt:  [93.652 Melem/s 93.803 Melem/s 93.915 Melem/s]
+Found 13 outliers among 100 measurements (13.00%)
+  8 (8.00%) low severe
+  2 (2.00%) low mild
+  3 (3.00%) high severe
+Benchmarking pointer-stream/statig
+Benchmarking pointer-stream/statig: Warming up for 3.0000 s
+Benchmarking pointer-stream/statig: Collecting 100 samples in estimated 5.7193 s (500 iterations)
+Benchmarking pointer-stream/statig: Analyzing
+pointer-stream/statig   time:   [11.481 ms 11.501 ms 11.523 ms]
+                        thrpt:  [86.782 Melem/s 86.949 Melem/s 87.097 Melem/s]
+Found 2 outliers among 100 measurements (2.00%)
+  1 (1.00%) high mild
+  1 (1.00%) high severe
+Benchmarking pointer-stream/smlang
+Benchmarking pointer-stream/smlang: Warming up for 3.0000 s
+Benchmarking pointer-stream/smlang: Collecting 100 samples in estimated 5.7134 s (700 iterations)
+Benchmarking pointer-stream/smlang: Analyzing
+pointer-stream/smlang   time:   [8.1863 ms 8.2043 ms 8.2264 ms]
+                        thrpt:  [121.56 Melem/s 121.89 Melem/s 122.16 Melem/s]
+Found 2 outliers among 100 measurements (2.00%)
+  2 (2.00%) high severe
+Benchmarking pointer-stream/sml
+Benchmarking pointer-stream/sml: Warming up for 3.0000 s
+Benchmarking pointer-stream/sml: Collecting 100 samples in estimated 5.4776 s (700 iterations)
+Benchmarking pointer-stream/sml: Analyzing
+pointer-stream/sml      time:   [7.7863 ms 7.7933 ms 7.8007 ms]
+                        thrpt:  [128.19 Melem/s 128.32 Melem/s 128.43 Melem/s]
+Found 2 outliers among 100 measurements (2.00%)
+  2 (2.00%) high mild
+Benchmarking pointer-stream/finny
+Benchmarking pointer-stream/finny: Warming up for 3.0000 s
+Benchmarking pointer-stream/finny: Collecting 100 samples in estimated 6.0369 s (500 iterations)
+Benchmarking pointer-stream/finny: Analyzing
+pointer-stream/finny    time:   [12.063 ms 12.085 ms 12.108 ms]
+                        thrpt:  [82.593 Melem/s 82.750 Melem/s 82.900 Melem/s]
+Benchmarking pointer-stream/fsmentry
+Benchmarking pointer-stream/fsmentry: Warming up for 3.0000 s
+Benchmarking pointer-stream/fsmentry: Collecting 100 samples in estimated 5.5033 s (800 iterations)
+Benchmarking pointer-stream/fsmentry: Analyzing
+pointer-stream/fsmentry time:   [6.9043 ms 6.9610 ms 7.0382 ms]
+                        thrpt:  [142.08 Melem/s 143.66 Melem/s 144.84 Melem/s]
+Found 12 outliers among 100 measurements (12.00%)
+  3 (3.00%) high mild
+  9 (9.00%) high severe
+Benchmarking pointer-stream/statum
+Benchmarking pointer-stream/statum: Warming up for 3.0000 s
+Benchmarking pointer-stream/statum: Collecting 100 samples in estimated 5.4126 s (1100 iterations)
+Benchmarking pointer-stream/statum: Analyzing
+pointer-stream/statum   time:   [4.9156 ms 4.9347 ms 4.9676 ms]
+                        thrpt:  [201.30 Melem/s 202.65 Melem/s 203.43 Melem/s]
+Found 11 outliers among 100 measurements (11.00%)
+  2 (2.00%) high mild
+  9 (9.00%) high severe
+Benchmarking pointer-stream/state-machines
+Benchmarking pointer-stream/state-machines: Warming up for 3.0000 s
+Benchmarking pointer-stream/state-machines: Collecting 100 samples in estimated 6.1591 s (400 iterations)
+Benchmarking pointer-stream/state-machines: Analyzing
+pointer-stream/state-machines
+                        time:   [15.143 ms 15.187 ms 15.231 ms]
+                        thrpt:  [65.654 Melem/s 65.845 Melem/s 66.039 Melem/s]
+Benchmarking pointer-stream/rust-fsm
+Benchmarking pointer-stream/rust-fsm: Warming up for 3.0000 s
+Benchmarking pointer-stream/rust-fsm: Collecting 100 samples in estimated 5.1289 s (600 iterations)
+Benchmarking pointer-stream/rust-fsm: Analyzing
+pointer-stream/rust-fsm time:   [8.5029 ms 8.5296 ms 8.5719 ms]
+                        thrpt:  [116.66 Melem/s 117.24 Melem/s 117.61 Melem/s]
+Found 8 outliers among 100 measurements (8.00%)
+  6 (6.00%) high mild
+  2 (2.00%) high severe
+
+Benchmarking wrap-80/implicit
+Benchmarking wrap-80/implicit: Warming up for 3.0000 s
+Benchmarking wrap-80/implicit: Collecting 20 samples in estimated 17.376 s (420 iterations)
+Benchmarking wrap-80/implicit: Analyzing
+wrap-80/implicit        time:   [40.358 ms 40.472 ms 40.644 ms]
+                        thrpt:  [254.45 Melem/s 255.53 Melem/s 256.26 Melem/s]
+Benchmarking wrap-80/enum
+Benchmarking wrap-80/enum: Warming up for 3.0000 s
+Benchmarking wrap-80/enum: Collecting 20 samples in estimated 16.850 s (420 iterations)
+Benchmarking wrap-80/enum: Analyzing
+wrap-80/enum            time:   [40.128 ms 40.200 ms 40.254 ms]
+                        thrpt:  [256.92 Melem/s 257.26 Melem/s 257.72 Melem/s]
+Benchmarking wrap-80/typestate
+Benchmarking wrap-80/typestate: Warming up for 3.0000 s
+Benchmarking wrap-80/typestate: Collecting 20 samples in estimated 11.206 s (100 iterations)
+Benchmarking wrap-80/typestate: Analyzing
+wrap-80/typestate       time:   [111.73 ms 111.87 ms 112.05 ms]
+                        thrpt:  [92.295 Melem/s 92.449 Melem/s 92.565 Melem/s]
+Found 2 outliers among 20 measurements (10.00%)
+  1 (5.00%) high mild
+  1 (5.00%) high severe
+Benchmarking wrap-80/statig
+Benchmarking wrap-80/statig: Warming up for 3.0000 s
+
+Warning: Unable to complete 20 samples in 10.0s. You may wish to increase target time to 16.8s, enable flat sampling, or reduce sample count to 10.
+Benchmarking wrap-80/statig: Collecting 20 samples in estimated 16.776 s (210 iterations)
+Benchmarking wrap-80/statig: Analyzing
+wrap-80/statig          time:   [79.507 ms 79.575 ms 79.664 ms]
+                        thrpt:  [129.82 Melem/s 129.96 Melem/s 130.08 Melem/s]
+Found 2 outliers among 20 measurements (10.00%)
+  1 (5.00%) high mild
+  1 (5.00%) high severe
+Benchmarking wrap-80/smlang
+Benchmarking wrap-80/smlang: Warming up for 3.0000 s
+Benchmarking wrap-80/smlang: Collecting 20 samples in estimated 19.163 s (420 iterations)
+Benchmarking wrap-80/smlang: Analyzing
+wrap-80/smlang          time:   [46.161 ms 46.650 ms 47.376 ms]
+                        thrpt:  [218.29 Melem/s 221.69 Melem/s 224.04 Melem/s]
+Benchmarking wrap-80/sml
+Benchmarking wrap-80/sml: Warming up for 3.0000 s
+
+Warning: Unable to complete 20 samples in 10.0s. You may wish to increase target time to 13.4s, enable flat sampling, or reduce sample count to 10.
+Benchmarking wrap-80/sml: Collecting 20 samples in estimated 13.407 s (210 iterations)
+Benchmarking wrap-80/sml: Analyzing
+wrap-80/sml             time:   [71.320 ms 78.523 ms 85.851 ms]
+                        thrpt:  [120.46 Melem/s 131.71 Melem/s 145.01 Melem/s]
+Benchmarking wrap-80/finny
+Benchmarking wrap-80/finny: Warming up for 3.0000 s
+Benchmarking wrap-80/finny: Collecting 20 samples in estimated 11.490 s (120 iterations)
+Benchmarking wrap-80/finny: Analyzing
+wrap-80/finny           time:   [94.699 ms 95.206 ms 95.819 ms]
+                        thrpt:  [107.93 Melem/s 108.63 Melem/s 109.21 Melem/s]
+Found 2 outliers among 20 measurements (10.00%)
+  2 (10.00%) high mild
+Benchmarking wrap-80/fsmentry
+Benchmarking wrap-80/fsmentry: Warming up for 3.0000 s
+Benchmarking wrap-80/fsmentry: Collecting 20 samples in estimated 16.993 s (420 iterations)
+Benchmarking wrap-80/fsmentry: Analyzing
+wrap-80/fsmentry        time:   [43.558 ms 45.566 ms 47.821 ms]
+                        thrpt:  [216.26 Melem/s 226.97 Melem/s 237.43 Melem/s]
+Found 2 outliers among 20 measurements (10.00%)
+  2 (10.00%) high mild
+Benchmarking wrap-80/statum
+Benchmarking wrap-80/statum: Warming up for 3.0000 s
+Benchmarking wrap-80/statum: Collecting 20 samples in estimated 11.932 s (100 iterations)
+Benchmarking wrap-80/statum: Analyzing
+wrap-80/statum          time:   [113.60 ms 114.87 ms 116.30 ms]
+                        thrpt:  [88.924 Melem/s 90.030 Melem/s 91.038 Melem/s]
+Benchmarking wrap-80/state-machines
+Benchmarking wrap-80/state-machines: Warming up for 3.0000 s
+Benchmarking wrap-80/state-machines: Collecting 20 samples in estimated 10.305 s (40 iterations)
+Benchmarking wrap-80/state-machines: Analyzing
+wrap-80/state-machines  time:   [253.19 ms 257.89 ms 263.02 ms]
+                        thrpt:  [39.320 Melem/s 40.102 Melem/s 40.847 Melem/s]
+Benchmarking wrap-80/rust-fsm
+Benchmarking wrap-80/rust-fsm: Warming up for 3.0000 s
+
+Warning: Unable to complete 20 samples in 10.0s. You may wish to increase target time to 16.8s, enable flat sampling, or reduce sample count to 10.
+Benchmarking wrap-80/rust-fsm: Collecting 20 samples in estimated 16.762 s (210 iterations)
+Benchmarking wrap-80/rust-fsm: Analyzing
+wrap-80/rust-fsm        time:   [76.048 ms 81.356 ms 85.971 ms]
+                        thrpt:  [120.30 Melem/s 127.12 Melem/s 135.99 Melem/s]
+
+Benchmarking wrap-200/implicit
+Benchmarking wrap-200/implicit: Warming up for 3.0000 s
+
+Warning: Unable to complete 20 samples in 10.0s. You may wish to increase target time to 10.7s, enable flat sampling, or reduce sample count to 10.
+Benchmarking wrap-200/implicit: Collecting 20 samples in estimated 10.681 s (210 iterations)
+Benchmarking wrap-200/implicit: Analyzing
+wrap-200/implicit       time:   [40.902 ms 42.699 ms 45.448 ms]
+                        thrpt:  [226.08 Melem/s 240.63 Melem/s 251.21 Melem/s]
+Found 4 outliers among 20 measurements (20.00%)
+  1 (5.00%) high mild
+  3 (15.00%) high severe
+Benchmarking wrap-200/enum
+Benchmarking wrap-200/enum: Warming up for 3.0000 s
+Benchmarking wrap-200/enum: Collecting 20 samples in estimated 18.713 s (420 iterations)
+Benchmarking wrap-200/enum: Analyzing
+wrap-200/enum           time:   [43.198 ms 44.665 ms 46.055 ms]
+                        thrpt:  [223.10 Melem/s 230.04 Melem/s 237.85 Melem/s]
+Benchmarking wrap-200/typestate
+Benchmarking wrap-200/typestate: Warming up for 3.0000 s
+Benchmarking wrap-200/typestate: Collecting 20 samples in estimated 11.642 s (100 iterations)
+Benchmarking wrap-200/typestate: Analyzing
+wrap-200/typestate      time:   [115.42 ms 116.35 ms 117.30 ms]
+                        thrpt:  [87.591 Melem/s 88.309 Melem/s 89.019 Melem/s]
+Benchmarking wrap-200/statig
+Benchmarking wrap-200/statig: Warming up for 3.0000 s
+
+Warning: Unable to complete 20 samples in 10.0s. You may wish to increase target time to 17.8s, enable flat sampling, or reduce sample count to 10.
+Benchmarking wrap-200/statig: Collecting 20 samples in estimated 17.769 s (210 iterations)
+Benchmarking wrap-200/statig: Analyzing
+wrap-200/statig         time:   [83.848 ms 84.693 ms 85.659 ms]
+                        thrpt:  [119.95 Melem/s 121.32 Melem/s 122.54 Melem/s]
+Benchmarking wrap-200/smlang
+Benchmarking wrap-200/smlang: Warming up for 3.0000 s
+
+Warning: Unable to complete 20 samples in 10.0s. You may wish to increase target time to 12.3s, enable flat sampling, or reduce sample count to 10.
+Benchmarking wrap-200/smlang: Collecting 20 samples in estimated 12.299 s (210 iterations)
+Benchmarking wrap-200/smlang: Analyzing
+wrap-200/smlang         time:   [52.447 ms 55.724 ms 59.048 ms]
+                        thrpt:  [174.01 Melem/s 184.39 Melem/s 195.91 Melem/s]
+Benchmarking wrap-200/sml
+Benchmarking wrap-200/sml: Warming up for 3.0000 s
+
+Warning: Unable to complete 20 samples in 10.0s. You may wish to increase target time to 16.8s, enable flat sampling, or reduce sample count to 10.
+Benchmarking wrap-200/sml: Collecting 20 samples in estimated 16.823 s (210 iterations)
+Benchmarking wrap-200/sml: Analyzing
+wrap-200/sml            time:   [71.621 ms 77.639 ms 85.137 ms]
+                        thrpt:  [120.69 Melem/s 132.34 Melem/s 143.46 Melem/s]
+Benchmarking wrap-200/finny
+Benchmarking wrap-200/finny: Warming up for 3.0000 s
+Benchmarking wrap-200/finny: Collecting 20 samples in estimated 11.857 s (120 iterations)
+Benchmarking wrap-200/finny: Analyzing
+wrap-200/finny          time:   [108.87 ms 111.35 ms 113.70 ms]
+                        thrpt:  [90.365 Melem/s 92.274 Melem/s 94.376 Melem/s]
+Benchmarking wrap-200/fsmentry
+Benchmarking wrap-200/fsmentry: Warming up for 3.0000 s
+
+Warning: Unable to complete 20 samples in 10.0s. You may wish to increase target time to 10.1s, enable flat sampling, or reduce sample count to 10.
+Benchmarking wrap-200/fsmentry: Collecting 20 samples in estimated 10.067 s (210 iterations)
+Benchmarking wrap-200/fsmentry: Analyzing
+wrap-200/fsmentry       time:   [46.460 ms 49.465 ms 52.779 ms]
+                        thrpt:  [194.67 Melem/s 207.72 Melem/s 221.15 Melem/s]
+Benchmarking wrap-200/statum
+Benchmarking wrap-200/statum: Warming up for 3.0000 s
+Benchmarking wrap-200/statum: Collecting 20 samples in estimated 11.379 s (100 iterations)
+Benchmarking wrap-200/statum: Analyzing
+wrap-200/statum         time:   [111.10 ms 112.09 ms 113.03 ms]
+                        thrpt:  [90.901 Melem/s 91.666 Melem/s 92.484 Melem/s]
+Found 1 outliers among 20 measurements (5.00%)
+  1 (5.00%) low mild
+Benchmarking wrap-200/state-machines
+Benchmarking wrap-200/state-machines: Warming up for 3.0000 s
+Benchmarking wrap-200/state-machines: Collecting 20 samples in estimated 10.232 s (40 iterations)
+Benchmarking wrap-200/state-machines: Analyzing
+wrap-200/state-machines time:   [253.57 ms 257.05 ms 260.39 ms]
+                        thrpt:  [39.459 Melem/s 39.972 Melem/s 40.521 Melem/s]
+Benchmarking wrap-200/rust-fsm
+Benchmarking wrap-200/rust-fsm: Warming up for 3.0000 s
+
+Warning: Unable to complete 20 samples in 10.0s. You may wish to increase target time to 17.1s, enable flat sampling, or reduce sample count to 10.
+Benchmarking wrap-200/rust-fsm: Collecting 20 samples in estimated 17.099 s (210 iterations)
+Benchmarking wrap-200/rust-fsm: Analyzing
+wrap-200/rust-fsm       time:   [71.264 ms 76.555 ms 83.799 ms]
+                        thrpt:  [122.61 Melem/s 134.21 Melem/s 144.18 Melem/s]
+
+Benchmarking replay-pointer/implicit
+Benchmarking replay-pointer/implicit: Warming up for 3.0000 s
+Benchmarking replay-pointer/implicit: Collecting 100 samples in estimated 5.0040 s (5.1M iterations)
+Benchmarking replay-pointer/implicit: Analyzing
+replay-pointer/implicit time:   [698.33 ns 731.40 ns 767.66 ns]
+                        thrpt:  [125.05 Melem/s 131.26 Melem/s 137.47 Melem/s]
+Benchmarking replay-pointer/enum
+Benchmarking replay-pointer/enum: Warming up for 3.0000 s
+Benchmarking replay-pointer/enum: Collecting 100 samples in estimated 5.0033 s (5.3M iterations)
+Benchmarking replay-pointer/enum: Analyzing
+replay-pointer/enum     time:   [975.75 ns 1.0302 µs 1.0864 µs]
+                        thrpt:  [88.368 Melem/s 93.183 Melem/s 98.386 Melem/s]
+Benchmarking replay-pointer/typestate
+Benchmarking replay-pointer/typestate: Warming up for 3.0000 s
+Benchmarking replay-pointer/typestate: Collecting 100 samples in estimated 5.0004 s (3.1M iterations)
+Benchmarking replay-pointer/typestate: Analyzing
+replay-pointer/typestate
+                        time:   [1.3011 µs 1.3248 µs 1.3522 µs]
+                        thrpt:  [70.996 Melem/s 72.464 Melem/s 73.785 Melem/s]
+Benchmarking replay-pointer/statig
+Benchmarking replay-pointer/statig: Warming up for 3.0000 s
+Benchmarking replay-pointer/statig: Collecting 100 samples in estimated 5.0059 s (3.3M iterations)
+Benchmarking replay-pointer/statig: Analyzing
+replay-pointer/statig   time:   [1.4983 µs 1.5476 µs 1.6053 µs]
+                        thrpt:  [59.804 Melem/s 62.031 Melem/s 64.073 Melem/s]
+Found 17 outliers among 100 measurements (17.00%)
+  2 (2.00%) high mild
+  15 (15.00%) high severe
+Benchmarking replay-pointer/smlang
+Benchmarking replay-pointer/smlang: Warming up for 3.0000 s
+Benchmarking replay-pointer/smlang: Collecting 100 samples in estimated 5.0010 s (4.0M iterations)
+Benchmarking replay-pointer/smlang: Analyzing
+replay-pointer/smlang   time:   [1.0378 µs 1.0943 µs 1.1570 µs]
+                        thrpt:  [82.973 Melem/s 87.725 Melem/s 92.504 Melem/s]
+Benchmarking replay-pointer/sml
+Benchmarking replay-pointer/sml: Warming up for 3.0000 s
+Benchmarking replay-pointer/sml: Collecting 100 samples in estimated 5.0053 s (2.9M iterations)
+Benchmarking replay-pointer/sml: Analyzing
+replay-pointer/sml      time:   [1.8583 µs 1.9599 µs 2.0594 µs]
+                        thrpt:  [46.615 Melem/s 48.982 Melem/s 51.660 Melem/s]
+Benchmarking replay-pointer/finny
+Benchmarking replay-pointer/finny: Warming up for 3.0000 s
+Benchmarking replay-pointer/finny: Collecting 100 samples in estimated 5.0002 s (2.1M iterations)
+Benchmarking replay-pointer/finny: Analyzing
+replay-pointer/finny    time:   [1.9817 µs 2.0969 µs 2.2163 µs]
+                        thrpt:  [43.316 Melem/s 45.781 Melem/s 48.442 Melem/s]
+Benchmarking replay-pointer/fsmentry
+Benchmarking replay-pointer/fsmentry: Warming up for 3.0000 s
+Benchmarking replay-pointer/fsmentry: Collecting 100 samples in estimated 5.0064 s (3.6M iterations)
+Benchmarking replay-pointer/fsmentry: Analyzing
+replay-pointer/fsmentry time:   [1.1290 µs 1.1769 µs 1.2307 µs]
+                        thrpt:  [78.005 Melem/s 81.572 Melem/s 85.029 Melem/s]
+Benchmarking replay-pointer/statum
+Benchmarking replay-pointer/statum: Warming up for 3.0000 s
+Benchmarking replay-pointer/statum: Collecting 100 samples in estimated 5.0005 s (6.4M iterations)
+Benchmarking replay-pointer/statum: Analyzing
+replay-pointer/statum   time:   [615.83 ns 637.04 ns 663.61 ns]
+                        thrpt:  [144.66 Melem/s 150.70 Melem/s 155.89 Melem/s]
+Found 14 outliers among 100 measurements (14.00%)
+  2 (2.00%) high mild
+  12 (12.00%) high severe
+Benchmarking replay-pointer/state-machines
+Benchmarking replay-pointer/state-machines: Warming up for 3.0000 s
+Benchmarking replay-pointer/state-machines: Collecting 100 samples in estimated 5.0012 s (2.6M iterations)
+Benchmarking replay-pointer/state-machines: Analyzing
+replay-pointer/state-machines
+                        time:   [2.2759 µs 2.4549 µs 2.6491 µs]
+                        thrpt:  [36.239 Melem/s 39.106 Melem/s 42.181 Melem/s]
+Benchmarking replay-pointer/rust-fsm
+Benchmarking replay-pointer/rust-fsm: Warming up for 3.0000 s
+Benchmarking replay-pointer/rust-fsm: Collecting 100 samples in estimated 5.0043 s (4.8M iterations)
+Benchmarking replay-pointer/rust-fsm: Analyzing
+replay-pointer/rust-fsm time:   [806.83 ns 810.44 ns 815.10 ns]
+                        thrpt:  [117.78 Melem/s 118.45 Melem/s 118.98 Melem/s]
+Found 7 outliers among 100 measurements (7.00%)
+  3 (3.00%) high mild
+  4 (4.00%) high severe
+
+Benchmarking replay-wrap/implicit
+Benchmarking replay-wrap/implicit: Warming up for 3.0000 s
+Benchmarking replay-wrap/implicit: Collecting 100 samples in estimated 5.0026 s (7.5M iterations)
+Benchmarking replay-wrap/implicit: Analyzing
+replay-wrap/implicit    time:   [666.73 ns 668.53 ns 670.69 ns]
+                        thrpt:  [214.70 Melem/s 215.40 Melem/s 215.98 Melem/s]
+Found 16 outliers among 100 measurements (16.00%)
+  4 (4.00%) high mild
+  12 (12.00%) high severe
+Benchmarking replay-wrap/enum
+Benchmarking replay-wrap/enum: Warming up for 3.0000 s
+Benchmarking replay-wrap/enum: Collecting 100 samples in estimated 5.0027 s (8.1M iterations)
+Benchmarking replay-wrap/enum: Analyzing
+replay-wrap/enum        time:   [626.28 ns 629.87 ns 634.07 ns]
+                        thrpt:  [227.10 Melem/s 228.62 Melem/s 229.93 Melem/s]
+Found 2 outliers among 100 measurements (2.00%)
+  2 (2.00%) high mild
+Benchmarking replay-wrap/typestate
+Benchmarking replay-wrap/typestate: Warming up for 3.0000 s
+Benchmarking replay-wrap/typestate: Collecting 100 samples in estimated 5.0031 s (3.0M iterations)
+Benchmarking replay-wrap/typestate: Analyzing
+replay-wrap/typestate   time:   [1.6555 µs 1.6568 µs 1.6584 µs]
+                        thrpt:  [86.831 Melem/s 86.914 Melem/s 86.985 Melem/s]
+Found 8 outliers among 100 measurements (8.00%)
+  6 (6.00%) high mild
+  2 (2.00%) high severe
+Benchmarking replay-wrap/statig
+Benchmarking replay-wrap/statig: Warming up for 3.0000 s
+Benchmarking replay-wrap/statig: Collecting 100 samples in estimated 5.0044 s (4.5M iterations)
+Benchmarking replay-wrap/statig: Analyzing
+replay-wrap/statig      time:   [1.1216 µs 1.1333 µs 1.1483 µs]
+                        thrpt:  [125.41 Melem/s 127.06 Melem/s 128.39 Melem/s]
+Found 2 outliers among 100 measurements (2.00%)
+  1 (1.00%) high mild
+  1 (1.00%) high severe
+Benchmarking replay-wrap/smlang
+Benchmarking replay-wrap/smlang: Warming up for 3.0000 s
+Benchmarking replay-wrap/smlang: Collecting 100 samples in estimated 5.0036 s (7.0M iterations)
+Benchmarking replay-wrap/smlang: Analyzing
+replay-wrap/smlang      time:   [708.45 ns 708.92 ns 709.51 ns]
+                        thrpt:  [202.96 Melem/s 203.12 Melem/s 203.26 Melem/s]
+Found 5 outliers among 100 measurements (5.00%)
+  2 (2.00%) high mild
+  3 (3.00%) high severe
+Benchmarking replay-wrap/sml
+Benchmarking replay-wrap/sml: Warming up for 3.0000 s
+Benchmarking replay-wrap/sml: Collecting 100 samples in estimated 5.0032 s (5.6M iterations)
+Benchmarking replay-wrap/sml: Analyzing
+replay-wrap/sml         time:   [909.62 ns 919.84 ns 930.62 ns]
+                        thrpt:  [154.74 Melem/s 156.55 Melem/s 158.31 Melem/s]
+Found 12 outliers among 100 measurements (12.00%)
+  5 (5.00%) high mild
+  7 (7.00%) high severe
+Benchmarking replay-wrap/finny
+Benchmarking replay-wrap/finny: Warming up for 3.0000 s
+Benchmarking replay-wrap/finny: Collecting 100 samples in estimated 5.0044 s (3.8M iterations)
+Benchmarking replay-wrap/finny: Analyzing
+replay-wrap/finny       time:   [1.2980 µs 1.3120 µs 1.3294 µs]
+                        thrpt:  [108.32 Melem/s 109.76 Melem/s 110.94 Melem/s]
+Found 16 outliers among 100 measurements (16.00%)
+  4 (4.00%) high mild
+  12 (12.00%) high severe
+Benchmarking replay-wrap/fsmentry
+Benchmarking replay-wrap/fsmentry: Warming up for 3.0000 s
+Benchmarking replay-wrap/fsmentry: Collecting 100 samples in estimated 5.0011 s (7.5M iterations)
+Benchmarking replay-wrap/fsmentry: Analyzing
+replay-wrap/fsmentry    time:   [661.51 ns 662.11 ns 663.11 ns]
+                        thrpt:  [217.16 Melem/s 217.49 Melem/s 217.68 Melem/s]
+Found 9 outliers among 100 measurements (9.00%)
+  1 (1.00%) high mild
+  8 (8.00%) high severe
+Benchmarking replay-wrap/statum
+Benchmarking replay-wrap/statum: Warming up for 3.0000 s
+Benchmarking replay-wrap/statum: Collecting 100 samples in estimated 5.0023 s (2.8M iterations)
+Benchmarking replay-wrap/statum: Analyzing
+replay-wrap/statum      time:   [1.8000 µs 1.8007 µs 1.8013 µs]
+                        thrpt:  [79.944 Melem/s 79.970 Melem/s 79.998 Melem/s]
+Found 3 outliers among 100 measurements (3.00%)
+  2 (2.00%) low mild
+  1 (1.00%) high mild
+Benchmarking replay-wrap/state-machines
+Benchmarking replay-wrap/state-machines: Warming up for 3.0000 s
+Benchmarking replay-wrap/state-machines: Collecting 100 samples in estimated 5.0102 s (1.6M iterations)
+Benchmarking replay-wrap/state-machines: Analyzing
+replay-wrap/state-machines
+                        time:   [3.0257 µs 3.0334 µs 3.0419 µs]
+                        thrpt:  [47.338 Melem/s 47.472 Melem/s 47.593 Melem/s]
+Found 14 outliers among 100 measurements (14.00%)
+  14 (14.00%) high mild
+Benchmarking replay-wrap/rust-fsm
+Benchmarking replay-wrap/rust-fsm: Warming up for 3.0000 s
+Benchmarking replay-wrap/rust-fsm: Collecting 100 samples in estimated 5.0006 s (4.6M iterations)
+Benchmarking replay-wrap/rust-fsm: Analyzing
+replay-wrap/rust-fsm    time:   [1.3732 µs 1.4797 µs 1.5759 µs]
+                        thrpt:  [91.377 Melem/s 97.314 Melem/s 104.86 Melem/s]
+
+Benchmarking replay-polkit/implicit
+Benchmarking replay-polkit/implicit: Warming up for 3.0000 s
+Benchmarking replay-polkit/implicit: Collecting 100 samples in estimated 5.0001 s (8.6M iterations)
+Benchmarking replay-polkit/implicit: Analyzing
+replay-polkit/implicit  time:   [462.86 ns 481.90 ns 502.48 ns]
+                        thrpt:  [187.07 Melem/s 195.06 Melem/s 203.08 Melem/s]
+Found 17 outliers among 100 measurements (17.00%)
+  8 (8.00%) high mild
+  9 (9.00%) high severe
+Benchmarking replay-polkit/enum
+Benchmarking replay-polkit/enum: Warming up for 3.0000 s
+Benchmarking replay-polkit/enum: Collecting 100 samples in estimated 5.0012 s (8.0M iterations)
+Benchmarking replay-polkit/enum: Analyzing
+replay-polkit/enum      time:   [550.41 ns 564.05 ns 578.62 ns]
+                        thrpt:  [162.46 Melem/s 166.65 Melem/s 170.78 Melem/s]
+Found 11 outliers among 100 measurements (11.00%)
+  9 (9.00%) high mild
+  2 (2.00%) high severe
+Benchmarking replay-polkit/typestate
+Benchmarking replay-polkit/typestate: Warming up for 3.0000 s
+Benchmarking replay-polkit/typestate: Collecting 100 samples in estimated 5.0030 s (5.8M iterations)
+Benchmarking replay-polkit/typestate: Analyzing
+replay-polkit/typestate time:   [833.97 ns 839.84 ns 845.37 ns]
+                        thrpt:  [111.19 Melem/s 111.93 Melem/s 112.71 Melem/s]
+Benchmarking replay-polkit/statig
+Benchmarking replay-polkit/statig: Warming up for 3.0000 s
+Benchmarking replay-polkit/statig: Collecting 100 samples in estimated 5.0007 s (3.0M iterations)
+Benchmarking replay-polkit/statig: Analyzing
+replay-polkit/statig    time:   [1.6424 µs 1.6477 µs 1.6537 µs]
+                        thrpt:  [56.844 Melem/s 57.050 Melem/s 57.234 Melem/s]
+Found 1 outliers among 100 measurements (1.00%)
+  1 (1.00%) high mild
+Benchmarking replay-polkit/smlang
+Benchmarking replay-polkit/smlang: Warming up for 3.0000 s
+Benchmarking replay-polkit/smlang: Collecting 100 samples in estimated 5.0022 s (11M iterations)
+Benchmarking replay-polkit/smlang: Analyzing
+replay-polkit/smlang    time:   [449.57 ns 450.83 ns 452.25 ns]
+                        thrpt:  [207.85 Melem/s 208.50 Melem/s 209.09 Melem/s]
+Found 4 outliers among 100 measurements (4.00%)
+  3 (3.00%) high mild
+  1 (1.00%) high severe
+Benchmarking replay-polkit/sml
+Benchmarking replay-polkit/sml: Warming up for 3.0000 s
+Benchmarking replay-polkit/sml: Collecting 100 samples in estimated 5.0012 s (5.4M iterations)
+Benchmarking replay-polkit/sml: Analyzing
+replay-polkit/sml       time:   [1.0877 µs 1.1562 µs 1.2227 µs]
+                        thrpt:  [76.879 Melem/s 81.298 Melem/s 86.424 Melem/s]
+Found 20 outliers among 100 measurements (20.00%)
+  1 (1.00%) high mild
+  19 (19.00%) high severe
+Benchmarking replay-polkit/finny
+Benchmarking replay-polkit/finny: Warming up for 3.0000 s
+Benchmarking replay-polkit/finny: Collecting 100 samples in estimated 5.0014 s (3.4M iterations)
+Benchmarking replay-polkit/finny: Analyzing
+replay-polkit/finny     time:   [1.5175 µs 1.6036 µs 1.7089 µs]
+                        thrpt:  [55.006 Melem/s 58.618 Melem/s 61.943 Melem/s]
+Found 18 outliers among 100 measurements (18.00%)
+  1 (1.00%) high mild
+  17 (17.00%) high severe
+Benchmarking replay-polkit/fsmentry
+Benchmarking replay-polkit/fsmentry: Warming up for 3.0000 s
+Benchmarking replay-polkit/fsmentry: Collecting 100 samples in estimated 5.0017 s (8.2M iterations)
+Benchmarking replay-polkit/fsmentry: Analyzing
+replay-polkit/fsmentry  time:   [553.33 ns 555.31 ns 557.98 ns]
+                        thrpt:  [168.46 Melem/s 169.27 Melem/s 169.88 Melem/s]
+Found 5 outliers among 100 measurements (5.00%)
+  3 (3.00%) high mild
+  2 (2.00%) high severe
+Benchmarking replay-polkit/statum
+Benchmarking replay-polkit/statum: Warming up for 3.0000 s
+Benchmarking replay-polkit/statum: Collecting 100 samples in estimated 5.0041 s (5.2M iterations)
+Benchmarking replay-polkit/statum: Analyzing
+replay-polkit/statum    time:   [959.75 ns 964.15 ns 970.61 ns]
+                        thrpt:  [96.846 Melem/s 97.495 Melem/s 97.942 Melem/s]
+Found 2 outliers among 100 measurements (2.00%)
+  1 (1.00%) high mild
+  1 (1.00%) high severe
+Benchmarking replay-polkit/state-machines
+Benchmarking replay-polkit/state-machines: Warming up for 3.0000 s
+Benchmarking replay-polkit/state-machines: Collecting 100 samples in estimated 5.0037 s (3.3M iterations)
+Benchmarking replay-polkit/state-machines: Analyzing
+replay-polkit/state-machines
+                        time:   [1.4818 µs 1.4886 µs 1.4977 µs]
+                        thrpt:  [62.761 Melem/s 63.145 Melem/s 63.436 Melem/s]
+Found 4 outliers among 100 measurements (4.00%)
+  1 (1.00%) high mild
+  3 (3.00%) high severe
+Benchmarking replay-polkit/rust-fsm
+Benchmarking replay-polkit/rust-fsm: Warming up for 3.0000 s
+Benchmarking replay-polkit/rust-fsm: Collecting 100 samples in estimated 5.0020 s (8.3M iterations)
+Benchmarking replay-polkit/rust-fsm: Analyzing
+replay-polkit/rust-fsm  time:   [607.06 ns 617.01 ns 628.67 ns]
+                        thrpt:  [149.52 Melem/s 152.35 Melem/s 154.84 Melem/s]
+Found 9 outliers among 100 measurements (9.00%)
+  2 (2.00%) high mild
+  7 (7.00%) high severe
+
+Benchmarking replay-transfer/implicit
+Benchmarking replay-transfer/implicit: Warming up for 3.0000 s
+Benchmarking replay-transfer/implicit: Collecting 100 samples in estimated 5.0038 s (4.7M iterations)
+Benchmarking replay-transfer/implicit: Analyzing
+replay-transfer/implicit
+                        time:   [915.33 ns 923.03 ns 932.03 ns]
+                        thrpt:  [129.82 Melem/s 131.09 Melem/s 132.19 Melem/s]
+Found 6 outliers among 100 measurements (6.00%)
+  2 (2.00%) high mild
+  4 (4.00%) high severe
+Benchmarking replay-transfer/enum
+Benchmarking replay-transfer/enum: Warming up for 3.0000 s
+Benchmarking replay-transfer/enum: Collecting 100 samples in estimated 5.0047 s (5.0M iterations)
+Benchmarking replay-transfer/enum: Analyzing
+replay-transfer/enum    time:   [997.04 ns 1.0344 µs 1.0764 µs]
+                        thrpt:  [112.42 Melem/s 116.98 Melem/s 121.36 Melem/s]
+Found 9 outliers among 100 measurements (9.00%)
+  4 (4.00%) high mild
+  5 (5.00%) high severe
+Benchmarking replay-transfer/typestate
+Benchmarking replay-transfer/typestate: Warming up for 3.0000 s
+Benchmarking replay-transfer/typestate: Collecting 100 samples in estimated 5.0027 s (3.2M iterations)
+Benchmarking replay-transfer/typestate: Analyzing
+replay-transfer/typestate
+                        time:   [1.5487 µs 1.6004 µs 1.6566 µs]
+                        thrpt:  [73.040 Melem/s 75.604 Melem/s 78.131 Melem/s]
+Found 17 outliers among 100 measurements (17.00%)
+  3 (3.00%) high mild
+  14 (14.00%) high severe
+Benchmarking replay-transfer/statig
+Benchmarking replay-transfer/statig: Warming up for 3.0000 s
+Benchmarking replay-transfer/statig: Collecting 100 samples in estimated 5.0011 s (2.8M iterations)
+Benchmarking replay-transfer/statig: Analyzing
+replay-transfer/statig  time:   [1.7382 µs 1.8063 µs 1.8842 µs]
+                        thrpt:  [64.220 Melem/s 66.986 Melem/s 69.612 Melem/s]
+Found 8 outliers among 100 measurements (8.00%)
+  8 (8.00%) high mild
+Benchmarking replay-transfer/smlang
+Benchmarking replay-transfer/smlang: Warming up for 3.0000 s
+Benchmarking replay-transfer/smlang: Collecting 100 samples in estimated 5.0038 s (3.9M iterations)
+Benchmarking replay-transfer/smlang: Analyzing
+replay-transfer/smlang  time:   [1.0443 µs 1.0945 µs 1.1564 µs]
+                        thrpt:  [104.64 Melem/s 110.55 Melem/s 115.87 Melem/s]
+Found 11 outliers among 100 measurements (11.00%)
+  1 (1.00%) high mild
+  10 (10.00%) high severe
+Benchmarking replay-transfer/sml
+Benchmarking replay-transfer/sml: Warming up for 3.0000 s
+Benchmarking replay-transfer/sml: Collecting 100 samples in estimated 5.0050 s (4.1M iterations)
+Benchmarking replay-transfer/sml: Analyzing
+replay-transfer/sml     time:   [1.2356 µs 1.2622 µs 1.2959 µs]
+                        thrpt:  [93.370 Melem/s 95.868 Melem/s 97.931 Melem/s]
+Found 10 outliers among 100 measurements (10.00%)
+  4 (4.00%) high mild
+  6 (6.00%) high severe
+Benchmarking replay-transfer/finny
+Benchmarking replay-transfer/finny: Warming up for 3.0000 s
+Benchmarking replay-transfer/finny: Collecting 100 samples in estimated 5.0077 s (3.2M iterations)
+Benchmarking replay-transfer/finny: Analyzing
+replay-transfer/finny   time:   [1.5221 µs 1.5348 µs 1.5478 µs]
+                        thrpt:  [78.174 Melem/s 78.836 Melem/s 79.497 Melem/s]
+Found 2 outliers among 100 measurements (2.00%)
+  1 (1.00%) high mild
+  1 (1.00%) high severe
+Benchmarking replay-transfer/fsmentry
+Benchmarking replay-transfer/fsmentry: Warming up for 3.0000 s
+Benchmarking replay-transfer/fsmentry: Collecting 100 samples in estimated 5.0012 s (4.4M iterations)
+Benchmarking replay-transfer/fsmentry: Analyzing
+replay-transfer/fsmentry
+                        time:   [1.1503 µs 1.1866 µs 1.2318 µs]
+                        thrpt:  [98.233 Melem/s 101.97 Melem/s 105.19 Melem/s]
+Found 11 outliers among 100 measurements (11.00%)
+  3 (3.00%) high mild
+  8 (8.00%) high severe
+Benchmarking replay-transfer/statum
+Benchmarking replay-transfer/statum: Warming up for 3.0000 s
+Benchmarking replay-transfer/statum: Collecting 100 samples in estimated 5.0030 s (3.6M iterations)
+Benchmarking replay-transfer/statum: Analyzing
+replay-transfer/statum  time:   [1.7758 µs 1.7837 µs 1.7915 µs]
+                        thrpt:  [67.540 Melem/s 67.836 Melem/s 68.139 Melem/s]
+Benchmarking replay-transfer/state-machines
+Benchmarking replay-transfer/state-machines: Warming up for 3.0000 s
+Benchmarking replay-transfer/state-machines: Collecting 100 samples in estimated 5.0096 s (1000k iterations)
+Benchmarking replay-transfer/state-machines: Analyzing
+replay-transfer/state-machines
+                        time:   [4.8214 µs 4.9735 µs 5.1543 µs]
+                        thrpt:  [23.475 Melem/s 24.329 Melem/s 25.096 Melem/s]
+Found 4 outliers among 100 measurements (4.00%)
+  4 (4.00%) high severe
+Benchmarking replay-transfer/rust-fsm
+Benchmarking replay-transfer/rust-fsm: Warming up for 3.0000 s
+Benchmarking replay-transfer/rust-fsm: Collecting 100 samples in estimated 5.0017 s (3.7M iterations)
+Benchmarking replay-transfer/rust-fsm: Analyzing
+replay-transfer/rust-fsm
+                        time:   [1.3110 µs 1.3263 µs 1.3462 µs]
+                        thrpt:  [89.880 Melem/s 91.228 Melem/s 92.294 Melem/s]
+Found 9 outliers among 100 measurements (9.00%)
+  5 (5.00%) high mild
+  4 (4.00%) high severe
+
+Benchmarking replay-lock/implicit
+Benchmarking replay-lock/implicit: Warming up for 3.0000 s
+Benchmarking replay-lock/implicit: Collecting 100 samples in estimated 5.0017 s (9.3M iterations)
+Benchmarking replay-lock/implicit: Analyzing
+replay-lock/implicit    time:   [536.86 ns 539.80 ns 542.86 ns]
+                        thrpt:  [243.16 Melem/s 244.54 Melem/s 245.87 Melem/s]
+Found 2 outliers among 100 measurements (2.00%)
+  2 (2.00%) high mild
+Benchmarking replay-lock/enum
+Benchmarking replay-lock/enum: Warming up for 3.0000 s
+Benchmarking replay-lock/enum: Collecting 100 samples in estimated 5.0010 s (11M iterations)
+Benchmarking replay-lock/enum: Analyzing
+replay-lock/enum        time:   [463.03 ns 484.50 ns 506.24 ns]
+                        thrpt:  [260.75 Melem/s 272.45 Melem/s 285.08 Melem/s]
+Found 22 outliers among 100 measurements (22.00%)
+  2 (2.00%) high mild
+  20 (20.00%) high severe
+Benchmarking replay-lock/typestate
+Benchmarking replay-lock/typestate: Warming up for 3.0000 s
+Benchmarking replay-lock/typestate: Collecting 100 samples in estimated 5.0010 s (8.9M iterations)
+Benchmarking replay-lock/typestate: Analyzing
+replay-lock/typestate   time:   [512.13 ns 515.49 ns 520.51 ns]
+                        thrpt:  [253.60 Melem/s 256.07 Melem/s 257.75 Melem/s]
+Found 6 outliers among 100 measurements (6.00%)
+  3 (3.00%) high mild
+  3 (3.00%) high severe
+Benchmarking replay-lock/statig
+Benchmarking replay-lock/statig: Warming up for 3.0000 s
+Benchmarking replay-lock/statig: Collecting 100 samples in estimated 5.0041 s (2.9M iterations)
+Benchmarking replay-lock/statig: Analyzing
+replay-lock/statig      time:   [1.7200 µs 1.7290 µs 1.7388 µs]
+                        thrpt:  [75.915 Melem/s 76.343 Melem/s 76.745 Melem/s]
+Found 5 outliers among 100 measurements (5.00%)
+  3 (3.00%) high mild
+  2 (2.00%) high severe
+Benchmarking replay-lock/smlang
+Benchmarking replay-lock/smlang: Warming up for 3.0000 s
+Benchmarking replay-lock/smlang: Collecting 100 samples in estimated 5.0000 s (8.4M iterations)
+Benchmarking replay-lock/smlang: Analyzing
+replay-lock/smlang      time:   [599.36 ns 607.24 ns 618.66 ns]
+                        thrpt:  [213.36 Melem/s 217.38 Melem/s 220.23 Melem/s]
+Found 4 outliers among 100 measurements (4.00%)
+  1 (1.00%) high mild
+  3 (3.00%) high severe
+Benchmarking replay-lock/sml
+Benchmarking replay-lock/sml: Warming up for 3.0000 s
+Benchmarking replay-lock/sml: Collecting 100 samples in estimated 5.0008 s (4.6M iterations)
+Benchmarking replay-lock/sml: Analyzing
+replay-lock/sml         time:   [1.0870 µs 1.0896 µs 1.0922 µs]
+                        thrpt:  [120.86 Melem/s 121.15 Melem/s 121.44 Melem/s]
+Found 3 outliers among 100 measurements (3.00%)
+  3 (3.00%) high mild
+Benchmarking replay-lock/finny
+Benchmarking replay-lock/finny: Warming up for 3.0000 s
+Benchmarking replay-lock/finny: Collecting 100 samples in estimated 5.0007 s (2.9M iterations)
+Benchmarking replay-lock/finny: Analyzing
+replay-lock/finny       time:   [1.7176 µs 1.7233 µs 1.7297 µs]
+                        thrpt:  [76.312 Melem/s 76.598 Melem/s 76.853 Melem/s]
+Found 7 outliers among 100 measurements (7.00%)
+  5 (5.00%) high mild
+  2 (2.00%) high severe
+Benchmarking replay-lock/fsmentry
+Benchmarking replay-lock/fsmentry: Warming up for 3.0000 s
+Benchmarking replay-lock/fsmentry: Collecting 100 samples in estimated 5.0008 s (8.9M iterations)
+Benchmarking replay-lock/fsmentry: Analyzing
+replay-lock/fsmentry    time:   [564.84 ns 571.07 ns 578.71 ns]
+                        thrpt:  [228.09 Melem/s 231.14 Melem/s 233.70 Melem/s]
+Found 13 outliers among 100 measurements (13.00%)
+  4 (4.00%) high mild
+  9 (9.00%) high severe
+Benchmarking replay-lock/statum
+Benchmarking replay-lock/statum: Warming up for 3.0000 s
+Benchmarking replay-lock/statum: Collecting 100 samples in estimated 5.0010 s (5.7M iterations)
+Benchmarking replay-lock/statum: Analyzing
+replay-lock/statum      time:   [888.60 ns 912.81 ns 943.57 ns]
+                        thrpt:  [139.89 Melem/s 144.61 Melem/s 148.55 Melem/s]
+Found 20 outliers among 100 measurements (20.00%)
+  6 (6.00%) high mild
+  14 (14.00%) high severe
+Benchmarking replay-lock/state-machines
+Benchmarking replay-lock/state-machines: Warming up for 3.0000 s
+Benchmarking replay-lock/state-machines: Collecting 100 samples in estimated 5.0060 s (2.5M iterations)
+Benchmarking replay-lock/state-machines: Analyzing
+replay-lock/state-machines
+                        time:   [1.9078 µs 1.9130 µs 1.9181 µs]
+                        thrpt:  [68.817 Melem/s 69.003 Melem/s 69.190 Melem/s]
+Found 8 outliers among 100 measurements (8.00%)
+  1 (1.00%) low mild
+  6 (6.00%) high mild
+  1 (1.00%) high severe
+Benchmarking replay-lock/rust-fsm
+Benchmarking replay-lock/rust-fsm: Warming up for 3.0000 s
+Benchmarking replay-lock/rust-fsm: Collecting 100 samples in estimated 5.0031 s (7.7M iterations)
+Benchmarking replay-lock/rust-fsm: Analyzing
+replay-lock/rust-fsm    time:   [641.90 ns 646.19 ns 651.57 ns]
+                        thrpt:  [202.59 Melem/s 204.27 Melem/s 205.64 Melem/s]
+Found 8 outliers among 100 measurements (8.00%)
+  3 (3.00%) high mild
+  5 (5.00%) high severe
+
+Benchmarking replay-install/implicit
+Benchmarking replay-install/implicit: Warming up for 3.0000 s
+Benchmarking replay-install/implicit: Collecting 100 samples in estimated 5.0012 s (6.0M iterations)
+Benchmarking replay-install/implicit: Analyzing
+replay-install/implicit time:   [576.30 ns 584.08 ns 592.80 ns]
+                        thrpt:  [205.80 Melem/s 208.87 Melem/s 211.69 Melem/s]
+Found 9 outliers among 100 measurements (9.00%)
+  5 (5.00%) high mild
+  4 (4.00%) high severe
+Benchmarking replay-install/enum
+Benchmarking replay-install/enum: Warming up for 3.0000 s
+Benchmarking replay-install/enum: Collecting 100 samples in estimated 5.0021 s (9.8M iterations)
+Benchmarking replay-install/enum: Analyzing
+replay-install/enum     time:   [509.75 ns 526.33 ns 544.38 ns]
+                        thrpt:  [224.11 Melem/s 231.79 Melem/s 239.33 Melem/s]
+Found 15 outliers among 100 measurements (15.00%)
+  6 (6.00%) high mild
+  9 (9.00%) high severe
+Benchmarking replay-install/typestate
+Benchmarking replay-install/typestate: Warming up for 3.0000 s
+Benchmarking replay-install/typestate: Collecting 100 samples in estimated 5.0011 s (8.8M iterations)
+Benchmarking replay-install/typestate: Analyzing
+replay-install/typestate
+                        time:   [522.08 ns 534.59 ns 550.26 ns]
+                        thrpt:  [221.71 Melem/s 228.21 Melem/s 233.68 Melem/s]
+Found 18 outliers among 100 measurements (18.00%)
+  16 (16.00%) high mild
+  2 (2.00%) high severe
+Benchmarking replay-install/statig
+Benchmarking replay-install/statig: Warming up for 3.0000 s
+Benchmarking replay-install/statig: Collecting 100 samples in estimated 5.0024 s (4.3M iterations)
+Benchmarking replay-install/statig: Analyzing
+replay-install/statig   time:   [1.1083 µs 1.1563 µs 1.2182 µs]
+                        thrpt:  [100.15 Melem/s 105.50 Melem/s 110.08 Melem/s]
+Found 10 outliers among 100 measurements (10.00%)
+  3 (3.00%) high mild
+  7 (7.00%) high severe
+Benchmarking replay-install/smlang
+Benchmarking replay-install/smlang: Warming up for 3.0000 s
+Benchmarking replay-install/smlang: Collecting 100 samples in estimated 5.0023 s (6.4M iterations)
+Benchmarking replay-install/smlang: Analyzing
+replay-install/smlang   time:   [781.27 ns 786.19 ns 792.24 ns]
+                        thrpt:  [153.99 Melem/s 155.18 Melem/s 156.16 Melem/s]
+Found 12 outliers among 100 measurements (12.00%)
+  3 (3.00%) high mild
+  9 (9.00%) high severe
+Benchmarking replay-install/sml
+Benchmarking replay-install/sml: Warming up for 3.0000 s
+Benchmarking replay-install/sml: Collecting 100 samples in estimated 5.0012 s (6.2M iterations)
+Benchmarking replay-install/sml: Analyzing
+replay-install/sml      time:   [805.25 ns 815.16 ns 828.57 ns]
+                        thrpt:  [147.24 Melem/s 149.66 Melem/s 151.51 Melem/s]
+Found 4 outliers among 100 measurements (4.00%)
+  4 (4.00%) high severe
+Benchmarking replay-install/finny
+Benchmarking replay-install/finny: Warming up for 3.0000 s
+Benchmarking replay-install/finny: Collecting 100 samples in estimated 5.0018 s (3.1M iterations)
+Benchmarking replay-install/finny: Analyzing
+replay-install/finny    time:   [1.4876 µs 1.5836 µs 1.6938 µs]
+                        thrpt:  [72.027 Melem/s 77.039 Melem/s 82.011 Melem/s]
+Found 14 outliers among 100 measurements (14.00%)
+  2 (2.00%) high mild
+  12 (12.00%) high severe
+Benchmarking replay-install/fsmentry
+Benchmarking replay-install/fsmentry: Warming up for 3.0000 s
+Benchmarking replay-install/fsmentry: Collecting 100 samples in estimated 5.0028 s (5.8M iterations)
+Benchmarking replay-install/fsmentry: Analyzing
+replay-install/fsmentry time:   [827.54 ns 881.25 ns 933.63 ns]
+                        thrpt:  [130.67 Melem/s 138.44 Melem/s 147.42 Melem/s]
+Benchmarking replay-install/statum
+Benchmarking replay-install/statum: Warming up for 3.0000 s
+Benchmarking replay-install/statum: Collecting 100 samples in estimated 5.0020 s (6.9M iterations)
+Benchmarking replay-install/statum: Analyzing
+replay-install/statum   time:   [639.33 ns 676.32 ns 718.35 ns]
+                        thrpt:  [169.83 Melem/s 180.39 Melem/s 190.82 Melem/s]
+Benchmarking replay-install/state-machines
+Benchmarking replay-install/state-machines: Warming up for 3.0000 s
+Benchmarking replay-install/state-machines: Collecting 100 samples in estimated 5.0007 s (1.7M iterations)
+Benchmarking replay-install/state-machines: Analyzing
+replay-install/state-machines
+                        time:   [2.4949 µs 2.6095 µs 2.7476 µs]
+                        thrpt:  [44.402 Melem/s 46.753 Melem/s 48.900 Melem/s]
+Found 11 outliers among 100 measurements (11.00%)
+  2 (2.00%) high mild
+  9 (9.00%) high severe
+Benchmarking replay-install/rust-fsm
+Benchmarking replay-install/rust-fsm: Warming up for 3.0000 s
+Benchmarking replay-install/rust-fsm: Collecting 100 samples in estimated 5.0011 s (6.2M iterations)
+Benchmarking replay-install/rust-fsm: Analyzing
+replay-install/rust-fsm time:   [1.1392 µs 1.2205 µs 1.3005 µs]
+                        thrpt:  [93.808 Melem/s 99.957 Melem/s 107.09 Melem/s]
+

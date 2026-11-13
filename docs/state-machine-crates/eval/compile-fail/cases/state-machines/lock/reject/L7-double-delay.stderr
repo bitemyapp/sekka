@@ -1,0 +1,7 @@
+error[E0599]: no method named `acquire` found for struct `Delay<impl_state_machines::lock::Held>` in the current scope
+ --> $WORKSPACE/compile-fail/cases/state-machines/lock/reject/L7-double-delay.rs
+  |
+  |     let _ = held.acquire();
+  |                  ^^^^^^^ method not found in `Delay<impl_state_machines::lock::Held>`
+  |
+  = note: the method was found for `Delay<impl_state_machines::lock::NotHeld>`

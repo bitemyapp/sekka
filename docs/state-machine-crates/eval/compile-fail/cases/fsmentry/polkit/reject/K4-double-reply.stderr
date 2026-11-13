@@ -1,0 +1,20 @@
+error[E0382]: use of moved value: `active`
+ --> $WORKSPACE/compile-fail/cases/fsmentry/polkit/reject/K4-double-reply.rs
+  |
+  |     if let AgentEntry::Active(active) = m.entry() {
+  |                               ------ move occurs because `active` has type `impl_fsmentry::polkit::agent::Active<'_>`, which does not implement the `Copy` trait
+  |         let _first = active.end();
+  |                             ----- `active` moved due to this method call
+  |         let _again = active.end();
+  |                      ^^^^^^ value used here after move
+  |
+note: `impl_fsmentry::polkit::agent::Active::<'state>::end` takes ownership of the receiver `self`, which moves `active`
+ --> src/polkit.rs
+  |
+  | /     fsmentry::fsmentry! {
+  | |         #[derive(Debug, PartialEq, Eq)]
+  | |         pub enum Agent {
+... |
+  | |     }
+  | |_____^
+  = note: this error originates in the macro `fsmentry::fsmentry` (in Nightly builds, run with -Z macro-backtrace for more info)

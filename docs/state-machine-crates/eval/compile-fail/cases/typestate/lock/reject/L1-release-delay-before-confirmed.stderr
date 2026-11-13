@@ -1,0 +1,13 @@
+error[E0308]: mismatched types
+ --> $WORKSPACE/compile-fail/cases/typestate/lock/reject/L1-release-delay-before-confirmed.rs
+  |
+  |     (locking, DelayFd::release(pending, out))
+  |               ---------------- ^^^^^^^ expected `DelayFd`, found `PendingSleep`
+  |               |
+  |               arguments to this function are incorrect
+  |
+note: method defined here
+ --> src/lock.rs
+  |
+  |     pub fn release(self, out: &mut impl Sink<Effect>) -> NoDelay {
+  |            ^^^^^^^

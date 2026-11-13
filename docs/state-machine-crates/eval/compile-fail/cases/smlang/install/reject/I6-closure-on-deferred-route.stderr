@@ -1,0 +1,5 @@
+error[E0026]: struct `Route` does not have a field named `closure`
+ --> $WORKSPACE/compile-fail/cases/smlang/install/reject/I6-closure-on-deferred-route.rs
+  |
+  |     if let States::Prepared(Route { deferred: true, closure }) = m.state_enum() {
+  |                                                     ^^^^^^^ struct `Route` does not have this field

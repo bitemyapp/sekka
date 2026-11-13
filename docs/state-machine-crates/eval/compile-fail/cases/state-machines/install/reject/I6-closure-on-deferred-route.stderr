@@ -1,0 +1,7 @@
+error[E0599]: no method named `cache_data` found for struct `Installer<impl_state_machines::install::Prepared>` in the current scope
+ --> $WORKSPACE/compile-fail/cases/state-machines/install/reject/I6-closure-on-deferred-route.rs
+  |
+  |     let _ = prepared.cache_data();
+  |                      ^^^^^^^^^^ method not found in `Installer<impl_state_machines::install::Prepared>`
+  |
+  = note: the method was found for `Installer<impl_state_machines::install::Cache>`
