@@ -40,7 +40,7 @@ def main():
     with tempfile.TemporaryDirectory() as temporary:
         root = Path(temporary)
         if not reflinks(root):
-            print("CAS dedupe not checked: this builder's filesystem does not share extents.")
+            print("CAS dedupe not checked: Linux FICLONE is unavailable on this filesystem; other cloning APIs were not tested.")
             return
         (root / "store").mkdir()
         (root / "cas/d2").mkdir(parents=True)

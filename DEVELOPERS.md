@@ -317,6 +317,12 @@ provenance account for the other changes. No checks were removed.
 
 ### Cargo workspaces through Buck2
 
+Native macOS feasibility results are recorded in
+[the 2026-11-13 probe](docs/test-results/buck2/2026-11-13-macos/README.md).
+The patched engine and NativeLink cache run on Apple Silicon, but the Sekka
+Cargo/Nix frontend and single-CAS sharing still require Linux. APFS clone
+support alone does not make the Linux dedupe implementation portable.
+
 `scripts/sekka-buck2` roots a pinned client closure once, then executes it
 without reevaluating the root flake on ordinary source edits. Cargo manifests,
 lockfiles and feature resolution remain authoritative; no Reindeer manifest

@@ -180,6 +180,27 @@ class CompilerContract(unittest.TestCase):
             self.assertEqual(decoded["joined"], "-L" + str(materialized / "generated.h") + " -L" + str(consumer / "assets"))
             self.assertEqual(decoded["external"], "-L" + str(external))
 
+    def test_output_relocation_under_aliased_checkout(self):
+        with tempfile.TemporaryDirectory(prefix="sekka-buck-alias-") as temporary:
+            actual = Path(temporary).resolve() / "actual"
+            output = actual / "output"
+            output.mkdir(parents=True)
+            (output / "resource").write_text("resource")
+            alias = actual.with_name("alias")
+            alias.symlink_to(actual, target_is_directory=True)
+            encoded = relocate(str(alias / "output/resource"), alias, alias / "output", encode=True)
+            self.assertEqual(encoded, OUTPUT_TOKEN + "/resource")
+            # Escaping the output still relocates within the checkout, while
+            # an external symlink must retain its external referent.
+            (actual / "asset").write_text("asset")
+            self.assertEqual(relocate(str(alias / "output/../asset"), alias, alias / "output", encode=True),
+                             ROOT_TOKEN + "/asset")
+            external = actual.with_name("external")
+            external.write_text("external")
+            (output / "external").symlink_to(external)
+            self.assertEqual(relocate(str(alias / "output/external"), alias, alias / "output", encode=True),
+                             str(external))
+
     def test_real_rustc_dependency_filenames(self):
         tools = json.loads(Path(os.environ["SEKKA_BUCK2_ENV"]).read_text())
         with tempfile.TemporaryDirectory(prefix="sekka-buck-dep-info-") as temporary:

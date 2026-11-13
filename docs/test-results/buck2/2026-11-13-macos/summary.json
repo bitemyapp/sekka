@@ -1,0 +1,219 @@
+{
+  "versions": {
+    "buck2": "buck2 935786e233ab3b0281c9e72c2a8c13d6 <build-id>",
+    "nativelink": "nativelink 1.8.3",
+    "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)"
+  },
+  "kind": "synthetic 19-action Rust DAG; no Cargo incremental state",
+  "runs": [
+    {
+      "label": "cold",
+      "seconds": 0.620522125158459,
+      "executors": {
+        "Local": 19
+      },
+      "output": "136"
+    },
+    {
+      "label": "no-change-0",
+      "seconds": 0.01668874965980649,
+      "executors": {},
+      "output": "136"
+    },
+    {
+      "label": "no-change-1",
+      "seconds": 0.015962165780365467,
+      "executors": {},
+      "output": "136"
+    },
+    {
+      "label": "no-change-2",
+      "seconds": 0.01697695767506957,
+      "executors": {},
+      "output": "136"
+    },
+    {
+      "label": "no-change-3",
+      "seconds": 0.017394292168319225,
+      "executors": {},
+      "output": "136"
+    },
+    {
+      "label": "no-change-4",
+      "seconds": 0.01741037517786026,
+      "executors": {},
+      "output": "136"
+    },
+    {
+      "label": "leaf-edit-0",
+      "seconds": 0.2720355000346899,
+      "executors": {
+        "Local": 1
+      },
+      "output": "137"
+    },
+    {
+      "label": "leaf-edit-1",
+      "seconds": 0.2320193750783801,
+      "executors": {
+        "Local": 1
+      },
+      "output": "138"
+    },
+    {
+      "label": "leaf-edit-2",
+      "seconds": 0.23655220912769437,
+      "executors": {
+        "Local": 1
+      },
+      "output": "139"
+    },
+    {
+      "label": "deep-edit-0",
+      "seconds": 0.520299082621932,
+      "executors": {
+        "Local": 19
+      },
+      "output": "155"
+    },
+    {
+      "label": "deep-edit-1",
+      "seconds": 0.4915610421448946,
+      "executors": {
+        "Local": 19
+      },
+      "output": "171"
+    },
+    {
+      "label": "deep-edit-2",
+      "seconds": 0.49045008327811956,
+      "executors": {
+        "Local": 19
+      },
+      "output": "187"
+    },
+    {
+      "label": "revert",
+      "seconds": 0.023269041907042265,
+      "executors": {
+        "Cache": 19
+      },
+      "output": "136"
+    },
+    {
+      "label": "fresh-workspace",
+      "seconds": 0.21759808296337724,
+      "executors": {
+        "Cache": 19
+      },
+      "output": "136"
+    }
+  ],
+  "storage": [
+    {
+      "label": "cold",
+      "cas": {
+        "files": 59,
+        "logical_bytes": 2719005,
+        "allocated_bytes_sum_not_unique_extents": 2899968
+      },
+      "artifacts": {
+        "files": 38,
+        "logical_bytes": 5400688,
+        "allocated_bytes_sum_not_unique_extents": 5472256
+      },
+      "buck_out_including_logs": {
+        "files": 48,
+        "logical_bytes": 6403529,
+        "allocated_bytes_sum_not_unique_extents": 6496256
+      }
+    },
+    {
+      "label": "no-change",
+      "cas": {
+        "files": 59,
+        "logical_bytes": 2719005,
+        "allocated_bytes_sum_not_unique_extents": 2899968
+      },
+      "artifacts": {
+        "files": 38,
+        "logical_bytes": 5400688,
+        "allocated_bytes_sum_not_unique_extents": 5472256
+      },
+      "buck_out_including_logs": {
+        "files": 63,
+        "logical_bytes": 6425444,
+        "allocated_bytes_sum_not_unique_extents": 6557696
+      }
+    },
+    {
+      "label": "leaf-edits",
+      "cas": {
+        "files": 65,
+        "logical_bytes": 4131111,
+        "allocated_bytes_sum_not_unique_extents": 4325376
+      },
+      "artifacts": {
+        "files": 41,
+        "logical_bytes": 6812368,
+        "allocated_bytes_sum_not_unique_extents": 6885376
+      },
+      "buck_out_including_logs": {
+        "files": 75,
+        "logical_bytes": 8068240,
+        "allocated_bytes_sum_not_unique_extents": 9265152
+      }
+    },
+    {
+      "label": "deep-edits",
+      "cas": {
+        "files": 233,
+        "logical_bytes": 12285795,
+        "allocated_bytes_sum_not_unique_extents": 12988416
+      },
+      "artifacts": {
+        "files": 98,
+        "logical_bytes": 14913400,
+        "allocated_bytes_sum_not_unique_extents": 15093760
+      },
+      "buck_out_including_logs": {
+        "files": 141,
+        "logical_bytes": 19332104,
+        "allocated_bytes_sum_not_unique_extents": 19714048
+      }
+    }
+  ],
+  "fresh_buck_out": {
+    "files": 29,
+    "logical_bytes": 3385541,
+    "allocated_bytes_sum_not_unique_extents": 3440640
+  },
+  "fresh_artifacts": {
+    "files": 19,
+    "logical_bytes": 2700344,
+    "allocated_bytes_sum_not_unique_extents": 2736128
+  },
+  "fresh_artifacts_matching_cas": {
+    "files": 19,
+    "logical_bytes": 2700344,
+    "note": "byte identity, not proof of shared physical extents"
+  },
+  "no-change": {
+    "samples": 5,
+    "median_seconds": 0.01697695767506957,
+    "min_seconds": 0.015962165780365467,
+    "max_seconds": 0.01741037517786026
+  },
+  "leaf-edit": {
+    "samples": 3,
+    "median_seconds": 0.23655220912769437,
+    "min_seconds": 0.2320193750783801,
+    "max_seconds": 0.2720355000346899
+  },
+  "deep-edit": {
+    "samples": 3,
+    "median_seconds": 0.4915610421448946,
+    "min_seconds": 0.49045008327811956,
+    "max_seconds": 0.520299082621932
+  }
+}
