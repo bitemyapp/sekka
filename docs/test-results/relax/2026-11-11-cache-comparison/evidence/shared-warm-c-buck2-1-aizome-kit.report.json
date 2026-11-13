@@ -1,0 +1,26 @@
+{
+  "trace_id": "ace8598b-faba-4bd3-8515-172305288169",
+  "success": true,
+  "results": {
+    "root//desktop/aizome/crates/aizome-kit:aizome_kit-test-test-lib": {
+      "success": "SUCCESS",
+      "outputs": {},
+      "other_outputs": {},
+      "configured_graph_size": null,
+      "configured": {
+        "prelude//platforms:default#a8ac7ec86a6bee54": {
+          "errors": [],
+          "success": "SUCCESS",
+          "outputs": {},
+          "other_outputs": {},
+          "configured_graph_size": null
+        }
+      },
+      "errors": []
+    }
+  },
+  "failures": {},
+  "project_root": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+  "truncated": false,
+  "strings": {}
+}

@@ -171,6 +171,17 @@
         # Aizome's workspace (desktop/aizome), which its `just` recipes and
         # aizome-dev enter.
         aizome = inputs.aizome.devShells.${system}.default;
+        # Opt-in compiler experiment; uses the same native desktop inputs.
+        # Relax's standalone runner also links directly against OpenSSL.
+        relax = inputs.aizome.devShells.${system}.default.overrideAttrs (old: {
+          name = "sekka-relax-experiment";
+          buildInputs = old.buildInputs ++ [ pkgs.openssl ];
+          nativeBuildInputs = old.nativeBuildInputs ++ [
+            pkgs.python3
+            # Relax's WebAssembly backend tests execute the generated modules.
+            pkgs.nodejs
+          ];
+        });
         default = pkgs.mkShell {
           inputsFrom = [
             calamares

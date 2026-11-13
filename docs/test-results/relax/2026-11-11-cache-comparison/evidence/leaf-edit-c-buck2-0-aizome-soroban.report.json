@@ -1,0 +1,26 @@
+{
+  "trace_id": "151f2877-3586-4217-b4ac-58ca15c098da",
+  "success": true,
+  "results": {
+    "root//desktop/aizome/apps/soroban:aizome_soroban-test-test-lib": {
+      "success": "SUCCESS",
+      "outputs": {},
+      "other_outputs": {},
+      "configured_graph_size": null,
+      "configured": {
+        "prelude//platforms:default#a8ac7ec86a6bee54": {
+          "errors": [],
+          "success": "SUCCESS",
+          "outputs": {},
+          "other_outputs": {},
+          "configured_graph_size": null
+        }
+      },
+      "errors": []
+    }
+  },
+  "failures": {},
+  "project_root": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+  "truncated": false,
+  "strings": {}
+}

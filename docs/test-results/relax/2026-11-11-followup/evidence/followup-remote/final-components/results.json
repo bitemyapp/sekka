@@ -1,0 +1,640 @@
+{
+  "mode": "components",
+  "status": "complete",
+  "runs": [
+    {
+      "label": "hotaru-sprites-rustc-1",
+      "engine": "rustc",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--release",
+        "-p",
+        "hotaru-sprites",
+        "--tests"
+      ],
+      "exit_code": 0,
+      "seconds": 4.674,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 13,
+      "expected_tests": null,
+      "test_summaries": [
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s",
+        "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s"
+      ],
+      "log": "hotaru-sprites-rustc-1.log.gz"
+    },
+    {
+      "label": "hotaru-sprites-relax-1",
+      "engine": "relax",
+      "command": [
+        "$FOLLOWUP/relax/target/release/relax",
+        "test",
+        "--no-live",
+        "--allow-c",
+        "hotaru-sprites"
+      ],
+      "exit_code": 0,
+      "seconds": 1.868,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 13,
+      "expected_tests": 13,
+      "test_summaries": [
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s",
+        "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s",
+        "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s"
+      ],
+      "log": "hotaru-sprites-relax-1.log.gz"
+    },
+    {
+      "label": "hotaru-core-rustc-1",
+      "engine": "rustc",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--release",
+        "-p",
+        "hotaru-core",
+        "--lib"
+      ],
+      "exit_code": 0,
+      "seconds": 12.538,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 42,
+      "expected_tests": null,
+      "test_summaries": [
+        "test result: ok. 42 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s"
+      ],
+      "log": "hotaru-core-rustc-1.log.gz"
+    },
+    {
+      "label": "hotaru-core-relax-1",
+      "engine": "relax",
+      "command": [
+        "$FOLLOWUP/relax/target/release/relax",
+        "test",
+        "--no-live",
+        "--allow-c",
+        "hotaru-core",
+        "--lib"
+      ],
+      "exit_code": 0,
+      "seconds": 3.42,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 42,
+      "expected_tests": 42,
+      "test_summaries": [
+        "test result: ok. 42 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.77s"
+      ],
+      "log": "hotaru-core-relax-1.log.gz"
+    },
+    {
+      "label": "calamares-session-env-rustc-1",
+      "engine": "rustc",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--release",
+        "-p",
+        "calamares-session-env",
+        "--tests"
+      ],
+      "exit_code": 0,
+      "seconds": 2.769,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 5,
+      "expected_tests": null,
+      "test_summaries": [
+        "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ],
+      "log": "calamares-session-env-rustc-1.log.gz"
+    },
+    {
+      "label": "calamares-session-env-relax-1",
+      "engine": "relax",
+      "command": [
+        "$FOLLOWUP/relax/target/release/relax",
+        "test",
+        "--no-live",
+        "--allow-c",
+        "calamares-session-env"
+      ],
+      "exit_code": 0,
+      "seconds": 1.968,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 5,
+      "expected_tests": 5,
+      "test_summaries": [
+        "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s"
+      ],
+      "log": "calamares-session-env-relax-1.log.gz"
+    },
+    {
+      "label": "aizome-ipc-rustc-1",
+      "engine": "rustc",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--release",
+        "-p",
+        "aizome-ipc",
+        "--lib"
+      ],
+      "exit_code": 0,
+      "seconds": 14.642,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 5,
+      "expected_tests": null,
+      "test_summaries": [
+        "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ],
+      "log": "aizome-ipc-rustc-1.log.gz"
+    },
+    {
+      "label": "aizome-ipc-relax-1",
+      "engine": "relax",
+      "command": [
+        "$FOLLOWUP/relax/target/release/relax",
+        "test",
+        "--no-live",
+        "--allow-c",
+        "aizome-ipc",
+        "--lib"
+      ],
+      "exit_code": 0,
+      "seconds": 3.121,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 5,
+      "expected_tests": 5,
+      "test_summaries": [
+        "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s"
+      ],
+      "log": "aizome-ipc-relax-1.log.gz"
+    },
+    {
+      "label": "aizome-theme-rustc-1",
+      "engine": "rustc",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--release",
+        "-p",
+        "aizome-theme",
+        "--lib"
+      ],
+      "exit_code": 0,
+      "seconds": 0.365,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 2,
+      "expected_tests": null,
+      "test_summaries": [
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ],
+      "log": "aizome-theme-rustc-1.log.gz"
+    },
+    {
+      "label": "aizome-theme-relax-1",
+      "engine": "relax",
+      "command": [
+        "$FOLLOWUP/relax/target/release/relax",
+        "test",
+        "--no-live",
+        "--allow-c",
+        "aizome-theme",
+        "--lib"
+      ],
+      "exit_code": 0,
+      "seconds": 2.219,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 2,
+      "expected_tests": 2,
+      "test_summaries": [
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s"
+      ],
+      "log": "aizome-theme-relax-1.log.gz"
+    },
+    {
+      "label": "aizome-config-rustc-1",
+      "engine": "rustc",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--release",
+        "-p",
+        "aizome-config",
+        "--lib"
+      ],
+      "exit_code": 0,
+      "seconds": 9.433,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 31,
+      "expected_tests": null,
+      "test_summaries": [
+        "test result: ok. 31 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ],
+      "log": "aizome-config-rustc-1.log.gz"
+    },
+    {
+      "label": "aizome-config-relax-1",
+      "engine": "relax",
+      "command": [
+        "$FOLLOWUP/relax/target/release/relax",
+        "test",
+        "--no-live",
+        "--allow-c",
+        "aizome-config",
+        "--lib"
+      ],
+      "exit_code": 0,
+      "seconds": 4.625,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 31,
+      "expected_tests": 31,
+      "test_summaries": [
+        "test result: ok. 31 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.67s"
+      ],
+      "log": "aizome-config-relax-1.log.gz"
+    },
+    {
+      "label": "aizome-shell-proto-rustc-1",
+      "engine": "rustc",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--release",
+        "-p",
+        "aizome-shell-proto",
+        "--lib"
+      ],
+      "exit_code": 0,
+      "seconds": 2.419,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 4,
+      "expected_tests": null,
+      "test_summaries": [
+        "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ],
+      "log": "aizome-shell-proto-rustc-1.log.gz"
+    },
+    {
+      "label": "aizome-shell-proto-relax-1",
+      "engine": "relax",
+      "command": [
+        "$FOLLOWUP/relax/target/release/relax",
+        "test",
+        "--no-live",
+        "--allow-c",
+        "aizome-shell-proto",
+        "--lib"
+      ],
+      "exit_code": 0,
+      "seconds": 2.42,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 4,
+      "expected_tests": 4,
+      "test_summaries": [
+        "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s"
+      ],
+      "log": "aizome-shell-proto-relax-1.log.gz"
+    },
+    {
+      "label": "respin-tools-rustc-1",
+      "engine": "rustc",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--release",
+        "-p",
+        "respin-tools",
+        "--lib"
+      ],
+      "exit_code": 0,
+      "seconds": 4.174,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 19,
+      "expected_tests": null,
+      "test_summaries": [
+        "test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s"
+      ],
+      "log": "respin-tools-rustc-1.log.gz"
+    },
+    {
+      "label": "respin-tools-relax-1",
+      "engine": "relax",
+      "command": [
+        "$FOLLOWUP/relax/target/release/relax",
+        "test",
+        "--no-live",
+        "--allow-c",
+        "respin-tools",
+        "--lib"
+      ],
+      "exit_code": 0,
+      "seconds": 2.82,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 19,
+      "expected_tests": 19,
+      "test_summaries": [
+        "test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.35s"
+      ],
+      "log": "respin-tools-relax-1.log.gz"
+    },
+    {
+      "label": "hotaru-link-regex-rustc-1",
+      "engine": "rustc",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--release",
+        "-p",
+        "hotaru-link-regex",
+        "--tests"
+      ],
+      "exit_code": 0,
+      "seconds": 10.28,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 9,
+      "expected_tests": null,
+      "test_summaries": [
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.49s"
+      ],
+      "log": "hotaru-link-regex-rustc-1.log.gz"
+    },
+    {
+      "label": "hotaru-link-regex-relax-1",
+      "engine": "relax",
+      "command": [
+        "$FOLLOWUP/relax/target/release/relax",
+        "test",
+        "--no-live",
+        "--allow-c",
+        "hotaru-link-regex"
+      ],
+      "exit_code": 0,
+      "seconds": 6.727,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 9,
+      "expected_tests": 9,
+      "test_summaries": [
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s",
+        "test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.65s"
+      ],
+      "log": "hotaru-link-regex-relax-1.log.gz"
+    },
+    {
+      "label": "hotaru-io-rustc-1",
+      "engine": "rustc",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--release",
+        "-p",
+        "hotaru-io",
+        "--lib"
+      ],
+      "exit_code": 0,
+      "seconds": 4.974,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 3,
+      "expected_tests": null,
+      "test_summaries": [
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ],
+      "log": "hotaru-io-rustc-1.log.gz"
+    },
+    {
+      "label": "hotaru-io-relax-1",
+      "engine": "relax",
+      "command": [
+        "$FOLLOWUP/relax/target/release/relax",
+        "test",
+        "--no-live",
+        "--allow-c",
+        "hotaru-io",
+        "--lib"
+      ],
+      "exit_code": 0,
+      "seconds": 2.569,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 3,
+      "expected_tests": 3,
+      "test_summaries": [
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s"
+      ],
+      "log": "hotaru-io-relax-1.log.gz"
+    },
+    {
+      "label": "aizome-kit-rustc-1",
+      "engine": "rustc",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--release",
+        "-p",
+        "aizome-kit",
+        "--lib"
+      ],
+      "exit_code": 0,
+      "seconds": 55.739,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 40,
+      "expected_tests": null,
+      "test_summaries": [
+        "test result: ok. 40 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s"
+      ],
+      "log": "aizome-kit-rustc-1.log.gz"
+    },
+    {
+      "label": "aizome-kit-relax-1",
+      "engine": "relax",
+      "command": [
+        "$FOLLOWUP/relax/target/release/relax",
+        "test",
+        "--no-live",
+        "--allow-c",
+        "aizome-kit",
+        "--lib"
+      ],
+      "exit_code": 0,
+      "seconds": 14.889,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 40,
+      "expected_tests": 40,
+      "test_summaries": [
+        "test result: ok. 40 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.58s"
+      ],
+      "log": "aizome-kit-relax-1.log.gz"
+    },
+    {
+      "label": "aizome-soroban-rustc-1",
+      "engine": "rustc",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--release",
+        "-p",
+        "aizome-soroban",
+        "--lib"
+      ],
+      "exit_code": 0,
+      "seconds": 31.176,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 11,
+      "expected_tests": null,
+      "test_summaries": [
+        "test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ],
+      "log": "aizome-soroban-rustc-1.log.gz"
+    },
+    {
+      "label": "aizome-soroban-relax-1",
+      "engine": "relax",
+      "command": [
+        "$FOLLOWUP/relax/target/release/relax",
+        "test",
+        "--no-live",
+        "--allow-c",
+        "aizome-soroban",
+        "--lib"
+      ],
+      "exit_code": 0,
+      "seconds": 12.538,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 11,
+      "expected_tests": 11,
+      "test_summaries": [
+        "test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s"
+      ],
+      "log": "aizome-soroban-relax-1.log.gz"
+    }
+  ],
+  "inputs": {
+    "sekka": {
+      "commit": "7dcf88e3b7f3391ec498a53a28555d02ba8fb14a",
+      "status": " M flake.nix\n"
+    },
+    "relax": {
+      "commit": "d09dcd17fa766b42e2f304fcdecfb489b2d00078",
+      "status": ""
+    },
+    "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13) (built from a source tarball)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.3\n",
+    "runner_sha256": "ceacd35f0729c6051838774363f32dee99bb3fe6e142c1d53a9fb54b43c48fd9",
+    "cpu_budget": "8",
+    "lockfiles": {
+      "apps/hotaru/Cargo.lock": "4f6322fac4e99a444a5fd15c01b55b96290ee87e3091470c825f5ca55e1faa83",
+      "desktop/aizome/Cargo.lock": "7d5e3d4cf544cee4bf18ce39d694cbeb1ac67bf39a933b9c086b19df78de84fc",
+      "installer/genkan/rust/system/session-env/Cargo.lock": "9f003f886509a52e92a065607ebb1978df254a32048e7b8a661ba362f7e24b92",
+      "rust/Cargo.lock": "29540938499a63d4edb8bcbcad595257c5125b50feef0f74b295b6370bd3573a"
+    }
+  }
+}

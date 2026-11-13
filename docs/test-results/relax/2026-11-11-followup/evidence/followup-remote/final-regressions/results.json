@@ -1,0 +1,717 @@
+{
+  "mode": "regressions",
+  "status": "complete",
+  "runs": [
+    {
+      "label": "sse2_safe_byte_intrinsics-rustc-compile",
+      "engine": "rustc",
+      "command": [
+        "rustc",
+        "--edition=2021",
+        "-O",
+        "--test",
+        "$FOLLOWUP/relax/libs/relax/compiler/tests/sse2_safe_byte_intrinsics.rs",
+        "-o",
+        "$FOLLOWUP/final-regressions/sse2_safe_byte_intrinsics-rustc"
+      ],
+      "exit_code": 0,
+      "seconds": 0.165,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 0,
+      "expected_tests": null,
+      "test_summaries": [],
+      "log": "sse2_safe_byte_intrinsics-rustc-compile.log.gz"
+    },
+    {
+      "label": "sse2_safe_byte_intrinsics-rustc",
+      "engine": "rustc",
+      "command": [
+        "$FOLLOWUP/final-regressions/sse2_safe_byte_intrinsics-rustc"
+      ],
+      "exit_code": 0,
+      "seconds": 0.002,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 1,
+      "expected_tests": 1,
+      "test_summaries": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ],
+      "log": "sse2_safe_byte_intrinsics-rustc.log.gz"
+    },
+    {
+      "label": "sse2_safe_byte_intrinsics-relax",
+      "engine": "relax",
+      "command": [
+        "$FOLLOWUP/relax/target/release/relax",
+        "test",
+        "$FOLLOWUP/relax/libs/relax/compiler/tests/sse2_safe_byte_intrinsics.rs"
+      ],
+      "exit_code": 0,
+      "seconds": 0.215,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 1,
+      "expected_tests": 1,
+      "test_summaries": [
+        "test result: 1 passed; 0 failed. compiled 4 fns (1136 bytes, 276 RIR insts): typeck 0.12 ms, lower 0.62 ms, opt 2.84 ms, codegen 3.18 ms"
+      ],
+      "log": "sse2_safe_byte_intrinsics-relax.log.gz"
+    },
+    {
+      "label": "macro_expansion_textual_scope-rustc-compile",
+      "engine": "rustc",
+      "command": [
+        "rustc",
+        "--edition=2021",
+        "-O",
+        "--test",
+        "$FOLLOWUP/relax/libs/relax/compiler/tests/macro_expansion_textual_scope.rs",
+        "-o",
+        "$FOLLOWUP/final-regressions/macro_expansion_textual_scope-rustc"
+      ],
+      "exit_code": 0,
+      "seconds": 0.165,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 0,
+      "expected_tests": null,
+      "test_summaries": [],
+      "log": "macro_expansion_textual_scope-rustc-compile.log.gz"
+    },
+    {
+      "label": "macro_expansion_textual_scope-rustc",
+      "engine": "rustc",
+      "command": [
+        "$FOLLOWUP/final-regressions/macro_expansion_textual_scope-rustc"
+      ],
+      "exit_code": 0,
+      "seconds": 0.002,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 2,
+      "expected_tests": 2,
+      "test_summaries": [
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ],
+      "log": "macro_expansion_textual_scope-rustc.log.gz"
+    },
+    {
+      "label": "macro_expansion_textual_scope-relax",
+      "engine": "relax",
+      "command": [
+        "$FOLLOWUP/relax/target/release/relax",
+        "test",
+        "$FOLLOWUP/relax/libs/relax/compiler/tests/macro_expansion_textual_scope.rs"
+      ],
+      "exit_code": 0,
+      "seconds": 0.265,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 2,
+      "expected_tests": 2,
+      "test_summaries": [
+        "test result: 2 passed; 0 failed. compiled 52 fns (10692 bytes, 2210 RIR insts): typeck 2.47 ms, lower 8.40 ms, opt 14.35 ms, codegen 6.20 ms"
+      ],
+      "log": "macro_expansion_textual_scope-relax.log.gz"
+    },
+    {
+      "label": "exported_macro_and_value_reexport-rustc-compile",
+      "engine": "rustc",
+      "command": [
+        "rustc",
+        "--edition=2021",
+        "-O",
+        "--test",
+        "$FOLLOWUP/relax/libs/relax/compiler/tests/exported_macro_and_value_reexport.rs",
+        "-o",
+        "$FOLLOWUP/final-regressions/exported_macro_and_value_reexport-rustc"
+      ],
+      "exit_code": 0,
+      "seconds": 0.165,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 0,
+      "expected_tests": null,
+      "test_summaries": [],
+      "log": "exported_macro_and_value_reexport-rustc-compile.log.gz"
+    },
+    {
+      "label": "exported_macro_and_value_reexport-rustc",
+      "engine": "rustc",
+      "command": [
+        "$FOLLOWUP/final-regressions/exported_macro_and_value_reexport-rustc"
+      ],
+      "exit_code": 0,
+      "seconds": 0.004,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 1,
+      "expected_tests": 1,
+      "test_summaries": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ],
+      "log": "exported_macro_and_value_reexport-rustc.log.gz"
+    },
+    {
+      "label": "exported_macro_and_value_reexport-relax",
+      "engine": "relax",
+      "command": [
+        "$FOLLOWUP/relax/target/release/relax",
+        "test",
+        "$FOLLOWUP/relax/libs/relax/compiler/tests/exported_macro_and_value_reexport.rs"
+      ],
+      "exit_code": 0,
+      "seconds": 0.165,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 1,
+      "expected_tests": 1,
+      "test_summaries": [
+        "test result: 1 passed; 0 failed. compiled 1 fns (36 bytes, 13 RIR insts): typeck 0.02 ms, lower 0.32 ms, opt 0.49 ms, codegen 1.50 ms"
+      ],
+      "log": "exported_macro_and_value_reexport-relax.log.gz"
+    },
+    {
+      "label": "macro_inner_use-rustc-compile",
+      "engine": "rustc",
+      "command": [
+        "rustc",
+        "--edition=2021",
+        "-O",
+        "--test",
+        "$FOLLOWUP/relax/libs/relax/compiler/tests/macro_inner_use.rs",
+        "-o",
+        "$FOLLOWUP/final-regressions/macro_inner_use-rustc"
+      ],
+      "exit_code": 0,
+      "seconds": 0.165,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 0,
+      "expected_tests": null,
+      "test_summaries": [],
+      "log": "macro_inner_use-rustc-compile.log.gz"
+    },
+    {
+      "label": "macro_inner_use-rustc",
+      "engine": "rustc",
+      "command": [
+        "$FOLLOWUP/final-regressions/macro_inner_use-rustc"
+      ],
+      "exit_code": 0,
+      "seconds": 0.002,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 1,
+      "expected_tests": 1,
+      "test_summaries": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ],
+      "log": "macro_inner_use-rustc.log.gz"
+    },
+    {
+      "label": "macro_inner_use-relax",
+      "engine": "relax",
+      "command": [
+        "$FOLLOWUP/relax/target/release/relax",
+        "test",
+        "$FOLLOWUP/relax/libs/relax/compiler/tests/macro_inner_use.rs"
+      ],
+      "exit_code": 0,
+      "seconds": 0.215,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 1,
+      "expected_tests": 1,
+      "test_summaries": [
+        "test result: 1 passed; 0 failed. compiled 1 fns (40 bytes, 16 RIR insts): typeck 0.02 ms, lower 0.42 ms, opt 0.57 ms, codegen 1.58 ms"
+      ],
+      "log": "macro_inner_use-relax.log.gz"
+    },
+    {
+      "label": "macro_file_order-rustc-compile",
+      "engine": "rustc",
+      "command": [
+        "rustc",
+        "--edition=2021",
+        "-O",
+        "--test",
+        "$FOLLOWUP/relax/libs/relax/compiler/tests/macro_file_order.rs",
+        "-o",
+        "$FOLLOWUP/final-regressions/macro_file_order-rustc"
+      ],
+      "exit_code": 0,
+      "seconds": 0.165,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 0,
+      "expected_tests": null,
+      "test_summaries": [],
+      "log": "macro_file_order-rustc-compile.log.gz"
+    },
+    {
+      "label": "macro_file_order-rustc",
+      "engine": "rustc",
+      "command": [
+        "$FOLLOWUP/final-regressions/macro_file_order-rustc"
+      ],
+      "exit_code": 0,
+      "seconds": 0.004,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 1,
+      "expected_tests": 1,
+      "test_summaries": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ],
+      "log": "macro_file_order-rustc.log.gz"
+    },
+    {
+      "label": "macro_file_order-relax",
+      "engine": "relax",
+      "command": [
+        "$FOLLOWUP/relax/target/release/relax",
+        "test",
+        "$FOLLOWUP/relax/libs/relax/compiler/tests/macro_file_order.rs"
+      ],
+      "exit_code": 0,
+      "seconds": 0.164,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 1,
+      "expected_tests": 1,
+      "test_summaries": [
+        "test result: 1 passed; 0 failed. compiled 1 fns (36 bytes, 19 RIR insts): typeck 0.02 ms, lower 0.28 ms, opt 0.49 ms, codegen 1.58 ms"
+      ],
+      "log": "macro_file_order-relax.log.gz"
+    },
+    {
+      "label": "macro_file_shadow-rustc-compile",
+      "engine": "rustc",
+      "command": [
+        "rustc",
+        "--edition=2021",
+        "-O",
+        "--test",
+        "$FOLLOWUP/relax/libs/relax/compiler/tests/macro_file_shadow.rs",
+        "-o",
+        "$FOLLOWUP/final-regressions/macro_file_shadow-rustc"
+      ],
+      "exit_code": 0,
+      "seconds": 0.165,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 0,
+      "expected_tests": null,
+      "test_summaries": [],
+      "log": "macro_file_shadow-rustc-compile.log.gz"
+    },
+    {
+      "label": "macro_file_shadow-rustc",
+      "engine": "rustc",
+      "command": [
+        "$FOLLOWUP/final-regressions/macro_file_shadow-rustc"
+      ],
+      "exit_code": 0,
+      "seconds": 0.004,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 1,
+      "expected_tests": 1,
+      "test_summaries": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ],
+      "log": "macro_file_shadow-rustc.log.gz"
+    },
+    {
+      "label": "macro_file_shadow-relax",
+      "engine": "relax",
+      "command": [
+        "$FOLLOWUP/relax/target/release/relax",
+        "test",
+        "$FOLLOWUP/relax/libs/relax/compiler/tests/macro_file_shadow.rs"
+      ],
+      "exit_code": 0,
+      "seconds": 0.215,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 1,
+      "expected_tests": 1,
+      "test_summaries": [
+        "test result: 1 passed; 0 failed. compiled 1 fns (72 bytes, 46 RIR insts): typeck 0.04 ms, lower 0.40 ms, opt 0.76 ms, codegen 1.59 ms"
+      ],
+      "log": "macro_file_shadow-relax.log.gz"
+    },
+    {
+      "label": "sse2_load_requires_unsafe_reject-rustc-compile",
+      "engine": "rustc",
+      "command": [
+        "rustc",
+        "--edition=2021",
+        "-O",
+        "--test",
+        "$FOLLOWUP/relax/libs/relax/compiler/tests/sse2_load_requires_unsafe_reject.rs",
+        "-o",
+        "$FOLLOWUP/final-regressions/sse2_load_requires_unsafe_reject-rustc"
+      ],
+      "exit_code": 1,
+      "seconds": 0.032,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": "E0133",
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 0,
+      "expected_tests": null,
+      "test_summaries": [],
+      "log": "sse2_load_requires_unsafe_reject-rustc-compile.log.gz"
+    },
+    {
+      "label": "sse2_load_requires_unsafe_reject-relax",
+      "engine": "relax",
+      "command": [
+        "$FOLLOWUP/relax/target/release/relax",
+        "test",
+        "$FOLLOWUP/relax/libs/relax/compiler/tests/sse2_load_requires_unsafe_reject.rs"
+      ],
+      "exit_code": 101,
+      "seconds": 0.216,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": "E0133",
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 0,
+      "expected_tests": null,
+      "test_summaries": [],
+      "log": "sse2_load_requires_unsafe_reject-relax.log.gz"
+    },
+    {
+      "label": "exported_macro_builtin_reexport_reject-rustc-compile",
+      "engine": "rustc",
+      "command": [
+        "rustc",
+        "--edition=2021",
+        "-O",
+        "--test",
+        "$FOLLOWUP/relax/libs/relax/compiler/tests/strict_errors/exported_macro_builtin_reexport.rs",
+        "-o",
+        "$FOLLOWUP/final-regressions/exported_macro_builtin_reexport_reject-rustc"
+      ],
+      "exit_code": 1,
+      "seconds": 0.032,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": "E0255",
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 0,
+      "expected_tests": null,
+      "test_summaries": [],
+      "log": "exported_macro_builtin_reexport_reject-rustc-compile.log.gz"
+    },
+    {
+      "label": "exported_macro_builtin_reexport_reject-relax",
+      "engine": "relax",
+      "command": [
+        "$FOLLOWUP/relax/target/release/relax",
+        "test",
+        "$FOLLOWUP/relax/libs/relax/compiler/tests/strict_errors/exported_macro_builtin_reexport.rs"
+      ],
+      "exit_code": 101,
+      "seconds": 0.215,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": "E0255",
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 0,
+      "expected_tests": null,
+      "test_summaries": [],
+      "log": "exported_macro_builtin_reexport_reject-relax.log.gz"
+    },
+    {
+      "label": "exported_macro_absolute_import_reject-rustc-compile",
+      "engine": "rustc",
+      "command": [
+        "rustc",
+        "--edition=2021",
+        "-O",
+        "--test",
+        "$FOLLOWUP/relax/libs/relax/compiler/tests/strict_errors/exported_macro_absolute_import.rs",
+        "-o",
+        "$FOLLOWUP/final-regressions/exported_macro_absolute_import_reject-rustc"
+      ],
+      "exit_code": 1,
+      "seconds": 0.032,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": "E0255",
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 0,
+      "expected_tests": null,
+      "test_summaries": [],
+      "log": "exported_macro_absolute_import_reject-rustc-compile.log.gz"
+    },
+    {
+      "label": "exported_macro_absolute_import_reject-relax",
+      "engine": "relax",
+      "command": [
+        "$FOLLOWUP/relax/target/release/relax",
+        "test",
+        "$FOLLOWUP/relax/libs/relax/compiler/tests/strict_errors/exported_macro_absolute_import.rs"
+      ],
+      "exit_code": 101,
+      "seconds": 0.215,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": "E0255",
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 0,
+      "expected_tests": null,
+      "test_summaries": [],
+      "log": "exported_macro_absolute_import_reject-relax.log.gz"
+    },
+    {
+      "label": "macro_inner_use_before_module_reject-rustc-compile",
+      "engine": "rustc",
+      "command": [
+        "rustc",
+        "--edition=2021",
+        "-O",
+        "--test",
+        "$FOLLOWUP/relax/libs/relax/compiler/tests/macro_inner_use_before_module_reject.rs",
+        "-o",
+        "$FOLLOWUP/final-regressions/macro_inner_use_before_module_reject-rustc"
+      ],
+      "exit_code": 1,
+      "seconds": 0.033,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": "macro `later_value",
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 0,
+      "expected_tests": null,
+      "test_summaries": [],
+      "log": "macro_inner_use_before_module_reject-rustc-compile.log.gz"
+    },
+    {
+      "label": "macro_inner_use_before_module_reject-relax",
+      "engine": "relax",
+      "command": [
+        "$FOLLOWUP/relax/target/release/relax",
+        "test",
+        "$FOLLOWUP/relax/libs/relax/compiler/tests/macro_inner_use_before_module_reject.rs"
+      ],
+      "exit_code": 101,
+      "seconds": 0.165,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": "macro `later_value",
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 0,
+      "expected_tests": null,
+      "test_summaries": [],
+      "log": "macro_inner_use_before_module_reject-relax.log.gz"
+    },
+    {
+      "label": "macro_file_before_module_reject-rustc-compile",
+      "engine": "rustc",
+      "command": [
+        "rustc",
+        "--edition=2021",
+        "-O",
+        "--test",
+        "$FOLLOWUP/relax/libs/relax/compiler/tests/macro_file_before_module_reject.rs",
+        "-o",
+        "$FOLLOWUP/final-regressions/macro_file_before_module_reject-rustc"
+      ],
+      "exit_code": 1,
+      "seconds": 0.033,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": "macro `ordered_value",
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 0,
+      "expected_tests": null,
+      "test_summaries": [],
+      "log": "macro_file_before_module_reject-rustc-compile.log.gz"
+    },
+    {
+      "label": "macro_file_before_module_reject-relax",
+      "engine": "relax",
+      "command": [
+        "$FOLLOWUP/relax/target/release/relax",
+        "test",
+        "$FOLLOWUP/relax/libs/relax/compiler/tests/macro_file_before_module_reject.rs"
+      ],
+      "exit_code": 101,
+      "seconds": 0.166,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": "macro `ordered_value",
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 0,
+      "expected_tests": null,
+      "test_summaries": [],
+      "log": "macro_file_before_module_reject-relax.log.gz"
+    },
+    {
+      "label": "attribute-macro-private-module-rustc",
+      "engine": "rustc",
+      "command": [
+        "cargo",
+        "test",
+        "--offline",
+        "--release",
+        "-p",
+        "apm-app",
+        "--lib"
+      ],
+      "exit_code": 0,
+      "seconds": 0.315,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 2,
+      "expected_tests": 2,
+      "test_summaries": [
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ],
+      "log": "attribute-macro-private-module-rustc.log.gz"
+    },
+    {
+      "label": "attribute-macro-private-module-relax",
+      "engine": "relax",
+      "command": [
+        "$FOLLOWUP/relax/target/release/relax",
+        "test",
+        "--no-live",
+        "apm-app",
+        "--lib"
+      ],
+      "exit_code": 0,
+      "seconds": 0.716,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 2,
+      "expected_tests": 2,
+      "test_summaries": [
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s"
+      ],
+      "log": "attribute-macro-private-module-relax.log.gz"
+    }
+  ],
+  "inputs": {
+    "sekka": {
+      "commit": "7dcf88e3b7f3391ec498a53a28555d02ba8fb14a",
+      "status": " M flake.nix\n"
+    },
+    "relax": {
+      "commit": "d09dcd17fa766b42e2f304fcdecfb489b2d00078",
+      "status": ""
+    },
+    "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13) (built from a source tarball)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.3\n",
+    "runner_sha256": "ceacd35f0729c6051838774363f32dee99bb3fe6e142c1d53a9fb54b43c48fd9",
+    "cpu_budget": "8",
+    "lockfiles": {
+      "apps/hotaru/Cargo.lock": "4f6322fac4e99a444a5fd15c01b55b96290ee87e3091470c825f5ca55e1faa83",
+      "desktop/aizome/Cargo.lock": "7d5e3d4cf544cee4bf18ce39d694cbeb1ac67bf39a933b9c086b19df78de84fc",
+      "installer/genkan/rust/system/session-env/Cargo.lock": "9f003f886509a52e92a065607ebb1978df254a32048e7b8a661ba362f7e24b92",
+      "rust/Cargo.lock": "29540938499a63d4edb8bcbcad595257c5125b50feef0f74b295b6370bd3573a"
+    },
+    "fixtures": {
+      "sse2_safe_byte_intrinsics.rs": "4a23024be46dc06338da79e1fdb800a517becba667533d63b6da7974cdef1588",
+      "macro_expansion_textual_scope.rs": "7a53dde4a3adda12866509f33ef74b5643c1951967c6781ffb2f5b6fea69760e",
+      "exported_macro_and_value_reexport.rs": "8a2ef7e792626ff0f7c940057c2bcb1d8c2a16d9f9a1888bf8543f71b3a6e21f",
+      "macro_inner_use.rs": "7f1ee58d9cc03dfad8c0b73c828710d46f4593327d51b3e9d0a5652a5d566383",
+      "macro_file_order.rs": "91a960e3b4404dde66e05f1d98adb813d7820865732ef1bf7b3edd789bd1c186",
+      "macro_file_shadow.rs": "95b24c355864766e8367eb41bba06abc992e77a23de8c57a67e095f4560e8661",
+      "sse2_load_requires_unsafe_reject.rs": "259489cad5083facdeb5c7537ef102b3649c18dc544f5b5dbdbb4fa3807279bb",
+      "strict_errors/exported_macro_builtin_reexport.rs": "2c86c5caecfd9a0384ce6957b75d7ee2f812528a168980d4e40c9cffb41a610f",
+      "strict_errors/exported_macro_absolute_import.rs": "9b9c5842e697702463d993c50a229798787a301686090093d034eb1727032d0e",
+      "macro_inner_use_before_module_reject.rs": "f2da1438bafd91129bf0a7c81e0b0b3d160e08e2c23f5430cd912269a158d920",
+      "macro_file_before_module_reject.rs": "3cc70bc380250d6c74e11bf81e0f3babc5a0e59610024311001a599cd66d8865",
+      "macro_inner_use/consumer.rs": "615bef0709c0f280375fc4032b82b4ad64dfcac3235862f214d64ab62a5e371c",
+      "macro_inner_use/definitions.rs": "34ae8cd4527d9784e43c9108b8787b248602db1255bad7336bbe27931d3435f8",
+      "macro_file_order/definitions.rs": "c430005927f800f3e98e334049c96f7b62ab58583620a74e3abd1b8c9bdf77a7",
+      "macro_file_shadow/definitions.rs": "e8dab31311c469304531e3cac6828cdfa2611e49ef4f24739ed74d73af40a958",
+      "macro_file_shadow/outer.rs": "9029b8e3a9025625ba7188fe628d592c24d0637d363abce233429a8277b9bf1f",
+      "macro_file_shadow/outer/inner.rs": "31e0eab3c4a97fc736624674e61bbbf7a3745dae19b0b7f4072357c97a0b0814",
+      "attribute_macro_private_module/Cargo.toml": "485dadfc4f5cc98380e4f34cd785740e605fe96826ee9f8a0b4a26b5c867d05b",
+      "attribute_macro_private_module/app/Cargo.toml": "48ed663506386800c966db8690f2aec0247c9c858fa17fbf87f2d3c281180e46",
+      "attribute_macro_private_module/dep/Cargo.toml": "b56941f8347cffb96a9a8c80e29b15b34aa1d0ddf9da4c68cd059cea809b9771",
+      "attribute_macro_private_module/mac/Cargo.toml": "48d8919ef7c8cbb703df1df80ba9dcee9413c1d7f957727fc9180e64303d6e1e",
+      "attribute_macro_private_module/mac/src/lib.rs": "0d521273be2ad0e93c06b90f91a05a8f9e0aa5f045c70b2982e83aa2bbacb41a",
+      "attribute_macro_private_module/dep/src/lib.rs": "917d7f3db6313852a437fdaeaea7f9cb09491ffc32b7b62482b4a60d57a61550",
+      "attribute_macro_private_module/app/src/lib.rs": "4263a8d7ecaa9a11a996fea72bdfc30557b0766d32dfd8442a15628bcecb757d"
+    }
+  }
+}

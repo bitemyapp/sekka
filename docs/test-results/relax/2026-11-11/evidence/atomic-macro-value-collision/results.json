@@ -1,0 +1,144 @@
+{
+  "mode": "regressions",
+  "runs": [
+    {
+      "label": "exported_macro_and_value_reexport-rustc-compile",
+      "engine": "rustc",
+      "command": [
+        "rustc",
+        "--edition=2024",
+        "-O",
+        "--test",
+        "$EXPERIMENT/import/relax/libs/relax/compiler/tests/exported_macro_and_value_reexport.rs",
+        "-o",
+        "$EXPERIMENT/atomic-macro-value-collision/exported_macro_and_value_reexport-rustc"
+      ],
+      "exit_code": 0,
+      "seconds": 0.164,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "test_summaries": [],
+      "log": "exported_macro_and_value_reexport-rustc-compile.log.gz"
+    },
+    {
+      "label": "exported_macro_and_value_reexport-rustc",
+      "engine": "rustc",
+      "command": [
+        "$EXPERIMENT/atomic-macro-value-collision/exported_macro_and_value_reexport-rustc"
+      ],
+      "exit_code": 0,
+      "seconds": 0.004,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "test_summaries": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ],
+      "log": "exported_macro_and_value_reexport-rustc.log.gz"
+    },
+    {
+      "label": "exported_macro_and_value_reexport-relax",
+      "engine": "relax",
+      "command": [
+        "$EXPERIMENT/relax/target/release/relax",
+        "test",
+        "$EXPERIMENT/import/relax/libs/relax/compiler/tests/exported_macro_and_value_reexport.rs"
+      ],
+      "exit_code": 0,
+      "seconds": 0.214,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "test_summaries": [
+        "test result: 1 passed; 0 failed. compiled 1 fns (36 bytes, 13 RIR insts): typeck 0.02 ms, lower 0.36 ms, opt 0.40 ms, codegen 1.92 ms"
+      ],
+      "log": "exported_macro_and_value_reexport-relax.log.gz"
+    },
+    {
+      "label": "exported_macro_builtin_reexport_reject-rustc-compile",
+      "engine": "rustc",
+      "command": [
+        "rustc",
+        "--edition=2024",
+        "-O",
+        "--test",
+        "$EXPERIMENT/import/relax/libs/relax/compiler/tests/exported_macro_builtin_reexport_reject.rs",
+        "-o",
+        "$EXPERIMENT/atomic-macro-value-collision/exported_macro_builtin_reexport_reject-rustc"
+      ],
+      "exit_code": 1,
+      "seconds": 0.032,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": "E0255",
+      "test_summaries": [],
+      "log": "exported_macro_builtin_reexport_reject-rustc-compile.log.gz"
+    },
+    {
+      "label": "exported_macro_builtin_reexport_reject-relax",
+      "engine": "relax",
+      "command": [
+        "$EXPERIMENT/relax/target/release/relax",
+        "test",
+        "$EXPERIMENT/import/relax/libs/relax/compiler/tests/exported_macro_builtin_reexport_reject.rs"
+      ],
+      "exit_code": 101,
+      "seconds": 0.164,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": "E0255",
+      "test_summaries": [],
+      "log": "exported_macro_builtin_reexport_reject-relax.log.gz"
+    },
+    {
+      "label": "exported_macro_absolute_import_reject-rustc-compile",
+      "engine": "rustc",
+      "command": [
+        "rustc",
+        "--edition=2024",
+        "-O",
+        "--test",
+        "$EXPERIMENT/import/relax/libs/relax/compiler/tests/exported_macro_absolute_import_reject.rs",
+        "-o",
+        "$EXPERIMENT/atomic-macro-value-collision/exported_macro_absolute_import_reject-rustc"
+      ],
+      "exit_code": 1,
+      "seconds": 0.032,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": "E0255",
+      "test_summaries": [],
+      "log": "exported_macro_absolute_import_reject-rustc-compile.log.gz"
+    },
+    {
+      "label": "exported_macro_absolute_import_reject-relax",
+      "engine": "relax",
+      "command": [
+        "$EXPERIMENT/relax/target/release/relax",
+        "test",
+        "$EXPERIMENT/import/relax/libs/relax/compiler/tests/exported_macro_absolute_import_reject.rs"
+      ],
+      "exit_code": 101,
+      "seconds": 0.164,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": "E0255",
+      "test_summaries": [],
+      "log": "exported_macro_absolute_import_reject-relax.log.gz"
+    }
+  ],
+  "inputs": {
+    "sekka": {
+      "commit": "7dcf88e3b7f3391ec498a53a28555d02ba8fb14a",
+      "status": " M flake.nix\n"
+    },
+    "relax": {
+      "commit": "f18e1d2afe4b06d163fb13949683fad7f195deff",
+      "status": ""
+    },
+    "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13) (built from a source tarball)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.3\n",
+    "runner_sha256": "6d6a721576b08b53314aa36b80f84c5f3dd52f90202c88b85aed16a3e71989fe",
+    "cpu_budget": "8"
+  }
+}

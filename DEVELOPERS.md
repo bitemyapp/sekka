@@ -306,6 +306,42 @@ Format references: Google's [Depthcharge x86 boot path](https://chromium.googles
 [kernel buffer limits](https://chromium.googlesource.com/chromiumos/platform/depthcharge/+/4c941ba895a7df6e7e8ea7a4e1db820d55338d9b/src/image/Kconfig),
 and [vboot GPT validation](https://chromium.googlesource.com/chromiumos/platform/vboot_reference/+/72043688a9842a31a92e4829fe71ee94c4939fc8/firmware/lib/cgptlib/cgptlib_internal.c).
 
+### Relax compiler experiment
+
+`nix develop .#relax` adds Relax's OpenSSL host dependency, Python and the
+Node runtime used by its WebAssembly backend tests to the
+root-locked Aizome development environment. It is an opt-in experiment shell;
+ordinary packages still use their existing Cargo workspaces and compiler.
+Build the standalone runner from the compiler revision recorded in the
+[follow-up report](docs/test-results/relax/2026-11-11-followup/README.md), then run:
+
+```sh
+nix develop .#relax
+cargo build --release --manifest-path /path/to/relax/Cargo.toml -p relax-runner --bin relax -j 8
+python3 scripts/relax-experiment.py regressions --relax-root /path/to/relax --output /path/to/evidence/regressions
+python3 scripts/relax-experiment.py components --relax-root /path/to/relax --output /path/to/evidence/components
+python3 scripts/relax-experiment.py check --package aizome-comp --relax-root /path/to/relax --output /path/to/evidence/compositor
+```
+
+Each output directory holds commands, revisions, exit codes, wall times and
+logs, with separate Cargo and Relax caches. Choose a new evidence directory
+for each compiler revision; the harness refuses to replace earlier results.
+Use `--package NAME` to narrow components, `--case NAME` for reduced compiler
+regressions, `--engine rustc|relax` for one side, and `--repeat N` to rerun a
+component with its cache intact. No socket tests are excluded. `--timeout`
+bounds an individual experiment command and records a timeout as a failure.
+
+Relax's `--allow-c` uses Cargo/rustc for native build dependencies and their
+build scripts. A successful check does not establish that every function was
+JIT-compiled; successful tests exercise only their covered paths. The report
+separates these results from the Buck2 experiment's build/cache measurements.
+Neither experiment qualifies an ISO or physical hardware.
+
+The [cache and worktree comparison](docs/test-results/relax/2026-11-11-cache-comparison/README.md)
+records matched component-test timings and physical cache storage for Relax and
+Buck2 + NativeLink, with cold, warm, identical-worktree and edited-worktree cases.
+It distinguishes those measurements from the older full native-build evidence.
+
 ### Component development
 
 The [migration record](docs/migration.md) explains retained work, exclusions,
