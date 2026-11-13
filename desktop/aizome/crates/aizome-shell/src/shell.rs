@@ -1613,9 +1613,26 @@ impl Shell {
     fn refresh_clock(&mut self, cx: &mut Cx<Msg>) {
         self.now = Local::now();
         let day = self.settings.theme_now() == aizome_theme::ThemeName::Day;
+        let theme_changed = self.theme_day != day;
         self.theme_changed(day);
         if self.panel.as_ref().is_some_and(|p| p.widget == TrayWidget::Clock) {
             self.refresh_agenda(cx);
+        }
+        // A clock tick changes the bars, lock screens and the open clock
+        // panel, not every desktop, Deskbar, palette and notification.
+        // A theme transition retains the conservative whole-shell pass.
+        if !theme_changed {
+            cx.skip_view_refresh();
+            for (&window, surface) in &self.surfaces {
+                if matches!(surface, Surface::MenuBar { .. } | Surface::Lock { .. }) {
+                    cx.refresh_window(window);
+                }
+            }
+            if let Some(p) = &self.panel
+                && p.widget == TrayWidget::Clock
+            {
+                cx.refresh_window(p.window);
+            }
         }
     }
 
@@ -1691,7 +1708,15 @@ impl Program for Shell {
                 self.sync_status_items();
                 self.session_events(cx);
             }
-            Msg::Meters(r) => self.meters = r,
+            Msg::Meters(r) => {
+                self.meters = r;
+                cx.skip_view_refresh();
+                for screen in &self.screens {
+                    if let Some(bar) = screen.bar {
+                        cx.refresh_window(bar);
+                    }
+                }
+            }
             Msg::Awake(s) => self.keep_awake_status(s, cx),
             Msg::AwakeSet(r) => self.keep_awake_set(r, cx),
             Msg::Holders(due) => self.holders_due(due, cx),
@@ -1760,7 +1785,15 @@ impl Program for Shell {
             Msg::Recording(serial, e) => self.recording_event(serial, e, cx),
             Msg::RecordTick(serial, tick) => self.record_tick(serial, tick, cx),
             Msg::MenuClosed(n) => self.menu_closed(n),
-            Msg::Agenda(a) => self.agenda = a,
+            Msg::Agenda(a) => {
+                self.agenda = a;
+                cx.skip_view_refresh();
+                if let Some(p) = &self.panel
+                    && p.widget == TrayWidget::Clock
+                {
+                    cx.refresh_window(p.window);
+                }
+            }
             Msg::FlashDone(n) => self.flash_done(n, cx),
             Msg::Wallpaper(key, image) => {
                 self.wallpaper_ready(key, image);

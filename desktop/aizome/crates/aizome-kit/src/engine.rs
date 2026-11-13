@@ -304,6 +304,10 @@ pub(crate) struct Core {
     pub bg_tx: Sender<AnyMsg>,
     pub bg_rx: Receiver<AnyMsg>,
     pub stats: Stats,
+    /// This application's current update uses the default, whole-app
+    /// refresh. Explicit refresh requests only add dirty windows; they
+    /// never clear work requested by an earlier message or by the kit.
+    pub refresh_all_after_update: bool,
     pub alerts: HashMap<u64, AlertState>,
     pub panels: HashMap<u64, crate::dialogs::PanelState>,
     pub next_id: u64,
@@ -336,6 +340,7 @@ impl Core {
             bg_tx,
             bg_rx,
             stats: Stats::default(),
+            refresh_all_after_update: true,
             alerts: HashMap::new(),
             panels: HashMap::new(),
             next_id: 1,
