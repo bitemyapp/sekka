@@ -951,14 +951,9 @@ impl Program for Utsushi {
             }
             Msg::StageClick(n) => {
                 if n >= 2 {
-                    // The first click toggled; a double click is for full
-                    // screen, so it goes back.
-                    self.toggle(cx);
                     if self.has_video() {
                         cx.set_fullscreen(self.window, !self.fullscreen);
                     }
-                } else if self.info.is_some() {
-                    self.toggle(cx);
                 } else if self.status == Status::Empty {
                     cx.send(Msg::OpenPanel);
                 }
