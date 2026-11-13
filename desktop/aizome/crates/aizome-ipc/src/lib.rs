@@ -491,7 +491,8 @@ pub enum Synthetic {
     /// `"up"`) or evdev code.
     Key { key: String, pressed: bool },
     /// Presses a chord's keys in order and releases them in reverse:
-    /// `"super+shift+3"`.
+    /// `"super+shift+3"`. Names are read under the keymap in force: the
+    /// key that holds that modifier or types that letter there.
     Chord { keys: String },
     /// Closes or opens the laptop's lid, as its switch does.
     Lid { closed: bool },

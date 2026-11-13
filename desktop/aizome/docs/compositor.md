@@ -524,7 +524,8 @@ nix develop .#aizome --command cargo test -p aizome-comp
   picking, windows alone start at windows); and a window pick, for a
   share or ❖⇧4, keeps its release from the window under it.
 - `tests/keys.rs`: ❖ as Ctrl, Ctrl+Shift in terminals, ❖ for kit apps,
-  system and shell chords.
+  system and shell chords, and a synthesized ❖V under swapped modifier
+  keys and Dvorak.
 - `tests/settings.rs`: tab double-click, scroll factor, sticky and slow
   keys.
 - `tests/displays.rs`: outputs off and on (from IPC and the settings),

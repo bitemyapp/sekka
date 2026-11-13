@@ -1,6 +1,7 @@
 //! Keys: the command key (❖) translated to Ctrl (Ctrl+Shift in
 //! terminals) for apps that don't use Aizome's kit, the system's chords
-//! kept for the compositor, and shell bindings sent to subscribers.
+//! kept for the compositor, shell bindings sent to subscribers, and
+//! synthesized chords pressed as the keyboard that typed last has them.
 
 mod common;
 
@@ -63,6 +64,59 @@ fn kit_apps_keep_super() {
             a.wait_seen("modifiers released", |s| s.mods & (CTRL | LOGO) == 0);
         }
     }
+}
+
+/// A chord means what it says, and the keymap of the keyboard that typed
+/// last reads it. Koe pastes into Aizome's apps with ❖V, which must reach
+/// them as ❖V whichever key holds ❖ on that keyboard and wherever its
+/// layout has v: with left Alt and Super swapped (as Genkan suggests for a
+/// PC keyboard), Sumi got Alt+V and typed a v.
+#[test]
+fn a_chord_means_what_it_says_on_the_keyboard_that_typed_last() {
+    const ALT: u32 = 8;
+    const KEY_V: u32 = 47;
+    // Where Dvorak has v: the full stop's key on a US keyboard.
+    const KEY_DOT: u32 = 52;
+    const KEY_SPACE: u32 = 57;
+    const PC: &str = "Logitech K120";
+    // The layout's variant, the keyboard's own keys, and the key that types
+    // v there.
+    let keyboards = [
+        ("", "altwin:swap_lalt_lwin", KEY_V),
+        ("", "ctrl:swap_lwin_lctl", KEY_V),
+        ("dvorak", "", KEY_DOT),
+        ("dvorak", "altwin:swap_lalt_lwin", KEY_DOT),
+    ];
+    // What the app saw of ❖V on each: the key and the modifiers held.
+    let saw = keyboards.map(|(variant, options, _)| {
+        // The keyboard's own keys, as Settei's keyboard setup saves them.
+        let settings = format!(
+            "[appearance]\neffects = \"austere\"\n\
+             [input.keyboard]\nlayouts = [\"us\"]\nvariant = \"{variant}\"\noptions = \"\"\n\
+             [[input.keyboards]]\nname = \"{PC}\"\nid = \"046d:c31c\"\noptions = \"{options}\"\n"
+        );
+        let c = Compositor::start(Options { settings: &settings, ..Default::default() });
+        let a = c.client(Spec::new("org.aizome.Sumi", 0x2222cc));
+        c.wait_window("org.aizome.Sumi");
+        a.wait_seen("keyboard focus", |s| s.keyboard_focus);
+        // It types, so the keymap is its own.
+        let space = |pressed| Synthetic::KeyOn { keyboard: PC.into(), key: "space".into(), pressed };
+        c.ok(Request::Synthesize {
+            events: vec![
+                Synthetic::PlugKeyboard { name: PC.into(), id: "046d:c31c".into(), bus: aizome_ipc::KeyboardBus::Usb },
+                space(true),
+                space(false),
+            ],
+        });
+        a.wait_seen("the keyboard's space bar", |s| s.keys.iter().any(|(k, _)| *k == KEY_SPACE));
+        chord(&c, "super+v");
+        // The chord's letter, on whichever of the two keys it came.
+        let letter = |s: &Seen| s.keys.iter().find(|(k, _)| [KEY_V, KEY_DOT].contains(k)).copied();
+        let (key, mods) = letter(&a.wait_seen("the chord's letter", |s| letter(s).is_some())).unwrap();
+        a.wait_seen("modifiers released", |s| s.mods & (SHIFT | CTRL | ALT | LOGO) == 0);
+        (variant, options, key, mods & (SHIFT | CTRL | ALT | LOGO))
+    });
+    assert_eq!(saw, keyboards.map(|(variant, options, v)| (variant, options, v, LOGO)));
 }
 
 #[test]

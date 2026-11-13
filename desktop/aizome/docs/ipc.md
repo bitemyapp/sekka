@@ -108,7 +108,11 @@ Protocol version: **1** (`version` reports it).
   `return`, `escape`, `space`, `grave`, `up`/`down`/`left`/`right`, letters,
   digits, punctuation (`,` `.` `/` `;` `'` `[` `]` `\` `-` `=`), `f1`…`f12`,
   `print`) or an evdev code;
-- `chord {keys}`: `"super+shift+3"` presses in order, releases in reverse;
+- `chord {keys}`: `"super+shift+3"` presses in order, releases in reverse.
+  Its names mean what they say under the keymap in force: `super` is the
+  key that holds ❖ where modifier keys are swapped, `v` the key that
+  types v in the layout in use (the usual key when none does). An evdev
+  code is that key;
 - `lid {closed}`: the laptop's lid closing or opening, as its switch says
   (`aizomectl input lid closed`);
 - `plug-keyboard {name, id, bus?}` and `unplug-keyboard {name}`: a keyboard
@@ -116,7 +120,8 @@ Protocol version: **1** (`version` reports it).
 - `key-on {keyboard, key, pressed}`: a key, as `key`, on a keyboard
   `plug-keyboard` plugged in, so its own keys' settings
   (`[[input.keyboards]]`) apply. `key` and `chord` come from no keyboard,
-  and leave the keymap as the last keyboard left it.
+  and leave the keymap as the last keyboard left it. `key` and `key-on`
+  press the key a US keyboard has under that name, whatever it does now.
 
 `aizomectl input key NAME` and `input button NAME` press and release
 (a tap); add `down` or `up` for one half. `aizomectl input type TEXT` taps
