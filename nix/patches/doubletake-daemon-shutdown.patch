@@ -1,0 +1,21 @@
+diff --git a/cmd/doubletake/main.go b/cmd/doubletake/main.go
+--- a/cmd/doubletake/main.go
++++ b/cmd/doubletake/main.go
+@@ -646,7 +646,6 @@ func runDaemon(cfg daemon.Config) {
+ 		<-sigCh
+ 		log.Println("[daemon] shutting down...")
+ 		cancel()
+-		d.Shutdown()
+ 		<-sigCh
+ 		log.Println("[daemon] forced exit")
+ 		os.Exit(1)
+@@ -655,6 +654,9 @@ func runDaemon(cfg daemon.Config) {
+ 	if err := d.Run(ctx); err != nil {
+ 		log.Fatalf("[daemon] %v", err)
+ 	}
++	// Wait on the main goroutine: returning from main otherwise exits while
++	// Shutdown is still stopping capture processes and closing portal sessions.
++	d.Shutdown()
+ }
+ 
+ func newCredentialStore(backend, filePath string) (*airplay.CredentialStore, error) {

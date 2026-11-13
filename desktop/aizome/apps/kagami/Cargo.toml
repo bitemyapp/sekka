@@ -1,0 +1,17 @@
+[package]
+name = "aizome-kagami"
+description = "Kagami, AirPlay screen mirroring with audio"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+aizome-kit.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+libc = "0.2"
+tempfile = "3"
+zbus = { version = "5.19", default-features = false, features = ["async-io", "blocking-api"] }
+plist = "1.8"

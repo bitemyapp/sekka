@@ -1,0 +1,388 @@
+Experimental channel-6 P2P GO context. Opt-in only; default settings unchanged.
+Design evidence: https://github.com/t4t5/owly/pull/21 (AX211, not BE211 qualification).
+Uses nl80211 UAPI, local MAC, stock firmware and the existing recovery journal.
+
+diff --git a/src/config.rs b/src/config.rs
+index d57acd0..9042fd6 100644
+--- a/src/config.rs
++++ b/src/config.rs
+@@ -87,6 +87,7 @@ impl Config {
+             ));
+         }
+         Ok(Settings {
++            p2p_go_trial: option_env!("SEKKA_AIRPLAY_GO_TRIAL") == Some("1"),
+             station: self.station,
+             allow_untested: self.allow_untested,
+             reconnect_after: self.reconnect_after,
+diff --git a/src/injection/mod.rs b/src/injection/mod.rs
+index f70494c..6dd2816 100644
+--- a/src/injection/mod.rs
++++ b/src/injection/mod.rs
+@@ -72,6 +72,8 @@ pub fn hostapd() -> PathBuf {
+ /// How the backend is set up on this machine (`/etc/owly/radio.toml`).
+ #[derive(Debug, Clone)]
+ pub struct Settings {
++    /// Opt-in channel-6 P2P GO acknowledgement experiment. No driver reload.
++    pub p2p_go_trial: bool,
+     /// The Wi-Fi interface to use; else the first station.
+     pub station: Option<String>,
+     /// Run on a card the quirks table doesn't mark tested.
+diff --git a/src/injection/setup.rs b/src/injection/setup.rs
+index fab1693..c00817e 100644
+--- a/src/injection/setup.rs
++++ b/src/injection/setup.rs
+@@ -44,9 +44,13 @@ pub(crate) fn prepare(
+         journal,
+         station,
+     };
+-    let result = match s.station.quirk.mode {
+-        Mode::Shared => s.shared(),
+-        Mode::Exclusive | Mode::ActiveMonitor => s.exclusive(),
++    let result = if settings.p2p_go_trial {
++        s.connected_go()
++    } else {
++        match s.station.quirk.mode {
++            Mode::Shared => s.shared(),
++            Mode::Exclusive | Mode::ActiveMonitor => s.exclusive(),
++        }
+     };
+     result.inspect_err(|_| {
+         if let Err(stuck) = s.journal.undo(ops) {
+@@ -63,6 +67,67 @@ struct Setup<'a> {
+ }
+ 
+ impl Setup<'_> {
++    /// An experimental, separate channel-6 GO context for receive ACKs.
++    /// Keep the associated station intact; refuse unsupported concurrency.
++    fn connected_go(&mut self) -> Result<Prepared, Error> {
++        let ops = self.ops;
++        let w = self
++            .station
++            .wiphy
++            .as_ref()
++            .ok_or_else(|| Error::no_radio("No Wi-Fi capabilities"))?;
++        if !w.channel(2437).is_some_and(|c| c.may_transmit())
++            || !w.supports(IfType::Other(9))
++            || !w
++                .combinations
++                .iter()
++                .any(|c| c.channels >= 2 && c.allows(&[IfType::Station, IfType::Other(9)]))
++        {
++            return Err(Error::no_radio(
++                "This card cannot run a permitted channel-6 GO beside its station",
++            ));
++        }
++        if ops.link_freq(&self.station.name).is_none() || !ops.gateway_reachable(&self.station.name)
++        {
++            return Err(Error::not_now(
++                "The connected GO trial requires working guest Wi-Fi",
++            ));
++        }
++        for name in [AP, MONITOR, super::AWDL_IFACE] {
++            if ops.exists(name) {
++                return Err(Error::not_now(format!(
++                    "Refusing existing interface {name}"
++                )));
++            }
++        }
++        use std::io::Read;
++        let mut address = [0u8; 6];
++        std::fs::File::open("/dev/urandom")
++            .and_then(|mut f| f.read_exact(&mut address))
++            .map_err(|e| Error::no_radio(format!("Local address generation failed: {e}")))?;
++        address[0] = (address[0] & !3) | 2;
++        let mac = MacAddr(address);
++        self.record(Step::Interface { name: AP.into() })?;
++        if let Err(e) = ops.add_iface(&self.station.phy, AP, Kind::P2pGo) {
++            let _ = self.journal.discard_last();
++            return Err(Error::no_radio(format!("Creating GO context: {e}")));
++        }
++        ops.set_managed(AP, false);
++        ops.sysctl(&format!("net/ipv6/conf/{AP}/disable_ipv6"), "1")
++            .and_then(|()| ops.set_mac(AP, mac))
++            .and_then(|()| ops.set_up(AP, true))
++            .and_then(|()| ops.start_p2p_go(AP, mac))
++            .map_err(|e| Error::no_radio(format!("Starting channel-6 GO context: {e}")))?;
++        self.monitor(Kind::Monitor { active: false }, mac)?;
++        tracing::info!(station = %self.station.name, %mac,
++            "experimental connected P2P GO on channel 6; station unchanged");
++        let radio = RadioConstraints {
++            channel: Channel(6),
++            presence: Presence::Fixed,
++        };
++        Ok(self.finish(Mode::Shared, radio, mac, Announce::FIXED, None))
++    }
++
+     fn record(&mut self, step: Step) -> Result<(), Error> {
+         self.journal.record(step).map_err(|e| {
+             Error::no_radio(format!(
+diff --git a/src/nl80211.rs b/src/nl80211.rs
+index c44ade2..b72225f 100644
+--- a/src/nl80211.rs
++++ b/src/nl80211.rs
+@@ -306,6 +306,7 @@ pub enum Kind {
+     Station,
+     Adhoc,
+     Ap,
++    P2pGo,
+     /// A monitor; an active one ACKs unicast to its own address.
+     Monitor {
+         active: bool,
+@@ -318,6 +319,7 @@ impl Kind {
+             Kind::Station => IfType::Station,
+             Kind::Adhoc => IfType::Adhoc,
+             Kind::Ap => IfType::Ap,
++            Kind::P2pGo => IfType::Other(9),
+             Kind::Monitor { .. } => IfType::Monitor,
+         }
+     }
+@@ -345,12 +347,62 @@ impl Kind {
+     }
+ }
+ 
++fn go_beacon(mac: MacAddr) -> (Vec<u8>, Vec<u8>) {
++    // IEEE 802.11 beacon header and IEs; the firmware inserts TSF and TIM.
++    let mut h = vec![0u8; 36];
++    h[0] = 0x80;
++    h[4..10].fill(0xff);
++    h[10..16].copy_from_slice(&mac.0);
++    h[16..22].copy_from_slice(&mac.0);
++    h[32..34].copy_from_slice(&100u16.to_le_bytes());
++    h[34..36].copy_from_slice(&0x0421u16.to_le_bytes());
++    fn ie(dst: &mut Vec<u8>, kind: u8, bytes: &[u8]) {
++        dst.extend_from_slice(&[kind, bytes.len() as u8]);
++        dst.extend_from_slice(bytes);
++    }
++    ie(&mut h, 0, b"DIRECT-Sekka-test");
++    ie(&mut h, 1, &[0x8c, 0x12, 0x98, 0x24, 0xb0, 0x48, 0x60, 0x6c]);
++    ie(&mut h, 3, &[6]);
++    let mut t = Vec::new();
++    let mut ht = [0u8; 26];
++    ht[2] = 0x1b;
++    ht[3] = 0xff;
++    ie(&mut t, 45, &ht);
++    let mut op = [0u8; 22];
++    op[0] = 6;
++    ie(&mut t, 61, &op);
++    let mut p2p = vec![0x50, 0x6f, 0x9a, 9, 2, 2, 0, 0, 1, 3, 6, 0];
++    p2p.extend_from_slice(&mac.0);
++    ie(&mut t, 221, &p2p);
++    (h, t)
++}
++
+ /// An nl80211 connection.
+ pub struct Nl80211 {
+     genl: Genl,
+ }
+ 
+ impl Nl80211 {
++    /// Fixed HT20 channel-6 GO radio context. No IP services or station
++    /// authentication handler are attached to this diagnostic interface.
++    pub fn start_p2p_go(&mut self, ifindex: u32, mac: MacAddr) -> io::Result<()> {
++        let (head, tail) = go_beacon(mac);
++        let mut a = Attrs::new();
++        a.u32(ATTR_IFINDEX, ifindex)
++            .u32(ATTR_WIPHY_FREQ, 2437)
++            .u32(159, 1) // NL80211_ATTR_CHANNEL_WIDTH: HT20
++            .u32(160, 2437) // NL80211_ATTR_CENTER_FREQ1
++            .u32(ATTR_BEACON_INTERVAL, 100)
++            .u32(13, 2) // DTIM_PERIOD
++            .bytes(ATTR_SSID, b"DIRECT-Sekka-test")
++            .u32(126, 0) // HIDDEN_SSID_NOT_IN_USE
++            .u32(53, 0) // AUTHTYPE_OPEN_SYSTEM
++            .bytes(36, &[12, 24, 48]) // basic OFDM rates in 500 kbps units
++            .u8(96, 1) // AP_ISOLATE
++            .bytes(14, &head) // BEACON_HEAD
++            .bytes(15, &tail); // BEACON_TAIL
++        self.genl.request(15, 0, &a).map(drop) // NL80211_CMD_START_AP
++    }
+     pub fn open() -> io::Result<Nl80211> {
+         Ok(Nl80211 {
+             genl: Genl::open("nl80211")?,
+@@ -473,6 +525,28 @@ impl Nl80211 {
+ #[cfg(test)]
+ mod tests {
+     use super::*;
++
++    #[test]
++    fn go_beacon_elements_are_bounded_and_addressed_to_the_context() {
++        let mac = MacAddr([2, 3, 4, 5, 6, 7]);
++        let (head, tail) = go_beacon(mac);
++        assert_eq!(&head[10..16], &mac.0);
++        assert_eq!(&head[16..22], &mac.0);
++        for mut ies in [&head[36..], &tail[..]] {
++            while !ies.is_empty() {
++                assert!(ies.len() >= 2);
++                let size = usize::from(ies[1]) + 2;
++                assert!(size <= ies.len());
++                if ies[0] == 3 {
++                    assert_eq!(&ies[2..size], &[6]);
++                }
++                if ies[0] == 221 {
++                    assert_eq!(&ies[size - 6..size], &mac.0);
++                }
++                ies = &ies[size..];
++            }
++        }
++    }
+     use crate::netlink::attr;
+ 
+     fn monitor_flags(kind: Kind, new: bool) -> Option<Vec<u8>> {
+diff --git a/src/sys.rs b/src/sys.rs
+index 28f0e11..30c0138 100644
+--- a/src/sys.rs
++++ b/src/sys.rs
+@@ -59,6 +59,12 @@ pub trait Ops: Send + Sync {
+     /// Joins AWDL's BSSID as an HT20 ad-hoc cell on a fixed channel.
+     fn join_ibss(&self, iface: &str, freq: u32) -> io::Result<()>;
+     fn leave_ibss(&self, iface: &str) -> io::Result<()>;
++    fn start_p2p_go(&self, _iface: &str, _mac: MacAddr) -> io::Result<()> {
++        Err(io::Error::new(
++            io::ErrorKind::Unsupported,
++            "P2P GO is unavailable",
++        ))
++    }
+     /// Sets `/proc/sys/<key>`, with `key` in slashes.
+     fn sysctl(&self, key: &str, value: &str) -> io::Result<()>;
+     /// mt76's debugfs directory for this wiphy.
+@@ -140,6 +146,9 @@ fn sysfs_id(path: &Path) -> Option<String> {
+ }
+ 
+ impl Ops for System {
++    fn start_p2p_go(&self, iface: &str, mac: MacAddr) -> io::Result<()> {
++        Nl80211::open()?.start_p2p_go(self.ifindex(iface)?, mac)
++    }
+     fn wifi_interfaces(&self) -> Vec<String> {
+         let mut names: Vec<_> = fs::read_dir(NET)
+             .into_iter()
+diff --git a/tests/hwsim.rs b/tests/hwsim.rs
+index 73ffafd..7fa3cb5 100644
+--- a/tests/hwsim.rs
++++ b/tests/hwsim.rs
+@@ -201,6 +201,7 @@ fn settings(station: &str, mode: &str, run: &Path) -> Settings {
+     ))
+     .unwrap();
+     Settings {
++        p2p_go_trial: false,
+         station: Some(station.into()),
+         allow_untested: false,
+         // No NetworkManager in here to reconnect through.
+diff --git a/tests/injection.rs b/tests/injection.rs
+index 4b176fa..13a73b2 100644
+--- a/tests/injection.rs
++++ b/tests/injection.rs
+@@ -157,6 +157,7 @@ fn kind_name(k: Kind) -> &'static str {
+         Kind::Station => "managed",
+         Kind::Adhoc => "IBSS",
+         Kind::Ap => "AP",
++        Kind::P2pGo => "P2P-GO",
+         Kind::Monitor { active: false } => "monitor",
+         Kind::Monitor { active: true } => "active-monitor",
+     }
+@@ -204,7 +205,14 @@ impl Ops for FakeOps {
+         self.ifaces.lock().unwrap().contains_key(iface)
+     }
+     fn link_freq(&self, iface: &str) -> Option<u32> {
+-        if iface == AP {
++        if iface == AP
++            && self
++                .ifaces
++                .lock()
++                .unwrap()
++                .get(AP)
++                .is_some_and(|i| i.kind == "AP")
++        {
+             let ch = std::fs::read_to_string(self.dir.join("hostapd.channel")).ok()?;
+             return match ch.trim() {
+                 "6" => Some(2437),
+@@ -287,6 +295,10 @@ impl Ops for FakeOps {
+         i.freq = Some(freq);
+         Ok(())
+     }
++    fn start_p2p_go(&self, iface: &str, _: MacAddr) -> io::Result<()> {
++        self.call(format!("go {iface}"));
++        self.set_freq(iface, 2437)
++    }
+     fn join_ibss(&self, iface: &str, freq: u32) -> io::Result<()> {
+         self.call(format!("join {iface} {freq}"));
+         let no_ir = self
+@@ -421,6 +433,7 @@ impl Fx {
+ 
+     fn settings(&self) -> Settings {
+         Settings {
++            p2p_go_trial: false,
+             station: None,
+             allow_untested: false,
+             reconnect_after: None,
+@@ -503,6 +516,71 @@ fn intel(o: &mut FakeOps) {
+     o.device = Some("8086:51f0".into());
+ }
+ 
++fn go_capable(o: &mut FakeOps) {
++    intel(o);
++    let mut w = o.wiphy.lock().unwrap();
++    w.iftypes.push(IfType::Other(9));
++    w.combinations.push(Combination {
++        limits: vec![(1, vec![IfType::Station]), (1, vec![IfType::Other(9)])],
++        max: 2,
++        channels: 2,
++    });
++}
++
++#[tokio::test]
++async fn connected_go_preserves_station_and_cleans_up() {
++    let fx = Fx::with(go_capable);
++    let mut s = fx.settings();
++    s.p2p_go_trial = true;
++    let mut b = fx.backend_with(s);
++    b.up().await.unwrap();
++    assert_eq!(fx.ops.link_freq(STATION), Some(5220));
++    assert_eq!(fx.ops.link_freq(AP), Some(2437));
++    assert_eq!(fx.ops.mac(AP), fx.ops.mac(MONITOR));
++    assert_ne!(fx.ops.mac(AP), fx.ops.mac(STATION));
++    assert_eq!(fx.awdl().radio.presence, Presence::Fixed);
++    b.down().await.unwrap();
++    assert!(!fx.ops.exists(AP));
++    assert!(!fx.ops.exists(MONITOR));
++    assert_eq!(fx.ops.link_freq(STATION), Some(5220));
++    assert!(
++        !fx.ops
++            .calls()
++            .iter()
++            .any(|c| c == "down wlan0" || c == "managed wlan0 false")
++    );
++}
++
++#[tokio::test]
++async fn connected_go_cleans_up_after_partial_failure() {
++    let fx = Fx::with(|o| {
++        go_capable(o);
++        o.fail_monitor = true;
++    });
++    let mut s = fx.settings();
++    s.p2p_go_trial = true;
++    assert!(fx.backend_with(s).up().await.is_err());
++    assert!(!fx.ops.exists(AP));
++    assert_eq!(fx.ops.link_freq(STATION), Some(5220));
++}
++
++#[tokio::test]
++async fn connected_go_refuses_unsupported_or_illegal_radio() {
++    for forbidden_channel in [false, true] {
++        let fx = Fx::with(|o| {
++            if forbidden_channel {
++                go_capable(o);
++                o.wiphy.lock().unwrap().channels[0].no_ir = true;
++            }
++        });
++        let mut s = fx.settings();
++        s.p2p_go_trial = true;
++        assert!(fx.backend_with(s).up().await.is_err());
++        assert!(!fx.ops.exists(AP));
++        assert_eq!(fx.ops.link_freq(STATION), Some(5220));
++    }
++}
++
+ /// The MT7612U: an active monitor, 149 first.
+ fn mt7612u(o: &mut FakeOps) {
+     o.driver = "mt76x2u".into();

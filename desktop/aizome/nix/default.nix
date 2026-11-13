@@ -97,6 +97,18 @@ let
         workspace = pkgs.callPackage ./workspace.nix { };
       in
       rec {
+        doubletake = pkgs.callPackage ../../../nix/doubletake.nix { };
+        airplay-radio = pkgs.callPackage ../../../nix/airplay-radio.nix { };
+        airplay-peer-session = pkgs.callPackage ../../../nix/airplay-peer-session.nix { inherit airplay-radio; };
+        airplay = pkgs.callPackage ./airplay.nix {
+          inherit
+            workspace
+            fonts
+            doubletake
+            airplay-peer-session
+            version
+            ;
+        };
         aizome = pkgs.callPackage ./package.nix {
           libsecret = libsecretFor pkgs;
           yukimi = aizome-yukimi;
@@ -229,8 +241,9 @@ let
         AIZOME_FONT_DIR = "${self.packages.${pkgs.stdenv.hostPlatform.system}.fonts}";
         HOTARU_FONT_DIR = "${self.packages.${pkgs.stdenv.hostPlatform.system}.hotaruFonts}";
         HOTARU_RESOURCES_DIR = "${../../../apps/hotaru/resources}";
-        HOTARU_TERMINFO_DIR = "${
-          pkgs.runCommand "hotaru-development-terminfo" { nativeBuildInputs = [ pkgs.ncurses ]; } ''
+        HOTARU_TERMINFO_DIR = "${pkgs.runCommand "hotaru-development-terminfo"
+          { nativeBuildInputs = [ pkgs.ncurses ]; }
+          ''
             mkdir -p $out
             tic -x -o $out ${../../../apps/hotaru/resources/hotaru.terminfo}
           ''
