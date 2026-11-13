@@ -171,6 +171,24 @@
         # Aizome's workspace (desktop/aizome), which its `just` recipes and
         # aizome-dev enter.
         aizome = inputs.aizome.devShells.${system}.default;
+        # Editors need the native dependencies of every separate Cargo
+        # workspace, plus one toolchain independent of the user's rustup.
+        editor = pkgs.mkShell {
+          inputsFrom = [
+            self.devShells.${system}.default
+            self.devShells.${system}.aizome
+            kakehashi.shell
+          ];
+          inherit (self.devShells.${system}.aizome)
+            RUSTFLAGS
+            RUSTC_WRAPPER
+            WHISPER_DONT_GENERATE_BINDINGS
+            ;
+          RUSTC = "${pkgs.rustc}/bin/rustc";
+          CARGO = "${pkgs.cargo}/bin/cargo";
+          RUSTFMT = "${pkgs.rustfmt}/bin/rustfmt";
+          RUST_SRC_PATH = pkgs.rustPlatform.rustLibSrc;
+        };
         default = pkgs.mkShell {
           inputsFrom = [
             calamares
