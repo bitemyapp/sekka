@@ -1740,17 +1740,115 @@ def printers():
     S.quit()
 
 
+def bluetooth_switches():
+    """Each Bluetooth radio switch (hci0…), and whether it's blocked."""
+    lines = machine.succeed("rfkill -n -o DEVICE,TYPE,SOFT").splitlines()
+    return {dev: soft == "blocked" for dev, kind, soft in (ln.split() for ln in lines if ln.strip()) if kind == "bluetooth"}
+
+
+def controller_switch(mac):
+    """A controller's own radio switch: the kernel names it as BlueZ does the controller (hci0)."""
+    for path in machine.succeed("busctl --system tree --list org.bluez").split():
+        if re.fullmatch(r"/org/bluez/hci\d+", path) and mac in machine.succeed(
+            f"busctl --system get-property org.bluez {path} org.bluez.Adapter1 Address"
+        ):
+            return path.rsplit("/", 1)[1]
+    return None
+
+
+# Last: it restarts the machine.
+@part("Restart: Bluetooth switched off is still off after airplane mode and after a restart; its switch brings it back")
+def bluetooth_stays_off():
+    def switch_off_the_one_shown():
+        S.open("bluetooth")
+        mac = until("the pane's controller", lambda: controller_named(S.wait(name="bluetooth-name").get("value")))
+        S.click(S.control("bluetooth", "bluetooth", role="switch"))
+        until("powered off", lambda: "Powered: no" in machine.succeed(f"bluetoothctl show {mac}"))
+        # Its own radio switch keeps it off: BlueZ switches every controller
+        # that isn't blocked on again when it starts.
+        until("its radio switch blocked", lambda: bluetooth_switches().get(controller_switch(mac)))
+        S.quit()
+        return mac
+
+    until("both controllers on", lambda: len(bluetooth_powered()) == 2 and all(bluetooth_powered().values()))
+    first = switch_off_the_one_shown()
+    until("BlueZ to say why", lambda: "PowerState: off-blocked" in machine.succeed(f"bluetoothctl show {first}"))
+    # The other controller's switch is left alone.
+    assert sum(bluetooth_switches().values()) == 1, bluetooth_switches()
+    assert bluetooth_powered() == {m: m != first for m in bluetooth_powered()}, bluetooth_powered()
+
+    # Airplane mode on and off: the Bluetooth that was on comes back, the
+    # controller switched off stays off (BlueZ would switch on whatever is
+    # unblocked).
+    S.open("network")
+    S.click(S.control("network", "airplane", role="switch"))
+    until("every radio off", lambda: "unblocked" not in machine.succeed("rfkill -n -o SOFT"))
+    S.click(S.control("network", "airplane", role="switch"))
+    until("Wi-Fi on", lambda: "enabled" in machine.succeed("nmcli radio wifi"))
+    until("the other controller back on", lambda: bluetooth_powered() == {m: m != first for m in bluetooth_powered()})
+    time.sleep(3)
+    assert bluetooth_powered() == {m: m != first for m in bluetooth_powered()}, bluetooth_powered()
+    assert bluetooth_switches() == {h: h == controller_switch(first) for h in bluetooth_switches()}, bluetooth_switches()
+    S.quit()
+
+    # The other one off too (the pane shows the first that's on), so that
+    # what the restart must keep doesn't depend on which state file a
+    # virtual controller's switch gets.
+    second = switch_off_the_one_shown()
+    assert second != first, (first, second)
+    assert all(bluetooth_switches().values()), bluetooth_switches()
+    # systemd-rfkill saves what it saw once the switches have been quiet
+    # for five seconds.
+    until(
+        "the blocks saved",
+        lambda: (lambda saved: saved and set(saved) == {"1"})(
+            machine.succeed("cat /var/lib/systemd/rfkill/*bluetooth* 2>/dev/null || true").split()
+        ),
+        timeout=30,
+    )
+    machine.succeed("systemctl is-active systemd-rfkill.socket")
+    print(machine.succeed("grep -r . /var/lib/systemd/rfkill/"))
+
+    machine.shutdown()
+    machine.start()
+    session_up()
+    off = {first: False, second: False}
+    until("BlueZ to have both controllers", lambda: set(bluetooth_powered()) == set(off), timeout=60)
+    until(
+        "both blocked again",
+        lambda: all("PowerState: off-blocked" in machine.succeed(f"bluetoothctl show {m}") for m in off),
+        timeout=30,
+    )
+    # Long enough for BlueZ to have switched them on, as it did before.
+    time.sleep(5)
+    assert bluetooth_powered() == off, bluetooth_powered()
+    assert all(bluetooth_switches().values()), bluetooth_switches()
+
+    # The switch brings Bluetooth back: it unblocks every Bluetooth radio.
+    S.open("bluetooth")
+    switch = S.control("bluetooth", "bluetooth", role="switch")
+    assert switch.get("checked") is False, switch
+    S.click(switch)
+    until("both controllers on", lambda: bluetooth_powered() == {m: True for m in off})
+    assert not any(bluetooth_switches().values()), bluetooth_switches()
+    S.quit()
+
+
+def session_up():
+    """Alice's session, once the machine has started."""
+    machine.wait_for_unit("multi-user.target")
+    machine.wait_until_succeeds("ls /run/user/1000/ | grep -q '^aizome\\..*\\.sock$'", timeout=120)
+    machine.wait_until_succeeds("pgrep -u alice -x aizome-shell", timeout=60)
+    # The welcome tour stays out of the way.
+    machine.sleep(3)
+    for w in ipc("windows")["windows"]:
+        if w["app_id"].startswith("org.aizome.Annai"):
+            ipc(f"close {w['id']}")
+
 
 # The session, then each part.
 
-machine.wait_for_unit("multi-user.target")
-machine.wait_until_succeeds("ls /run/user/1000/ | grep -q '^aizome\\..*\\.sock$'", timeout=120)
-machine.wait_until_succeeds("pgrep -u alice -x aizome-shell", timeout=60)
-# The welcome tour stays out of the way.
-machine.sleep(3)
-for w in ipc("windows")["windows"]:
-    if w["app_id"].startswith("org.aizome.Annai"):
-        ipc(f"close {w['id']}")
+session_up()
 
 with subtest("the session is up"):
     print(json.dumps(ipc("outputs")["outputs"], indent=1))
