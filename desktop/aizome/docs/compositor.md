@@ -448,7 +448,9 @@ Notes for client authors:
   display its own back); a new one shows the first Desk no display shows,
   a Desk being added when there's none. Windows of Desks no display shows
   keep their places for when one does. Every display keeps a Desk, so
-  removing Desks stops at one each.
+  removing Desks stops at one each. In the overview, Delete removes the
+  Desk under the pointer as Remove in the bar's Desk menu does (one code
+  path, `Actions::remove_desk`), while no filter is typed.
 - **Overview** (⌃❖↑), **switcher** (❖Tab), **marking menu** (right press
   on a tab, or ⌃❖Space for the focused window: arrows, letters and digits
   pick, and the pointer only what it's over), **area screenshots** (❖⇧4; the shell borrows the picker with

@@ -53,6 +53,12 @@ pub trait Actions {
     /// Parks a Desk (its windows are told they're suspended) or unparks
     /// it; the current Desk isn't parked. True if that changed it.
     fn set_desk_parked(&mut self, desk: DeskId, park: bool) -> bool;
+    /// Removes a Desk, for the bar's Remove (IPC `remove-desk`) and the
+    /// overview's Delete alike: its windows join the Desk before it, a
+    /// display that showed it shows another, and the Desks are saved.
+    /// False, with nothing changed, when it's not one or can't go: every
+    /// display keeps a Desk, and the last Desk stays.
+    fn remove_desk(&mut self, desk: DeskId) -> bool;
     fn emit_desks(&mut self);
     fn stack(&mut self, a: WinId, b: WinId) -> bool;
     /// Stacks `b` before the `at`th of `a`'s tabs (`None`: after them).
@@ -353,6 +359,30 @@ impl Actions for State {
         for id in self.lg.r().wm.desk_windows(desk) {
             self.configure(id);
         }
+        true
+    }
+
+    fn remove_desk(&mut self, desk: DeskId) -> bool {
+        let l = self.lg.m();
+        let before = l.wm.current_desk();
+        let shown = l.wm.is_visible(desk);
+        let Some(r) = l.wm.remove_desk(desk) else { return false };
+        let changed = shown || l.wm.current_desk() != before;
+        let ids: Vec<WinId> = l.wm.windows().map(|w| w.id).collect();
+        for id in ids {
+            l.window_changed(id);
+        }
+        if changed {
+            self.az.window_outputs_dirty = true;
+            self.az.queue_redraw_all();
+        }
+        self.apply_refocus(r);
+        if self.lg.r().wm.current_desk() != before {
+            current_desk_changed(self);
+        } else {
+            self.emit_desks();
+        }
+        crate::config::save_desks(self);
         true
     }
 

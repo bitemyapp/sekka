@@ -173,26 +173,9 @@ fn wm_request(st: &mut State, req: Request) -> Result<Option<Response>, String> 
         }
         Request::RemoveDesk { desk } => {
             let desk = desk_arg(st, &desk)?;
-            let l = st.lg.m();
-            let before = l.wm.current_desk();
-            let shown = l.wm.is_visible(desk);
-            let r = l.wm.remove_desk(desk).ok_or("every display keeps a Desk, and the last Desk stays")?;
-            let changed = shown || l.wm.current_desk() != before;
-            let ids: Vec<WinId> = l.wm.windows().map(|w| w.id).collect();
-            for id in ids {
-                l.window_changed(id);
+            if !st.remove_desk(desk) {
+                return Err("every display keeps a Desk, and the last Desk stays".into());
             }
-            if changed {
-                st.az.window_outputs_dirty = true;
-                st.az.queue_redraw_all();
-            }
-            st.apply_refocus(r);
-            if st.lg.r().wm.current_desk() != before {
-                crate::actions::current_desk_changed(st);
-            } else {
-                st.emit_desks();
-            }
-            crate::config::save_desks(st);
             Response::Ok
         }
         Request::MoveDesk { desk, index } => {

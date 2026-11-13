@@ -117,6 +117,150 @@ fn a_parked_desk_suspends_its_windows_until_it_is_visited() {
     red.wait_seen("woken on arriving at its Desk", |s| !s.suspended);
 }
 
+/// Two Desks, as the settings name them.
+const MAIL_AND_BUILD: &str =
+    "[appearance]\neffects = \"austere\"\n\n[[desks]]\nname = \"Mail\"\n\n[[desks]]\nname = \"Build\"\n";
+
+/// A compositor with the Desks Mail and Build: a red window on Mail, the
+/// current Desk, with the keyboard, and a blue one on Build.
+fn mail_and_build() -> (Compositor, [TestClient; 2]) {
+    mail_and_build_with("")
+}
+
+/// The same, with more settings.
+fn mail_and_build_with(more: &str) -> (Compositor, [TestClient; 2]) {
+    let settings = format!("{MAIL_AND_BUILD}{more}");
+    let c = Compositor::start(Options { settings: &settings, ..Default::default() });
+    let red = c.client(Spec::new("test.red", 0xcc2222).title("Red"));
+    c.wait_window("test.red");
+    let blue = c.client(Spec::new("test.blue", 0x2222cc).title("Blue"));
+    let wb = c.wait_window("test.blue");
+    c.ok(Request::MoveToDesk { id: Some(wb.id), desk: aizome_ipc::DeskSel::Index(2), follow: false });
+    red.wait_seen("keyboard focus", |s| s.keyboard_focus);
+    (c, [red, blue])
+}
+
+/// The Desks' names in order, and which is current.
+fn desks(c: &Compositor) -> (Vec<String>, u32) {
+    match c.request(Request::Desks) {
+        aizome_ipc::Response::Desks { desks, current } => (desks.into_iter().map(|d| d.name).collect(), current),
+        other => panic!("{other:?}"),
+    }
+}
+
+/// The Desks `settings.toml` names.
+fn saved_desks(c: &Compositor) -> Vec<String> {
+    let file = aizome_comp_core::aizome_config::Settings::load_from(&c.dir.join("config/aizome/settings.toml"));
+    file.expect("the settings").desks.into_iter().map(|d| d.name).collect()
+}
+
+/// Each window's Desk and place, by app.
+fn places(c: &Compositor) -> Vec<(String, Option<u32>, aizome_ipc::Rect)> {
+    let mut places: Vec<_> = c.windows().into_iter().map(|w| (w.app_id, w.desk, w.geometry)).collect();
+    places.sort_by(|a, b| a.0.cmp(&b.0));
+    places
+}
+
+/// Points at the overview's thumbnail of a window of one of these
+/// colours, so at its Desk's card, once the overview has drawn its cards.
+fn point_at_a_thumbnail(c: &Compositor, colours: &[u32]) {
+    c.settle();
+    let img = c.screenshot();
+    let is_one = |x: i32, y: i32| colours.iter().any(|colour| near(img.px(x, y), rgb(*colour)));
+    let at = (0..img.height as i32)
+        .step_by(4)
+        .flat_map(|y| (0..img.width as i32).step_by(4).map(move |x| (x, y)))
+        .find(|(x, y)| is_one(*x, *y));
+    let (x, y) =
+        at.unwrap_or_else(|| panic!("no thumbnail in {colours:x?}: {}", keep(&img, "overview-no-thumbnail").display()));
+    c.ok(Request::Synthesize { events: vec![Synthetic::PointerMotion { x: x as f64 + 2.0, y: y as f64 + 2.0 }] });
+}
+
+/// Delete in the overview removes the Desk under the pointer as Remove in
+/// the bar's Desk menu does (#229): its windows join the Desk before it,
+/// the settings follow, the overview stays up, and the last Desk stays.
+#[test]
+fn delete_in_the_overview_removes_the_desk_under_the_pointer() {
+    let both = (vec!["Mail".to_string(), "Build".to_string()], 1);
+    // What the bar's Remove does (it sends `remove-desk`), to compare with.
+    let (bar, _clients) = mail_and_build();
+    assert_eq!(desks(&bar), both);
+    bar.ok(Request::RemoveDesk { desk: aizome_ipc::DeskSel::Index(2) });
+    let (as_the_bar, places_as_the_bar) = (desks(&bar), places(&bar));
+    assert_eq!(as_the_bar, (vec!["Mail".to_string()], 1));
+    assert!(places_as_the_bar.iter().all(|(_, desk, _)| *desk == Some(1)), "{places_as_the_bar:?}");
+
+    let (c, [red, _blue]) = mail_and_build();
+    assert_eq!(desks(&c), both);
+    c.ok(Request::Overview { state: Some(true) });
+    red.wait_seen("the overview has the keyboard", |s| !s.keyboard_focus);
+    // Over Build's card, where the blue window's thumbnail is.
+    point_at_a_thumbnail(&c, &[0x2222cc]);
+    tap(&c, "delete");
+    assert_eq!(desks(&c), as_the_bar, "Build is gone");
+    assert_eq!(places(&c), places_as_the_bar, "its window went where the bar's Remove sends it");
+    assert_eq!(saved_desks(&c), ["Mail"], "and the settings follow");
+    keep(&c.screenshot(), "overview-desk-removed");
+
+    // Over Mail's card, where both thumbnails are now: the last Desk stays.
+    point_at_a_thumbnail(&c, &[0x2222cc, 0xcc2222]);
+    tap(&c, "delete");
+    assert_eq!(desks(&c), as_the_bar, "the last Desk stays");
+    assert_eq!(places(&c), places_as_the_bar);
+    assert_eq!(saved_desks(&c), ["Mail"]);
+
+    // The overview stayed up through both; Esc closes it.
+    c.settle();
+    assert!(!red.seen().keyboard_focus, "the overview is still up");
+    tap(&c, "escape");
+    red.wait_seen("keyboard focus again", |s| s.keyboard_focus);
+}
+
+/// With a filter typed, Delete is left to its field (which has nothing
+/// after its end to delete): no Desk goes, and the filter is as it was.
+#[test]
+fn delete_in_the_overview_removes_nothing_while_a_filter_is_typed() {
+    let both = (vec!["Mail".to_string(), "Build".to_string()], 1);
+    let (c, [red, _blue]) = mail_and_build();
+    c.ok(Request::Overview { state: Some(true) });
+    red.wait_seen("the overview has the keyboard", |s| !s.keyboard_focus);
+    // Over Build's card, as where Delete removes it.
+    point_at_a_thumbnail(&c, &[0x2222cc]);
+    for k in ["b", "l", "u", "delete"] {
+        tap(&c, k);
+    }
+    assert_eq!(desks(&c), both, "Delete with a filter typed removed a Desk");
+    assert_eq!(saved_desks(&c), ["Mail", "Build"]);
+    assert_eq!(places(&c).iter().map(|(_, desk, _)| *desk).collect::<Vec<_>>(), [Some(2), Some(1)], "blue, red");
+    // Still filtering by "blu": Return goes to its first match, the blue
+    // window on Build.
+    tap(&c, "return");
+    c.wait_windows("the blue window focused", |ws| ws.iter().any(|w| w.app_id == "test.blue" && w.focused));
+    assert_eq!(desks(&c), (both.0, 2));
+}
+
+/// With Num Lock on, the keypad's "." (its Del key, evdev 83) is typed into
+/// the filter, not taken for Delete; with Num Lock off the key is Delete.
+#[test]
+fn a_keypads_dot_is_typed_in_the_overview_and_its_del_removes() {
+    let both = (vec!["Mail".to_string(), "Build".to_string()], 1);
+    let (c, [red, _blue]) = mail_and_build_with("\n[input.keyboard]\nnumlock = true\n");
+    c.ok(Request::Overview { state: Some(true) });
+    red.wait_seen("the overview has the keyboard", |s| !s.keyboard_focus);
+    point_at_a_thumbnail(&c, &[0x2222cc]);
+    tap(&c, "83");
+    assert_eq!(desks(&c), both, "the keypad's \".\" removed a Desk");
+    // It's in the filter: Esc clears that (and would close the overview
+    // had nothing been typed).
+    tap(&c, "escape");
+    c.settle();
+    assert!(!red.seen().keyboard_focus, "the overview is still up");
+    // Num Lock (evdev 69) off: the same key is Del.
+    tap(&c, "69");
+    tap(&c, "83");
+    assert_eq!(desks(&c).0, ["Mail"], "the keypad's Del removes as Delete does");
+}
+
 #[test]
 fn a_marking_menu_flick_fills_without_drawing() {
     let c = Compositor::start(Options::default());
