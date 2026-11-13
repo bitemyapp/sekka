@@ -323,6 +323,11 @@ Desktop and the Shelf, image thumbnails cached in
 `$XDG_CACHE_HOME/thumbnails` (the freedesktop spec), hidden files toggle,
 sorting. Tabs are Aizome's own tab groups, so no tabs inside.
 
+The picture (or icon) in the column view's preview is something to drag
+the file by: it goes out of the window as a drag of the file's row does
+once it leaves, under the same chip, as a copy for whatever takes it. A
+click there is the click it was.
+
 Refreshing a listing keeps a still-selected folder's deeper columns
 open. If that folder leaves the listing (including Put Back from Trash),
 its obsolete columns close and keyboard focus returns to the surviving

@@ -175,6 +175,7 @@ impl Program for Hako {
             Msg::Drag(w, col, ev) => self.on_drag(cx, w, col, ev),
             Msg::Spring(w, target, n) => self.spring(cx, w, target, n),
             Msg::DropUrls(w, dest, urls) => self.on_drop_urls(cx, w, dest, urls),
+            Msg::DragPreview(w) => self.drag_preview(cx, w),
             Msg::SetLayout(w, layout) => {
                 let w = self.owner(w);
                 if let Some(b) = self.windows.get_mut(&w) {
