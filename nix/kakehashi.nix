@@ -35,7 +35,7 @@ let
     udisks
   ];
 in
-{
+rec {
   package = pkgs.rustPlatform.buildRustPackage {
     pname = "kakehashi";
     version = "0.1.0";
@@ -88,6 +88,51 @@ in
       ];
     };
   };
+
+  # The window's two tests that a plain `cargo test` leaves ignored: its
+  # real start_write worker and elevate::run against a fake pkexec, through
+  # app/repro_ktl_03.sh and app/repro_ktl_04.sh as a developer runs them.
+  # From the package's own source and vendored crates, as a check of its
+  # own, so the package builds where user namespaces can't nest.
+  #
+  # The scripts mask /run/wrappers/bin/pkexec with bubblewrap over the
+  # root they are run in. A build sandbox's root has no /run and can't take
+  # one, so an outer bubblewrap gives them a root that can: the store
+  # read-only, the build directory, an empty /run, and the /bin/sh the fake
+  # pkexec names. Neither the real pkexec nor the helper runs.
+  elevationTests = package.overrideAttrs (old: {
+    pname = "kakehashi-elevation-tests";
+    nativeCheckInputs = (old.nativeCheckInputs or [ ]) ++ [ pkgs.bubblewrap ];
+    # The package's check has run the other tests.
+    preCheck = "";
+    dontBuild = true;
+    doCheck = true;
+    checkPhase = ''
+      runHook preCheck
+      set -o pipefail
+      # Sekka's root, where the scripts say to run them.
+      cd ../..
+      for script in repro_ktl_03 repro_ktl_04; do
+        bwrap --unshare-all --die-with-parent \
+          --proc /proc --dev /dev --tmpfs /tmp \
+          --ro-bind /nix/store /nix/store \
+          --bind "$NIX_BUILD_TOP" "$NIX_BUILD_TOP" \
+          --dir /run --symlink ${pkgs.runtimeShell} /bin/sh \
+          -- bash apps/kakehashi/app/$script.sh 2>&1 | tee "$NIX_BUILD_TOP/$script.log"
+        # The scripts choose their tests by name, and Cargo passes when a
+        # name matches none.
+        if ! grep -Eq '^test result: ok\. [1-9][0-9]* passed' "$NIX_BUILD_TOP/$script.log"; then
+          echo "error: $script.sh ran no test" >&2
+          exit 1
+        fi
+      done
+      runHook postCheck
+    '';
+    installPhase = ''
+      touch $out
+    '';
+    dontFixup = true;
+  });
 
   shell = pkgs.mkShell {
     packages = [

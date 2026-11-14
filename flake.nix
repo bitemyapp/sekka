@@ -767,6 +767,9 @@
         };
         activity = self.packages.${system}.activity;
         kakehashi = self.packages.${system}.kakehashi;
+        # The window's start of a write through a fake pkexec: the tests a
+        # plain `cargo test` leaves ignored.
+        kakehashi-elevation = kakehashi.elevationTests;
         kakehashi-vm = import ./nix/kakehashi-vm-test.nix {
           inherit pkgs;
           kakehashi = self.packages.${system}.kakehashi;

@@ -4192,7 +4192,10 @@ doctests on `Plan::new`, `ConfirmedWrite`, `Running::exited`, `Exit`,
 codes. `app/repro_ktl_03.sh` and `app/repro_ktl_04.sh` run the window's real
 write worker and `elevate::run` against a fake `pkexec` in bubblewrap, for a
 helper killed mid-write and a stick swapped under the dialog; they never run
-the helper or open a device. Run `cargo fmt` with `-p` for Kakehashi's
+the helper or open a device. Their tests stay ignored in a plain `cargo test`;
+`nix build .#checks.x86_64-linux.kakehashi-elevation` runs both scripts in the
+build sandbox, inside an outer bubblewrap for a root that has `/run`
+(`elevationTests` in `nix/kakehashi.nix`). Run `cargo fmt` with `-p` for Kakehashi's
 packages: `--all` follows the path dependency into Aizome's workspace.
 
 On macOS the GUI first stages the selected image in that private temporary
