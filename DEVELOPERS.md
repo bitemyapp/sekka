@@ -738,6 +738,14 @@ bootstrap encodes its next-stage location in 512-byte units, so a native
 reports success. UEFI and 512e disks remain supported. The storage VM check
 exercises discovery and revalidation on disposable 4Kn and 512e disks.
 
+`installer/genkan/rust/tests` holds the backend's namespace tests: revalidation
+while an unrelated disk goes or is renumbered, and the room check on the route
+that builds on the target. Both give the backend fake tools and a fake sysfs
+entry for `/dev/loop0`, whose node it stats, and stay ignored in a plain
+`cargo test`. `nix build .#checks.x86_64-linux.genkan-namespace` builds them
+from a source of their own (`nix/namespace-tests.nix`) and runs them in a
+disposable VM, as a build sandbox has no block device node.
+
 Before publishing an installable image, exercise the exact image through a disposable UEFI and BIOS install, disk-only reboot, desktop login, and Yukimi configuration/update checks. Record the ISO checksum, source revision, results and outstanding hardware limitations. Passing component tests alone is insufficient evidence of an end-to-end installation.
 
 Genkan no longer hashes the entire live store before evaluation or the prepared

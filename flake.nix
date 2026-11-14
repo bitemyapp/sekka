@@ -448,6 +448,8 @@
         native-installer = calamares;
         storage = calamares.storageTest;
         encrypted-storage = import ./installer/genkan/nix/encryption-test.nix { inherit pkgs; };
+        # The backend's ignored tests, which give it a fake disk in namespaces.
+        genkan-namespace = import ./installer/genkan/nix/namespace-test.nix { inherit pkgs; };
         encrypted-boot-splash = import ./installer/genkan/nix/encrypted-splash-test.nix { inherit pkgs; };
         applications = applicationCatalog.check;
         uta-installation = import ./nix/uta-installation-test.nix {

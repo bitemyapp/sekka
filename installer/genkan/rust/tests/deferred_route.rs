@@ -26,6 +26,9 @@
 //! export CALAMARES_TOOL_PATH=$scratch/tools GENKAN_FAKE_TOOLS=$scratch/tools
 //! cargo test --test deferred_route -- --ignored
 //! ```
+//!
+//! `checks.x86_64-linux.genkan-namespace` runs it in a disposable VM
+//! (nix/namespace-test.nix): a build sandbox has no `/dev/loop0`.
 // The test re-runs itself in a namespace; it is no part of the installer.
 #![allow(clippy::disallowed_methods)]
 use std::{fs, os::unix::fs::PermissionsExt, path::Path, process::Command};
