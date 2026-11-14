@@ -1093,14 +1093,6 @@ fn preflight_request(change: &Change) -> preflight::Request {
     preflight::Request { inputs: change.update.clone(), sekka: change.sekka, follow: change.follow.clone() }
 }
 
-fn preflight_command(mut c: Command) -> std::result::Result<std::process::Output, String> {
-    c.env("PATH", PATH);
-    let out = wait(c.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped())).map_err(|e| e.0)?;
-    // Plain Nix diagnostics are understood by the GUI's progress reader.
-    let _ = std::io::stderr().write_all(&out.stderr);
-    Ok(out)
-}
-
 fn check_update(args: &[String]) -> Result<preflight::Report> {
     let change = Change::parse(args)?;
     if change.channels || change.edits_main() || change.lock.is_some() || change.checked_source.is_some() {
@@ -1108,7 +1100,7 @@ fn check_update(args: &[String]) -> Result<preflight::Report> {
     }
     stage(1, "Checking the proposed update before changing your system");
     let result =
-        preflight::check(&Setup::detect(), &preflight_request(&change), &mut preflight_command).map_err(Failure);
+        preflight::check(&Setup::detect(), &preflight_request(&change), &mut process::preflight).map_err(Failure);
     stage_done(1);
     result
 }
@@ -1117,7 +1109,7 @@ fn validate_preflight(change: &Change, setup: &Setup) -> Result<Option<String>> 
     let Some(expected) = &change.checked_source else { return Ok(None) };
     stage(1, "Verifying the checked configuration");
     let candidate =
-        preflight::Candidate::prepare(setup, &preflight_request(change), &mut preflight_command).map_err(Failure)?;
+        preflight::Candidate::prepare(setup, &preflight_request(change), &mut process::preflight).map_err(Failure)?;
     if &candidate.source != expected {
         return Err(Failure(
             "Your configuration changed after the compatibility check. Check the update again; nothing was changed."
