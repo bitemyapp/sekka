@@ -297,6 +297,9 @@ pub struct ActionSpec {
     pub icon: Option<Icon>,
     /// An 8pt colour square beside the label in local popup menus.
     pub swatch: Option<Color>,
+    /// Its shortcut is the text's while text has the keyboard
+    /// ([`MenuItem::yields_to_text`]).
+    pub yields_to_text: bool,
 }
 
 impl MenuSpec {
@@ -429,6 +432,7 @@ impl<Msg> MenuItem<Msg> {
                 id: None,
                 icon: None,
                 swatch: None,
+                yields_to_text: false,
             }),
             _m: PhantomData,
         }
@@ -478,6 +482,19 @@ impl<Msg> MenuItem<Msg> {
     pub fn role(mut self, role: MenuRole) -> Self {
         if let Some(a) = self.action() {
             a.role = Some(role);
+        }
+        self
+    }
+
+    /// Its shortcut is also a key text is edited with (❖⌫ deletes back to
+    /// the start of a line, ❖↑ and ❖↓ go to the text's ends): while a
+    /// text field or editor has the keyboard the key is the text's, and
+    /// the item is chosen from the menu only. For an item that acts on
+    /// something else in the window, such as a selected file's Move to
+    /// Trash.
+    pub fn yields_to_text(mut self) -> Self {
+        if let Some(a) = self.action() {
+            a.yields_to_text = true;
         }
         self
     }
