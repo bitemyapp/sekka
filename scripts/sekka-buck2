@@ -15,7 +15,7 @@ inputs=(
   nix/rustc-reproducible-hygiene.nix nix/patches/rustc-reproducible-hygiene.patch
   desktop/aizome/nix/fonts.nix desktop/aizome/nix/aizome-fonts.nix
   desktop/aizome/nix/hotaru-fonts.nix desktop/aizome/Cargo.lock
-  build/buck2/client.py build/buck2/generate.py build/buck2/action.py
+  build/buck2/client.py build/buck2/cas_dedupe.py build/buck2/generate.py build/buck2/action.py
   build/buck2/run.py
   build/buck2/CARGO-LICENSE-MIT
 )

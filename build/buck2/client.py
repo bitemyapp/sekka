@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Cargo-authoritative target discovery and Buck action execution (no Nix eval)."""
 import argparse
+import contextlib
 import errno
 import fcntl
+import functools
 import hashlib
 import json
 import os
@@ -10,7 +12,9 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 
+import cas_dedupe
 from generate import root_dir
 
 
@@ -58,6 +62,57 @@ def configure_startup(root, config_files):
     os.environ["BUCK2_EXTRA_EXTERNAL_CONFIG"] = str(destination)
 
 
+def local_cas_dirs(config_files):
+    """[sekka] local_cas_dir entries of the private client files: a CAS on this host."""
+    found = []
+    for path in config_files:
+        section = None
+        for line in Path(path).read_text().splitlines():
+            line = line.strip()
+            if line.startswith("["):
+                section = line
+            elif section == "[sekka]" and line.startswith("local_cas_dir") and "=" in line:
+                directory = Path(line.split("=", 1)[1].strip())
+                if directory.is_dir():
+                    found.append(directory)
+    return found
+
+
+def share_with_cas(content_dirs, store_changed, journal):
+    """After a build, share extents between the CAS and this host's other copies.
+
+    Uploaded outputs are listed in the journal; content-store objects that the
+    CAS also holds are matched by name. One physical copy remains of each."""
+    if sys.platform == "darwin":
+        # The native engine shares APFS outputs before publication. Replacing
+        # an inode from this unlocked post-build pass could lose a later write.
+        return 0
+    reports = []
+    blobs = functools.cache(lambda: cas_dedupe.scan(content_dirs))  # One scan for both passes.
+
+    def timed(run):
+        start = time.monotonic()
+        reports.append(dict(run(), seconds=round(time.monotonic() - start, 3)))
+    # The store pass moves CAS blobs onto store objects' extents, and the journal
+    # pass moves outputs onto CAS blobs' extents; in this order all end on one copy.
+    store = os.environ.get("BUCK2_LOCAL_CONTENT_STORE")
+    if store and store_changed:
+        timed(lambda: cas_dedupe.dedupe(content_dirs, [Path(store)], blobs))
+    if journal is not None:
+        timed(lambda: cas_dedupe.share_journal(content_dirs, journal, blobs))
+    if journal is not None and reports:
+        # The last pass, for inspection: nothing in it is secret.
+        journal.with_name("local-cas-report.json").write_text(json.dumps(reports, indent=2) + "\n")
+    if any(report["cross_filesystem"] for report in reports):
+        print("Local CAS is on another filesystem than this worktree; extents not shared.", file=sys.stderr)
+        return 0
+    problems = [problem for report in reports for problem in report.get("differs", []) + report["errors"]]
+    if problems:
+        print("Local CAS sharing found mismatched or unreadable files: " + json.dumps(problems[:5]), file=sys.stderr)
+        return 1
+    return 0
+
+
 def configure_content_store(root, args):
     """Enable shared reflinks where supported; never substitute copied CAS files."""
     names = ["BUCK2_LOCAL_CONTENT_STORE", "BUCK2_LOCAL_CONTENT_STORE_MAX_BYTES", "BUCK2_LOCAL_CONTENT_STORE_MAX_ENTRIES"]
@@ -65,6 +120,12 @@ def configure_content_store(root, args):
     if selection is None:
         selection = os.environ.get(names[0], "auto") or "off"
     if selection == "off":
+        for name in names:
+            os.environ.pop(name, None)
+        return
+    if sys.platform == "darwin":
+        if selection != "auto":
+            raise SystemExit("The standalone Buck content store requires Linux; use a --local-cas NativeLink client for APFS sharing.")
         for name in names:
             os.environ.pop(name, None)
         return
@@ -189,6 +250,18 @@ def main():
         raise SystemExit("Select exactly one binary target to run")
     configure_startup(root, args.config_file)
     configure_content_store(root, args)
+    content_dirs = local_cas_dirs(args.config_file)
+    journal = None
+    if content_dirs:
+        # The daemon clones cache hits from this CAS instead of downloading them.
+        os.environ["BUCK2_LOCAL_CAS_DIR"] = str(content_dirs[0])
+        if args.cache_write and args.cache != "local":
+            # Uploaded outputs skip the content store; the CAS keeps them, and
+            # their extents are shared with it after each build. A local build
+            # uploads nothing, so its outputs stay in the content store.
+            journal = root / "buck-out" / args.isolation_dir / "local-cas-journal"
+            journal.parent.mkdir(parents=True, exist_ok=True)
+            os.environ["BUCK2_LOCAL_CAS_JOURNAL"] = str(journal)
     command = [os.environ["SEKKA_BUCK2_BIN"], "--isolation-dir", args.isolation_dir, "build" if args.command in ["outputs", "runtime"] else args.command, "--config-file", os.environ["SEKKA_BUCK2_CONFIG"], "--config", "sekka.execution=" + args.cache, "--config", "sekka.cache_write=" + str(args.cache_write).lower()]
     if os.environ.get("SEKKA_BUCK2_RUNTIME"):
         command += ["--config", "sekka.runtime=" + os.environ["SEKKA_BUCK2_RUNTIME"]]
@@ -201,6 +274,27 @@ def main():
         command += ["--show-full-json-output"]
     command += args.buck_arg + extra + passthrough
     os.chdir(root)
+    if args.command in ["build", "test", "run", "outputs", "runtime"] and content_dirs:
+        # Every command that builds shares extents afterwards. New objects are
+        # renamed into the store directory; lookups only write worktree views,
+        # so an unchanged directory has nothing to share.
+        store = os.environ.get("BUCK2_LOCAL_CONTENT_STORE")
+        before = Path(store).stat().st_mtime_ns if store else None
+        capture = args.command == "runtime"
+        with tempfile.TemporaryFile("w+") if capture else contextlib.nullcontext() as output:
+            process = subprocess.Popen(command, stdout=output if capture else None)
+            while True:
+                try:
+                    status = process.wait()
+                    break
+                except KeyboardInterrupt:
+                    continue  # Buck receives the same SIGINT and cancels its own command.
+            changed = bool(store) and Path(store).stat().st_mtime_ns != before
+            shared = share_with_cas(content_dirs, changed, journal)
+            if capture and status == 0:
+                output.seek(0)
+                stage_runtime(root, (root / args.runtime_dir).resolve(), targets, json.load(output))
+        raise SystemExit(status or shared)
     if args.command == "runtime":
         completed = subprocess.run(command, check=True, text=True, stdout=subprocess.PIPE)
         stage_runtime(root, (root / args.runtime_dir).resolve(), targets, json.loads(completed.stdout))

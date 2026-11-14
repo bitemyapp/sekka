@@ -49,6 +49,14 @@ def relocate(value, root, output, encode=False):
                     for directory, token in [(output, OUTPUT_TOKEN), (root, ROOT_TOKEN)]:
                         if referent == directory or referent.startswith(directory + "/"):
                             return option + token + referent[len(directory):] + suffix
+                    # A checkout may itself sit below an alias (macOS /var
+                    # points at /private/var). Compare resolved bases only
+                    # after the ordinary fast path; preserve lexical sibling
+                    # paths and their symlink traversal below.
+                    for directory, token in [(output, OUTPUT_TOKEN), (root, ROOT_TOKEN)]:
+                        directory = str(Path(directory).resolve())
+                        if referent == directory or referent.startswith(directory + "/"):
+                            return option + token + referent[len(directory):] + suffix
                     return option + referent + suffix
                 # Siblings such as `unit-extra`, and unrelated input paths,
                 # retain their original traversal and symlink semantics.

@@ -71,7 +71,7 @@
     "apps/yukimi/crates/yukimi-config/Cargo.toml": "f9d877c5c7c2dd1f06591a4eff25572043169bf2c4871a563f4b0824d8a2c827",
     "apps/yukimi/crates/yukimi-store/Cargo.toml": "4e14c643043c9c81eba61c817067f405b4fd93f49d38821da4be11dfb2498c52",
     "apps/yukimi/crates/yukimi-system/Cargo.toml": "0cd7d5a67e26cc737edf6848b17abe4d7de29eafe19b5c09f2fa8aa2ed6c6492",
-    "build/buck2/action.py": "f6fc36d191bf4ad0bbb70c8b8e378a3a67fc523f222381cc5d0455a1157a53b9",
+    "build/buck2/action.py": "2fd4129e7eff60dc8ae4f614e26ee2bd29a27ea2aaea33d77d6e27cb4df4fef3",
     "build/buck2/generate.py": "f2f114f23fbd10ddfb1b79ce83339a9512b01652ee85a19f0fdcd4151bbe38a3",
     "build/buck2/platforms.bzl": "2a3d94cf111b330fd61679bc09c9158c04437241c545775f78b3881360e1e48c",
     "build/buck2/units.bzl": "eeb59947943041468e4ed7a4f826c0cbc58bb7bad09bcfe7255a0bc6fdd9fc03",

@@ -1,0 +1,37 @@
+{
+  "blob_bytes": 67108864,
+  "views": 8,
+  "logical_view_bytes": 536870912,
+  "clone_allocation_delta_bytes": 0,
+  "copy_allocation_delta_bytes": 536879104,
+  "one_mib_cow_allocation_delta_bytes": 1048576,
+  "clone_with_fsync_seconds": [
+    0.0002215830609202385,
+    0.00021508289501070976,
+    0.0002599167637526989,
+    0.00024062488228082657,
+    0.0001948331482708454,
+    0.00020195823162794113,
+    0.00039604073390364647,
+    0.00019737472757697105
+  ],
+  "copy_with_fsync_seconds": [
+    0.042109542060643435,
+    0.06665712501853704,
+    0.04824633337557316,
+    0.04288483364507556,
+    0.045223250053822994,
+    0.05440270807594061,
+    0.04458312503993511,
+    0.04415729222819209
+  ],
+  "clone_with_fsync_median_seconds": 0.00021833297796547413,
+  "copy_with_fsync_median_seconds": 0.04490318754687905,
+  "checks": [
+    "content equality",
+    "distinct single-link inodes",
+    "write isolation",
+    "survives donor unlink"
+  ],
+  "timing_caveat": "both include file fsync; neither includes parent-directory fsync or F_FULLFSYNC"
+}

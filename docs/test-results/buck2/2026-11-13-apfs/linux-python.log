@@ -1,0 +1,9 @@
+dedupe-tests.log
+CAS dedupe: shared, mismatch, journal, repeat, leftover and late-append checks passed
+
+python-tests.log
+........
+----------------------------------------------------------------------
+Ran 8 tests in 0.007s
+
+OK

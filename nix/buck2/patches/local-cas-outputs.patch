@@ -1,0 +1,232 @@
+Subject: [PATCH] Keep produced outputs in the local CAS instead of the content store
+
+Base: facebook/buck2 9a1876786f32806f6b65fc51f4c1c3077efc38a5 plus the
+preceding Sekka patches.
+
+On the CAS host with cache writes (BUCK2_LOCAL_CAS_DIR and
+BUCK2_LOCAL_CAS_JOURNAL), every produced output is uploaded to the CAS
+anyway, so ingesting it into the content store as well only repeats the
+work: a verified canonical stage and syncs per file under the exclusive
+lock, which four worktrees rebuilding at once queued on (88 s each, in
+lockstep). Produced outputs now skip ingestion, both at declaration and in
+the output pipeline, which then uploads from its private snapshots as it
+does with the store off. After the cache uploader
+finishes, it appends one HASH SIZE PATH line per output file to the
+journal, and the client shares those files' extents with their CAS blobs
+after the build. A content-based output is written to a placeholder and
+published as a copy at its content path, which the uploader lists, so
+publication lists the placeholder too. Without that, the placeholder
+alone kept the extents the action wrote: 1.1 GB of a cold dev worktree's
+buck-out on wx-workstation. Other materialized copies are listed rather
+than ingested. The journal joins the daemon startup identity. Read-only clients and hosts without a local CAS are
+unchanged.
+
+diff --git a/app/buck2_common/src/init.rs b/app/buck2_common/src/init.rs
+index b126442..4d08982 100644
+--- a/app/buck2_common/src/init.rs
++++ b/app/buck2_common/src/init.rs
+@@ -633,6 +633,8 @@ pub struct DaemonStartupConfig {
+     pub extra_external_config: Option<String>,
+     /// A NativeLink CAS content directory on this host, cloned instead of downloaded.
+     pub local_cas_dir: Option<String>,
++    /// Where the cache uploader lists outputs it found in that CAS.
++    pub local_cas_journal: Option<String>,
+     pub num_tokio_workers: Option<usize>,
+     pub daemon_buster: Option<String>,
+     pub digest_algorithms: Option<String>,
+@@ -755,6 +757,7 @@ impl DaemonStartupConfig {
+                 .map(str::to_owned),
+             extra_external_config: buck2_env!("BUCK2_EXTRA_EXTERNAL_CONFIG")?.map(str::to_owned),
+             local_cas_dir: buck2_env!("BUCK2_LOCAL_CAS_DIR")?.map(str::to_owned),
++            local_cas_journal: buck2_env!("BUCK2_LOCAL_CAS_JOURNAL")?.map(str::to_owned),
+             num_tokio_workers: config
+                 .parse(BuckconfigKeyRef {
+                     section: "build",
+@@ -863,6 +866,7 @@ impl DaemonStartupConfig {
+             local_content_store_max_entries: None,
+             extra_external_config: None,
+             local_cas_dir: None,
++            local_cas_journal: None,
+             num_tokio_workers: None,
+             daemon_buster: None,
+             digest_algorithms: None,
+diff --git a/app/buck2_execute_impl/src/executors/caching.rs b/app/buck2_execute_impl/src/executors/caching.rs
+index 33be254..7f9ce02 100644
+--- a/app/buck2_execute_impl/src/executors/caching.rs
++++ b/app/buck2_execute_impl/src/executors/caching.rs
+@@ -537,6 +537,16 @@ impl CacheUploader {
+         };
+ 
+         let ((), std_streams) = future::try_join(uploads, std_streams).await?;
++        if crate::materializers::local_content_store::local_cas_writes() {
++            // Every output is in the CAS now; the client shares its extents.
++            for output_result in result.resolve_outputs(&self.artifact_fs) {
++                let (_, content_path, value) = output_result?;
++                crate::materializers::local_content_store::note_in_local_cas(
++                    &self.artifact_fs.fs().resolve(&content_path),
++                    value.entry(),
++                )?;
++            }
++        }
+ 
+         let worker;
+ 
+diff --git a/app/buck2_execute_impl/src/executors/output_pipeline.rs b/app/buck2_execute_impl/src/executors/output_pipeline.rs
+index 01dd6cb..b448dde 100644
+--- a/app/buck2_execute_impl/src/executors/output_pipeline.rs
++++ b/app/buck2_execute_impl/src/executors/output_pipeline.rs
+@@ -319,7 +319,7 @@ fn capture(
+             retention,
+         });
+     }
+-    if local_content_store::enabled() {
++    if local_content_store::ingests_outputs() {
+         let paths = files
+             .iter()
+             .map(|file| {
+@@ -334,13 +334,13 @@ fn capture(
+         local_content_store::ingest_files(&paths, config)?;
+     }
+     let mut uploads = Vec::with_capacity(if want_upload { files.len() } else { 0 });
+-    let mut prepared = Vec::with_capacity(if local_content_store::enabled() {
++    let mut prepared = Vec::with_capacity(if local_content_store::ingests_outputs() {
+         files.len()
+     } else {
+         0
+     });
+     for file in files {
+-        if local_content_store::enabled() {
++        if local_content_store::ingests_outputs() {
+             let mut source = File::open(&file.path)?;
+             let mode = if file.metadata.is_executable {
+                 0o755
+diff --git a/app/buck2_execute_impl/src/materializers/deferred.rs b/app/buck2_execute_impl/src/materializers/deferred.rs
+index 1593bc5..cdda40f 100644
+--- a/app/buck2_execute_impl/src/materializers/deferred.rs
++++ b/app/buck2_execute_impl/src/materializers/deferred.rs
+@@ -435,7 +435,8 @@ impl<T: IoHandler + Allocative> Materializer for DeferredMaterializerAccessor<T>
+         _lease: &WriteLease,
+         artifacts: Vec<DeclareArtifactPayload>,
+     ) -> buck2_error::Result<()> {
+-        let artifacts = if crate::materializers::local_content_store::enabled() {
++        // On the CAS host with cache writes, the CAS keeps produced outputs.
++        let artifacts = if crate::materializers::local_content_store::ingests_outputs() {
+             let fs = self.io.fs().clone();
+             let digest_config = self.io.digest_config();
+             tokio::task::spawn_blocking(move || {
+@@ -687,6 +688,14 @@ impl<T: IoHandler + Allocative> Materializer for DeferredMaterializerAccessor<T>
+             }],
+         )
+         .await?;
++        if crate::materializers::local_content_store::local_cas_writes() {
++            // The cache uploader lists the copy at `dest`; the placeholder keeps the same
++            // bytes, so list it too, or it alone keeps the extents the action wrote.
++            crate::materializers::local_content_store::note_in_local_cas(
++                &self.io.fs().resolve(&src),
++                value.entry(),
++            )?;
++        }
+         let materializer: &dyn Materializer = self;
+         materializer
+             .declare_copy(
+diff --git a/app/buck2_execute_impl/src/materializers/deferred/io_handler.rs b/app/buck2_execute_impl/src/materializers/deferred/io_handler.rs
+index afa6ba8..2f5fb9d 100644
+--- a/app/buck2_execute_impl/src/materializers/deferred/io_handler.rs
++++ b/app/buck2_execute_impl/src/materializers/deferred/io_handler.rs
+@@ -305,11 +305,22 @@ impl DefaultIoHandler {
+                                 &self.fs.root().join(&a.dest),
+                                 a.executable_bit_override,
+                             )?;
+-                            crate::materializers::local_content_store::artifact(
+-                                &self.fs.root().join(&a.dest),
+-                                &a.dest_entry,
+-                                self.digest_config,
+-                            )?;
++                            if crate::materializers::local_content_store::local_cas_writes() {
++                                // A copy of content the CAS holds, such as a content-based
++                                // output published from its placeholder, which is what the
++                                // cache uploader lists. Listing the copy too lets the client
++                                // share its extents with the blob instead of keeping its own.
++                                crate::materializers::local_content_store::note_in_local_cas(
++                                    &self.fs.root().join(&a.dest),
++                                    &a.dest_entry,
++                                )?;
++                            } else {
++                                crate::materializers::local_content_store::artifact(
++                                    &self.fs.root().join(&a.dest),
++                                    &a.dest_entry,
++                                    self.digest_config,
++                                )?;
++                            }
+                         }
+                         Ok(())
+                     })
+diff --git a/app/buck2_execute_impl/src/materializers/local_content_store.rs b/app/buck2_execute_impl/src/materializers/local_content_store.rs
+index 70caea7..be2ed4d 100644
+--- a/app/buck2_execute_impl/src/materializers/local_content_store.rs
++++ b/app/buck2_execute_impl/src/materializers/local_content_store.rs
+@@ -2303,6 +2303,64 @@ pub(crate) fn artifact<D: ActionDirectory>(
+     Ok(())
+ }
+ 
++/// On the CAS host with cache writes (`BUCK2_LOCAL_CAS_DIR` and
++/// `BUCK2_LOCAL_CAS_JOURNAL`), produced outputs are not ingested into the
++/// content store: the cache uploader puts each one in the CAS and lists it in
++/// the journal, and the client shares its extents with the CAS blob after the
++/// build. The CAS is then the one store on this host.
++pub(crate) fn local_cas_writes() -> bool {
++    static WRITES: std::sync::LazyLock<bool> = std::sync::LazyLock::new(|| {
++        std::env::var_os("BUCK2_LOCAL_CAS_DIR").is_some()
++            && std::env::var_os("BUCK2_LOCAL_CAS_JOURNAL").is_some()
++    });
++    *WRITES
++}
++
++/// Whether produced outputs go into the content store: not when the local CAS
++/// keeps them (see `local_cas_writes`).
++pub(crate) fn ingests_outputs() -> bool {
++    enabled() && !local_cas_writes()
++}
++
++/// Lists every file of an output the CAS now holds. One `HASH SIZE PATH` line
++/// per file, each appended by a fresh open so the client can rotate the file.
++pub(crate) fn note_in_local_cas<D: ActionDirectory>(
++    path: &AbsNormPath,
++    entry: &ActionDirectoryEntry<D>,
++) -> buck2_error::Result<()> {
++    use std::io::Write;
++    let Some(journal) = std::env::var_os("BUCK2_LOCAL_CAS_JOURNAL") else {
++        return Ok(());
++    };
++    let mut lines = String::new();
++    let mut walk = unordered_entry_walk(entry.as_ref().map_dir(Directory::as_ref));
++    while let Some((relative, entry)) = walk.next() {
++        if let DirectoryEntry::Leaf(ActionDirectoryMember::File(metadata)) = entry {
++            let digest = metadata.digest.data();
++            if digest.raw_digest().algorithm() != buck2_common::cas_digest::DigestAlgorithmFamily::Sha256 {
++                continue;
++            }
++            let rendered = digest.to_string();
++            let Some((hash, _)) = rendered.split_once(':') else { continue };
++            let file = path.join(relative.get());
++            let Some(file) = file.as_path().to_str() else { continue };
++            if file.contains('\n') {
++                continue;
++            }
++            lines.push_str(&format!("{hash} {} {file}\n", digest.size()));
++        }
++    }
++    if lines.is_empty() {
++        return Ok(());
++    }
++    let mut options = std::fs::OpenOptions::new();
++    options.create(true).append(true);
++    #[cfg(unix)]
++    std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
++    options.open(journal)?.write_all(lines.as_bytes())?;
++    Ok(())
++}
++
+ pub(crate) fn ingest_files(
+     files: &[(AbsNormPathBuf, FileMetadata)],
+     config: DigestConfig,

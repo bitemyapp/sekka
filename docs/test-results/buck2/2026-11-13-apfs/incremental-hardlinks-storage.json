@@ -1,0 +1,75 @@
+{
+  "local_cas": true,
+  "runs": [
+    {
+      "label": "cold",
+      "seconds": 1.5801988327875733,
+      "success": true
+    },
+    {
+      "label": "fresh",
+      "seconds": 0.5404620827175677,
+      "success": true
+    },
+    {
+      "label": "parallel-1",
+      "seconds": 0.5437662089243531,
+      "success": true
+    },
+    {
+      "label": "parallel-0",
+      "seconds": 0.5477040410041809,
+      "success": true
+    },
+    {
+      "label": "action-readonly",
+      "seconds": 0.4637412093579769,
+      "success": true
+    },
+    {
+      "label": "platform-readonly",
+      "seconds": 0.4865697082132101,
+      "success": true
+    },
+    {
+      "label": "upload-limit",
+      "seconds": 0.525308582931757,
+      "success": true
+    },
+    {
+      "label": "failed",
+      "seconds": 0.49067283421754837,
+      "success": false
+    },
+    {
+      "label": "lost-cas",
+      "seconds": 1.6313756247982383,
+      "success": true
+    },
+    {
+      "label": "corrupt",
+      "seconds": 0.5334845827892423,
+      "success": false
+    },
+    {
+      "label": "repaired",
+      "seconds": 0.5072934171184897,
+      "success": true
+    }
+  ],
+  "checks": [
+    "distinct inodes and writable clone isolation",
+    "concurrent fresh materialization",
+    "action-readonly writes no CAS blobs",
+    "platform-readonly writes no CAS blobs",
+    "upload-limit writes no CAS blobs",
+    "failed writes no CAS blobs",
+    "cancelled producer writes no CAS blobs",
+    "CAS loss/restart rebuilds and preserves existing clones",
+    "same-size corrupt CAS blob rejected before publication",
+    "repaired CAS restores correctly; no staging leaks"
+  ],
+  "cold_physical_bytes": 67592192,
+  "fresh_physical_bytes": 323584,
+  "one_mib_write_physical_bytes": 1048576
+}

@@ -8,6 +8,7 @@ let
     root = ../../build/buck2;
     fileset = lib.fileset.unions [
       ../../build/buck2/client.py
+      ../../build/buck2/cas_dedupe.py
       ../../build/buck2/generate.py
       ../../build/buck2/action.py
       ../../build/buck2/run.py
@@ -17,10 +18,13 @@ let
   backendTestSource = lib.fileset.toSource {
     root = ../../build/buck2;
     fileset = lib.fileset.unions [
+      ../../build/buck2/client.py
       ../../build/buck2/generate.py
       ../../build/buck2/action.py
       ../../build/buck2/run.py
       ../../build/buck2/test_backend.py
+      ../../build/buck2/cas_dedupe.py
+      ../../build/buck2/test_cas_dedupe.py
       ../../build/buck2/units.bzl
       ../../build/buck2/platforms.bzl
       ../../build/buck2/CARGO-LICENSE-MIT
@@ -74,6 +78,7 @@ let
     SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
     PYTHONDONTWRITEBYTECODE = "1";
   } ''
+    ${pkgs.python3}/bin/python3 ${backendTestSource}/test_cas_dedupe.py
     ${pkgs.python3}/bin/python3 ${backendTestSource}/test_backend.py
     touch "$out"
   '';
