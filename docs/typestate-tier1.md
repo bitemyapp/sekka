@@ -89,8 +89,9 @@ declined:
 
 `machine!` is `macro_rules!`, not a proc macro. It was measured on the
 evaluation's Hotaru wrap machine, the hottest path in the evaluation. The
-source files are in the evaluation workspace in PR #282, under
-`docs/state-machine-crates/eval/experiments/typestate-wrap/`.
+source files are in the evaluation workspace in the history of PR #282, under
+`docs/state-machine-crates/eval/experiments/typestate-wrap/`; the catalog as
+merged does not carry the workspace.
 
 | Variant | Lines | Instructions per printed cell vs `enum` (default build / thin LTO) |
 |---|---:|---|

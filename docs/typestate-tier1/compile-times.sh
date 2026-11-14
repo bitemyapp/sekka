@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # As run for docs/typestate-tier1.md. $RUN was the session's isolation wrapper, equivalent to
-# docs/state-machine-crates/eval/isolate from #282: an empty environment with the named dev shell,
+# docs/state-machine-crates/eval/isolate in the history of #282: an empty environment with the named dev shell,
 # a private HOME and runtime dir, and CARGO_TARGET_DIR from REPRO_TARGET. NM points the linker at
 # NetworkManager's libnm, which Genkan's packages link. Run it as
 #   flock -o ~/.cache/hotaru-runnymede-benchmark.lock ./compile-times.sh MAIN_WORKTREE BRANCH_WORKTREE 5
