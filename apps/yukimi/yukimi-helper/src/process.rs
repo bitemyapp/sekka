@@ -391,6 +391,50 @@ pub fn output(mut c: Command, what: &str) -> Result<String> {
     }
 }
 
+/// Run a command the shared update check built
+/// (`yukimi_system::preflight`), and keep both of its outputs.
+///
+/// The check is written for the unprivileged side too, so it makes its own
+/// commands; the helper doesn't run them as given. It makes each one again
+/// as it makes every command: one of the two programs the check may ask
+/// for, found on [`PATH`], with the helper's clean environment and then the
+/// variables the check set. A command for any other program is refused
+/// before anything runs. The check works on a copy of the configuration,
+/// so these commands change neither the configuration nor root's channels.
+pub fn preflight(built: Command) -> std::result::Result<std::process::Output, String> {
+    let mut c = reissued(&built).map_err(|e| e.0)?;
+    let out = wait(c.stdout(Stdio::piped()).stderr(Stdio::piped())).map_err(|e| e.0)?;
+    // Plain Nix diagnostics are understood by the GUI's progress reader.
+    let _ = std::io::stderr().write_all(&out.stderr);
+    Ok(out)
+}
+
+/// The update check's command, made again by the helper.
+fn reissued(built: &Command) -> Result<Command> {
+    let program = match built.get_program().to_str() {
+        Some("nix") => Program::new("nix"),
+        Some("git") => Program::new("git"),
+        _ => {
+            return Err(Failure(format!(
+                "The update check asked to run {}, which Yukimi's helper doesn't run",
+                built.get_program().to_string_lossy()
+            )));
+        }
+    };
+    let mut c = command(program);
+    c.args(built.get_args());
+    for (name, value) in built.get_envs() {
+        match value {
+            Some(value) => c.env(name, value),
+            None => c.env_remove(name),
+        };
+    }
+    if let Some(dir) = built.get_current_dir() {
+        c.current_dir(dir);
+    }
+    Ok(c)
+}
+
 /// Tests that move the process-wide phase hold this: they run in parallel.
 #[cfg(test)]
 pub(crate) fn phase_for_test() -> std::sync::MutexGuard<'static, ()> {
@@ -403,6 +447,28 @@ pub(crate) fn phase_for_test() -> std::sync::MutexGuard<'static, ()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_update_checks_commands_are_made_again_as_the_helpers_own() {
+        let mut built = new_command(Path::new("git"));
+        built.args(["-C", "/somewhere", "rev-parse"]).env("GIT_TERMINAL_PROMPT", "0").current_dir("/somewhere");
+        let c = reissued(&built).unwrap();
+        assert_eq!(c.get_program(), "git");
+        assert_eq!(c.get_args().collect::<Vec<_>>(), ["-C", "/somewhere", "rev-parse"]);
+        assert_eq!(c.get_current_dir(), Some(Path::new("/somewhere")));
+        let set = |name: &str| c.get_envs().find(|(n, _)| *n == name).and_then(|(_, v)| v.map(|v| v.to_owned()));
+        // The helper's own environment, then what the check set.
+        assert_eq!(set("PATH").as_deref(), Some(std::ffi::OsStr::new(PATH)));
+        assert_eq!(set("HOME").as_deref(), Some(std::ffi::OsStr::new("/root")));
+        assert_eq!(set("GIT_TERMINAL_PROMPT").as_deref(), Some(std::ffi::OsStr::new("0")));
+
+        assert_eq!(reissued(&new_command(Path::new("nix"))).unwrap().get_program(), "nix");
+        // Only by name, found on the helper's PATH: never a path, never another program.
+        for refused in ["/tmp/nix", "./git", "sh", "systemctl"] {
+            let e = reissued(&new_command(Path::new(refused))).unwrap_err();
+            assert!(e.0.contains(refused), "{}", e.0);
+        }
+    }
 
     #[test]
     fn a_stop_refuses_the_commit_and_a_commit_absorbs_stops() {

@@ -1094,11 +1094,6 @@ fn preflight_request(change: &Change) -> preflight::Request {
     preflight::Request { inputs: change.update.clone(), sekka: change.sekka, follow: change.follow.clone() }
 }
 
-fn preflight_command(mut c: Command) -> std::result::Result<std::process::Output, String> {
-    c.env("PATH", PATH);
-    wait_with_progress(c.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()), true).map_err(|e| e.0)
-}
-
 fn check_update(args: &[String]) -> Result<preflight::Report> {
     let change = Change::parse(args)?;
     if change.channels || change.edits_main() || change.lock.is_some() || change.checked_source.is_some() {
@@ -1106,7 +1101,7 @@ fn check_update(args: &[String]) -> Result<preflight::Report> {
     }
     stage(1, "Checking the proposed update before changing your system");
     let result =
-        preflight::check(&Setup::detect(), &preflight_request(&change), &mut preflight_command).map_err(Failure);
+        preflight::check(&Setup::detect(), &preflight_request(&change), &mut process::preflight).map_err(Failure);
     stage_done(1);
     result
 }
@@ -1120,7 +1115,7 @@ fn validate_preflight(change: &Change, setup: &Setup) -> Result<Option<String>> 
     // from what the check found for the updated inputs, so that Nix has
     // nothing to fetch for an address the check already resolved.
     let candidate =
-        preflight::Candidate::prepare_to_judge(setup, &preflight_request(change), &proposed, &mut preflight_command)
+        preflight::Candidate::prepare_to_judge(setup, &preflight_request(change), &proposed, &mut process::preflight)
             .map_err(Failure)?;
     if &candidate.source != expected {
         return Err(Failure(

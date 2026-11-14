@@ -240,6 +240,11 @@ which their Nix check phases run.
 
 **Still open:**
 - free-form `nix build` and `systemctl` arguments (Yukimi);
+- the update check's commands (Yukimi): the shared backend builds them, for
+  the unprivileged side too, and the helper makes each one again as its own
+  (`process::preflight`). It refuses any program but `nix` and `git` when
+  the check runs, not when the helper compiles, and the arguments are the
+  check's. They act on a copy of the configuration;
 - writing the device node with ordinary file APIs (Genkan).
 
 ### A proof shows a check, not a person
