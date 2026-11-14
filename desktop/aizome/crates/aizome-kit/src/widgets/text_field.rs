@@ -382,6 +382,10 @@ impl Widget for FieldNode {
     fn text(&self) -> Option<&str> {
         self.get().text()
     }
+
+    fn edits_text(&self) -> bool {
+        self.get().edits_text()
+    }
 }
 
 struct FieldWidget<M> {
