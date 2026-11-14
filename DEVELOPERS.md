@@ -1422,7 +1422,41 @@ supplies the capture rectangle; it does not qualify the exact ISO's GUI journey.
 `nix/installed-lock.nix` extends that external lock with Sekka itself. A clean Git build pins its commit and source hash; a dirty development build pins the exact source copied into the Nix store. The source is included on the ISO. The installed flake follows `github:bitemyapp/sekka/nightly` for subsequent updates, and every other input follows Sekka's own (`inputs.nixpkgs.follows = "sekka/nixpkgs"`, and likewise `determinate`, `fh`, `applications`, `ai-apps` and `omp`). Sekka's `superluminal`, `tracy` and `uta` inputs are the exception: only Sekka's own outputs use them, as catalog packages (`nix/components.nix`), so the installed flake doesn't name them and they stay locked beneath Sekka, where updating it moves them just the same. Updating Sekka therefore moves them together, and only to revisions the nightly workflow has checked and confirmed a fresh system downloads entirely: it moves `nightly` only then, so nothing upstream publishes reaches an installed system untested, and no update compiles. The exception is an unfree application such as Superluminal: Sekka's binary cache carries only free ones, so updates download it from its maker and build its small wrapper on the machine. The `tracy` input is bitemyapp's fork of Quince-Pie's flake, which nothing updates on its own: the nightly signs and publishes Tracy's build, so only upstream changes reviewed and pushed to the fork reach it. The `uta` input names its revision, so the nightly's input update never moves it: Sekka builds Uta against its own Aizome (`nix/uta.nix`), so a new Uta is a change to `flake.nix`, built with the Aizome it will run with.
 
 Update the distro through **Yukimi → Updates → Update** or `sekka-update`.
-Both use the privileged helper transaction: recognize/migrate the flake,
+The GUI checks flake updates before requesting administrator access. It copies
+the source Nix actually sees to a private temporary directory, preserving Git
+revision metadata, tracked-file selection and the repository layout around
+subdirectory flakes. It borrows Git objects read-only with an independent
+index and no checkout or hooks. It applies the requested migration/branch
+and input changes there, and evaluates a Nix dry
+run with import-from-derivation disabled. Evaluation failures stop the update
+and display Nix's diagnostic without writing the installed configuration.
+Uncached package builds are named in a separate confirmation: they are
+unverified, not necessarily incompatible. This would flag an uncached
+cargo-geiger before attempting its build, but cannot predict its compiler or
+native-library errors. Generated configuration derivations marked
+`preferLocalBuild` and fixed-output downloads do not trigger that warning.
+The check uses the user's configured caches; a cache introduced by the update
+may therefore cause a conservative warning until the root build reads it.
+
+Proceeding uses the exact checked lock stored in Nix, with root independently
+validating the permitted input changes and rejecting a configuration changed
+since the check, including a new Git revision with identical files. It does
+not refresh the inputs again after confirmation.
+Cancellation, evaluation errors and unreadable results never start the root
+update. Source downloads and Nix store writes are possible during the check;
+package builds, profile changes and activation are not. This GUI preflight
+covers Sekka updates, other flake inputs, Early updates and branch changes.
+Channel-based systems and direct `sekka-update` retain their existing flow.
+For a read-only command-line check use `yukimi-helper preflight --sekka`
+(or `--update input`), without sudo. A successful check is not a guarantee
+that later compilation, downloading or activation will succeed.
+`nix build .#checks.x86_64-linux.yukimi-preflight` runs real Nix and the
+packaged helper in disposable namespaces with private stores and sentinel
+builders; it checks warnings, evaluation errors, Git revisions and worktrees,
+sibling imports, stale sources and lock validation. These are component
+tests, not ISO installation qualification.
+
+The GUI and CLI use the privileged helper transaction: recognize/migrate the flake,
 back up the configuration, update the selected inputs, and build the host once.
 A flake following Sekka's `main` (or its default branch) is moved to
 `nightly`, and each of the other inputs still at the address Sekka's

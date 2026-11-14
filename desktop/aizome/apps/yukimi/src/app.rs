@@ -778,6 +778,11 @@ impl Yukimi {
     /// Run an operation in a sheet showing its progress, then read
     /// everything again.
     fn run(&mut self, operation: Operation, cx: &mut Cx<Msg>) {
+        let operation = if self.model.setup.kind == Kind::Flake && operation.needs_preflight() {
+            Operation::CheckUpdate { operation: Box::new(operation) }
+        } else {
+            operation
+        };
         if let Some(why) = self.cannot_run(&operation) {
             self.note(why, cx);
             return;
@@ -817,11 +822,48 @@ impl Yukimi {
 
     fn job_event(&mut self, id: u64, event: JobEvent, cx: &mut Cx<Msg>) {
         let Some(job) = self.job.as_mut().filter(|j| j.id == id) else { return };
+        let mut checked = None;
+        let event = if let (Operation::CheckUpdate { operation }, JobEvent::Done(Ok(out))) = (&job.operation, &event) {
+            if job.stop.requested() {
+                JobEvent::Done(Err("Compatibility check stopped. No system configuration was changed.".into()))
+            } else {
+                match serde_json::from_str::<yukimi_system::preflight::Report>(out) {
+                    Ok(report) => {
+                        checked = Some(Operation::CheckedUpdate { operation: operation.clone(), report });
+                        event
+                    }
+                    Err(_) => JobEvent::Done(Err(
+                        "The compatibility check returned an unreadable result. The update was not started.".into(),
+                    )),
+                }
+            }
+        } else {
+            event
+        };
         let Some(outcome) = job.take(event, Instant::now()).cloned() else { return };
         if let Some(t) = self.quiet_timer.take() {
             cx.cancel(t);
         }
         let update = job.operation.is_update();
+        if let Some(operation) = checked {
+            let warning = match &operation {
+                Operation::CheckedUpdate { report, .. } => report.warning(),
+                _ => None,
+            };
+            self.close_job(cx);
+            if let Some(warning) = warning {
+                self.confirm(
+                    "Some packages need to be built".into(),
+                    warning,
+                    "Build and Update".into(),
+                    operation,
+                    cx,
+                );
+            } else {
+                self.run(operation, cx);
+            }
+            return;
+        }
         match outcome {
             Outcome::Done(text) => {
                 if update {

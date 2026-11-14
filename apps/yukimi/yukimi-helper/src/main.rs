@@ -62,6 +62,7 @@ use yukimi_config::{branch, edit, lock};
 use yukimi_system::catalog;
 use yukimi_system::completion::{self, Receipt};
 use yukimi_system::people;
+use yukimi_system::preflight;
 use yukimi_system::setup::{Choice, Kind, Setup};
 
 const PROFILE: &str = "/nix/var/nix/profiles/system";
@@ -677,6 +678,8 @@ struct Change {
     unlist_user: Vec<(String, Vec<String>)>,
     update: Vec<String>,
     lock: Option<PathBuf>,
+    /// The immutable source snapshot checked before the user agreed.
+    checked_source: Option<String>,
     /// An input to follow another branch, and the branch.
     follow: Option<(String, String)>,
     /// The system's own choices to write (`--choose setting=a,b`), each a
@@ -714,6 +717,7 @@ impl Change {
                 }
                 "--update" => change.update = split_list(value),
                 "--lock" => change.lock = Some(PathBuf::from(value)),
+                "--checked-source" => change.checked_source = Some(value.clone()),
                 "--follow" => {
                     let (input, branch) =
                         value.split_once('=').ok_or_else(|| Failure("--follow needs input=branch".into()))?;
@@ -755,9 +759,6 @@ impl Change {
         if change.applications.is_some() != change.setting.is_some() {
             return Err(Failure("--applications goes with --setting".into()));
         }
-        if change.lock.is_some() && change.update.is_empty() {
-            return Err(Failure("--lock goes with --update".into()));
-        }
         if change.sekka {
             // The system's choices and Sekka's own branch may change with it.
             let other_follow = change.follow.as_ref().is_some_and(|(input, _)| input != "sekka");
@@ -766,7 +767,11 @@ impl Change {
                 || change.applications.is_some()
                 || !change.unlist_system.is_empty()
                 || !change.unlist_user.is_empty();
-            if change.channels || other_follow || change.lock.is_some() || other_edits {
+            if change.channels
+                || other_follow
+                || (change.lock.is_some() && change.checked_source.is_none())
+                || other_edits
+            {
                 return Err(Failure("--sekka only goes with --mode, --update, --choose and --follow sekka=…".into()));
             }
             if !change.update.iter().any(|i| i == "sekka") {
@@ -776,12 +781,18 @@ impl Change {
         // An input that follows another branch is updated too, by the helper:
         // a lock file prepared beforehand would be for the old branch.
         if let Some((input, _)) = &change.follow {
-            if change.lock.is_some() {
+            if change.lock.is_some() && change.checked_source.is_none() {
                 return Err(Failure("--follow can't go with --lock".into()));
             }
             if !change.update.contains(input) {
                 change.update.push(input.clone());
             }
+        }
+        if change.lock.is_some() && change.update.is_empty() {
+            return Err(Failure("--lock goes with --update".into()));
+        }
+        if change.checked_source.is_some() && (change.lock.is_none() || change.channels || change.edits_main()) {
+            return Err(Failure("--checked-source needs a prepared flake update without other edits".into()));
         }
         Ok(change)
     }
@@ -831,6 +842,10 @@ fn unlist(text: &str, path: &[&str], attr: &str) -> Result<String> {
 fn change(args: &[String]) -> Result<String> {
     let change = Change::parse(args)?;
     let setup = Setup::detect();
+    // The check is advisory; never trust its proposed lock or copied flake.
+    // Reconstruct permitted migration/branch changes from the real source
+    // and validate the immutable lock before saving or writing any files.
+    let checked_lock = validate_preflight(&change, &setup)?;
     // Validate migration before touching any files. The GUI's detection is
     // only a convenience; the privileged helper always checks again.
     let sekka_flake = if change.sekka {
@@ -978,10 +993,15 @@ fn change(args: &[String]) -> Result<String> {
             match &change.lock {
                 // Prepared by Yukimi, with every new source already in the store.
                 Some(prepared) => {
-                    let proposed = std::fs::read_to_string(prepared)?;
-                    let current = std::fs::read_to_string(&lock_file)?;
-                    lock::check_update(&current, &proposed, &change.update)
-                        .map_err(|e| Failure(format!("The prepared update was refused: {e}")))?;
+                    let proposed = if let Some(checked) = &checked_lock {
+                        checked.clone()
+                    } else {
+                        let proposed = std::fs::read_to_string(prepared)?;
+                        let current = std::fs::read_to_string(&lock_file)?;
+                        lock::check_update(&current, &proposed, &change.update)
+                            .map_err(|e| Failure(format!("The prepared update was refused: {e}")))?;
+                        proposed
+                    };
                     std::fs::write(&lock_file, proposed)?;
                 }
                 None => {
@@ -1358,6 +1378,27 @@ fn estimate(args: &[String]) -> Result<String> {
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    // This reads a private configuration copy and queries Nix. It never
+    // writes /etc, builds packages, starts services or needs polkit.
+    if args.first().is_some_and(|s| s == "preflight") {
+        watch_for_stop();
+        let result = check_update(&args[1..]);
+        return match result {
+            Ok(report) => {
+                let _ = writeln!(std::io::stdout(), "{}", serde_json::to_string(&report).unwrap());
+                ExitCode::SUCCESS
+            }
+            Err(Failure(message)) => {
+                report(
+                    0,
+                    &format!(
+                        "The update compatibility check could not complete. {message}\n\nNo system configuration was changed."
+                    ),
+                );
+                ExitCode::FAILURE
+            }
+        };
+    }
     // A target-side pre-switch check is read-only and also protects legacy
     // clients which still explicitly request a live switch.
     if args.first().is_some_and(|s| s == "check-activation") {
@@ -1430,6 +1471,50 @@ fn main() -> ExitCode {
     let success = serde_json::from_str::<serde_json::Value>(&json).is_ok_and(|v| v["ok"] == true);
     let _ = writeln!(std::io::stdout(), "{json}");
     if success { ExitCode::SUCCESS } else { ExitCode::FAILURE }
+}
+
+fn preflight_request(change: &Change) -> preflight::Request {
+    preflight::Request { inputs: change.update.clone(), sekka: change.sekka, follow: change.follow.clone() }
+}
+
+fn preflight_command(mut c: Command) -> std::result::Result<std::process::Output, String> {
+    c.env("PATH", PATH);
+    let out = wait(c.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped())).map_err(|e| e.0)?;
+    // Plain Nix diagnostics are understood by the GUI's progress reader.
+    let _ = std::io::stderr().write_all(&out.stderr);
+    Ok(out)
+}
+
+fn check_update(args: &[String]) -> Result<preflight::Report> {
+    let change = Change::parse(args)?;
+    if change.channels || change.edits_main() || change.lock.is_some() || change.checked_source.is_some() {
+        return Err(Failure("Only flake input updates can be checked".into()));
+    }
+    stage(1, "Checking the proposed update before changing your system");
+    let result =
+        preflight::check(&Setup::detect(), &preflight_request(&change), &mut preflight_command).map_err(Failure);
+    stage_done(1);
+    result
+}
+
+fn validate_preflight(change: &Change, setup: &Setup) -> Result<Option<String>> {
+    let Some(expected) = &change.checked_source else { return Ok(None) };
+    stage(1, "Verifying the checked configuration");
+    let candidate =
+        preflight::Candidate::prepare(setup, &preflight_request(change), &mut preflight_command).map_err(Failure)?;
+    if &candidate.source != expected {
+        return Err(Failure(
+            "Your configuration changed after the compatibility check. Check the update again; nothing was changed."
+                .into(),
+        ));
+    }
+    let proposed =
+        std::fs::read_to_string(change.lock.as_ref().ok_or_else(|| Failure("Missing checked lock".into()))?)?;
+    let baseline = std::fs::read_to_string(candidate.dir.join("flake.lock"))?;
+    lock::check_update(&baseline, &proposed, &candidate.inputs)
+        .map_err(|e| Failure(format!("The checked update was refused: {e}")))?;
+    stage_done(1);
+    Ok(Some(proposed))
 }
 
 fn check_activation(args: &[String]) -> Result<()> {
@@ -1554,6 +1639,24 @@ mod tests {
             "--follow x;y=main",
             "--update tatami --lock /tmp/x.lock --follow tatami=main",
             "--packages",
+        ] {
+            assert!(Change::parse(&args(bad)).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn checked_updates_need_a_lock_and_cannot_edit_settings() {
+        for operation in ["--update nixpkgs", "--sekka", "--follow tatami=main", "--sekka --follow sekka=main"] {
+            let change =
+                Change::parse(&args(&format!("{operation} --lock /tmp/check.lock --checked-source /nix/store/source")))
+                    .unwrap();
+            assert_eq!(change.checked_source.as_deref(), Some("/nix/store/source"));
+        }
+        for bad in [
+            "--sekka --checked-source /nix/store/source",
+            "--channels --lock /tmp/check.lock --checked-source /nix/store/source",
+            "--update nixpkgs --packages htop --lock /tmp/check.lock --checked-source /nix/store/source",
+            "--sekka --choose calamares.loginScreen=aizome --lock /tmp/check.lock --checked-source /nix/store/source",
         ] {
             assert!(Change::parse(&args(bad)).is_err(), "{bad}");
         }
