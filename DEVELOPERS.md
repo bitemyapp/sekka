@@ -26,6 +26,19 @@ The initial import preserves component layouts and separate Cargo workspaces, an
 
 Sidestep (whose engine and native toolkit Sukumo continues), Upleft, Omperor, upstream forks, and Arch/Omarchy packaging stay outside Sekka. Add package definitions and pinned dependencies when the distro needs them.
 
+Hotaru's compressed raw benchmark captures are retained in Git history rather
+than the current flake source. `apps/hotaru/upstream/evidence.json` records their
+immutable revision, original paths, sizes and SHA-256 hashes. In a clone with
+that revision available, run `python3 scripts/restore-hotaru-evidence.py` to
+restore all captures, or pass path globs to restore a subset. `--destination DIR`
+restores below a separate directory. Existing files are verified and never
+overwritten; restored captures are ignored by Git. Reports, runnable fixtures,
+source and licenses remain in the current tree. This removes 94.8 MiB of raw
+captures from each new flake snapshot without discarding the evidence. Keep
+future large recordings outside tracked source and record their provenance.
+Do not use Git archive exclusions for this: the installed lock requires local
+Git and GitHub source trees to have the same NAR hash.
+
 ## Discord repository notifications
 
 `nix build .#sekka-discord --no-update-lock-file` builds the standalone Rust
@@ -1444,6 +1457,47 @@ collect garbage below 5 GB free (`installer/genkan/rust/system/store-space.nix`)
 The ordinary GUI action updates Sekka, and with it everything that follows
 it, along with any other source with a newer revision; the CLI updates only
 Sekka. Sources that don't follow Sekka keep their own rows.
+
+Once configuration edits and input updates are complete, Yukimi asks Nix which
+source the configuration is. When Nix resolves it to an ordinary directory
+flake, Yukimi copies that directory to the store and uses the immutable
+snapshot for host selection, cache settings and system evaluation; unchanged
+retries can reuse Nix's persistent evaluation cache. Nix's resolution decides,
+not a search for `.git`: a configuration reached through a symlink into a Git
+repository is a flake in that repository's subdirectory. Git flakes keep their
+original reference (and revision/subdirectory metadata), as do flakes with
+local path inputs, whose resolution must remain relative to the original
+configuration; neither is copied for a snapshot. `nix eval` never uses the
+evaluation cache, so the cache settings an unchanged snapshot names are
+remembered in `/var/lib/yukimi/configured-caches.json` rather than evaluated
+again; those of a Git flake are read on every update. Evaluation uses
+`nix path-info --derivation`, including the new
+system's binary caches for import-from-derivation. Cache planning and building
+use the same flake reference so Nix applies its accepted `nixConfig` settings
+on each command and reuses the persistent derivation cache. Both commands check
+that the selected derivation still matches the evaluated one before activation.
+Operation-local GC roots protect the source, derivation and result until
+activation completes; success, failure and cancellation release them.
+
+Progress distinguishes fetching versions, preparing the configuration, reading
+cache settings, evaluation, checking cached packages, downloading/building and
+activation. Operation logs contain `Yukimi phase: ...; elapsed_ms=...` for each
+stage, including failures. Custom configurations using import-from-derivation
+may still build while evaluating. Sekka defaults
+`programs.yukimi.evaluationCores` to 8 for Determinate Nix: the measured workstation
+used less evaluator CPU and memory with similar elapsed time. Set it to `null`
+to leave Nix's setting alone, or `0` to use all CPUs. Standalone Yukimi defaults
+to `null`; `max-jobs` and `cores` govern builds, not evaluator parallelism.
+This does not remove the first evaluation after a configuration or input change.
+The main-branch binary-cache workflow already publishes builds on each push;
+early updates can still precede its completion, whereas nightly publication
+waits for cache coverage.
+The [workstation measurements](docs/test-results/yukimi-evaluation-2026-10-30.json)
+record the comparison and its limits: unchanged snapshot planning took 0.06 s
+after an 8.87 s first pass, versus 8.82 s for the repeated mutable-directory
+case, with identical derivation and output paths. The affected machine's
+multi-minute stall was not reproduced.
+
 The default `auto` mode compares boot artifacts, kernel parameters, startup
 compatibility, the declared display/graphics/sleep-manager identity, effective
 session-critical systemd units (including aliases and drop-ins), and NixOS
@@ -1638,6 +1692,17 @@ ones), who logs in automatically (and refusing someone whose account can't), ref
 explicit switches and rollbacks, and UWSM session identity. Nix and
 systemd actions are stubbed; also evaluate/build a copy of the installed host
 flake to check actual module and dependency compatibility before deployment.
+
+`nix build .#checks.x86_64-linux.yukimi-evaluation` runs the packaged helper with
+real Nix in a disposable VM. A traced, inputless cached system checks evaluation-cache
+and cache-setting reuse on an unchanged retry and invalidation after source edits,
+distinct phase timings, GC-root cleanup, and a configuration reached through a
+symlink into a Git repository. Activation writes only a fixture marker. This is
+a component test; it does not qualify fresh compilation, an ISO or hardware.
+Signed-cache fixtures also require substitution during import-from-derivation
+and through accepted flake `nixConfig`, with local compilation disabled, and
+verify that unaccepted flake settings remain untrusted. The namespace tests also
+cover snapshot/evaluation failure and cancellation before building.
 
 Standalone users can import `sekka.nixosModules.tatami` with `programs.tatami.enable = true`, or `sekka.nixosModules.yukimi` with `programs.yukimi.enable = true`, without enabling the whole distro. Set `inputs.sekka.inputs.nixpkgs.follows = "nixpkgs"` in the consuming flake.
 

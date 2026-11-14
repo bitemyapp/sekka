@@ -153,6 +153,16 @@ in
         place of Yukimi's own entries for the same applications.
       '';
     };
+    evaluationCores = lib.mkOption {
+      # The helper reads it as 32 bits; a larger value would void every fact.
+      type = lib.types.nullOr lib.types.ints.u32;
+      default = null;
+      description = ''
+        Evaluator thread limit for Nix implementations supporting eval-cores
+        (including Determinate Nix). Null preserves Nix's setting; zero uses
+        all available threads. This does not change build jobs or cores.
+      '';
+    };
     choices = lib.mkOption {
       type = lib.types.listOf choice;
       default = [ ];
@@ -226,7 +236,7 @@ in
         if source != null then toString source else toString pkgs.path;
       allowUnfree = pkgs.config.allowUnfree or false;
       ownCatalog = builtins.toFile "yukimi-applications.json" (builtins.toJSON ownCatalog);
-      inherit (cfg) configuration;
+      inherit (cfg) configuration evaluationCores;
       catalogs = map (catalog: {
         file = "${catalog.file}";
         inherit (catalog) setting title;
