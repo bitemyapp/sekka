@@ -17,9 +17,10 @@ import unittest
 BIN = Path(sys.argv.pop(1)).resolve()
 NIX = Path(shutil.which('nix')).resolve()
 SHELL = Path(shutil.which('sh')).resolve()
+GIT = Path(shutil.which('git')).resolve()
 RUNTIME = (Path(os.environ['YUKIMI_TEST_RUNTIME']).read_text().split()
            if 'YUKIMI_TEST_RUNTIME' in os.environ else subprocess.check_output(
-               ['nix-store', '-qR', str(BIN.parent), str(NIX.parents[1]), str(SHELL.parents[1])], text=True).split())
+               ['nix-store', '-qR', str(BIN.parent), str(NIX.parents[1]), str(SHELL.parents[1]), str(GIT.parents[1])], text=True).split())
 
 FLAKE = '''{
   inputs.dependency.url = "path:./dependency";
@@ -64,6 +65,7 @@ class Preflight(unittest.TestCase):
             'experimental-features = nix-command flakes\nbuild-users-group =\n'
             'sandbox = false\nsubstituters =\nflake-registry =\n')
         (self.root / 'run/current-system/sw/bin/nix').symlink_to(NIX)
+        (self.root / 'run/current-system/sw/bin/git').symlink_to(GIT)
         (self.root / 'bin/yukimi-helper').symlink_to(BIN / 'yukimi-helper')
         (self.root / 'builder').write_text(f'#!{SHELL}\necho ran > /state/compiled\nexit 91\n')
         (self.root / 'builder').chmod(0o755)
@@ -81,7 +83,7 @@ class Preflight(unittest.TestCase):
         self.tmp.cleanup()
 
     def configuration(self):
-        return {str(p.relative_to(self.config)): p.read_bytes() for p in self.config.rglob('*') if p.is_file()}
+        return {str(p.relative_to(self.config)): p.read_bytes() for p in self.config.rglob('*') if p.is_file() and '.git' not in p.relative_to(self.config).parts}
 
     def run_cmd(self, *args, ok=True, builds=False):
         result = subprocess.run(self.base + list(args), stdin=subprocess.DEVNULL,
@@ -101,6 +103,117 @@ class Preflight(unittest.TestCase):
                              '--checked-source', report['source'], ok=ok, builds=builds)
         self.assertEqual(self.configuration(), self.before)
         return result
+
+    def git(self, *args, directory='/etc/nixos'):
+        return self.run_cmd(str(GIT), '-C', directory, '-c', 'user.name=Fixture',
+                            '-c', 'user.email=fixture@localhost', *args)
+
+    def commit_config(self, directory='/etc/nixos'):
+        self.git('init', '-q', directory=directory)
+        self.git('add', '.', directory=directory)
+        self.git('commit', '-qm', 'fixture', directory=directory)
+        self.before = self.configuration()
+
+    def original_derivation(self):
+        result = self.run_cmd(str(NIX), 'build', '--dry-run', '--json', '--no-link',
+                              '--no-update-lock-file',
+                              '/etc/nixos#nixosConfigurations.preflight-host.config.system.build.toplevel')
+        return Path(json.loads(result.stdout)[0]['drvPath']).name
+
+    def assert_same_derivation(self):
+        original = self.original_derivation()
+        before = set((self.root / 'nix/store').glob('*-system-fixture.drv'))
+        self.assertEqual(self.check()['builds'], ['cargo-geiger-fixture'])
+        after = set((self.root / 'nix/store').glob('*-system-fixture.drv'))
+        self.assertIn(original, {p.name for p in after})
+        self.assertEqual(after, before, 'preflight evaluated a different system')
+
+    def test_git_revision_metadata_matches_the_real_build(self):
+        flake = FLAKE.replace('outputs = { dependency, ... }', 'outputs = { self, dependency, ... }')
+        flake = flake.replace('preferLocalBuild = true;', '''preferLocalBuild = true;
+          revision = self.rev or self.dirtyRev;
+          shortRevision = self.shortRev or self.dirtyShortRev;
+          modified = toString self.lastModified;
+          commits = toString (self.revCount or 0);
+          clean = self ? rev;
+          untracked = assert !(builtins.pathExists ./untracked.nix); "absent";''')
+        (self.config / 'flake.nix').write_text(flake)
+        self.commit_config()
+        (self.config / 'untracked.nix').write_text('throw "must not be copied"')
+        self.before = self.configuration()
+        index = (self.config / '.git/index').read_bytes()
+        self.assert_same_derivation()
+        self.assertEqual((self.config / '.git/index').read_bytes(), index)
+        (self.config / 'flake.nix').write_text(flake + '# dirty tracked file\n')
+        self.before = self.configuration()
+        self.assert_same_derivation()
+        self.assertEqual((self.config / '.git/index').read_bytes(), index)
+
+    def test_git_subdirectory_preserves_sibling_imports_and_detects_changes(self):
+        sibling = self.root / 'etc/shared.nix'
+        sibling.write_text('"shared configuration"')
+        (self.config / 'flake.nix').write_text(FLAKE.replace(
+            'preferLocalBuild = true;', 'preferLocalBuild = true; shared = import ../shared.nix;'))
+        self.commit_config('/etc')
+        self.assert_same_derivation()
+        report = self.check()
+        sibling.write_text('"changed after check"')
+        self.assertIn('changed after the compatibility check', self.worker(report).stderr)
+
+    def test_new_git_commit_with_identical_files_invalidates_the_check(self):
+        self.commit_config()
+        report = self.check()
+        self.git('commit', '--allow-empty', '-qm', 'new revision, same files')
+        self.assertIn('changed after the compatibility check', self.worker(report).stderr)
+
+    def test_inherited_git_index_cannot_redirect_private_writes(self):
+        self.commit_config()
+        index = (self.config / '.git/index').read_bytes()
+        self.base += ['--setenv', 'GIT_INDEX_FILE', '/etc/nixos/.git/index']
+        self.assert_same_derivation()
+        self.assertEqual((self.config / '.git/index').read_bytes(), index)
+
+    def test_updated_lock_uses_the_same_dirty_revision_as_apply(self):
+        dependency = self.root / 'state/dependency'
+        dependency.mkdir()
+        (dependency / 'flake.nix').write_text(DEPENDENCY)
+        self.commit_config('/state/dependency')
+        flake = FLAKE.replace('path:./dependency', 'git+file:///state/dependency')
+        flake = flake.replace('outputs = { dependency, ... }', 'outputs = { self, dependency, ... }')
+        flake = flake.replace('preferLocalBuild = true;',
+                              'preferLocalBuild = true; revision = self.rev or self.dirtyRev;')
+        (self.config / 'flake.nix').write_text(flake)
+        self.run_cmd(str(NIX), 'flake', 'lock', '/etc/nixos')
+        self.commit_config()
+        (dependency / 'flake.nix').write_text(DEPENDENCY.replace('cargo-geiger-fixture', 'updated-fixture'))
+        self.git('commit', '-am', 'update dependency', directory='/state/dependency')
+        report = self.check()
+        self.assertEqual(report['builds'], ['updated-fixture'])
+        checked = set((self.root / 'nix/store').glob('*-system-fixture.drv'))
+        proposed = self.root / report['lock'].lstrip('/')
+        self.assertNotEqual(proposed.read_bytes(), (self.config / 'flake.lock').read_bytes())
+        (self.config / 'flake.lock').write_bytes(proposed.read_bytes())
+        actual = self.original_derivation()
+        self.assertIn(actual, {p.name for p in checked}, 'apply evaluates a different revision than preflight')
+
+    def test_shallow_git_history_is_preserved(self):
+        flake = FLAKE.replace('outputs = { dependency, ... }', 'outputs = { self, dependency, ... }')
+        flake = flake.replace('preferLocalBuild = true;',
+                              'preferLocalBuild = true; revision = self.rev; commits = toString (self.revCount or 0);')
+        (self.config / 'flake.nix').write_text(flake)
+        self.commit_config()
+        self.git('commit', '--allow-empty', '-qm', 'second commit')
+        self.config.rename(self.root / 'state/main')
+        self.git('clone', '--depth=1', 'file:///state/main', '/etc/nixos', directory='/state')
+        self.before = self.configuration()
+        self.assert_same_derivation()
+
+    def test_linked_worktree_preserves_revision_context(self):
+        self.commit_config()
+        self.config.rename(self.root / 'state/main')
+        self.git('worktree', 'add', '--detach', '/etc/nixos', directory='/state/main')
+        self.before = self.configuration()
+        self.assert_same_derivation()
 
     def test_uncached_package_is_named_without_a_build_or_configuration_write(self):
         report = self.check()

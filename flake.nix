@@ -900,6 +900,7 @@
                 pkgs.bubblewrap
                 pkgs.nix
                 pkgs.bash
+                pkgs.git
               ];
               YUKIMI_TEST_RUNTIME = "${
                 pkgs.closureInfo {
@@ -907,6 +908,7 @@
                     self.packages.${system}.yukimi.helper
                     pkgs.nix
                     pkgs.bash
+                    pkgs.git
                   ];
                 }
               }/store-paths";

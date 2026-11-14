@@ -23,8 +23,8 @@ pub struct Request {
     pub follow: Option<(String, String)>,
 }
 
-/// Only immutable store paths leave the check. The privileged helper still
-/// validates both the current configuration and the permitted lock changes.
+/// The lock is immutable. The source identity includes the fetched tree and
+/// its revision metadata; root independently verifies it and the lock changes.
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct Report {
     pub source: String,
@@ -69,16 +69,57 @@ fn output(c: Command, run: &mut impl FnMut(Command) -> Result<Output, String>) -
     Ok(out)
 }
 
-pub fn source(setup: &Setup, run: &mut impl FnMut(Command) -> Result<Output, String>) -> Result<String, String> {
-    let expression = format!("(builtins.getFlake {}).outPath", edit::nix_string(&setup.flake()));
+#[derive(Deserialize, Serialize)]
+struct Snapshot {
+    root: PathBuf,
+    flake: PathBuf,
+    info: serde_json::Value,
+}
+
+fn snapshot(flake: &Path, run: &mut impl FnMut(Command) -> Result<Output, String>) -> Result<(Snapshot, bool), String> {
+    // Resolve the CLI installable first: getFlake on a bare absolute path
+    // uses the path fetcher, even when the updater sees a Git worktree.
     let mut c = command();
-    c.args(["eval", "--raw", "--impure", "--no-update-lock-file", "--expr", &expression]);
-    let out = output(c, run)?;
-    let path = String::from_utf8(out.stdout).map_err(|e| e.to_string())?;
-    if !path.starts_with("/nix/store/") || !Path::new(&path).is_dir() {
+    c.args(["flake", "metadata", "--json", "--no-update-lock-file"]).arg(flake);
+    let metadata: serde_json::Value = serde_json::from_slice(&output(c, run)?.stdout).map_err(|e| e.to_string())?;
+    let url = metadata["resolvedUrl"].as_str().ok_or("Nix did not resolve the configuration")?;
+    let git = metadata["resolved"]["type"] == "git";
+    let expression = format!(
+        "let f = builtins.getFlake {}; in {{ root = f.sourceInfo.outPath; flake = f.outPath; \
+         info = builtins.removeAttrs f.sourceInfo [ \"outPath\" ]; }}",
+        edit::nix_string(url)
+    );
+    let mut c = command();
+    c.args(["eval", "--json", "--impure", "--no-update-lock-file", "--expr", &expression]);
+    let snapshot: Snapshot = serde_json::from_slice(&output(c, run)?.stdout).map_err(|e| e.to_string())?;
+    if !snapshot.root.starts_with("/nix/store")
+        || !snapshot.root.is_dir()
+        || !snapshot.flake.starts_with(&snapshot.root)
+    {
         return Err("Nix did not return a configuration snapshot".into());
     }
-    Ok(path)
+    Ok((snapshot, git))
+}
+
+fn git_command() -> Command {
+    let mut c = Command::new("git");
+    // The root validator may read a configuration owned by the caller. No
+    // hooks, checkout or original index writes are needed for the private copy.
+    c.args(["-c", "safe.directory=*", "-c", "core.hooksPath=/dev/null"]);
+    for key in [
+        "GIT_DIR",
+        "GIT_COMMON_DIR",
+        "GIT_WORK_TREE",
+        "GIT_INDEX_FILE",
+        "GIT_OBJECT_DIRECTORY",
+        "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+        "GIT_CONFIG_COUNT",
+        "GIT_CONFIG_PARAMETERS",
+    ] {
+        c.env_remove(key);
+    }
+    c.env("GIT_CONFIG_NOSYSTEM", "1").env("GIT_CONFIG_GLOBAL", "/dev/null").env("GIT_TERMINAL_PROMPT", "0");
+    c
 }
 
 /// The same authorized flake transformation used by the updater.
@@ -102,6 +143,7 @@ pub fn prepare_flake(text: &str, request: &Request) -> Result<String, String> {
 /// A private, disposable copy of the source Nix actually sees (including
 /// Git's tracked-file selection). It is never used as root's build source.
 pub struct Candidate {
+    root: PathBuf,
     pub dir: PathBuf,
     pub source: String,
     pub inputs: Vec<String>,
@@ -109,7 +151,7 @@ pub struct Candidate {
 
 impl Drop for Candidate {
     fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.dir);
+        let _ = std::fs::remove_dir_all(&self.root);
     }
 }
 
@@ -122,16 +164,51 @@ impl Candidate {
         if setup.kind != Kind::Flake {
             return Err("Compatibility checks need a flake configuration".into());
         }
-        let source = source(setup, run)?;
+        let (snapshot, git) = snapshot(&setup.dir, run)?;
+        let source = serde_json::to_string(&snapshot).map_err(|e| e.to_string())?;
         static NEXT: AtomicU64 = AtomicU64::new(0);
-        let dir = std::env::temp_dir().join(format!(
+        let root = std::env::temp_dir().join(format!(
             "yukimi-preflight-{}-{}",
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
-        std::fs::DirBuilder::new().mode(0o700).create(&dir).map_err(|e| e.to_string())?;
-        let mut candidate = Self { dir, source, inputs: request.inputs.clone() };
-        copy(Path::new(&candidate.source), &candidate.dir, &mut 0, &mut 0).map_err(|e| e.to_string())?;
+        std::fs::DirBuilder::new().mode(0o700).create(&root).map_err(|e| e.to_string())?;
+        let dir = root.join(snapshot.flake.strip_prefix(&snapshot.root).map_err(|e| e.to_string())?);
+        let mut candidate = Self { root, dir, source, inputs: request.inputs.clone() };
+        if git {
+            let mut c = git_command();
+            c.arg("-C").arg(&setup.dir).args(["rev-parse", "--show-toplevel"]);
+            let original = String::from_utf8(output(c, run)?.stdout).map_err(|e| e.to_string())?;
+            let mut c = git_command();
+            // Borrow objects read-only, but keep an independent HEAD, index,
+            // configuration and refs. This also supports linked worktrees and
+            // shallow clones without copying an unbounded repository history.
+            c.args(["clone", "--shared", "--no-checkout", "--template=", "--"])
+                .arg(original.trim_end_matches('\n'))
+                .arg(&candidate.root);
+            output(c, run)?;
+            if let Some(revision) = snapshot.info["rev"].as_str().or_else(|| snapshot.info["dirtyRev"].as_str()) {
+                let revision = revision.strip_suffix("-dirty").unwrap_or(revision);
+                if ![40, 64].contains(&revision.len()) || !revision.bytes().all(|b| b.is_ascii_hexdigit()) {
+                    return Err("Nix returned an invalid Git revision".into());
+                }
+                let mut c = git_command();
+                c.arg("-C").arg(&candidate.root).args(["reset", "--mixed", revision, "--"]);
+                output(c, run)?;
+            }
+        }
+        copy(&snapshot.root, &candidate.root, &mut 0, &mut 0).map_err(|e| e.to_string())?;
+        if git {
+            // Include additions already selected by Nix, even when ignored by
+            // .gitignore, and retain unstaged edits/deletions from the snapshot.
+            let mut c = git_command();
+            c.arg("-C").arg(&candidate.root).args(["add", "--intent-to-add", "--force", "--all", "--", "."]);
+            output(c, run)?;
+            let (copied, _) = self::snapshot(&candidate.dir, run)?;
+            if serde_json::to_string(&copied).map_err(|e| e.to_string())? != candidate.source {
+                return Err("The Git configuration changed while preparing the compatibility check; check again".into());
+            }
+        }
         // Never write through a copied symlink back into the real
         // configuration or another location outside this private directory.
         for name in ["flake.nix", "flake.lock"] {
@@ -266,7 +343,7 @@ pub fn check(
     // different from the machine's hostname.
     let mut c = command();
     c.args(["eval", "--json", "--no-update-lock-file", "--apply", "builtins.attrNames"])
-        .arg(format!("path:{}#nixosConfigurations", candidate.dir.display()));
+        .arg(format!("{}#nixosConfigurations", candidate.dir.display()));
     let names: Vec<String> = serde_json::from_slice(&output(c, run)?.stdout).map_err(|e| e.to_string())?;
     let host = if names.contains(&setup.host) {
         &setup.host
@@ -278,7 +355,7 @@ pub fn check(
     let host = edit::nix_string(host);
     let mut c = command();
     c.args(["build", "--dry-run", "--json", "--no-link", "--no-update-lock-file"])
-        .arg(format!("path:{}#nixosConfigurations.{host}.config.system.build.toplevel", candidate.dir.display()));
+        .arg(format!("{}#nixosConfigurations.{host}.config.system.build.toplevel", candidate.dir.display()));
     let out = output(c, run)?;
     // Malformed/empty stdout must never look like a completed check.
     let result: serde_json::Value = serde_json::from_slice(&out.stdout).map_err(|e| e.to_string())?;

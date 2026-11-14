@@ -1423,8 +1423,11 @@ supplies the capture rectangle; it does not qualify the exact ISO's GUI journey.
 
 Update the distro through **Yukimi → Updates → Update** or `sekka-update`.
 The GUI checks flake updates before requesting administrator access. It copies
-the source Nix actually sees to a private temporary directory, applies the
-requested migration/branch and input changes there, and evaluates a Nix dry
+the source Nix actually sees to a private temporary directory, preserving Git
+revision metadata, tracked-file selection and the repository layout around
+subdirectory flakes. It borrows Git objects read-only with an independent
+index and no checkout or hooks. It applies the requested migration/branch
+and input changes there, and evaluates a Nix dry
 run with import-from-derivation disabled. Evaluation failures stop the update
 and display Nix's diagnostic without writing the installed configuration.
 Uncached package builds are named in a separate confirmation: they are
@@ -1437,7 +1440,8 @@ may therefore cause a conservative warning until the root build reads it.
 
 Proceeding uses the exact checked lock stored in Nix, with root independently
 validating the permitted input changes and rejecting a configuration changed
-since the check. It does not refresh the inputs again after confirmation.
+since the check, including a new Git revision with identical files. It does
+not refresh the inputs again after confirmation.
 Cancellation, evaluation errors and unreadable results never start the root
 update. Source downloads and Nix store writes are possible during the check;
 package builds, profile changes and activation are not. This GUI preflight
@@ -1448,8 +1452,9 @@ For a read-only command-line check use `yukimi-helper preflight --sekka`
 that later compilation, downloading or activation will succeed.
 `nix build .#checks.x86_64-linux.yukimi-preflight` runs real Nix and the
 packaged helper in disposable namespaces with private stores and sentinel
-builders; it checks warnings, evaluation errors, stale sources and lock
-validation. These are component tests, not ISO installation qualification.
+builders; it checks warnings, evaluation errors, Git revisions and worktrees,
+sibling imports, stale sources and lock validation. These are component
+tests, not ISO installation qualification.
 
 The GUI and CLI use the privileged helper transaction: recognize/migrate the flake,
 back up the configuration, update the selected inputs, and build the host once.
