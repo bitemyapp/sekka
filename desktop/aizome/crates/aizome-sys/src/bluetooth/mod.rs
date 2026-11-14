@@ -20,7 +20,9 @@ pub use agent::{PairingPrompt, PairingRequest, PairingResponse, Responder};
 
 use crate::bus::{self, Bus, Event, Objects, Opts, Props, PropsExt, signals_from};
 use crate::error::{Error, Result};
+use crate::network::{Radio, RadioKind, rfkill};
 use crate::service::{Model, Stop, Task, Wake, service_handle};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 use zbus::zvariant::ObjectPath;
@@ -317,7 +319,10 @@ pub struct Bluetooth {
     model: Arc<Model<BluetoothState>>,
     stop: Stop,
     agent: agent::Worker,
-    rfkill: std::path::PathBuf,
+    /// `/dev/rfkill`.
+    rfkill: PathBuf,
+    /// `/sys/class/rfkill`.
+    rfkill_sysfs: PathBuf,
 }
 
 service_handle!(Bluetooth, BluetoothState);
@@ -334,7 +339,8 @@ impl Bluetooth {
                     model: Arc::new(Model::new(BluetoothState::default(), wake)),
                     stop: Stop::default(),
                     agent: agent::Worker::default(),
-                    rfkill: crate::network::rfkill::DEVICE.into(),
+                    rfkill: rfkill::DEVICE.into(),
+                    rfkill_sysfs: rfkill::SYSFS.into(),
                 }
             }
         }
@@ -388,13 +394,17 @@ impl Bluetooth {
             model,
             stop,
             agent: agent::Worker::default(),
-            rfkill: crate::network::rfkill::DEVICE.into(),
+            rfkill: rfkill::DEVICE.into(),
+            rfkill_sysfs: rfkill::SYSFS.into(),
         }
     }
 
-    /// Use `device` instead of `/dev/rfkill` to unblock Bluetooth (tests).
-    pub fn with_rfkill_device(mut self, device: std::path::PathBuf) -> Bluetooth {
+    /// Use `device` instead of `/dev/rfkill` and `sysfs` instead of
+    /// `/sys/class/rfkill` for the radio switches (tests: switching an
+    /// adapter writes to them).
+    pub fn with_rfkill(mut self, device: PathBuf, sysfs: PathBuf) -> Bluetooth {
         self.rfkill = device;
+        self.rfkill_sysfs = sysfs;
         self
     }
 
@@ -418,20 +428,47 @@ impl Bluetooth {
         self.task(move |bus| bus.set(BLUEZ, &path, iface, name, value))
     }
 
-    /// Switch an adapter on or off. An adapter a radio switch keeps off
-    /// (`PowerState` `off-blocked`) is unblocked through `/dev/rfkill`
-    /// first, as a Bluetooth switch in the UI means.
+    /// Switch an adapter on or off.
+    ///
+    /// Off also blocks the adapter's own radio switch through
+    /// `/dev/rfkill`. BlueZ keeps no record of `Powered` and switches every
+    /// adapter on when it starts (`AutoEnable`), so off alone lasts only
+    /// until the next restart; a blocked adapter it leaves off, and
+    /// systemd-rfkill puts the block back at each start. Where the switch
+    /// can't be blocked the adapter still goes off, until BlueZ next
+    /// starts.
+    ///
+    /// On unblocks Bluetooth first (that block, airplane mode's or a radio
+    /// key's: `PowerState` `off-blocked`), as a Bluetooth switch in the UI
+    /// means.
     pub fn set_powered(&self, adapter: &str, on: bool) -> Task<()> {
         let blocked = on && self.snapshot().adapter(adapter).is_some_and(Adapter::blocked);
         let adapter = adapter.to_owned();
         let device = self.rfkill.clone();
+        let sysfs = self.rfkill_sysfs.clone();
         self.task(move |bus| {
-            if blocked {
-                crate::network::rfkill::block_type(&device, crate::network::rfkill::TYPE_BLUETOOTH, false)?;
-                // BlueZ notices the unblock and the adapter comes back first.
-                std::thread::sleep(Duration::from_millis(300));
+            let power = |on: bool| bus.set(BLUEZ, &adapter, IFACE_ADAPTER, "Powered", on);
+            let switch = own_switch(&sysfs, &adapter);
+            if !on {
+                power(false)?;
+                let kept = match switch {
+                    Some(s) => rfkill::send(&device, &[rfkill::block_one_event(s.index, rfkill::TYPE_BLUETOOTH, true)]),
+                    None => Err(Error::NotFound(format!("no radio switch for {adapter}"))),
+                };
+                if let Err(error) = kept {
+                    log::warn!("aizome-sys: {adapter} is off, but only until BlueZ next starts: {error}");
+                }
+                return Ok(());
             }
-            bus.set(BLUEZ, &adapter, IFACE_ADAPTER, "Powered", on)
+            // The kernel is asked too: the snapshot may not have heard of a
+            // block made a moment ago.
+            if !blocked && !switch.is_some_and(|s| s.soft_blocked) {
+                return power(true);
+            }
+            rfkill::block_type(&device, rfkill::TYPE_BLUETOOTH, false)?;
+            // BlueZ notices the unblock and the adapter comes back first.
+            std::thread::sleep(Duration::from_millis(300));
+            or_coming_on(power(true))
         })
     }
 
@@ -558,6 +595,26 @@ impl Drop for Bluetooth {
     }
 }
 
+/// An adapter's own radio switch: the kernel names it after the controller
+/// (`hci0`), which is the last part of BlueZ's path for the adapter.
+fn own_switch(sysfs: &Path, adapter: &str) -> Option<Radio> {
+    let name = adapter.rsplit('/').next()?;
+    rfkill::read_sysfs_named(sysfs)
+        .into_iter()
+        .find(|(n, radio)| n == name && radio.kind == RadioKind::Bluetooth)
+        .map(|(_, radio)| radio)
+}
+
+/// BlueZ switches an adapter on by itself once it is unblocked, and answers
+/// `Busy` to being asked for the same until that's done (a controller that
+/// loads its firmware takes longer than we wait): on its way on.
+fn or_coming_on(result: Result<()>) -> Result<()> {
+    match result {
+        Err(Error::DBus { name, .. }) if name == "org.bluez.Error.Busy" => Ok(()),
+        other => other,
+    }
+}
+
 fn connect(bus: &Bus, device: &str) -> Result<()> {
     match bus.call_with::<_, ()>(Opts::long(CONNECT_TIMEOUT), BLUEZ, device, IFACE_DEVICE, "Connect", &()) {
         Err(Error::DBus { name, .. }) if name == "org.bluez.Error.AlreadyConnected" => Ok(()),
@@ -625,6 +682,13 @@ mod tests {
         assert_eq!(state.nearby().count(), 0, "nameless devices aren't offered");
         assert!(state.powered() && state.connected());
         assert_eq!(state.default_adapter().unwrap().alias, "ganymede");
+    }
+
+    #[test]
+    fn an_unblocked_adapter_still_coming_on_is_not_a_failure() {
+        assert_eq!(or_coming_on(Err(Error::from_dbus("org.bluez.Error.Busy", ""))), Ok(()));
+        let blocked = Error::from_dbus("org.bluez.Error.Blocked", "Blocked through rfkill");
+        assert_eq!(or_coming_on(Err(blocked.clone())), Err(blocked));
     }
 
     #[test]

@@ -1,6 +1,8 @@
 //! The kernel's radio switches: `/dev/rfkill` events (read to follow them,
-//! written to block or unblock every radio at once, which is airplane mode)
-//! and `/sys/class/rfkill` (read when the device can't be opened).
+//! written to block or unblock every radio at once, which is airplane mode,
+//! or one Bluetooth adapter's, which keeps it off across restarts) and
+//! `/sys/class/rfkill` (read when the device can't be opened, and for the
+//! switches' names).
 //!
 //! On a systemd system the seat's user may read and write `/dev/rfkill`
 //! (udev's `uaccess` tag), so airplane mode needs no polkit prompt.
@@ -75,10 +77,23 @@ pub(crate) fn apply(radios: &mut BTreeMap<u32, Radio>, event: Event) {
     }
 }
 
-/// Block or unblock every radio.
-pub(crate) fn block_all(device: &Path, blocked: bool) -> Result<()> {
+/// The event that blocks (or unblocks) one radio, if it is of this type.
+pub(crate) fn block_one_event(index: u32, kind: u8, blocked: bool) -> [u8; EVENT_SIZE] {
+    let mut event = [0u8; EVENT_SIZE];
+    event[..4].copy_from_slice(&index.to_ne_bytes());
+    event[4] = kind;
+    event[5] = OP_CHANGE;
+    event[6] = u8::from(blocked);
+    event
+}
+
+/// Write events to the device in order, each in a write of its own as the
+/// kernel reads them.
+pub(crate) fn send(device: &Path, events: &[[u8; EVENT_SIZE]]) -> Result<()> {
     let mut file = std::fs::OpenOptions::new().write(true).open(device)?;
-    file.write_all(&block_all_event(blocked))?;
+    for event in events {
+        file.write_all(event)?;
+    }
     Ok(())
 }
 
@@ -89,16 +104,20 @@ pub(crate) const TYPE_BLUETOOTH: u8 = 2;
 pub(crate) fn block_type(device: &Path, kind: u8, blocked: bool) -> Result<()> {
     let mut event = block_all_event(blocked);
     event[4] = kind;
-    let mut file = std::fs::OpenOptions::new().write(true).open(device)?;
-    file.write_all(&event)?;
-    Ok(())
+    send(device, &[event])
 }
 
 /// The radios, from sysfs (`rfkillN/{index,type,soft,hard}`).
 pub(crate) fn read_sysfs(root: &Path) -> Vec<Radio> {
+    read_sysfs_named(root).into_iter().map(|(_, radio)| radio).collect()
+}
+
+/// The radios with the kernel's names for them (`rfkillN/name`: `phy0`,
+/// and `hci0` for a Bluetooth controller's own switch), from sysfs.
+pub(crate) fn read_sysfs_named(root: &Path) -> Vec<(String, Radio)> {
     let Ok(entries) = std::fs::read_dir(root) else { return Vec::new() };
     let read = |dir: &Path, name: &str| std::fs::read_to_string(dir.join(name)).unwrap_or_default();
-    let mut radios: Vec<Radio> = entries
+    let mut radios: Vec<(String, Radio)> = entries
         .flatten()
         .filter_map(|entry| {
             let dir = entry.path();
@@ -114,15 +133,16 @@ pub(crate) fn read_sysfs(root: &Path) -> Vec<Radio> {
                 "nfc" => RadioKind::Nfc,
                 _ => RadioKind::Other,
             };
-            Some(Radio {
+            let radio = Radio {
                 index,
                 kind,
                 soft_blocked: read(&dir, "soft").trim() == "1",
                 hard_blocked: read(&dir, "hard").trim() == "1",
-            })
+            };
+            Some((read(&dir, "name").trim().to_owned(), radio))
         })
         .collect();
-    radios.sort_by_key(|r| r.index);
+    radios.sort_by_key(|(_, r)| r.index);
     radios
 }
 
@@ -212,21 +232,33 @@ mod tests {
         let root = std::env::temp_dir().join(format!("aizome-sys-rfkill-{}", std::process::id()));
         let dir = root.join("rfkill0");
         std::fs::create_dir_all(&dir).unwrap();
-        for (name, value) in [("index", "0\n"), ("type", "bluetooth\n"), ("soft", "1\n"), ("hard", "0\n")] {
+        for (name, value) in
+            [("index", "0\n"), ("name", "hci0\n"), ("type", "bluetooth\n"), ("soft", "1\n"), ("hard", "0\n")]
+        {
             std::fs::write(dir.join(name), value).unwrap();
         }
         let radios = read_sysfs(&root);
+        let named = read_sysfs_named(&root);
         std::fs::remove_dir_all(&root).unwrap();
-        assert_eq!(radios, [Radio { index: 0, kind: RadioKind::Bluetooth, soft_blocked: true, hard_blocked: false }]);
+        let radio = Radio { index: 0, kind: RadioKind::Bluetooth, soft_blocked: true, hard_blocked: false };
+        assert_eq!(named, [("hci0".to_owned(), radio.clone())]);
+        assert_eq!(radios, [radio]);
     }
 
     #[test]
     fn blocking_writes_one_event() {
         let path = std::env::temp_dir().join(format!("aizome-sys-rfkill-dev-{}", std::process::id()));
         std::fs::write(&path, b"").unwrap();
-        block_all(&path, true).unwrap();
+        send(&path, &[block_all_event(true)]).unwrap();
         let written = std::fs::read(&path).unwrap();
         std::fs::remove_file(&path).unwrap();
         assert_eq!(written, block_all_event(true));
+    }
+
+    #[test]
+    fn one_radio_is_blocked_by_its_index() {
+        let bytes = block_one_event(7, TYPE_BLUETOOTH, true);
+        let event = parse_event(&bytes).unwrap();
+        assert_eq!((event.index, event.kind, event.op, event.soft), (7, TYPE_BLUETOOTH, OP_CHANGE, true));
     }
 }

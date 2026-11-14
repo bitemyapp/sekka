@@ -660,9 +660,9 @@ impl Pane for Bluetooth {
         };
         let on = adapter.powered;
         let mut sections: Vec<Element<Msg>> = Vec::new();
-        let detail = if adapter.blocked() {
-            "Off: airplane mode or a radio switch keeps it off".to_owned()
-        } else if !on {
+        // (Blocked or not: the switch itself blocks the adapter's radio
+        // when it turns it off, and unblocks it to turn it on.)
+        let detail = if !on {
             "Off".to_owned()
         } else if adapter.discoverable {
             format!("Discoverable as “{}” while this pane is open", adapter.alias)

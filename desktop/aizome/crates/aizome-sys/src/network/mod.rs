@@ -70,15 +70,24 @@ pub struct RadioPaths {
     /// BlueZ's adapters switched off instead): the adapters it switched off,
     /// one per line, to switch on again. Gone while it's off.
     pub fallback: PathBuf,
+    /// The Bluetooth radio switches that were off already when airplane
+    /// mode went on (their names, one per line), to leave off when it ends.
+    /// Kept across restarts, as the radios' blocks are.
+    pub bluetooth_off: PathBuf,
 }
 
 impl Default for RadioPaths {
     fn default() -> RadioPaths {
-        let runtime = std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from).unwrap_or_else(std::env::temp_dir);
+        let dir = |name: &str| std::env::var_os(name).filter(|v| !v.is_empty()).map(PathBuf::from);
+        let runtime = dir("XDG_RUNTIME_DIR").unwrap_or_else(std::env::temp_dir);
+        let state = dir("XDG_STATE_HOME")
+            .or_else(|| dir("HOME").map(|home| home.join(".local/state")))
+            .unwrap_or_else(|| runtime.clone());
         RadioPaths {
             device: rfkill::DEVICE.into(),
             sysfs: rfkill::SYSFS.into(),
             fallback: runtime.join("aizome-airplane-mode"),
+            bluetooth_off: state.join("aizome/airplane-mode-bluetooth-off"),
         }
     }
 }
@@ -124,6 +133,29 @@ fn airplane_without_rfkill(bus: &Bus, fallback: &Path, on: bool) -> Result<()> {
         let _ = std::fs::remove_file(fallback);
     }
     Ok(())
+}
+
+/// The Bluetooth radio switches among `switches`, with their names.
+fn bluetooth_switches(switches: &[(String, Radio)]) -> impl Iterator<Item = (&str, &Radio)> {
+    switches
+        .iter()
+        .filter(|(name, radio)| radio.kind == RadioKind::Bluetooth && !name.is_empty())
+        .map(|(name, radio)| (name.as_str(), radio))
+}
+
+/// Keep the names of the Bluetooth switches to leave off when airplane mode
+/// ends ([`RadioPaths::bluetooth_off`]): no file when there are none.
+fn remember_bluetooth_off(path: &Path, names: &[&str]) -> std::io::Result<()> {
+    if names.is_empty() {
+        return match std::fs::remove_file(path) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e),
+            _ => Ok(()),
+        };
+    }
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    std::fs::write(path, names.join("\n"))
 }
 
 /// Whether airplane mode is on: every radio blocked, or (without rfkill)
@@ -225,33 +257,61 @@ impl Network {
     /// Airplane mode: block (or unblock) every radio through rfkill; where
     /// rfkill can't be written, switch NetworkManager's Wi-Fi and mobile
     /// radios and BlueZ's adapters off instead (and those back on after).
+    ///
+    /// Bluetooth that was off already when airplane mode went on stays off
+    /// when it ends (BlueZ switches on every adapter that is unblocked):
+    /// its switches are blocked again in the same breath.
     pub fn set_airplane_mode(&self, on: bool) -> Task<()> {
-        let device = self.radios.device.clone();
-        let fallback = self.radios.fallback.clone();
+        let RadioPaths { device, sysfs, fallback, bluetooth_off } = self.radios.clone();
         let wake = self.model.wake();
         let bus = self.bus.clone();
         let model = self.model.clone();
-        Task::spawn("airplane mode", &wake, move || match rfkill::block_all(&device, on) {
-            Ok(()) => {
-                // Turned off through rfkill after the fallback: what the
-                // fallback switched off comes back too.
-                if !on
-                    && fallback.exists()
-                    && let Some(bus) = &bus
-                {
-                    airplane_without_rfkill(bus, &fallback, false)?;
+        Task::spawn("airplane mode", &wake, move || {
+            let switches = rfkill::read_sysfs_named(&sysfs);
+            let mut events = vec![rfkill::block_all_event(on)];
+            if !on {
+                let off = std::fs::read_to_string(&bluetooth_off).unwrap_or_default();
+                events.extend(
+                    bluetooth_switches(&switches)
+                        .filter(|(name, _)| off.lines().any(|line| line == *name))
+                        .map(|(_, radio)| rfkill::block_one_event(radio.index, rfkill::TYPE_BLUETOOTH, true)),
+                );
+            }
+            match rfkill::send(&device, &events) {
+                Ok(()) => {
+                    if !on {
+                        let _ = std::fs::remove_file(&bluetooth_off);
+                    } else if switches.iter().any(|(_, radio)| !radio.soft_blocked && !radio.hard_blocked) {
+                        // (With every radio off already this is airplane
+                        // mode asked for twice: what was kept stays.)
+                        let off: Vec<&str> = bluetooth_switches(&switches)
+                            .filter(|(_, radio)| radio.soft_blocked)
+                            .map(|(name, _)| name)
+                            .collect();
+                        if let Err(e) = remember_bluetooth_off(&bluetooth_off, &off) {
+                            log::warn!("aizome-sys: airplane mode: Bluetooth will come back on with the rest: {e}");
+                        }
+                    }
+                    // Turned off through rfkill after the fallback: what the
+                    // fallback switched off comes back too.
+                    if !on
+                        && fallback.exists()
+                        && let Some(bus) = &bus
+                    {
+                        airplane_without_rfkill(bus, &fallback, false)?;
+                    }
+                    Ok(())
                 }
-                Ok(())
+                Err(error) if rfkill::is_permission(&error) => {
+                    let bus = bus.ok_or_else(|| Error::Unavailable("NetworkManager".into()))?;
+                    airplane_without_rfkill(&bus, &fallback, on)?;
+                    // Shown at once (NetworkManager says Wi-Fi is off a moment
+                    // later), so the switch doesn't spring back.
+                    model.update(|s| s.airplane_mode = on || airplane(&s.radios, &fallback, s.wifi_enabled));
+                    Ok(())
+                }
+                Err(error) => Err(error),
             }
-            Err(error) if rfkill::is_permission(&error) => {
-                let bus = bus.ok_or_else(|| Error::Unavailable("NetworkManager".into()))?;
-                airplane_without_rfkill(&bus, &fallback, on)?;
-                // Shown at once (NetworkManager says Wi-Fi is off a moment
-                // later), so the switch doesn't spring back.
-                model.update(|s| s.airplane_mode = on || airplane(&s.radios, &fallback, s.wifi_enabled));
-                Ok(())
-            }
-            Err(error) => Err(error),
         })
     }
 

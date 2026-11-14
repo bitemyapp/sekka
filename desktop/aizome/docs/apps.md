@@ -243,7 +243,10 @@ As built, beyond the above:
   BlueZ's adapters off, and those back on after.
 - **Bluetooth**: a pairing sheet closes when BlueZ cancels it, when our
   pairing ends (a code only shown included), and a device that asked to
-  pair (Authorize) leaves no spinner once answered.
+  pair (Authorize) leaves no spinner once answered. Off (here or from the
+  menu bar) also blocks the adapter's own radio switch through
+  `/dev/rfkill`, so it is still off after a restart, when BlueZ would
+  switch it on again; airplane mode ending leaves it off too.
 - **Displays** previews mirroring live under "Keep these display
   settings?" as it does the other risky changes, and follows `[[outputs]]`
   changed elsewhere while it's open (panes hear when `settings.toml`
