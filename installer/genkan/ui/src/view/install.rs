@@ -10,7 +10,7 @@ use aizome_kit::{column, row};
 const LOG_LINE: f64 = 17.0;
 
 pub fn page(app: &Genkan) -> Element<Msg> {
-    let heading = if app.failed {
+    let heading = if app.failed() {
         "Installation Failed"
     } else {
         "Installing NixOS"
@@ -36,7 +36,7 @@ pub fn page(app: &Genkan) -> Element<Msg> {
     .width(Fill);
     let steps = INSTALL_STEPS
         .iter()
-        .zip(app.steps)
+        .zip(app.steps())
         .enumerate()
         .map(|(index, (title, state))| {
             let mark: Element<Msg> = match state {
@@ -70,7 +70,11 @@ pub fn page(app: &Genkan) -> Element<Msg> {
     if let Some(message) = &app.failure {
         items.push(group(
             "Installation did not complete",
-            "The disk may have been modified. Copy these details before closing; storage diagnostics, if any, are saved under /run.",
+            if app.disk_written() {
+                "The disk may have been modified. Copy these details before closing; storage diagnostics, if any, are saved under /run."
+            } else {
+                "It stopped before writing to the disk, which is unchanged. Copy these details before closing."
+            },
             vec![container(failure(message)).padding(12.0).width(Fill).into()],
         ));
     }

@@ -19,6 +19,7 @@ use yukimi_system::diff::Diff;
 use yukimi_system::generations::Generation;
 use yukimi_system::human_size;
 use yukimi_system::index::{Package, PackageIndex};
+use yukimi_system::saved::GenerationId;
 use yukimi_system::setup::{Choice, Kind};
 
 use crate::checks::{self, UpdateCheck};
@@ -1124,7 +1125,9 @@ impl Yukimi {
         let sample = matches!(self.source, Source::Sample(_));
         self.changes.insert(number, Changes::Working);
         cx.spawn(move || {
-            let kept = sample || yukimi_system::saved_configuration(number).is_dir();
+            // The copy kept for this very generation, not an earlier one with its number.
+            let root = std::path::Path::new(yukimi_system::SAVED_CONFIGURATIONS);
+            let kept = sample || yukimi_system::saved::Snapshot::of(root, &GenerationId::listed(&this)).is_some();
             let diff = match (&store, &previous) {
                 (Some(store), Some(previous)) => {
                     let (before, after) = (store.closure_of(&previous.target), store.closure_of(&this.target));

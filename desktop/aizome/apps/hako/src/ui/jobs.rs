@@ -12,11 +12,11 @@ use aizome_kit::{MsgSender, WindowKey};
 use crate::fsops::archive::{self, Format};
 use crate::fsops::transfer::{self, Mode};
 use crate::fsops::trash::{self, Trash};
-use crate::fsops::undo::{self, Record, Step, items_label};
+use crate::fsops::undo::{self, Inversion, Inverted, Record, Step, items_label};
 use crate::fsops::{Asker, Conflict, Control, Env, ErrorChoice, Failure, Progress, Report, Reporter, Resolution};
 
 /// What a job does.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub enum Work {
     Transfer {
         sources: Vec<PathBuf>,
@@ -45,11 +45,8 @@ pub enum Work {
         archive: PathBuf,
         dest: PathBuf,
     },
-    /// Undo (or redo, `redo`) a step.
-    Invert {
-        step: Step,
-        redo: bool,
-    },
+    /// Undo or redo a step, which the history keeps until this is done.
+    Invert(Inversion),
 }
 
 fn dest_name(p: &std::path::Path) -> String {
@@ -77,7 +74,7 @@ impl Work {
             Work::EmptyTrash => "Emptying the Trash".into(),
             Work::Compress { archive, .. } => format!("Compressing into “{}”", dest_name(archive)),
             Work::Extract { archive, .. } => format!("Extracting “{}”", dest_name(archive)),
-            Work::Invert { step, redo } => format!("{} {}", if *redo { "Redoing" } else { "Undoing" }, step.label),
+            Work::Invert(i) => format!("{} {}", if i.is_redo() { "Redoing" } else { "Undoing" }, i.label()),
         }
     }
 }
@@ -110,8 +107,8 @@ pub struct Done {
     pub report: Report,
     /// The step that undoes it (or, for an undo, redoes it).
     pub step: Option<Step>,
-    /// An undo (false) or redo (true) this was.
-    pub inverted: Option<bool>,
+    /// For an undo or redo, its result, for the history to file.
+    pub inverted: Option<Inverted>,
     /// Folders whose listings changed.
     pub changed: Vec<PathBuf>,
 }
@@ -197,18 +194,39 @@ pub fn start<Msg: Send + 'static>(
     let (atx, arx) = mpsc::channel::<Answer>();
     let c = control.clone();
     let wrap = Arc::new(wrap);
-    let _ = std::thread::Builder::new().name(format!("hako-job-{id}")).spawn(move || {
+    // An undo's or redo's result, should the job not give one: the history
+    // keeps the step either way.
+    let title = work.title();
+    let abandoned = match &work {
+        Work::Invert(inversion) => Some(inversion.abandoned()),
+        _ => None,
+    };
+    let (tx_spawn, wrap_spawn) = (tx.clone(), wrap.clone());
+    let (title_spawn, abandoned_spawn) = (title.clone(), abandoned.clone());
+    let spawned = std::thread::Builder::new().name(format!("hako-job-{id}")).spawn(move || {
         let send = {
             let (tx, wrap) = (tx.clone(), wrap.clone());
             move |e: JobEvent| tx.send(wrap(id, e))
         };
         let mut asker = UiAsker { send: &send, answers: arx, conflicts: None, errors: None };
         let mut reporter = Throttle { send: &send, last: None };
-        let mut env = Env::new(&c, &mut asker, &mut reporter);
-        let done = run(work, &trash, &mut env);
+        let ran = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let mut env = Env::new(&c, &mut asker, &mut reporter);
+            run(work, &trash, &mut env)
+        }));
+        let done = ran.unwrap_or_else(|_| stopped(&title, abandoned));
         send(JobEvent::Done(Arc::new(done)));
     });
+    if spawned.is_err() {
+        let _ = tx_spawn.send(wrap_spawn(id, JobEvent::Done(Arc::new(stopped(&title_spawn, abandoned_spawn)))));
+    }
     (control, atx)
+}
+
+/// What a job that stopped without a result did, as far as anyone knows.
+fn stopped(title: &str, inverted: Option<Inverted>) -> Done {
+    let failed = vec![(PathBuf::from(title), "it stopped unexpectedly, partway or before it began".into())];
+    Done { report: Report { failed, ..Report::default() }, step: None, inverted, changed: Vec::new() }
 }
 
 /// Carry out `work`.
@@ -221,7 +239,7 @@ pub fn run(work: Work, trash: &Trash, env: &mut Env) -> Done {
     };
     match work {
         Work::Transfer { sources, dest, mode } => {
-            let report = transfer::transfer(&sources, &dest, mode, env, Some(trash));
+            let report = transfer::transfer(&sources, &dest, mode, env, trash);
             let mut changed = parents(&sources);
             changed.push(dest.clone());
             let step = match mode {
@@ -236,7 +254,7 @@ pub fn run(work: Work, trash: &Trash, env: &mut Env) -> Done {
             Done { report, step, inverted: None, changed }
         }
         Work::Duplicate { sources } => {
-            let report = transfer::duplicate(&sources, env);
+            let report = transfer::duplicate(&sources, env, trash);
             Done { step: made(&report, "Duplicate"), changed: parents(&sources), report, inverted: None }
         }
         Work::Trash { paths } => {
@@ -279,12 +297,12 @@ pub fn run(work: Work, trash: &Trash, env: &mut Env) -> Done {
             let report = archive::extract(&from, &dest, env);
             Done { step: made(&report, "Extract"), report, inverted: None, changed: vec![dest] }
         }
-        Work::Invert { step, redo } => {
-            let (report, record) = undo::invert(&step.record, trash, env);
+        Work::Invert(inversion) => {
+            let (report, inverted) = undo::invert(inversion, trash, env);
             let mut touched: Vec<PathBuf> = report.done.iter().flat_map(|(a, b)| [a.clone(), b.clone()]).collect();
             touched.extend(report.failed.iter().map(|(a, _)| a.clone()));
             let changed = parents(&touched);
-            Done { report, step: Some(Step { record, label: step.label }), inverted: Some(redo), changed }
+            Done { report, step: None, inverted: Some(inverted), changed }
         }
     }
 }
@@ -400,11 +418,16 @@ mod tests {
         assert!(done.changed.contains(&dest) && done.changed.contains(&t.join("home")));
         let step = done.step.unwrap();
         assert_eq!(step.label, "Move of “a.txt”");
+        let mut history = undo::History::default();
+        history.push(step);
+        let work = Work::Invert(history.begin_undo().unwrap());
+        assert_eq!(work.title(), "Undoing Move of “a.txt”");
         let mut env = Env::new(&control, &mut asker, &mut quiet);
-        let undone = run(Work::Invert { step, redo: false }, &tr, &mut env);
+        let undone = run(work, &tr, &mut env);
         assert!(undone.report.is_clean());
         assert!(a.exists());
-        assert_eq!(undone.inverted, Some(false));
+        history.finished(undone.inverted.clone().expect("an undo's result"), |note| panic!("{note}"));
+        assert_eq!((history.undo_label(), history.redo_label()), (None, Some("Move of “a.txt”")));
         assert_eq!(Work::Trash { paths: vec![a.clone()] }.title(), "Moving “a.txt” to the Trash");
         assert_eq!(drop_mode(&[a], &dest, false), Mode::Move);
     }

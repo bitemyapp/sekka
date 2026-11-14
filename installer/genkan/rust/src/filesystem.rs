@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Closed filesystem choices and the shared format/probe/mount protocol.
-use crate::{Firmware, process::output};
+use crate::{Firmware, disk::Device, process::output, storage::Program};
 use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
 use std::{fs, io::Write};
@@ -29,11 +29,11 @@ impl Filesystem {
             Self::Xfs => "XFS — large files and parallel I/O",
         }
     }
-    fn formatter(self) -> &'static str {
+    fn formatter(self) -> Program {
         match self {
-            Self::Ext4 => "mkfs.ext4",
-            Self::Btrfs => "mkfs.btrfs",
-            Self::Xfs => "mkfs.xfs",
+            Self::Ext4 => Program::MKFS_EXT4,
+            Self::Btrfs => Program::MKFS_BTRFS,
+            Self::Xfs => Program::MKFS_XFS,
         }
     }
     pub(crate) fn preflight(self, firmware: Firmware) -> Result<()> {
@@ -50,14 +50,32 @@ impl Filesystem {
             Self::Ext4 | Self::Xfs => &["noatime"],
         }
     }
-    pub(crate) fn format(self, device: &str, uuid: &str) -> Result<()> {
+    /// Formats a device on the confirmed disk, with the chosen identity. It
+    /// takes a [`Device`], which only the confirmed disk yields, so it can't
+    /// format a partition named from a path passed beside the proof (GEN-03):
+    ///
+    /// ```compile_fail,E0308
+    /// use calamares_nixos::{Filesystem, InstallPlan, disk};
+    /// fn format(plan: &InstallPlan, uuid: &str) -> anyhow::Result<()> {
+    ///     Filesystem::Ext4.format(&disk::partition(&plan.disk().path, 2), uuid)
+    /// }
+    /// ```
+    ///
+    /// ```
+    /// use calamares_nixos::{Filesystem, disk::Confirmed};
+    /// fn format(disk: &Confirmed, uuid: &str) -> anyhow::Result<()> {
+    ///     Filesystem::Ext4.format(&disk.partition(2), uuid)
+    /// }
+    /// ```
+    pub fn format(self, device: &Device, uuid: &str) -> Result<()> {
+        let device = device.path();
         format_with(self, device, uuid, output)
             .with_context(|| format!("Formatting {device} as {}", self.name()))
     }
-    pub(crate) fn mount(self, device: &str, target: &str) -> Result<()> {
+    pub(crate) fn mount(self, device: &Device, target: &str) -> Result<()> {
         mount_with(
             self.name(),
-            device,
+            device.path(),
             target,
             &self.mount_options().join(","),
             output,
@@ -144,23 +162,23 @@ pub(crate) fn vfat_serial(b: [u8; 4]) -> String {
 fn preflight_with(
     filesystem: Filesystem,
     firmware: Firmware,
-    mut run: impl FnMut(&str, &[&str], u64) -> Result<String>,
+    mut run: impl FnMut(Program, &[&str], u64) -> Result<String>,
     read_filesystems: impl FnOnce() -> Result<String>,
 ) -> Result<()> {
     run(filesystem.formatter(), &[if filesystem == Filesystem::Btrfs { "--version" } else { "-V" }], 15)
         .context("The installation media is missing a working filesystem formatter; no disk writes were made")?;
     // Cold module loading can include decompression and kernel relocation while
     // the live desktop is starting. This is read-only preparation, not a disk job.
-    run("modprobe", &[filesystem.name()], 120).with_context(|| {
+    run(Program::MODPROBE, &[filesystem.name()], 120).with_context(|| {
         format!(
             "Could not load {} kernel support; no disk writes were made",
             filesystem.name()
         )
     })?;
     if firmware == Firmware::Uefi {
-        run("mkfs.fat", &["--help"], 15)
+        run(Program::MKFS_FAT, &["--help"], 15)
             .context("Could not check the EFI formatter; no disk writes were made")?;
-        run("modprobe", &["vfat"], 120)
+        run(Program::MODPROBE, &["vfat"], 120)
             .context("Could not load FAT32 kernel support; no disk writes were made")?;
     }
     let supported = read_filesystems()?;
@@ -184,12 +202,12 @@ fn preflight_with(
 fn verify_with(
     device: &str,
     expected: &str,
-    run: &mut impl FnMut(&str, &[&str], u64) -> Result<String>,
+    run: &mut impl FnMut(Program, &[&str], u64) -> Result<String>,
 ) -> Result<()> {
     // Low-level probing bypasses both blkid's cache and udev's cached ID_FS_TYPE.
     // An ambiguous signature (exit 8) is an error, never a reason to guess.
     let actual = run(
-        "blkid",
+        Program::BLKID,
         &[
             "--probe",
             "--output",
@@ -253,7 +271,11 @@ fn uuid_from_probe(probe: &str, expected: &str) -> Result<String> {
 pub(crate) fn probe_uuid(device: &str, expected: &str) -> Result<String> {
     // Old /dev/disk/by-uuid aliases can outlive a reformat even after udev
     // settles. Read the superblock itself, never select an alias by its rdev.
-    let probe = output("blkid", &["--probe", "--output", "export", device], 30)?;
+    let probe = output(
+        Program::BLKID,
+        &["--probe", "--output", "export", device],
+        30,
+    )?;
     uuid_from_probe(&probe, expected)
         .with_context(|| format!("Reading the new filesystem UUID on {device}"))
 }
@@ -261,12 +283,12 @@ fn format_with(
     filesystem: Filesystem,
     device: &str,
     uuid: &str,
-    mut run: impl FnMut(&str, &[&str], u64) -> Result<String>,
+    mut run: impl FnMut(Program, &[&str], u64) -> Result<String>,
 ) -> Result<()> {
     check_uuid(uuid, filesystem.name())?;
     // Wiping the whole disk only removes its partition table, not signatures
     // inside its partitions. Do this even when mkfs would accept -f/-F.
-    run("wipefs", &["--all", "--force", device], 60)?;
+    run(Program::WIPEFS, &["--all", "--force", device], 60)?;
     let xfs_uuid = format!("uuid={uuid}");
     let args: Vec<&str> = match filesystem {
         Filesystem::Ext4 => vec!["-F", "-U", uuid, device],
@@ -277,35 +299,49 @@ fn format_with(
     verify_with(device, filesystem.name(), &mut run)?;
     verify_identity(device, filesystem.name(), uuid, &mut run)
 }
-pub(crate) fn format_efi(device: &str, serial: &str) -> Result<()> {
-    format_efi_with(device, serial, output)
+pub(crate) fn format_efi(device: &Device, serial: &str) -> Result<()> {
+    format_efi_with(device.path(), serial, output)
 }
 fn format_efi_with(
     device: &str,
     serial: &str,
-    mut run: impl FnMut(&str, &[&str], u64) -> Result<String>,
+    mut run: impl FnMut(Program, &[&str], u64) -> Result<String>,
 ) -> Result<()> {
     check_uuid(serial, "vfat")?;
-    run("wipefs", &["--all", "--force", device], 60)?;
+    run(Program::WIPEFS, &["--all", "--force", device], 60)?;
     run(
-        "mkfs.fat",
+        Program::MKFS_FAT,
         &["-F", "32", "-i", &serial.replace('-', ""), device],
         60,
     )?;
     verify_with(device, "vfat", &mut run)?;
     verify_identity(device, "vfat", serial, &mut run)
 }
-pub(crate) fn format_swap(device: &str, uuid: &str) -> Result<()> {
-    format_swap_with(device, uuid, output)
+/// Whether the media can make swap: before any disk write.
+pub(crate) fn swap_preflight() -> Result<()> {
+    output(Program::MKSWAP, &["--version"], 15)
+        .context("The installation media is missing mkswap; no disk writes were made")
+        .map(drop)
+}
+pub(crate) fn format_swap(device: &Device, uuid: &str) -> Result<()> {
+    format_swap_with(device.path(), uuid, output)
+}
+/// Erases a device's signatures (a BIOS boot partition keeps none).
+pub(crate) fn wipe(device: &Device) -> Result<()> {
+    output(Program::WIPEFS, &["--all", "--force", device.path()], 60).map(drop)
 }
 fn format_swap_with(
     device: &str,
     uuid: &str,
-    mut run: impl FnMut(&str, &[&str], u64) -> Result<String>,
+    mut run: impl FnMut(Program, &[&str], u64) -> Result<String>,
 ) -> Result<()> {
     check_uuid(uuid, "swap")?;
-    run("wipefs", &["--all", "--force", device], 60)?;
-    run("mkswap", &["--uuid", uuid, "--label", "swap", device], 60)?;
+    run(Program::WIPEFS, &["--all", "--force", device], 60)?;
+    run(
+        Program::MKSWAP,
+        &["--uuid", uuid, "--label", "swap", device],
+        60,
+    )?;
     verify_with(device, "swap", &mut run)?;
     verify_identity(device, "swap", uuid, &mut run)
 }
@@ -314,9 +350,13 @@ fn verify_identity(
     device: &str,
     kind: &str,
     expected: &str,
-    run: &mut impl FnMut(&str, &[&str], u64) -> Result<String>,
+    run: &mut impl FnMut(Program, &[&str], u64) -> Result<String>,
 ) -> Result<()> {
-    let probe = run("blkid", &["--probe", "--output", "export", device], 30)?;
+    let probe = run(
+        Program::BLKID,
+        &["--probe", "--output", "export", device],
+        30,
+    )?;
     let actual = uuid_from_probe(&probe, kind)
         .with_context(|| format!("Reading the new filesystem UUID on {device}"))?;
     ensure!(
@@ -325,19 +365,19 @@ fn verify_identity(
     );
     Ok(())
 }
-pub(crate) fn mount_efi(device: &str, target: &str) -> Result<()> {
-    mount_with("vfat", device, target, "umask=0077", output)
+pub(crate) fn mount_efi(device: &Device, target: &str) -> Result<()> {
+    mount_with("vfat", device.path(), target, "umask=0077", output)
 }
 fn mount_with(
     kind: &str,
     device: &str,
     target: &str,
     options: &str,
-    mut run: impl FnMut(&str, &[&str], u64) -> Result<String>,
+    mut run: impl FnMut(Program, &[&str], u64) -> Result<String>,
 ) -> Result<()> {
     verify_with(device, kind, &mut run)?;
     run(
-        "mount",
+        Program::MOUNT,
         &["--types", kind, "--options", options, "--", device, target],
         30,
     )
@@ -352,7 +392,7 @@ pub(crate) fn diagnose(error: anyhow::Error, disk: &str) -> anyhow::Error {
     let swap = crate::disk::partition(disk, 3);
     for (program, args) in [
         (
-            "lsblk",
+            Program::LSBLK,
             vec![
                 "--bytes",
                 "--output",
@@ -360,10 +400,10 @@ pub(crate) fn diagnose(error: anyhow::Error, disk: &str) -> anyhow::Error {
                 disk,
             ],
         ),
-        ("blkid", vec!["--probe", root.as_str()]),
-        ("blkid", vec!["--probe", boot.as_str()]),
-        ("blkid", vec!["--probe", swap.as_str()]),
-        ("dmesg", vec!["--ctime", "--level=err,warn"]),
+        (Program::BLKID, vec!["--probe", root.as_str()]),
+        (Program::BLKID, vec!["--probe", boot.as_str()]),
+        (Program::BLKID, vec!["--probe", swap.as_str()]),
+        (Program::DMESG, vec!["--ctime", "--level=err,warn"]),
     ] {
         let text = match output(program, &args, 15) {
             Ok(text) => text,
@@ -377,7 +417,7 @@ pub(crate) fn diagnose(error: anyhow::Error, disk: &str) -> anyhow::Error {
             .into_iter()
             .rev()
             .collect();
-        report.push_str(&format!("\n{program}:\n{tail}\n"));
+        report.push_str(&format!("\n{}:\n{tail}\n", program.name()));
     }
     let saved = (|| -> Result<_> {
         // NamedTempFile is mode 0600; diagnostics are local and contain no request secrets.
@@ -441,7 +481,7 @@ mod tests {
                     "/target",
                     "defaults",
                     |program, args, _| {
-                        calls.push(program.to_owned());
+                        calls.push(program.name().to_owned());
                         assert_eq!(args[0], "--probe");
                         answer.take().unwrap()
                     }
@@ -483,14 +523,14 @@ mod tests {
     fn every_formatter_requests_and_verifies_the_chosen_identity() {
         for fs in Filesystem::ALL {
             let mut calls = vec![];
-            let mut run = |program: &str, args: &[&str], _: u64| {
+            let mut run = |program: Program, args: &[&str], _: u64| {
                 calls.push((
-                    program.to_owned(),
+                    program.name().to_owned(),
                     args.iter().map(|s| s.to_string()).collect::<Vec<_>>(),
                 ));
                 Ok(if args.contains(&"export") {
                     probe(fs.name(), ROOT)
-                } else if program == "blkid" {
+                } else if program == Program::BLKID {
                     format!("{}\n", fs.name())
                 } else {
                     String::new()
@@ -507,7 +547,14 @@ mod tests {
             .unwrap();
             assert_eq!(
                 calls.iter().map(|c| c.0.as_str()).collect::<Vec<_>>(),
-                ["wipefs", fs.formatter(), "blkid", "blkid", "blkid", "mount"]
+                [
+                    "wipefs",
+                    fs.formatter().name(),
+                    "blkid",
+                    "blkid",
+                    "blkid",
+                    "mount"
+                ]
             );
             assert_eq!(calls[0].1, ["--all", "--force", "/dev/nvme0n1p2"]);
             let requested = calls[1].1.join(" ");
@@ -520,10 +567,10 @@ mod tests {
     fn a_mismatched_or_malformed_identity_is_rejected() {
         let other = "11111111-2222-4333-8444-555555555555";
         let answer = |kind: &'static str, uuid: &'static str| {
-            move |program: &str, args: &[&str], _: u64| -> Result<String> {
+            move |program: Program, args: &[&str], _: u64| -> Result<String> {
                 Ok(if args.contains(&"export") {
                     probe(kind, uuid)
-                } else if program == "blkid" {
+                } else if program == Program::BLKID {
                     format!("{kind}\n")
                 } else {
                     String::new()
@@ -593,7 +640,7 @@ mod tests {
                 Filesystem::Xfs,
                 Firmware::Uefi,
                 |program, args, _| {
-                    if program == "modprobe" && args == [failed_module] {
+                    if program == Program::MODPROBE && args == [failed_module] {
                         anyhow::bail!("modprobe timed out");
                     }
                     Ok(String::new())
@@ -617,10 +664,7 @@ mod tests {
     #[test]
     #[ignore = "requires Linux root, loop devices and filesystem tools"]
     fn real_reformat_mount_matrix() -> Result<()> {
-        ensure!(
-            unsafe { libc::geteuid() } == 0,
-            "Needs disposable Linux root"
-        );
+        ensure!(crate::sys::is_root(), "Needs disposable Linux root");
         struct Image {
             device: String,
             dir: std::path::PathBuf,
@@ -629,10 +673,10 @@ mod tests {
             fn drop(&mut self) {
                 let mount = self.dir.join("mount");
                 if let Some(mount) = mount.to_str() {
-                    let _ = output("umount", &[mount], 30);
+                    let _ = output(Program::UMOUNT, &[mount], 30);
                 }
                 // Never recursively delete a mountpoint, including on failure.
-                if output("losetup", &["--detach", &self.device], 30).is_ok() {
+                if output(Program::LOSETUP, &["--detach", &self.device], 30).is_ok() {
                     let _ = fs::remove_file(self.dir.join("disk.raw"));
                 }
                 let _ = fs::remove_dir(mount);
@@ -648,7 +692,7 @@ mod tests {
             fs::File::create(&backing)?.set_len(2 * 1024u64.pow(3))?;
             fs::create_dir(dir.join("mount"))?;
             let device = output(
-                "losetup",
+                Program::LOSETUP,
                 &[
                     "--find",
                     "--show",
@@ -661,13 +705,14 @@ mod tests {
             .trim()
             .to_owned();
             let image = Image { device, dir };
+            let device = crate::disk::Device::for_test(&image.device);
             ensure!(
                 image.device.starts_with("/dev/loop"),
                 "Unexpected test device"
             );
             ensure!(
                 output(
-                    "losetup",
+                    Program::LOSETUP,
                     &["--noheadings", "--output", "BACK-FILE", &image.device],
                     30
                 )?
@@ -680,19 +725,19 @@ mod tests {
             for previous in Filesystem::ALL {
                 for next in Filesystem::ALL {
                     let old_uuid = uuid_v4(random()?);
-                    previous.format(&image.device, &old_uuid)?;
+                    previous.format(&device, &old_uuid)?;
                     // Prime the ordinary userspace probe before replacing it.
-                    output("blkid", &[&image.device], 30)?;
+                    output(Program::BLKID, &[&image.device], 30)?;
                     let new_uuid = uuid_v4(random()?);
-                    next.format(&image.device, &new_uuid)?;
+                    next.format(&device, &new_uuid)?;
                     ensure!(
                         probe_uuid(&image.device, next.name())? == new_uuid,
                         "Reformat did not apply the requested UUID"
                     );
-                    next.mount(&image.device, mount)?;
+                    next.mount(&device, mount)?;
                     ensure!(
                         output(
-                            "findmnt",
+                            Program::FINDMNT,
                             &["--noheadings", "--output", "FSTYPE", "--mountpoint", mount],
                             15
                         )?
@@ -704,15 +749,15 @@ mod tests {
                         std::path::Path::new(mount).join("sentinel"),
                         b"persistent storage",
                     )?;
-                    output("sync", &[], 30)?;
-                    output("umount", &[mount], 30)?;
-                    next.mount(&image.device, mount)?;
+                    output(Program::SYNC, &[], 30)?;
+                    output(Program::UMOUNT, &[mount], 30)?;
+                    next.mount(&device, mount)?;
                     ensure!(
                         fs::read(std::path::Path::new(mount).join("sentinel"))?
                             == b"persistent storage",
                         "Data lost on remount"
                     );
-                    output("umount", &[mount], 30)?;
+                    output(Program::UMOUNT, &[mount], 30)?;
                     println!(
                         "PASS sector={sector_size} {} -> {}",
                         previous.name(),
@@ -720,18 +765,18 @@ mod tests {
                     );
                 }
             }
-            format_efi(&image.device, &vfat_serial(random()?))?;
-            output("blkid", &[&image.device], 30)?;
+            format_efi(&device, &vfat_serial(random()?))?;
+            output(Program::BLKID, &[&image.device], 30)?;
             let serial = vfat_serial(random()?);
-            format_efi(&image.device, &serial)?;
+            format_efi(&device, &serial)?;
             ensure!(
                 probe_uuid(&image.device, "vfat")? == serial,
                 "FAT reformat did not apply the requested serial"
             );
-            mount_efi(&image.device, mount)?;
+            mount_efi(&device, mount)?;
             ensure!(
                 output(
-                    "findmnt",
+                    Program::FINDMNT,
                     &["-n", "-o", "FSTYPE", "--mountpoint", mount],
                     15
                 )?
@@ -739,10 +784,10 @@ mod tests {
                     == "vfat",
                 "Wrong EFI filesystem"
             );
-            output("umount", &[mount], 30)?;
+            output(Program::UMOUNT, &[mount], 30)?;
             // Swap replaces the FAT signature and must carry the chosen UUID.
             let swap = uuid_v4(random()?);
-            format_swap(&image.device, &swap)?;
+            format_swap(&device, &swap)?;
             ensure!(
                 probe_uuid(&image.device, "swap")? == swap,
                 "Swap format did not apply the requested UUID"

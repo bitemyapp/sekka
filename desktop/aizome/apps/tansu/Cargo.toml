@@ -22,7 +22,14 @@ aizome-theme.workspace = true
 log.workspace = true
 env_logger.workspace = true
 
+[features]
+# Tansu's own tests choose segments outside a sheet's opening
+# (app::Opening::for_tests). Not for the app.
+test-util = []
+
 [dev-dependencies]
+# Itself, with test-util, for its integration tests and doctests.
+aizome-tansu = { path = ".", features = ["test-util"] }
 # A fake UDisks2 on a private bus, for the tests that run plans through
 # aizome-sys's real client (already in aizome-sys's tree).
 zbus = { version = "5.19", default-features = false, features = ["async-io", "blocking-api"] }

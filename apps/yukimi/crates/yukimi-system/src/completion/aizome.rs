@@ -171,33 +171,7 @@ fn snapshot(socket: &Path, proc: &Path, timeout: Duration) -> Result<Running, St
 // immediately (EAGAIN), rather than waiting or treating POLLHUP as success.
 // Keep this policy in the consumer, outside the compositor's ABI dependencies.
 fn connect(path: &Path) -> std::io::Result<Client> {
-    use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
-    use std::os::unix::{ffi::OsStrExt, net::UnixStream};
-    let bytes = path.as_os_str().as_bytes();
-    // Safety: sockaddr_un consists of integer fields; all-zero is valid.
-    let mut address: libc::sockaddr_un = unsafe { std::mem::zeroed() };
-    if bytes.is_empty() || bytes.contains(&0) || bytes.len() >= address.sun_path.len() {
-        return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid Unix socket path"));
-    }
-    address.sun_family = libc::AF_UNIX as libc::sa_family_t;
-    for (target, byte) in address.sun_path.iter_mut().zip(bytes) {
-        *target = *byte as libc::c_char;
-    }
-    // Safety: the flags and protocol describe a Unix stream socket.
-    let fd = unsafe { libc::socket(libc::AF_UNIX, libc::SOCK_STREAM | libc::SOCK_CLOEXEC | libc::SOCK_NONBLOCK, 0) };
-    if fd < 0 {
-        return Err(std::io::Error::last_os_error());
-    }
-    // Safety: socket returned a new, owned descriptor.
-    let fd = unsafe { OwnedFd::from_raw_fd(fd) };
-    let length = (std::mem::offset_of!(libc::sockaddr_un, sun_path) + bytes.len() + 1) as libc::socklen_t;
-    // Safety: address is initialized and length covers its family and terminated path.
-    if unsafe { libc::connect(fd.as_raw_fd(), (&address as *const libc::sockaddr_un).cast(), length) } != 0 {
-        return Err(std::io::Error::last_os_error());
-    }
-    let stream = UnixStream::from(fd);
-    stream.set_nonblocking(false)?;
-    Client::from_stream(stream)
+    Client::from_stream(crate::sys::connect_once(path)?)
 }
 
 fn process_environment(raw: &[u8]) -> Result<Environment, String> {
@@ -1107,13 +1081,11 @@ esac
 
     #[test]
     fn a_full_ipc_accept_queue_cannot_block_completion() {
-        use std::os::fd::AsRawFd;
         use std::os::unix::net::UnixStream;
         let f = Fixture::new();
         let socket = f.root.join("ipc");
         let listener = UnixListener::bind(&socket).unwrap();
-        // Safety: this is the live descriptor of our private fixture listener.
-        assert_eq!(unsafe { libc::listen(listener.as_raw_fd(), 0) }, 0);
+        crate::sys::listen_without_backlog(&listener).unwrap();
         let _queued = UnixStream::connect(&socket).unwrap();
         let (done, wait) = std::sync::mpsc::channel();
         let proc = f.root.clone();

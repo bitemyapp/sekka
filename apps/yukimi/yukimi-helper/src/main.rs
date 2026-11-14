@@ -6,8 +6,9 @@
 //!
 //! - `change [options] --mode auto|switch|boot` changes what the system installs
 //!   and where it comes from, builds the new system and switches to it. If
-//!   anything before the switch fails, every file it touched is put back as
-//!   it was. The options:
+//!   anything before the switch fails, every file it touched, and root's
+//!   channels if it updated them, is put back as it was
+//!   ([`yukimi_helper::change`]). The options:
 //!   - `--packages a,b` and `--programs x,y`: what `yukimi.nix` installs
 //!     (written next to the main configuration file, and imported from it
 //!     once);
@@ -26,19 +27,20 @@
 //!     the Sekka input, preserving all independent dependency pins.
 //! - `rollback <generation>` switches to an earlier system generation, and
 //!   puts back the configuration it was built from.
-//! - `clean [--older-than-days n]` deletes old system generations and
-//!   collects garbage.
+//! - `clean [--older-than-days n]` deletes old system generations, updates
+//!   the boot menu, and collects garbage ([`yukimi_helper::clean`]).
 //! - `delete <generation>... [--collect-garbage]` deletes particular system
 //!   generations: never the one selected for the next start, the running
 //!   one or the one the computer started with. Their kept configurations go
-//!   with them, and the boot menu is made again without them. What only
-//!   they kept goes when garbage is collected: then, with
-//!   `--collect-garbage`, or at the next clean-up.
+//!   with them, and the boot menu is made again without them, in the same
+//!   step as `clean`'s. What only they kept goes when garbage is collected:
+//!   then, with `--collect-garbage`, or at the next clean-up.
 //! - `estimate <generation>...`, which needs no administrator, says what
 //!   deleting generations would give back (see `yukimi_system::reclaim`).
 //!
 //! Each generation's configuration is kept: a copy of the configuration's
-//! directory in [`SAVED`]`/generation-<n>`. So going back to a generation
+//! directory in [`SAVED`]`/generation-<n>`, which records the system it was
+//! kept for ([`yukimi_helper::snapshots`]). So going back to a generation
 //! brings back the choices that made it, and the next change builds on
 //! those.
 //!
@@ -47,31 +49,35 @@
 //! standard input is a pipe and Yukimi closes it, the helper stops what it
 //! is doing and puts the configuration back, unless the new system is
 //! already being started, which is never interrupted.
-use std::io::{Read, Write};
+#![forbid(clippy::disallowed_methods)]
+#![forbid(unsafe_code)]
+use std::io::Write;
 
 mod transaction;
-use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
-use std::process::{Command, ExitCode, Stdio};
-use std::sync::Mutex;
+use std::process::ExitCode;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use yukimi_config::packages;
 use yukimi_config::sekka;
 use yukimi_config::{branch, edit, lock};
+use yukimi_helper::change::{Committed, RestorePoint};
+use yukimi_helper::clean::{self as cleaning, Generations, generation_words};
+use yukimi_helper::process::{
+    Failure, Nix, Operation, PATH, Program, Result, command, nix, output, report, stage, stage_done, stop,
+    watch_for_stop,
+};
+use yukimi_helper::{process, snapshots};
 use yukimi_system::catalog;
 use yukimi_system::completion::{self, Receipt};
 use yukimi_system::people;
 use yukimi_system::preflight;
+use yukimi_system::saved::{GenerationId, Snapshot};
 use yukimi_system::setup::{Choice, Kind, Setup};
 
-const PROFILE: &str = "/nix/var/nix/profiles/system";
-/// pkexec starts programs with an almost empty environment.
-const PATH: &str = "/run/current-system/sw/bin:/run/wrappers/bin";
+const PROFILE: &str = yukimi_system::generations::SYSTEM_PROFILE;
 /// Where each generation's configuration is kept, as `generation-<n>`.
 const SAVED: &str = yukimi_system::SAVED_CONFIGURATIONS;
-/// Files bigger than this aren't configuration, and aren't kept with it.
-const LARGEST_KEPT: u64 = 1 << 20;
 /// Where Nix keeps the store and builds; the one with least room counts.
 const BUILD_PLACES: [&str; 2] = ["/nix", "/tmp"];
 /// A new system isn't built with less room than this.
@@ -79,327 +85,9 @@ const SPACE_NEEDED: u64 = 10_000_000_000;
 /// Building stops when room falls below this, rather than fill the disk.
 const SPACE_FLOOR: u64 = 4_000_000_000;
 
-/// Where the work is, which decides whether it can still be stopped.
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Phase {
-    Working,
-    /// Yukimi asked to stop.
-    Stopping,
-    /// The new system is being started: too late to stop.
-    Committed,
-}
-
-/// The phase, and the program running now (to stop when asked).
-static STATE: Mutex<(Phase, Option<u32>)> = Mutex::new((Phase::Working, None));
-static INTERRUPTED: AtomicBool = AtomicBool::new(false);
-
-extern "C" fn interrupt(_: libc::c_int) {
-    INTERRUPTED.store(true, Ordering::Relaxed);
-}
-
-fn stop() {
-    let mut state = state();
-    if state.0 == Phase::Committed {
-        return;
-    }
-    state.0 = Phase::Stopping;
-    if let Some(pid) = state.1 {
-        // SAFETY: signalling a process has no memory-safety preconditions.
-        unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) };
-    }
-}
-
-fn state() -> std::sync::MutexGuard<'static, (Phase, Option<u32>)> {
-    STATE.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
-}
-
-/// Stop when standard input closes, if it is a pipe: that is how Yukimi
-/// asks. Standard input that is a terminal or /dev/null means nothing.
-fn watch_for_stop() {
-    // Terminal cancellation must follow the same rollback path as closing
-    // the GUI's pipe, not abruptly exit with a half-edited configuration.
-    // SAFETY: the signal handler only stores to a lock-free atomic.
-    unsafe {
-        libc::signal(libc::SIGINT, interrupt as *const () as libc::sighandler_t);
-        libc::signal(libc::SIGTERM, interrupt as *const () as libc::sighandler_t);
-    }
-    std::thread::spawn(|| {
-        loop {
-            if INTERRUPTED.swap(false, Ordering::Relaxed) {
-                stop();
-            }
-            std::thread::sleep(std::time::Duration::from_millis(50));
-        }
-    });
-    // SAFETY: fstat writes only into the struct it is given.
-    let is_pipe = unsafe {
-        let mut stat: libc::stat = std::mem::zeroed();
-        libc::fstat(0, &mut stat) == 0 && (stat.st_mode & libc::S_IFMT) == libc::S_IFIFO
-    };
-    if !is_pipe {
-        return;
-    }
-    std::thread::spawn(|| {
-        let mut buffer = [0u8; 64];
-        while matches!(std::io::stdin().read(&mut buffer), Ok(n) if n > 0) {}
-        stop();
-    });
-}
-
-fn check_stopped() -> Result<()> {
-    if state().0 == Phase::Stopping { Err(Failure("Stopped".into())) } else { Ok(()) }
-}
-
-/// From here on the work finishes even if Yukimi goes away, so that the
-/// system is never left half switched.
-fn commit() -> Result<()> {
-    let mut state = state();
-    if state.0 == Phase::Stopping {
-        return Err(Failure("Stopped".into()));
-    }
-    state.0 = Phase::Committed;
-    Ok(())
-}
-
-/// The system is whole again (generations deleted and the boot menu made
-/// without them): what follows, collecting garbage, may be stopped.
-fn settle() {
-    let mut state = state();
-    if state.0 == Phase::Committed {
-        state.0 = Phase::Working;
-    }
-}
-
-/// Start a command, remembering it so it can be stopped, and wait for it.
-fn wait(c: &mut Command) -> Result<std::process::Output> {
-    let child = {
-        let mut state = state();
-        if state.0 == Phase::Stopping {
-            return Err(Failure("Stopped".into()));
-        }
-        let child = c.spawn()?;
-        state.1 = Some(child.id());
-        child
-    };
-    let out = child.wait_with_output();
-    state().1 = None;
-    check_stopped()?;
-    Ok(out?)
-}
-
-/// A failure, in words for the person who asked.
-#[derive(Debug)]
-struct Failure(String);
-
-impl<E: std::fmt::Display> From<E> for Failure {
-    fn from(e: E) -> Failure {
-        Failure(e.to_string())
-    }
-}
-
-type Result<T> = std::result::Result<T, Failure>;
-
-/// Say what is happening, as an activity Yukimi shows.
-fn stage(id: u64, text: &str) {
-    eprintln!(
-        "@nix {}",
-        serde_json::json!({"action": "start", "id": id, "level": 0, "type": 0, "text": text, "fields": []})
-    );
-}
-
-fn stage_done(id: u64) {
-    eprintln!("@nix {}", serde_json::json!({"action": "stop", "id": id}));
-}
-
-fn report(level: u8, message: &str) {
-    eprintln!("@nix {}", serde_json::json!({"action": "msg", "level": level, "msg": message}));
-}
-
-fn command(program: &str) -> Command {
-    let mut c = Command::new(program);
-    // Only the helper handles terminal cancellation. In particular, an
-    // activation already committed must finish even when Ctrl-C is pressed.
-    c.process_group(0);
-    c.env_clear().env("PATH", PATH).env("HOME", "/root").env("LANG", "C.UTF-8").stdin(Stdio::null());
-    if let Ok(archive) = std::fs::read_link("/run/current-system/sw/lib/locale/locale-archive") {
-        c.env("LOCALE_ARCHIVE", archive);
-    }
-    c
-}
-
-fn nix() -> Command {
-    let mut c = command("nix");
-    c.args(["--extra-experimental-features", "nix-command flakes"]);
-    c
-}
-
-/// Run a command whose error output goes straight to Yukimi.
-fn run(mut c: Command, what: &str) -> Result<()> {
-    let out = wait(c.stdout(Stdio::inherit()).stderr(Stdio::inherit()))?;
-    if out.status.success() { Ok(()) } else { Err(Failure(format!("{what} failed"))) }
-}
-
-/// Run a command and keep its standard output.
-fn output(mut c: Command, what: &str) -> Result<String> {
-    let out = wait(c.stdout(Stdio::piped()).stderr(Stdio::inherit()))?;
-    if out.status.success() {
-        Ok(String::from_utf8_lossy(&out.stdout).into_owned())
-    } else {
-        Err(Failure(format!("{what} failed")))
-    }
-}
-
-/// Files as they were, to put back if a change fails.
-struct Backup(Vec<(PathBuf, Option<Vec<u8>>)>);
-
-impl Backup {
-    fn take(files: &[PathBuf]) -> Backup {
-        Backup(files.iter().map(|path| (path.clone(), std::fs::read(path).ok())).collect())
-    }
-
-    fn restore(&self) {
-        for (path, contents) in &self.0 {
-            match contents {
-                Some(bytes) => {
-                    let _ = std::fs::write(path, bytes);
-                }
-                None => {
-                    let _ = std::fs::remove_file(path);
-                }
-            }
-        }
-    }
-}
-
-/// Write a file of the configuration. A new file belongs to whoever owns
-/// its directory, so a configuration kept in someone's home stays theirs,
-/// and in a Git work tree, Git is told about it (as intended to be added),
-/// or a flake there wouldn't see it.
-fn write_file(setup: &Setup, path: &Path, contents: &str) -> Result<()> {
-    let new = !path.exists();
-    std::fs::write(path, contents)?;
-    if !new {
-        return Ok(());
-    }
-    if let Some(meta) = path.parent().and_then(|dir| std::fs::metadata(dir).ok()) {
-        use std::os::unix::fs::MetadataExt;
-        let _ = std::os::unix::fs::chown(path, Some(meta.uid()), Some(meta.gid()));
-    }
-    if setup.git {
-        let mut git = command("git");
-        // Root works in someone else's work tree here, which Git refuses
-        // unless told it is safe.
-        git.args(["-c", "safe.directory=*", "-C"]).arg(path.parent().unwrap_or(&setup.dir));
-        git.args(["add", "--intent-to-add", "--"]).arg(path);
-        if !wait(git.stdout(Stdio::null()).stderr(Stdio::null()))?.status.success() {
-            return Err(Failure(format!(
-                "{} is in a Git repository, and Git couldn't be told about {}",
-                setup.dir.display(),
-                path.display()
-            )));
-        }
-    }
-    Ok(())
-}
-
-/// The number of the system generation the profile points at.
-fn current_generation() -> Option<u32> {
-    let link = std::fs::read_link(PROFILE).ok()?;
-    generation_number(link.file_name()?.to_str()?)
-}
-
-/// `system-12-link` is generation 12.
-fn generation_number(link: &str) -> Option<u32> {
-    link.strip_prefix("system-")?.strip_suffix("-link")?.parse().ok()
-}
-
-fn saved(generation: u32) -> PathBuf {
-    yukimi_system::saved_configuration(generation)
-}
-
-/// Copy a configuration directory: its files and folders, not hidden ones
-/// (such as a Git directory), build results or large files. Each file keeps
-/// its permissions, so a file only its owner may read (in a configuration
-/// kept in a home directory, say) stays that way.
-fn copy_configuration(from: &Path, to: &Path) -> Result<()> {
-    std::fs::create_dir_all(to)?;
-    for entry in std::fs::read_dir(from)? {
-        let entry = entry?;
-        let name = entry.file_name();
-        let text = name.to_string_lossy();
-        if text.starts_with('.') || text.starts_with("result") {
-            continue;
-        }
-        let (from, to) = (entry.path(), to.join(&name));
-        let kind = entry.file_type()?;
-        if kind.is_dir() {
-            copy_configuration(&from, &to)?;
-        } else if kind.is_file() && entry.metadata()?.len() <= LARGEST_KEPT {
-            std::fs::copy(&from, &to)?;
-        }
-    }
-    Ok(())
-}
-
-/// Keep the configuration as generation `generation`'s, unless one is kept
-/// already (or `replace`).
-fn save_configuration(setup: &Setup, generation: u32, replace: bool) -> Result<()> {
-    let dir = saved(generation);
-    if dir.is_dir() && !replace {
-        return Ok(());
-    }
-    let partial = dir.with_extension("new");
-    let _ = std::fs::remove_dir_all(&partial);
-    copy_configuration(&setup.dir, &partial)?;
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::rename(&partial, &dir)?;
-    Ok(())
-}
-
-/// Put back the files Yukimi changes (the lock file, its own file, the main
-/// configuration file) as a kept configuration has them. A file someone
-/// changed since the running generation was built is left as it is, so
-/// that nothing written by hand is lost. Returns the files left alone.
-fn restore_choices(setup: &Setup, kept: &Path, running: Option<&Path>) -> Vec<PathBuf> {
-    let mut files = vec![setup.dir.join("flake.nix"), setup.dir.join("flake.lock")];
-    files.extend(setup.main.clone());
-    files.extend(setup.packages_file());
-    let mut left = Vec::new();
-    for file in files {
-        let Ok(relative) = file.strip_prefix(&setup.dir) else { continue };
-        let now = std::fs::read(&file).ok();
-        let then = std::fs::read(kept.join(relative)).ok();
-        if now == then {
-            continue;
-        }
-        // Unchanged since the running generation was made from it?
-        let untouched = running.is_some_and(|r| std::fs::read(r.join(relative)).ok() == now);
-        if !untouched {
-            left.push(file);
-            continue;
-        }
-        let _ = match then {
-            Some(bytes) => std::fs::write(&file, bytes),
-            None => std::fs::remove_file(&file),
-        };
-    }
-    left
-}
-
-/// Forget the configurations of generations that no longer exist.
-fn prune_saved() {
-    let Ok(entries) = std::fs::read_dir(SAVED) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let name = entry.file_name().to_string_lossy().into_owned();
-        let generation = name.strip_prefix("generation-").and_then(|n| n.parse::<u32>().ok());
-        let exists =
-            generation.map(|g| Path::new(&format!("{PROFILE}-{g}-link")).symlink_metadata().is_ok()).unwrap_or(false);
-        if !exists {
-            let _ = std::fs::remove_dir_all(entry.path());
-        }
-    }
+/// The system generation the profile points at now.
+fn current_generation() -> Option<GenerationId> {
+    GenerationId::current(Path::new(PROFILE))
 }
 
 fn split_list(value: &str) -> Vec<String> {
@@ -424,8 +112,8 @@ fn valid_user(name: &str) -> bool {
 /// the build that adds it. The daemon takes them from root.
 fn build_flake(setup: &Setup, host: &str) -> std::result::Result<String, Failure> {
     let system = format!("{}#nixosConfigurations.\"{host}\"", setup.flake());
-    let mut build = nix();
-    build.args(["build", "--log-format", "internal-json", "-v", "--no-link", "--print-out-paths"]);
+    let mut build = nix(Nix::Build);
+    build.args(["--log-format", "internal-json", "-v", "--no-link", "--print-out-paths"]);
     if let Some((substituters, keys)) = caches(&system) {
         build.args(["--option", "extra-substituters", &substituters.join(" ")]);
         build.args(["--option", "extra-trusted-public-keys", &keys.join(" ")]);
@@ -436,12 +124,7 @@ fn build_flake(setup: &Setup, host: &str) -> std::result::Result<String, Failure
 
 /// The free space, in bytes, of the filesystem holding `path`.
 fn free_space(path: &str) -> Option<u64> {
-    let path = std::ffi::CString::new(path).ok()?;
-    // SAFETY: statvfs writes only into the struct it is given.
-    unsafe {
-        let mut stat: libc::statvfs = std::mem::zeroed();
-        (libc::statvfs(path.as_ptr(), &mut stat) == 0).then(|| stat.f_bavail as u64 * stat.f_frsize as u64)
-    }
+    yukimi_system::sys::free_space(Path::new(path))
 }
 
 fn least_room() -> Option<u64> {
@@ -499,8 +182,8 @@ fn with_room<T>(work: impl FnOnce() -> Result<T>) -> Result<T> {
 /// The binary caches and their keys a system's configuration names, if it
 /// names any. A configuration that doesn't evaluate is reported by the build.
 fn caches(system: &str) -> Option<(Vec<String>, Vec<String>)> {
-    let mut eval = nix();
-    eval.args(["eval", "--json", &format!("{system}.config.nix.settings"), "--apply"]);
+    let mut eval = nix(Nix::Eval);
+    eval.args(["--json", &format!("{system}.config.nix.settings"), "--apply"]);
     eval.arg(
         "s: { substituters = (s.substituters or [ ]) ++ (s.extra-substituters or [ ]); \
          keys = (s.trusted-public-keys or [ ]) ++ (s.extra-trusted-public-keys or [ ]); }",
@@ -524,16 +207,16 @@ fn caches(system: &str) -> Option<(Vec<String>, Vec<String>)> {
 /// only one), or `configuration.nix` with the channels' Nixpkgs.
 fn build(setup: &Setup) -> Result<String> {
     if setup.kind == Kind::Channels {
-        let mut build = nix();
-        build.args(["build", "--impure", "--log-format", "internal-json", "-v", "--no-link", "--print-out-paths"]);
+        let mut build = nix(Nix::Build);
+        build.args(["--impure", "--log-format", "internal-json", "-v", "--no-link", "--print-out-paths"]);
         build.args(["--file", "<nixpkgs/nixos>", "system"]);
         build.env("NIXOS_CONFIG", setup.dir.join("configuration.nix"));
         // Nix's own setting says where `<nixpkgs>` is; NixOS before 24.05
         // said so only in the environment, which pkexec clears.
         let configured = output(
             {
-                let mut c = nix();
-                c.args(["config", "show", "nix-path"]);
+                let mut c = nix(Nix::Config);
+                c.args(["show", "nix-path"]);
                 c
             },
             "Reading Nix's settings",
@@ -556,8 +239,8 @@ fn build(setup: &Setup) -> Result<String> {
     }
     // Usually the configuration is named after the computer; only when it
     // isn't, ask the flake what it has.
-    let mut names = nix();
-    names.args(["eval", "--json", &format!("{}#nixosConfigurations", setup.flake()), "--apply", "builtins.attrNames"]);
+    let mut names = nix(Nix::Eval);
+    names.args(["--json", &format!("{}#nixosConfigurations", setup.flake()), "--apply", "builtins.attrNames"]);
     let listed: Vec<String> = serde_json::from_str(&output(names, "Reading the configurations")?)?;
     let host = if listed.contains(&setup.host) {
         setup.host.clone()
@@ -580,15 +263,13 @@ fn build(setup: &Setup) -> Result<String> {
 /// Make a built system the current generation and start it (`switch`) or
 /// make it the one the next start uses (`boot`), as nixos-rebuild does:
 /// inside the independent system operation, with persistent output files.
-fn activate(setup: &Setup, system: &str, mode: &str) -> Result<()> {
-    let mut set = command("nix-env");
-    set.args(["-p", PROFILE, "--set", system]);
-    run(set, "Setting the system profile")?;
+fn activate(committed: &Committed, setup: &Setup, system: &str, mode: &str) -> Result<()> {
+    committed.set_system_profile(Path::new(system))?;
     // The configuration that built it, for going back to it later.
     if let Some(generation) = current_generation() {
-        let _ = save_configuration(setup, generation, true);
+        let _ = snapshots::save(setup, Path::new(SAVED), &generation);
     }
-    switch(&format!("{system}/bin/switch-to-configuration"), mode)
+    committed.switch_to_configuration(Path::new(system), mode)
 }
 
 type Entries = std::collections::BTreeMap<String, Option<PathBuf>>;
@@ -632,27 +313,19 @@ fn refresh_launchers(before: &Path, after: &Path) {
     if launchable(before) == launchable(after) {
         return;
     }
-    let mut list = command("loginctl");
+    let mut list = command(Program::LOGINCTL);
     list.args(["list-users", "--no-legend"]);
     let Ok(users) = output(list, "Listing signed-in users") else {
         return;
     };
     // UID USER LINGER STATE
     for user in users.lines().filter_map(|line| line.split_whitespace().nth(1)).filter(|u| valid_user(u)) {
-        let mut restart = command("systemctl");
+        let mut restart = command(Program::SYSTEMCTL);
         restart.args(["--user", &format!("--machine={user}@.host"), "try-restart", "tatami-elephant.service"]);
         if output(restart, "Refreshing the application launcher").is_err() {
             report(1, &format!("{user}'s application launcher shows the change after their next sign-in"));
         }
     }
-}
-
-fn switch(program: &str, mode: &str) -> Result<()> {
-    // The entire helper already runs in a system service with persistent logs.
-    // Never reconnect this process to the GUI's file descriptors.
-    let mut c = command(program);
-    c.arg(mode);
-    run(c, "Switching to the new system")
 }
 
 fn activation_mode(requested: &str, reasons: &[String]) -> Result<&'static str> {
@@ -839,7 +512,7 @@ fn unlist(text: &str, path: &[&str], attr: &str) -> Result<String> {
         .ok_or_else(|| Failure(format!("{attr} isn't in {} in the configuration", path.join("."))))
 }
 
-fn change(args: &[String]) -> Result<String> {
+fn change(operation: &mut Operation, args: &[String]) -> Result<String> {
     let change = Change::parse(args)?;
     let setup = Setup::detect();
     // The check is advisory; never trust its proposed lock or copied flake.
@@ -911,7 +584,7 @@ fn change(args: &[String]) -> Result<String> {
     // The configuration as it is belongs to the running generation: keep it,
     // so going back to that generation brings it back.
     if let Some(generation) = current_generation() {
-        let saved = save_configuration(&setup, generation, false);
+        let saved = snapshots::keep(&setup, Path::new(SAVED), &generation);
         if change.sekka {
             saved?;
         }
@@ -921,11 +594,11 @@ fn change(args: &[String]) -> Result<String> {
     let mut touched = vec![lock_file.clone(), flake_file.clone()];
     touched.extend(main.clone());
     touched.extend(packages_file.clone());
-    let backup = Backup::take(&touched);
-    let attempt = || -> Result<String> {
+    // Everything up to the plan is put back if it fails or Yukimi stops it.
+    let (committed, (system, reasons, mode)) = RestorePoint::take(&touched)?.attempt(operation, |changing| {
         if let Some(text) = &sekka_flake {
             stage(1, "Preparing your Sekka configuration");
-            write_file(&setup, &flake_file, text)?;
+            changing.write_file(&setup, &flake_file, text)?;
             stage_done(1);
         }
         if let (Some(main), true) = (&main, change.edits_main()) {
@@ -944,7 +617,7 @@ fn change(args: &[String]) -> Result<String> {
                 if let Some(list) = &change.programs {
                     choices.programs = list.clone();
                 }
-                write_file(&setup, &file, &packages::render(&choices)?)?;
+                changing.write_file(&setup, &file, &packages::render(&choices)?)?;
                 configuration = packages::import_into(&configuration)?;
             }
             if let (Some(setting), Some(list)) = (&change.setting, &change.applications) {
@@ -966,7 +639,7 @@ fn change(args: &[String]) -> Result<String> {
                     configuration = unlist(&configuration, &["users", "users", user, "packages"], attr)?;
                 }
             }
-            write_file(&setup, main, &configuration)?;
+            changing.write_file(&setup, main, &configuration)?;
             stage_done(1);
         }
         if let Some((input, branch)) = &change.follow {
@@ -985,7 +658,7 @@ fn change(args: &[String]) -> Result<String> {
                 branch::with(&url, branch)
                     .ok_or_else(|| Failure(format!("{input} comes from {url}, which has no branch to choose")))?
             };
-            write_file(&setup, &flake_file, &edit::set_string_value(&text, &path, &followed)?)?;
+            changing.write_file(&setup, &flake_file, &edit::set_string_value(&text, &path, &followed)?)?;
             stage_done(5);
         }
         if !change.update.is_empty() {
@@ -1002,60 +675,44 @@ fn change(args: &[String]) -> Result<String> {
                             .map_err(|e| Failure(format!("The prepared update was refused: {e}")))?;
                         proposed
                     };
-                    std::fs::write(&lock_file, proposed)?;
+                    changing.write_file(&setup, &lock_file, &proposed)?;
                 }
                 None => {
                     // Inputs that follow Sekka's move with it, to what its
                     // nightly build checked; on their own they can't move.
                     let following = sekka_flake.as_deref().map(sekka::following).unwrap_or_default();
-                    let mut c = nix();
-                    let flake = setup.flake();
-                    c.args(["flake", "update", "--refresh", "--log-format", "internal-json", "-v", "--flake", &flake]);
-                    c.args(change.update.iter().filter(|i| !following.contains(&i.as_str())));
-                    run(c, "Updating the flake inputs")?;
+                    let inputs: Vec<&str> =
+                        change.update.iter().map(String::as_str).filter(|i| !following.contains(i)).collect();
+                    changing.update_lock(&setup, &inputs)?;
                 }
             }
             stage_done(2);
         }
         if change.channels {
             stage(2, "Fetching the newest channels");
-            let mut c = command("nix-channel");
-            c.arg("--update");
-            run(c, "Updating the channels")?;
+            changing.cover_channels()?.update_channels()?;
             stage_done(2);
         }
         stage(3, "Evaluating your configuration");
         let system = build(&setup)?;
         stage_done(3);
-        Ok(system)
-    };
-    let (system, reasons, mode) = match attempt().and_then(|system| {
         let active = std::fs::canonicalize("/run/current-system")?;
         let booted =
             std::fs::canonicalize("/run/booted-system").unwrap_or_else(|_| PathBuf::from("/run/booted-system"));
         let reasons = completion::plan(&booted, &active, Path::new(&system));
         let mode = activation_mode(&change.mode, &reasons)?;
-        commit()?;
         Ok((system, reasons, mode))
-    }) {
-        Ok(prepared) => prepared,
-        Err(e) => {
-            backup.restore();
-            return Err(e);
-        }
-    };
-    let mut receipt =
-        Receipt { system: PathBuf::from(&system), boot_id: completion::boot_id(), state: "activating".into(), reasons };
-    save_update(&receipt)?;
+    })?;
+    let activating = Receipt::activating(PathBuf::from(&system), reasons);
+    save_update(activating.receipt())?;
     stage(4, if mode == "switch" { "Switching to the new system" } else { "Setting it up for the next start" });
     // Only for refreshing the launcher afterwards, which never fails an update.
     let before = std::fs::canonicalize("/run/current-system").ok();
-    activate(&setup, &system, mode)?;
+    activate(&committed, &setup, &system, mode)?;
     if mode == "switch" && std::fs::canonicalize("/run/current-system").ok().as_deref() != Some(Path::new(&system)) {
         return Err(Failure("Activation returned without making the built system current".into()));
     }
-    receipt.state = if mode == "boot" { "prepared" } else { "activated" }.into();
-    save_update(&receipt)?;
+    save_update(&if mode == "boot" { activating.prepared() } else { activating.activated() })?;
     if let (Some(before), "switch") = (&before, mode) {
         refresh_launchers(before, Path::new(&system));
     }
@@ -1065,7 +722,6 @@ fn change(args: &[String]) -> Result<String> {
 }
 
 fn save_update(receipt: &Receipt) -> Result<()> {
-    use std::io::Write;
     let path = Path::new(completion::RECEIPT);
     std::fs::create_dir_all(path.parent().unwrap())?;
     let temporary = path.with_extension("new");
@@ -1077,14 +733,14 @@ fn save_update(receipt: &Receipt) -> Result<()> {
     Ok(())
 }
 
-fn rollback(args: &[String]) -> Result<String> {
+fn rollback(operation: &mut Operation, args: &[String]) -> Result<String> {
     let generation: u32 = args
         .first()
         .and_then(|g| g.parse().ok())
         .ok_or_else(|| Failure("rollback needs a generation number".into()))?;
-    if Path::new(&format!("{PROFILE}-{generation}-link")).symlink_metadata().is_err() {
+    let Some(chosen) = GenerationId::read(Path::new(PROFILE), generation) else {
         return Err(Failure(format!("There is no generation {generation}")));
-    }
+    };
     let setup = Setup::detect();
     let target = std::fs::canonicalize(format!("{PROFILE}-{generation}-link"))?;
     let active = std::fs::canonicalize("/run/current-system")?;
@@ -1092,49 +748,44 @@ fn rollback(args: &[String]) -> Result<String> {
     let reasons = completion::plan(&booted, &active, &target);
     let mode = activation_mode("auto", &reasons)?;
     let running = current_generation();
-    if let Some(current) = running {
-        let _ = save_configuration(&setup, current, false);
+    if let Some(current) = &running {
+        let _ = snapshots::keep(&setup, Path::new(SAVED), current);
     }
     stage(1, &format!("Returning to generation {generation}"));
-    commit()?;
-    let mut set = command("nix-env");
-    set.args(["-p", PROFILE, "--switch-generation", &generation.to_string()]);
-    run(set, "Choosing the generation")?;
-    let mut receipt = Receipt {
-        system: std::fs::canonicalize(PROFILE)?,
-        boot_id: completion::boot_id(),
-        state: "activating".into(),
-        reasons,
-    };
-    save_update(&receipt)?;
+    // Nothing is changed before the commit, so there is nothing to put back.
+    let committed = operation.commit_without_changes()?;
+    committed.switch_generation(generation)?;
+    let system = std::fs::canonicalize(PROFILE)?;
+    let activating = Receipt::activating(system.clone(), reasons);
+    save_update(activating.receipt())?;
     // The configuration follows the system, so the next change builds on
-    // what this generation was made from.
-    let kept = saved(generation).is_dir();
+    // what this generation was made from: the copy kept for this very
+    // generation, not for an earlier one that had its number.
+    let kept = Snapshot::of(Path::new(SAVED), &chosen);
     let mut left = Vec::new();
-    if kept {
-        let running = running.map(saved).filter(|dir| dir.is_dir());
-        left = restore_choices(&setup, &saved(generation), running.as_deref());
+    if let Some(kept) = &kept {
+        let running = running.and_then(|r| Snapshot::of(Path::new(SAVED), &r));
+        left = snapshots::restore_choices(&setup, kept, running.as_ref());
         for file in &left {
             report(1, &format!("{} was changed by hand since, so it was left as it is", file.display()));
         }
     }
-    switch(&format!("{PROFILE}/bin/switch-to-configuration"), mode)?;
-    if mode == "switch" && std::fs::canonicalize("/run/current-system").ok().as_ref() != Some(&receipt.system) {
+    committed.switch_to_configuration(Path::new(PROFILE), mode)?;
+    if mode == "switch" && std::fs::canonicalize("/run/current-system").ok().as_ref() != Some(&system) {
         return Err(Failure("Rollback did not make the selected generation current".into()));
     }
-    receipt.state = if mode == "boot" { "prepared" } else { "activated" }.into();
-    save_update(&receipt)?;
+    save_update(&if mode == "boot" { activating.prepared() } else { activating.activated() })?;
     if mode == "switch" {
-        refresh_launchers(&active, &receipt.system);
+        refresh_launchers(&active, &system);
     }
     stage_done(1);
     let left: Vec<String> = left.iter().map(|f| f.display().to_string()).collect();
-    Ok(serde_json::json!({"ok": true, "generation": generation, "configuration": kept, "left": left,
-        "system": receipt.system, "mode": mode, "completion": completion::read_system()})
+    Ok(serde_json::json!({"ok": true, "generation": generation, "configuration": kept.is_some(), "left": left,
+        "system": system, "mode": mode, "completion": completion::read_system()})
     .to_string())
 }
 
-fn clean(args: &[String]) -> Result<String> {
+fn clean(operation: &mut Operation, args: &[String]) -> Result<String> {
     let mut days = None;
     let mut it = args.iter();
     while let Some(flag) = it.next() {
@@ -1150,57 +801,27 @@ fn clean(args: &[String]) -> Result<String> {
             other => return Err(Failure(format!("Unknown option {other}"))),
         }
     }
-    if let Some(days) = days {
-        stage(1, "Deleting old generations");
-        let mut delete = command("nix-env");
-        delete.args(["-p", PROFILE, "--delete-generations", &format!("{days}d")]);
-        run(delete, "Deleting old generations")?;
-        prune_saved();
-        stage_done(1);
-    }
-    stage(2, "Collecting garbage");
-    let freed = collect_garbage()?;
-    stage_done(2);
-    // The boot menu lists only generations that still exist.
-    stage(3, "Updating the boot menu");
-    commit()?;
-    switch(&format!("{PROFILE}/bin/switch-to-configuration"), "boot")?;
-    stage_done(3);
+    // Deleting generations and updating the boot menu is one step a stop
+    // waits for; only then can garbage be collected.
+    let generations = Generations::hold(operation)?;
+    let menu = match days {
+        Some(days) => generations.delete_older_than(days).update_boot_menu()?,
+        None => generations.update_boot_menu()?,
+    };
+    let freed = menu.collect_garbage().map_err(|Failure(message)| match days {
+        Some(_) => Failure(format!(
+            "{}. The old generations were deleted, and the boot menu lists only the ones left",
+            if message == "Stopped" { "Collecting garbage was stopped" } else { &message }
+        )),
+        None => Failure(message),
+    })?;
     Ok(serde_json::json!({"ok": true, "freed": freed}).to_string())
-}
-
-/// Collect garbage, passing Nix's report on, and return its last line
-/// ("… store paths deleted, … freed").
-fn collect_garbage() -> Result<String> {
-    let mut gc = command("nix-store");
-    gc.arg("--gc");
-    let out = wait(gc.stdout(Stdio::piped()).stderr(Stdio::piped()))?;
-    let text = String::from_utf8_lossy(&out.stderr).into_owned() + &String::from_utf8_lossy(&out.stdout);
-    for line in text.lines() {
-        eprintln!("{line}");
-    }
-    // Nix deletes its reserve (`gc-reserved-space`, 8 MiB in
-    // /nix/var/nix/db/reserved) as a collection starts, so it can work on a
-    // full disk, and makes it again whenever it next opens the store. Open
-    // it now, so that free space measured afterwards is what stays free.
-    let mut reopen = command("nix-store");
-    reopen.args(["--query", "--hash", PROFILE]);
-    let _ = wait(reopen.stdout(Stdio::null()).stderr(Stdio::null()));
-    if !out.status.success() {
-        return Err(Failure("Collecting garbage failed".into()));
-    }
-    Ok(text.lines().rev().find(|l| l.contains("freed")).unwrap_or("").trim().to_owned())
 }
 
 /// The free blocks of the filesystem holding `path`, in bytes, counting
 /// those kept for root: what deleting files changes.
 fn blocks_free(path: &str) -> Option<u64> {
-    let path = std::ffi::CString::new(path).ok()?;
-    // SAFETY: statvfs writes only into the struct it is given.
-    unsafe {
-        let mut stat: libc::statvfs = std::mem::zeroed();
-        (libc::statvfs(path.as_ptr(), &mut stat) == 0).then(|| stat.f_bfree as u64 * stat.f_frsize as u64)
-    }
+    yukimi_system::sys::blocks_free(Path::new(path))
 }
 
 /// A generation number as given: digits, without sign or leading zero.
@@ -1209,16 +830,6 @@ fn parse_generation(text: &str) -> Option<u32> {
         return None;
     }
     text.parse().ok()
-}
-
-/// "generation 3", "generations 3 and 4", "generations 2, 3 and 4".
-fn generation_words(numbers: &[u32]) -> String {
-    let n: Vec<String> = numbers.iter().map(u32::to_string).collect();
-    match n.as_slice() {
-        [one] => format!("generation {one}"),
-        [rest @ .., last] => format!("generations {} and {last}", rest.join(", ")),
-        [] => "no generations".into(),
-    }
 }
 
 /// What `delete` was asked to do.
@@ -1288,9 +899,9 @@ fn refusal(
     None
 }
 
-fn delete(args: &[String]) -> Result<String> {
+fn delete(operation: &mut Operation, args: &[String]) -> Result<String> {
     let deletion = Deletion::parse(args)?;
-    let selected = current_generation();
+    let selected = current_generation().map(|g| g.number());
     let running = std::fs::canonicalize("/run/current-system").ok();
     let booted = std::fs::canonicalize("/run/booted-system").ok();
     for &number in &deletion.generations {
@@ -1313,22 +924,9 @@ fn delete(args: &[String]) -> Result<String> {
         ),
         Err(e) => report(1, &format!("What deleting {what} gives back couldn't be worked out: {e}")),
     }
-    stage(1, &format!("Deleting {what}"));
-    // The links, the kept configurations and the boot menu change together.
-    commit()?;
-    let mut delete = command("nix-env");
-    delete.args(["-p", PROFILE, "--delete-generations"]).args(deletion.generations.iter().map(u32::to_string));
-    run(delete, "Deleting the generation")?;
-    for &number in &deletion.generations {
-        let _ = std::fs::remove_dir_all(saved(number));
-    }
-    prune_saved();
-    stage_done(1);
-    // The boot menu lists only generations that still exist.
-    stage(2, "Updating the boot menu");
-    switch(&format!("{PROFILE}/bin/switch-to-configuration"), "boot")?;
-    stage_done(2);
-    settle();
+    // Deleting the generations and updating the boot menu is one step a
+    // stop waits for; only then can garbage be collected.
+    let menu = Generations::hold(operation)?.delete(&deletion.generations).update_boot_menu()?;
     let mut report_json = serde_json::json!({
         "ok": true,
         "deleted": deletion.generations,
@@ -1336,9 +934,8 @@ fn delete(args: &[String]) -> Result<String> {
         "estimate": estimate.ok(),
     });
     if deletion.collect {
-        stage(3, "Collecting garbage");
         let before = blocks_free("/nix/store");
-        match collect_garbage() {
+        match menu.collect_garbage() {
             Ok(summary) => {
                 report_json["collected"] = true.into();
                 report_json["summary"] = summary.into();
@@ -1348,12 +945,12 @@ fn delete(args: &[String]) -> Result<String> {
                 // back at the next clean-up.
                 report(1, &format!("Collecting garbage didn't finish: {message}"));
                 report_json["collect_error"] = message.into();
+                stage_done(3);
             }
         }
         if let (Some(before), Some(after)) = (before, blocks_free("/nix/store")) {
             report_json["freed"] = after.saturating_sub(before).into();
         }
-        stage_done(3);
     }
     Ok(report_json.to_string())
 }
@@ -1424,10 +1021,29 @@ fn main() -> ExitCode {
             }
         };
     }
-    // SAFETY: geteuid has no preconditions.
-    if unsafe { libc::geteuid() } != 0 {
+    if !yukimi_system::sys::is_root() {
         report(0, "yukimi-helper must be started through pkexec");
         return ExitCode::from(2);
+    }
+    // The operation's unit runs this after its worker ends, however it
+    // ended (ExecStopPost=, SIGKILL included): it finishes a clean-up that
+    // was killed before it rewrote the boot menu. While another operation
+    // holds the lock, that operation's own start does it instead.
+    if args.first().is_some_and(|s| s == "__recover") {
+        let mut operation = match Operation::begin() {
+            Ok(operation) => operation,
+            Err(Failure(message)) => {
+                report(1, &format!("Not recovering now: {message}"));
+                return ExitCode::SUCCESS;
+            }
+        };
+        return match cleaning::recover(&mut operation) {
+            Ok(_) => ExitCode::SUCCESS,
+            Err(Failure(message)) => {
+                report(0, &format!("Finishing an interrupted clean-up failed: {message}"));
+                ExitCode::FAILURE
+            }
+        };
     }
     if args.first().is_some_and(|s| s == "__worker") {
         let Some((directory, args)) = args.get(1..).and_then(|args| args.split_first()) else {
@@ -1440,7 +1056,7 @@ fn main() -> ExitCode {
         let (json, success) = match result {
             Ok(json) => (json, true),
             Err(Failure(message)) => {
-                let message = if state().0 == Phase::Committed {
+                let message = if process::committed() {
                     format!(
                         "System changes had already begun; the configuration was not restored. {message}. Review the log before restarting or retrying."
                     )
@@ -1477,14 +1093,6 @@ fn preflight_request(change: &Change) -> preflight::Request {
     preflight::Request { inputs: change.update.clone(), sekka: change.sekka, follow: change.follow.clone() }
 }
 
-fn preflight_command(mut c: Command) -> std::result::Result<std::process::Output, String> {
-    c.env("PATH", PATH);
-    let out = wait(c.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped())).map_err(|e| e.0)?;
-    // Plain Nix diagnostics are understood by the GUI's progress reader.
-    let _ = std::io::stderr().write_all(&out.stderr);
-    Ok(out)
-}
-
 fn check_update(args: &[String]) -> Result<preflight::Report> {
     let change = Change::parse(args)?;
     if change.channels || change.edits_main() || change.lock.is_some() || change.checked_source.is_some() {
@@ -1492,7 +1100,7 @@ fn check_update(args: &[String]) -> Result<preflight::Report> {
     }
     stage(1, "Checking the proposed update before changing your system");
     let result =
-        preflight::check(&Setup::detect(), &preflight_request(&change), &mut preflight_command).map_err(Failure);
+        preflight::check(&Setup::detect(), &preflight_request(&change), &mut process::preflight).map_err(Failure);
     stage_done(1);
     result
 }
@@ -1501,7 +1109,7 @@ fn validate_preflight(change: &Change, setup: &Setup) -> Result<Option<String>> 
     let Some(expected) = &change.checked_source else { return Ok(None) };
     stage(1, "Verifying the checked configuration");
     let candidate =
-        preflight::Candidate::prepare(setup, &preflight_request(change), &mut preflight_command).map_err(Failure)?;
+        preflight::Candidate::prepare(setup, &preflight_request(change), &mut process::preflight).map_err(Failure)?;
     if &candidate.source != expected {
         return Err(Failure(
             "Your configuration changed after the compatibility check. Check the update again; nothing was changed."
@@ -1534,23 +1142,19 @@ fn check_activation(args: &[String]) -> Result<()> {
 fn worker(args: &[String]) -> Result<String> {
     let (command, rest) = args.split_first().ok_or_else(|| Failure("Missing operation".into()))?;
     // CLI and GUI must not edit the configuration or activate generations
-    // concurrently. The kernel releases this lock even after a crash.
-    let _guard = std::fs::OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .write(true)
-        .open("/run/lock/yukimi.lock")
-        .and_then(|file| {
-            file.try_lock()?;
-            Ok(file)
-        })
-        .map_err(|e| Failure(format!("Another Yukimi operation is running, or its lock is unavailable: {e}")))?;
+    // concurrently: the operation holds the lock until it ends.
+    let mut operation = Operation::begin()?;
     watch_for_stop();
+    // A clean-up killed, or cut off by a power failure, before it rewrote
+    // the boot menu: finish that first.
+    if let Err(Failure(message)) = cleaning::recover(&mut operation) {
+        report(0, &format!("Finishing an interrupted clean-up failed: {message}"));
+    }
     match command.as_str() {
-        "change" => change(rest),
-        "rollback" => rollback(rest),
-        "clean" => clean(rest),
-        "delete" => delete(rest),
+        "change" => change(&mut operation, rest),
+        "rollback" => rollback(&mut operation, rest),
+        "clean" => clean(&mut operation, rest),
+        "delete" => delete(&mut operation, rest),
         _ => Err(Failure("Usage: yukimi-helper change|rollback|clean|delete … (or estimate …)".into())),
     }
 }
@@ -1569,8 +1173,6 @@ mod tests {
         assert!(split_list("").is_empty());
         assert!(valid_host("acer-predator") && !valid_host("a b") && !valid_host("x\"y"));
         assert!(valid_user("alice") && !valid_user("a:b") && !valid_user(""));
-        assert_eq!(generation_number("system-12-link"), Some(12));
-        assert_eq!(generation_number("system"), None);
     }
 
     #[test]
@@ -1758,77 +1360,5 @@ mod tests {
         assert_eq!(on, "{ ... }:\n{\n  calamares.desktops = [ \"aizome\" ];\n  calamares.autoLogin = \"kara\";\n}\n");
         let nobody = write_choice(&on, &auto, &v(&[])).unwrap();
         assert_eq!(nobody, on.replace("\"kara\"", "\"\""));
-    }
-
-    #[test]
-    fn configurations_copy_without_hidden_or_large_files() {
-        let dir = std::env::temp_dir().join(format!("yukimi-copy-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        let (from, to) = (dir.join("nixos"), dir.join("saved"));
-        std::fs::create_dir_all(from.join("modules")).unwrap();
-        std::fs::create_dir_all(from.join(".git")).unwrap();
-        std::fs::write(from.join("configuration.nix"), "{ }").unwrap();
-        std::fs::write(from.join("modules/desk.nix"), "{ }").unwrap();
-        std::fs::write(from.join(".git/HEAD"), "ref").unwrap();
-        std::fs::write(from.join("wallpaper.png"), vec![0u8; (LARGEST_KEPT + 1) as usize]).unwrap();
-        copy_configuration(&from, &to).unwrap();
-        assert_eq!(std::fs::read_to_string(to.join("configuration.nix")).unwrap(), "{ }");
-        assert!(to.join("modules/desk.nix").is_file());
-        assert!(!to.join(".git").exists() && !to.join("wallpaper.png").exists());
-        // A private file stays private.
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::write(from.join("secrets.nix"), "{ }").unwrap();
-        std::fs::set_permissions(from.join("secrets.nix"), std::fs::Permissions::from_mode(0o600)).unwrap();
-        copy_configuration(&from, &to).unwrap();
-        assert_eq!(std::fs::metadata(to.join("secrets.nix")).unwrap().permissions().mode() & 0o777, 0o600);
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn backups_restore_contents_and_absence() {
-        let dir = std::env::temp_dir().join(format!("yukimi-backup-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let (kept, created) = (dir.join("kept"), dir.join("created"));
-        std::fs::write(&kept, "before").unwrap();
-        let backup = Backup::take(&[kept.clone(), created.clone()]);
-        std::fs::write(&kept, "after").unwrap();
-        std::fs::write(&created, "new").unwrap();
-        backup.restore();
-        assert_eq!(std::fs::read_to_string(&kept).unwrap(), "before");
-        assert!(!created.exists());
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn going_back_keeps_what_was_written_by_hand() {
-        let dir = std::env::temp_dir().join(format!("yukimi-restore-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        let (config, older, running) = (dir.join("nixos"), dir.join("generation-1"), dir.join("generation-2"));
-        for d in [&config, &older, &running] {
-            std::fs::create_dir_all(d).unwrap();
-        }
-        // Migration changes flake.nix too; it must go back with its lock.
-        std::fs::write(older.join("flake.nix"), "old repositories").unwrap();
-        std::fs::write(running.join("flake.nix"), "sekka").unwrap();
-        std::fs::write(config.join("flake.nix"), "sekka").unwrap();
-        // flake.lock: unchanged since generation 2, so it goes back to 1's.
-        std::fs::write(older.join("flake.lock"), "lock 1").unwrap();
-        std::fs::write(running.join("flake.lock"), "lock 2").unwrap();
-        std::fs::write(config.join("flake.lock"), "lock 2").unwrap();
-        // configuration.nix: edited by hand since generation 2, so it stays.
-        std::fs::write(older.join("configuration.nix"), "{ a = 1; }").unwrap();
-        std::fs::write(running.join("configuration.nix"), "{ a = 2; }").unwrap();
-        std::fs::write(config.join("configuration.nix"), "{ a = 3; }").unwrap();
-        // yukimi.nix: generation 1 had none.
-        std::fs::write(running.join("yukimi.nix"), "{ }").unwrap();
-        std::fs::write(config.join("yukimi.nix"), "{ }").unwrap();
-        let setup = Setup::detect_in(&config, Default::default(), "acer");
-        let left = restore_choices(&setup, &older, Some(&running));
-        assert_eq!(std::fs::read_to_string(config.join("flake.nix")).unwrap(), "old repositories");
-        assert_eq!(std::fs::read_to_string(config.join("flake.lock")).unwrap(), "lock 1");
-        assert_eq!(std::fs::read_to_string(config.join("configuration.nix")).unwrap(), "{ a = 3; }");
-        assert!(!config.join("yukimi.nix").exists());
-        assert_eq!(left, vec![config.join("configuration.nix")]);
-        let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -5,6 +5,7 @@ use std::path::Path;
 
 use yukimi_config::lock::{FlakeLock, Input, Locked, Movement};
 use yukimi_system::generations::Generation;
+use yukimi_system::saved::{GenerationId, Snapshot};
 
 #[derive(Clone, Debug, Default)]
 pub struct History {
@@ -16,9 +17,11 @@ pub struct History {
 impl History {
     pub fn load(root: &Path, generations: &[Generation]) -> Self {
         Self {
+            // Each generation's own copy: not one kept for an earlier
+            // generation that had its number.
             snapshots: generations
                 .iter()
-                .filter_map(|g| Some((g.number, read_inputs(&root.join(format!("generation-{}", g.number)))?)))
+                .filter_map(|g| Some((g.number, read_inputs(Snapshot::of(root, &GenerationId::listed(g))?.dir())?)))
                 .collect(),
             active: generations.iter().filter(|g| g.active).max_by_key(|g| (g.current, g.number)).map(|g| g.number),
             current: generations.iter().find(|g| g.current).map(|g| g.number),
@@ -212,10 +215,17 @@ mod tests {
     #[test]
     fn saved_locks_supply_history_without_branches_or_app_state() {
         let dir = std::env::temp_dir().join(format!("yukimi-saved-locks-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        // Copies are checked against the generations' links, so give the
+        // sample generations real ones, made before the copies.
+        let profiles = dir.join("profiles");
+        std::fs::create_dir_all(&profiles).unwrap();
         let mut generations = crate::fixture::model().generations;
         for g in &mut generations {
             g.active = g.number == 27;
             g.current = g.number == 27;
+            g.link = profiles.join(format!("system-{}-link", g.number));
+            std::os::unix::fs::symlink(g.target.as_str(), &g.link).unwrap();
         }
         for (number, inputs) in history().snapshots {
             let path = dir.join(format!("generation-{number}"));
@@ -239,6 +249,17 @@ mod tests {
             assert_eq!(link.url, "https://github.com/bitemyapp/sekka/compare/aaa..bbb");
             assert!(link.tooltip.contains("24 → 26"));
         }
+        // YUK-10: a copy kept for an earlier generation 26, which Nix
+        // deleted before building today's, isn't today's 26's history.
+        let earlier = dir.join("earlier");
+        std::fs::create_dir_all(&earlier).unwrap();
+        std::os::unix::fs::symlink(generations[0].target.as_str(), earlier.join("system-26-link")).unwrap();
+        let older = GenerationId::read(&earlier.join("system"), 26).unwrap();
+        let copy = yukimi_system::saved::Saving::begin(&dir, &older).unwrap();
+        std::fs::copy(dir.join("generation-26/flake.lock"), copy.dir().join("flake.lock")).unwrap();
+        copy.finish().unwrap();
+        let loaded = History::load(&dir, &generations);
+        assert!(!loaded.snapshots.contains_key(&26) && loaded.snapshots.contains_key(&27));
         std::fs::remove_dir_all(dir).unwrap();
     }
 

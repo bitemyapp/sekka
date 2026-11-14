@@ -39,17 +39,24 @@ in
   package = pkgs.rustPlatform.buildRustPackage {
     pname = "kakehashi";
     version = "0.1.0";
+    # Sekka's paths, as the core's path dependency on Aizome's typestate
+    # crate names them; nothing else of Aizome's.
     src = lib.fileset.toSource {
-      root = source;
+      root = ../.;
       fileset = lib.fileset.unions [
         (source + "/Cargo.toml")
         (source + "/Cargo.lock")
         (source + "/core")
+        (source + "/write")
         (source + "/helper")
         (source + "/app")
         (source + "/linux")
+        ../desktop/aizome/crates/aizome-typestate
       ];
     };
+    postUnpack = ''
+      sourceRoot="$sourceRoot/apps/kakehashi"
+    '';
     cargoLock.lockFile = source + "/Cargo.lock";
     nativeBuildInputs = [
       pkgs.pkg-config
@@ -57,6 +64,11 @@ in
     ];
     buildInputs = libraries;
     env.KAKEHASHI_TOOL_PATH = lib.makeBinPath tools;
+    # The default check's `cargo test` runs the doctests too, their
+    # compile_fail error codes checked.
+    preCheck = ''
+      source ${./checked-doctests.sh}
+    '';
     # Sekka's app icon, from the brand's generated logos.
     postInstall = ''
       install -Dm644 linux/computer.sekka.Kakehashi.desktop -t $out/share/applications

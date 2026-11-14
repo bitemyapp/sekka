@@ -194,6 +194,7 @@ dependencies = [
  "aizome-kit",
  "aizome-search",
  "aizome-sys",
+ "aizome-typestate",
  "env_logger",
  "libc",
  "log",
@@ -522,6 +523,7 @@ name = "aizome-sys"
 version = "0.1.0"
 dependencies = [
  "aizome-apps",
+ "aizome-typestate",
  "async-io",
  "event-listener",
  "futures-lite",
@@ -540,6 +542,7 @@ version = "0.1.0"
 dependencies = [
  "aizome-kit",
  "aizome-sys",
+ "aizome-tansu",
  "aizome-theme",
  "env_logger",
  "log",
@@ -582,6 +585,10 @@ dependencies = [
  "serde_json",
  "zbus",
 ]
+
+[[package]]
+name = "aizome-typestate"
+version = "0.1.0"
 
 [[package]]
 name = "aizome-utsushi"
@@ -6365,6 +6372,7 @@ name = "yukimi-system"
 version = "0.1.0"
 dependencies = [
  "aizome-ipc",
+ "aizome-typestate",
  "libc",
  "serde",
  "serde_json",

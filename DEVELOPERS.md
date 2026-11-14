@@ -684,6 +684,21 @@ cargo test --locked --manifest-path rust/Cargo.toml
 
 Do not merge unrelated Cargo workspaces or broaden package source filters as part of routine edits. Preserve Genkan, Yukimi and Kakehashi's unprivileged GUI/privileged helper boundaries. Keep slow I/O off the interface thread.
 
+State machines whose mistakes would cost data, a disk or a working system are
+written as typestate on `desktop/aizome/crates/aizome-typestate`: one type per
+state, transitions that consume the state they leave, proofs that a check ran
+(a fresh answer, a confirmed target), and private constructors, so the mistake
+doesn't compile. Show each guarantee with a `compile_fail,EXXXX` doctest beside
+a twin that compiles, and run them with `RUSTC_BOOTSTRAP=1 cargo test --doc -p
+<crate>`, which makes rustdoc check the error codes as it does on nightly.
+The Nix checks run them that way: each Rust package's check sources
+`nix/checked-doctests.sh`, which gives `RUSTC_BOOTSTRAP=1` to rustdoc alone
+and stops if a wrong code would still pass. Aizome's and Sukumo's checks run
+the doctests of every crate with a `compile_fail` one; the other packages'
+`cargo test` runs all their doctests.
+`docs/typestate-tier1.md` lists the machines done so far and what their types
+still can't rule out.
+
 The retained VM tooling is available through `nix build .#tools`. Run `result/bin/respin-tools qemu-test --help` for its firmware, storage, desktop, and application options. The Genkan fixture now builds from `installer/genkan/tests/vm-fixture`, not a remote installer revision. The rootless builder's static guest tools require the Rust musl target. The older reports in `TESTING.md`, `installer/genkan/RUST-TESTING.md`, and `docs/test-results/` describe their named predecessor revisions only.
 
 BIOS fixtures keep PCI memory windows below 4 GiB with SeaBIOS's
@@ -1613,10 +1628,34 @@ and replaces only the three first-party inputs and the module reference.
 It preserves external URLs and locks, configuration modules, user choices,
 hardware settings, and `system.stateVersion`. Unrecognized customizations
 require manual migration. Failed builds and cancellation before activation
-restore the touched files. A helper process lock serializes Yukimi changes;
-configuration snapshots under `/var/lib/yukimi/configurations` accompany
-generations, including `flake.nix` for rollback across migration. Activation
-is allowed to finish once started; it never initiates a reboot.
+restore the touched files, and root's channels profile when the change
+updated it. A helper process lock serializes Yukimi changes; configuration
+snapshots under `/var/lib/yukimi/configurations` accompany generations,
+including `flake.nix` for rollback across migration. Each snapshot records
+the system it was kept for, and is used only for that generation, because Nix
+reuses the numbers of deleted generations. A copy from before copies recorded
+their system counts when it is no older than its generation's link; the
+helper then records its system once, and never deletes such a copy while its
+generation exists: a new copy for that generation sets it aside as
+`generation-<n>.unrecorded`. Activation is allowed to finish once started; it
+never initiates a reboot. Clean Up deletes old generations and rewrites the
+boot menu as one step that Stop waits for, and only then collects garbage.
+It records the deletion in `/var/lib/yukimi/clean-up.json` before it starts
+and removes the record once the menu is rewritten. After a kill or a power
+cut in between, the operation's unit (`ExecStopPost=`) or the next operation
+rewrites the menu, never while another operation holds the lock.
+
+The helper's typed steps live in its library (`yukimi_helper`), each
+guarantee shown by a `compile_fail` doctest. The helper runs programs only
+through `yukimi_helper::process`, which names those it may run; the ones that
+change what a restore point or the boot menu covers are named only in the
+step that covers them, and `yukimi-helper/clippy.toml` denies the other ways
+to start a program. Run them with
+`RUSTC_BOOTSTRAP=1 cargo test --doc`, so that rustdoc checks the error codes.
+`cargo test -p yukimi-helper --test namespace -- --ignored` runs the real
+helper worker against stand-in Nix tools, in an unprivileged user and mount
+namespace with private `/run`, `/nix/var/nix`, `/var/lib/yukimi`,
+`/etc/yukimi` and `/etc/nixos`.
 
 The authenticated helper launches the entire operation in an independent systemd
 service. The client follows progress from regular files, rather than connecting
@@ -1861,7 +1900,7 @@ while installing hold. Set `AIZOME_FONT_DIR` (`nix build .#aizome-fonts`) for
 Aizome's type and `TZDIR` for the map; the package's check phase sets both.
 `GENKAN_PICTURES=dir` also writes each page in Night and Day.
 
-In debug builds, `CALAMARES_UI_PREVIEW=welcome|disk|account|github|desktop|applications|location|keyboard|review|ready|prepfail|install|done|failed`
+In debug builds, `CALAMARES_UI_PREVIEW=welcome|disk|account|github|desktop|applications|location|keyboard|review|ready|prepfail|install|done|failed|memfail`
 opens the window on that page with sample data, touching no disks, network or
 helper, and `CALAMARES_UI_SIZE=800x600` sizes it. Release builds read
 neither. Outside the live media only previews are useful: reviewing reads the
@@ -3957,10 +3996,14 @@ objects still have to be fetched.
 
 ## Kakehashi
 
-`apps/kakehashi/` is its own Cargo workspace of three crates. `core` holds the
-drive rules, image checksums, the nightly list and downloads, and the write
-itself, with one platform module each for Linux, macOS and Windows. `helper`
-is `kakehashi-helper`, the only part that writes a drive. It runs with
+`apps/kakehashi/` is its own Cargo workspace of four crates. `core` holds the
+drive rules and listing, image checksums, the nightly list and downloads, and
+the window's side of a write, with one platform module each for Linux, macOS
+and Windows. `write` is `kakehashi-write`, the write itself and each
+platform's unmount, exclusive open, flush and eject; only the helper depends
+on it, so the window can't write a drive in its own process, which on macOS,
+where the helper runs as the user, nothing else would stop. `helper` is
+`kakehashi-helper`, the only part that writes a drive. It runs with
 administrator rights on Linux and Windows; on macOS it receives an authorized
 device handle from Apple’s `authopen` while remaining an ordinary user process.
 `app` is the window, built on GPUI through `gpui-kit` with its `gpui-fast`
@@ -3990,6 +4033,38 @@ helper appends one JSON object per line to the progress file, which it opens
 without following links and only while it has a single name; the window stops
 it by creating `PROGRESS.cancel`, which the helper checks between 8 MiB chunks.
 
+The window's side of a write is typestate in `core`, on Aizome's
+`aizome-typestate` crate, taken by path; the Nix package's source adds only
+that directory. `core::choice` lists the drives every two seconds while no
+write runs and keeps the chosen drive as the drive itself, compared with
+`Drive::same` at each listing, so a stick swapped for one that gets the same
+name (`sdb`, `disk4`) is no longer chosen. Opening the "Erase …?" dialog
+takes a review of the drive and the image, named by a ticket its OK hands
+back; cancelling, opening another dialog or choosing again makes the ticket
+stale. OK finds the drive again in the current list and checks that the
+window's image is still the one described, and only the `ConfirmedWrite` that
+yields makes a `Plan`. If either changed, nothing is written and the window
+says why. `Plan` is only serialized: the helper reads `plan.json`, with the
+same fields, as `kakehashi_write::Requested`, checks its drive against the
+drive as it is (`still_there`), and unmounts or opens only with that
+check's proof. The
+helper's first report must be written before it does anything. `core::job`
+follows the helper: before it starts, or if it reported nothing, nothing was
+written; once it has reported, its final report decides, and a helper that
+exits without one (killed, or an unexplained exit code) leaves the drive
+marked as partly written. Reports reach the job only through `ProgressFile`,
+and the helper's exit only with the lines still unread; the reader borrows the
+job's directory, so the directory outlives it. The `compile_fail`
+doctests on `Plan::new`, `ConfirmedWrite`, `Running::exited`, `Exit`,
+`ProgressFile`, `core::write` (which the write step isn't in),
+`Failure` and `Report` show the mistakes these types rule out;
+`RUSTC_BOOTSTRAP=1 cargo test --doc -p kakehashi-core` checks their error
+codes. `app/repro_ktl_03.sh` and `app/repro_ktl_04.sh` run the window's real
+write worker and `elevate::run` against a fake `pkexec` in bubblewrap, for a
+helper killed mid-write and a stick swapped under the dialog; they never run
+the helper or open a device. Run `cargo fmt` with `-p` for Kakehashi's
+packages: `--all` follows the path dependency into Aizome's workspace.
+
 On macOS the GUI first stages the selected image in that private temporary
 directory, on a worker thread. Administrator authorization alone does not
 grant macOS file-privacy access. The former AppleScript elevation path lost
@@ -4016,8 +4091,10 @@ checks the production device-open function on an explicitly selected USB disk
 and closes the handle without unmounting, writing or ejecting. It requires
 macOS authorization. These checks do not validate physical USB writing.
 
-`kakehashi_core::write::execute` compares the plan's drive with the drive as
-it is now (name, size, vendor, model, serial and bus) and rejects one the
+`kakehashi_write::execute` compares the plan's drive with the drive as
+it is now (name, size, vendor, model, serial and bus, and the USB port when
+both readings have one: Linux reads it from sysfs as `2-1.3`, macOS from the
+I/O Registry's location ID, Windows not at all) and rejects one the
 rules now exclude, unmounts it, opens it exclusively, checks again, writes in
 sector-padded chunks, zeroes the last MiB, syncs, drops the page cache where
 it can, reads everything back against the image, checks the zeroed tail and
@@ -4080,9 +4157,10 @@ nix build .#checks.x86_64-linux.kakehashi-vm
 
 `checks.kakehashi-vm` hot-plugs a 256 MiB virtual USB stick into a disposable
 NixOS VM. It checks the helper refuses the VM's own disk and a stick whose
-serial number differs from the plan's. Then an ordinary user starts the helper
-through `pkexec` as the window does, with a polkit rule in place of a
-password: once with the cancel file already present, which must leave the
+serial number or USB port differs from the plan's. Then an ordinary user
+starts the helper through `pkexec` as the window does, with a polkit rule in
+place of a password: once with the cancel file already present, which must
+leave the
 stick unchanged, and once to write a random image, after which the stick's
 bytes are compared from outside the VM and its last MiB must be clear. It
 doesn't drive the window itself. NixOS 26.11 installs the setuid `pkexec`

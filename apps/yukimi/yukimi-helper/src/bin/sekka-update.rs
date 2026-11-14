@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! Terminal entry point for the same transaction Yukimi uses.
+#![forbid(clippy::disallowed_methods)]
+#![forbid(unsafe_code)]
 use std::io::{BufRead, Read};
-use std::process::{Command, ExitCode, Stdio};
+use std::process::{ExitCode, Stdio};
 
 // Ctrl-C goes to the foreground helper too. Let it restore the configuration
 // and keep reading its result, instead of killing this reader halfway.
-extern "C" fn wait_for_helper(_: libc::c_int) {}
-
 const USAGE: &str = "Usage: sekka-update [--boot | --switch] [--early | --nightly] [--choose SETTING=VALUE[,VALUE]]...\n       sekka-update --print-flake | --status [--json]";
 
 const HELP: &str = "Update Sekka and apply safe changes automatically: live when it can, else\nprepared for the next start (say --boot or --switch to insist). No automatic reboot.\n\n  --early        follow Sekka as soon as changes are merged (main), before the\n                 nightly checks; what isn't in the binary cache builds here\n  --nightly      follow the nightly again (the default)\n  --choose S=V   change one of the system's own choices with the update, such as\n                 --choose calamares.loginScreen=aizome or\n                 --choose calamares.desktops=aizome,tatami (Yukimi lists them)\n\nOlder installer configurations migrate to Sekka automatically.\nIndependent Nixpkgs and application pins stay unchanged; update those in Yukimi.\nUse --print-flake to review the proposed flake without changing anything.\nUse --status [--json] to read pending update completion without changing anything.";
@@ -56,20 +56,11 @@ fn run() -> Result<(), String> {
         print!("{prepared}");
         return Ok(());
     }
-    let helper = std::env::current_exe().map_err(|e| e.to_string())?.with_file_name("yukimi-helper");
-    // SAFETY: the handler does nothing. Caught handlers reset in the child
-    // at exec; the helper installs its own cancellation handler.
-    unsafe {
-        libc::signal(libc::SIGINT, wait_for_helper as *const () as libc::sighandler_t);
-    }
-    // SAFETY: geteuid has no preconditions. Never trust a helper from PATH.
-    let mut command = if unsafe { libc::geteuid() } == 0 {
-        Command::new(&helper)
-    } else {
-        let mut command = Command::new("/run/wrappers/bin/pkexec");
-        command.arg(&helper);
-        command
-    };
+    // Ctrl-C reaches the helper too, which decides what stops; this waits for
+    // it. A caught signal reverts in the child at exec, and the helper
+    // installs its own cancellation handler.
+    yukimi_system::sys::catch_sigint();
+    let mut command = yukimi_helper::process::helper_client().map_err(|e| e.to_string())?;
     println!("Updating Sekka. Any restart needed will be reported after preparation finishes.");
     let mut child = command
         .args(["change", "--sekka", "--mode", mode])
