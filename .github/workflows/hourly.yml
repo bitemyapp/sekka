@@ -1,0 +1,112 @@
+name: Refresh and cache nixpkgs hourly
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Let a long build finish; keep only the newest waiting hourly run. Other
+# refs cannot displace main's pending run with a skipped manual dispatch.
+concurrency:
+  group: sekka-hourly-nixpkgs-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    if: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' }}
+    runs-on: [self-hosted, linux, x64, sekka-builder]
+    timeout-minutes: 720
+    environment: nightly
+    permissions:
+      contents: write
+    steps:
+      - name: Check the cache secrets
+        shell: bash
+        env:
+          CACHE_R2_ACCESS_KEY_ID: ${{ secrets.CACHE_R2_ACCESS_KEY_ID }}
+          CACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.CACHE_R2_SECRET_ACCESS_KEY }}
+          CACHE_SIGNING_KEY: ${{ secrets.CACHE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          missing=()
+          for name in CACHE_R2_ACCESS_KEY_ID CACHE_R2_SECRET_ACCESS_KEY CACHE_SIGNING_KEY; do
+            [[ -n "${!name}" ]] || missing+=("$name")
+          done
+          if (( ${#missing[@]} )); then
+            echo "::error::The nightly environment lacks ${missing[*]}."
+            exit 1
+          fi
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          # A run may have waited behind an earlier build for hours.
+          ref: main
+          persist-credentials: false
+      - name: Refresh the base-system and application nixpkgs inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          nix flake update nixpkgs applications --flake .
+          if ! git diff --quiet -- flake.lock; then
+            # Commit locally before evaluating: the exact revision we test
+            # and cache must be the revision installed systems will consume.
+            git -c user.name='Sekka hourly' \
+              -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+              commit --quiet -m 'Update nixpkgs for the hourly build' -- flake.lock
+          fi
+      - name: Check the builder
+        shell: bash
+        run: |
+          set -euo pipefail
+          nix --version
+          # As in the nightly, the NixOS component tests require KVM.
+          # shellcheck disable=SC2016
+          nix build --no-link --impure --print-build-logs --expr '
+            let pkgs = (builtins.getFlake (toString ./.)).inputs.nixpkgs.legacyPackages.x86_64-linux;
+            in pkgs.runCommand "kvm-${toString builtins.currentTime}" { requiredSystemFeatures = [ "kvm" ]; } "exec 3<>/dev/kvm && touch $out"
+          ' || {
+            echo "::error::The builder's Nix daemon cannot give builds KVM (see DEVELOPERS.md)."
+            exit 1
+          }
+      - name: Build Uta
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Exercise Uta only in the Nix sandbox, as in cache.yml.
+          nix build --no-update-lock-file --print-build-logs --no-link .#uta
+      - name: Check components
+        shell: bash
+        run: |
+          set -euo pipefail
+          nix flake check --keep-going --no-update-lock-file --print-build-logs
+          git diff --exit-code HEAD
+      - name: Build and publish Sekka's packages to its binary cache
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.CACHE_R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.CACHE_R2_SECRET_ACCESS_KEY }}
+          CACHE_SIGNING_KEY: ${{ secrets.CACHE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          config=$(mktemp -d)
+          trap 'rm -rf "$config"' EXIT
+          (umask 077 && printf '%s' "$CACHE_SIGNING_KEY" > "$config/cache.sekka.computer-1.sec")
+          TMPDIR=$RUNNER_TEMP SEKKA_CACHE_CONFIG=$config nix run --no-update-lock-file .#push-cache
+      - name: Check that updating to it only downloads
+        shell: bash
+        run: |
+          set -euo pipefail
+          nix run --no-update-lock-file --inputs-from . nixpkgs#python3 -- scripts/check_cache_coverage.py .#uta .#installed-systems
+      - name: Advance main to the checked and cached revision
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git diff --exit-code HEAD
+          remote="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          # A merge or nightly may have advanced main while we built. Never
+          # force or rebase: the next hourly run tests a fresh candidate.
+          git push "$remote" HEAD:refs/heads/main
