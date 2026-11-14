@@ -248,6 +248,12 @@
         # Aizome's session fonts in one folder, for $AIZOME_FONT_DIR
         # (desktop/aizome/docs/kit.md).
         aizome-fonts = inputs.aizome.packages.${system}.fonts;
+        # What Shikka builds Aizome's workspace with: SHIKKA_TOOLCHAIN names
+        # its env.json (DEVELOPERS.md, "Building Aizome with Shikka").
+        shikka-toolchain = import ./nix/shikka-toolchain.nix {
+          inherit pkgs;
+          aizome = inputs.aizome.packages.${system}.aizome;
+        };
         inherit (hyprlandPkgs) aquamarine hyprland;
         inherit (cargoGeigerPkgs) cargo-geiger;
         genkan = calamares;
@@ -410,6 +416,9 @@
         hyprlauncher-software = import ./nix/hyprlauncher-software-test.nix { pkgs = hyprlandPkgs; };
         aizome-ibus = import ./nix/aizome-ibus-test.nix { inherit pkgs inputs; };
         aizome-memory-policy = import ./nix/aizome-memory-policy-test.nix { inherit pkgs inputs; };
+        # Shikka's toolchain is assembled from Aizome's package, and checks
+        # itself for what the package's setup hooks give it.
+        shikka-toolchain = self.packages.${system}.shikka-toolchain;
         # Aizome's toolkit's own tests, under a headless sway
         # (desktop/aizome/sukumo).
         sukumo = import ./nix/sukumo-test.nix {
