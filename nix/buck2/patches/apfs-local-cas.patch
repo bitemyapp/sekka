@@ -315,7 +315,7 @@ diff --git a/app/buck2_execute_impl/src/materializers/apfs.rs b/app/buck2_execut
 new file mode 100644
 --- /dev/null
 +++ b/app/buck2_execute_impl/src/materializers/apfs.rs
-@@ -0,0 +1,699 @@
+@@ -0,0 +1,754 @@
 +/*
 + * Copyright (c) Meta Platforms, Inc. and affiliates.
 + *
@@ -426,9 +426,30 @@ new file mode 100644
 +        || before.ctime() != current.ctime()
 +        || before.ctime_nsec() != current.ctime_nsec()
 +    {
-+        return Err(error("Action-owned output changed during APFS CAS upload"));
++        return Err(error(format!(
++            "Action-owned output {} changed during APFS CAS upload",
++            path.display()
++        )));
 +    }
 +    snapshot.publish(path, executable)
++}
++
++/// Rustc can hardlink incremental session files. Publishing one alias changes
++/// the old inode's ctime/link count, so detach aliases before saving the metadata
++/// used by the later publication guard. The caller has already verified this
++/// private snapshot and still holds the action's output lease.
++fn detach_owned_alias(
++    snapshot: &Snapshot,
++    path: &Path,
++    before: fs::Metadata,
++    executable: bool,
++) -> buck2_error::Result<fs::Metadata> {
++    if before.nlink() <= 1 {
++        return Ok(before);
++    }
++    let independent = Snapshot::clone(&snapshot.file, path.parent().unwrap())?;
++    publish_owned(independent, path, &before, executable)?;
++    Ok(fs::symlink_metadata(path)?)
 +}
 +
 +/// Clean only recognized, privately owned, unlocked capture directories. A
@@ -681,6 +702,8 @@ new file mode 100644
 +                Err(e) => return Err(e.into()),
 +            };
 +            snapshot.verify(metadata.digest.data())?;
++            let before =
++                detach_owned_alias(&snapshot, path.as_path(), before, metadata.is_executable)?;
 +            bytes = bytes.saturating_add(size);
 +            originals.push((path, metadata, before));
 +            snapshots.push((snapshot, metadata));
@@ -791,6 +814,38 @@ new file mode 100644
 +    fn digest(bytes: &[u8]) -> FileDigest {
 +        let config = DigestConfig::leak_new(vec![DigestAlgorithm::Sha256], None).unwrap();
 +        FileDigest::from_content(bytes, config.cas_digest_config())
++    }
++
++    #[test]
++    fn incremental_hardlinks_are_detached_before_publication_guards() -> buck2_error::Result<()> {
++        let root = tempfile::tempdir()?;
++        let donor = root.path().join("previous-session");
++        fs::write(&donor, b"incremental object")?;
++        let paths: Vec<_> = (0..3)
++            .map(|i| root.path().join(format!("output-{i}")))
++            .collect();
++        for path in &paths {
++            fs::hard_link(&donor, path)?;
++        }
++        let mut captured = Vec::new();
++        for path in &paths {
++            let source = open_regular(path)?;
++            let before = source.metadata()?;
++            let mut snapshot = Snapshot::clone(&source, root.path())?;
++            snapshot.verify(&digest(b"incremental object"))?;
++            let before = detach_owned_alias(&snapshot, path, before, false)?;
++            assert_eq!(before.nlink(), 1);
++            captured.push((path, before));
++        }
++        for (path, before) in captured {
++            let mut snapshot = Snapshot::clone(&open_regular(&donor)?, root.path())?;
++            snapshot.verify(&digest(b"incremental object"))?;
++            publish_owned(snapshot, path, &before, false)?;
++        }
++        fs::write(&paths[0], b"next compilation")?;
++        assert_eq!(fs::read(&donor)?, b"incremental object");
++        assert_eq!(fs::read(&paths[1])?, b"incremental object");
++        Ok(())
 +    }
 +
 +    #[test]

@@ -136,3 +136,18 @@ retain per-build logs. Engine build/unit-test logs are compressed separately.
 The native engine is retained at `~/.cache/sekka/mac-probe-20261113/buck2-apfs`.
 The Mac has no Nix; its engine was bootstrapped with Cargo using the same source
 and pinned nightly, rather than claiming a Darwin Nix derivation build.
+
+## Standalone extraction follow-up
+
+The Shikka Cargo importer exposed rustc hardlinked incremental session outputs.
+Replacing one alias changes the old inode ctime and falsely tripped another
+output's publication guard. APFS now detaches verified aliases while Buck2 owns
+the outputs, before recording the later guards. Linux storage code is unchanged.
+
+All 10 APFS unit tests passed (the optional second-volume case was not exercised
+in this run). The real NativeLink fixture also passed all 10 integrity/lifecycle
+checks on a new disposable APFS image: a 64 MiB cold output used 67,592,192 bytes,
+a fresh clone used 323,584 bytes, and a 1 MiB write allocated 1,048,576 bytes.
+Evidence: `incremental-hardlinks-tests.log.gz` and
+`incremental-hardlinks-storage.json`. The new patch was reapplied over its
+preceding engine patches and compared byte-for-byte with the tested fork.
