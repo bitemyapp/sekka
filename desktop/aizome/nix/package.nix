@@ -146,6 +146,8 @@ let
   # package's check verifies (nix/checked-doctests.sh). Each is tested on
   # its own, so the dependency build compiles what each one's tests need on
   # its own too. The check stops if this list and the source disagree.
+  # Tansu's unit and integration tests run on their own as well, on what
+  # the dependency build compiles for it as one of these.
   doctested = [
     "aizome-hako"
     "aizome-hotaru"
@@ -299,12 +301,24 @@ rustPlatform.buildRustPackage (
       TMPDIR="$sessionTestTmp" AIZOME_TEST_COMPOSITOR="$PWD/target/${target}/release/aizome" \
         ${cargo}/bin/cargo test --offline --target ${target} --release -p aizome-comp-process-tests -- --include-ignored
       ${test} -p aizome-kit --lib
+      # The tests that start a bus of their own pass without one, skipped.
+      if ! command -v dbus-daemon > /dev/null; then
+        echo "error: no dbus-daemon, so the bus tests would be skipped" >&2
+        exit 1
+      fi
       # A successful spawn is not a successful application launch. Gate the
       # shipped shell on process outcomes and its failure/details interface.
       # One run: dependencies built once for all three packages. The screen
       # saver that keeps the screen awake for a video answers real callers
-      # on a bus of the test's own, as Files' show-in-folder service does.
-      ${test} -p aizome-sys -p aizome-shell -p aizome-hako --lib --test file_manager --test screensaver
+      # on a bus of the test's own, as Files' show-in-folder service does,
+      # and the disks client's fake UDisks2 (which stick a confirmation
+      # names). Files' regressions from the typestate work run here too.
+      ${test} -p aizome-sys -p aizome-shell -p aizome-hako --lib --test file_manager --test screensaver \
+        --test disks --test repro_hako_05 --test repro_hako_06 --test repro_hako_08 --test repro_hako_09
+      # Tansu, on its own as its doctests are: its units, its sheets, plans
+      # and runs on in-memory disks, and plans through the disks client to a
+      # fake UDisks2 on a bus of the test's own. No block device is touched.
+      ${test} -p aizome-tansu --lib --test repro_tsh_25 --test confirmations --test resize --test udisks --test ui
       # The doctests of every crate with one that must not compile, their
       # error codes checked: what the typestate machines' types rule out.
       source ${../../../nix/checked-doctests.sh}

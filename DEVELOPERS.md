@@ -2781,6 +2781,13 @@ of the instance. The UI tests check that reveal requests select the files,
 one window to a folder, and that the last window takes the token. These are
 component checks, not browser or ISO qualification.
 
+The same phase runs `aizome-sys`'s disks client against a fake UDisks2 on such
+a bus (`crates/aizome-sys/tests/disks.rs`), Hako's `repro_hako_*` regressions,
+and Tansu's unit and integration tests, whose `udisks` tests run plans through
+that client to a fake UDisks2 of their own. A bus test passes where
+`dbus-daemon` is missing, by skipping, so the phase requires it first. None of
+these touches a real block device.
+
 ### Utsushi diagnostics
 
 Utsushi sends FFmpeg's nonfatal library diagnostics to the
