@@ -740,6 +740,33 @@ The polkit agent (`aizome-sys`) asks the shell: an overlay dialog with the
 mark, the action's message, the identity (a dropdown if several admins), a
 password field, Cancel and Authenticate, PAM's prompts and errors inline.
 
+The agent decides when an attempt starts, not the dialog. Every attempt
+that ends without success, however it ended (a refused password,
+polkit's helper missing or refusing, PAM giving up before its prompt, a
+change of identity), delays the next: half a second, then 1, 2 and 4
+seconds. The delay is the agent's, across all its requests, and starts
+afresh only after a success or a minute without a failure, so nothing,
+however it answers or asks again, can start polkit's root helper in a
+loop. When PAM's modules said why an attempt failed (a lockout, an
+expired password), the dialog shows their words, as the lock screen does;
+otherwise a refused password shows "That didn't work. Try again."; an
+attempt that ends before anyone answers shows "Trying again…", and after
+a third in a row the dialog says authentication isn't available and
+Authenticate becomes Try Again; if the retry can't even be scheduled, it
+says so at once. The helper runs only for someone polkitd offered for that
+request. A password submitted before the helper's
+prompt answers that prompt (if it hides what's typed). An answer goes
+only to the prompt it answers, of the request it came from, once, and
+one with a line break, a NUL or over 510 bytes is refused in the dialog
+rather than split across prompts. Events from a conversation that a newer
+one replaced are dropped by both the agent and the dialog: their types
+need a proof, made by checking the event against the latest
+conversation, before they can apply one
+(`aizome-sys/src/polkit/conversation.rs`,
+`aizome-shell/src/auth/dialog.rs`). If the dialog's output goes, the
+dialog opens again on the focused screen, keeping what was typed; with no
+screen at all it waits for one.
+
 The shell owns a `PolkitAgent` handle for its lifetime. The handle watches
 polkit's D-Bus owner before registering and registers again when the daemon
 restarts, including during a system update. Registration failures retry

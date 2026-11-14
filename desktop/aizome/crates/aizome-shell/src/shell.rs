@@ -345,7 +345,7 @@ pub struct Shell {
     pub lock: crate::lock::LockState,
     pub authenticator: Arc<dyn crate::pam::Authenticator>,
     pub user_picture: Option<aizome_kit::Image>,
-    pub auth: Option<crate::auth::AuthState>,
+    pub(crate) auth: Option<crate::auth::dialog::Dialog>,
     polkit: Option<Arc<aizome_sys::polkit::PolkitAgent>>,
     pub tearoffs: Vec<crate::tearoff::TearOff>,
     pub(crate) tear_shown: HashMap<usize, crate::tearoff::Shown>,
@@ -522,7 +522,7 @@ impl Shell {
             drag_grab: aizome_kit::Vec2::ZERO,
             volumes_fixture: Vec::new(),
             system_disk_fallback: None,
-            lock: Default::default(),
+            lock: crate::lock::LockState::unlocked(),
             authenticator: Arc::new(crate::pam::Pam::new("aizome")),
             user_picture: None,
             auth: None,
@@ -890,7 +890,7 @@ impl Shell {
     fn sync_rename_keys(&mut self, cx: &mut Cx<Msg>) {
         let Some(keys) = self.rename_keys else { return };
         let refocused = self.wm.focused.is_some() && self.wm.focused != keys.focused;
-        let locked = self.wm.locked || !self.lock.surfaces.is_empty();
+        let locked = self.wm.locked || !self.lock.surfaces().is_empty();
         let taken = self.palette.is_some() || self.confirm.is_some() || self.auth.is_some();
         let gone = !self.surfaces.contains_key(&keys.bar)
             || self.renaming.as_ref().is_some_and(|(index, _)| self.wm.desk(*index).is_none());
@@ -1982,7 +1982,9 @@ impl Program for Shell {
         // opened again when the outputs change.
         if let Some(s) = self.surfaces.remove(&window) {
             if matches!(s, Surface::Lock { .. }) {
-                self.lock.surfaces.retain(|(key, _)| *key != window);
+                if let Some(lock_surfaces) = self.lock.surfaces_mut() {
+                    lock_surfaces.retain(|(key, _)| *key != window);
+                }
                 // Reconcile after the kit has destroyed the old surface;
                 // creating its replacement here would duplicate its role.
                 cx.send(Msg::Nothing);
@@ -2013,6 +2015,9 @@ impl Program for Shell {
             }
             if s == Surface::DeskbarLanding {
                 self.deskbar_landing = None;
+            }
+            if s == Surface::Auth {
+                self.auth_window_closed(window, cx);
             }
         }
         true
@@ -2071,8 +2076,8 @@ impl Program for Shell {
         self.lock_confirmed(cx);
     }
 
-    fn session_lock_finished(&mut self, _cx: &mut Cx<Msg>) {
-        self.lock_ended();
+    fn session_lock_finished(&mut self, cx: &mut Cx<Msg>) {
+        self.lock_ended(cx);
     }
 }
 
@@ -2116,6 +2121,7 @@ impl Shell {
         self.sync_panel(cx);
         self.sync_tearoffs(cx);
         self.sync_cards(cx);
+        self.sync_auth(cx);
         self.keep_palette_ahead(cx);
         self.sync_rename_keys(cx);
         if let Some(screen) = self.primary().cloned() {
@@ -2363,17 +2369,14 @@ impl Shell {
             match e {
                 SessionEvent::Lock => self.lock(cx),
                 SessionEvent::Unlock => self.unlock(cx),
-                SessionEvent::PrepareForSleep => {
-                    if self.lock_cfg.before_sleep && self.lock.phase == crate::lock::Phase::Unlocked {
-                        self.lock.sleep_pending = true;
-                        self.lock(cx);
-                    } else if let Some(l) = &self.sys.logind {
-                        l.sleep_ready();
-                    }
-                }
+                // The lock screen decides when the sleep may go.
+                SessionEvent::PrepareForSleep(sleep) => self.lock_for_sleep(sleep, cx),
                 SessionEvent::Resumed => {
+                    // A sleep that waited for the lock is over.
+                    self.lock_resumed();
                     self.sync_screens(cx.outputs(), cx);
-                    // Take the delay again for the next sleep.
+                    // Hold the delay for the next sleep (the one held
+                    // stays, if logind went to sleep without its release).
                     if let Some(l) = &self.sys.logind
                         && let Err(e) = l.take_sleep_delay()
                     {

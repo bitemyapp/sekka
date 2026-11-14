@@ -126,8 +126,8 @@ use smithay_client_toolkit::{
 };
 
 use crate::protocol::{
-    Cursor, FromRender, LayerPlacement, Op, PopupPlacement, Rect, SizeLimits, Style, Target, TitleText, ToRender,
-    WindowId, WindowRequest, WindowState,
+    Cursor, FromRender, LayerPlacement, Op, PopupPlacement, Rect, SizeLimits, Style, Target, TextPurpose, TitleText,
+    ToRender, WindowId, WindowRequest, WindowState,
 };
 use crate::raster::{self, Canvas, Glyphs};
 
@@ -363,7 +363,7 @@ fn run(channel: Channel<ToRender>, to_main: MainSender) {
     // A program that stops while it holds the session lock leaves the
     // session locked: the lock goes with the connection, not destroyed
     // (a protocol error while locked).
-    if let Some(lock) = state.session_lock.take().filter(SessionLock::is_locked) {
+    if let Some(lock) = state.session_lock.take().map(|held| held.lock).filter(SessionLock::is_locked) {
         std::mem::forget(lock);
     }
 }
@@ -390,9 +390,10 @@ pub struct State {
     activation: Option<ActivationState>,
     /// wlr-layer-shell, where the compositor offers it (see `layer`).
     layer_shell: Option<LayerShell>,
-    /// ext-session-lock (see `lock`), and the lock asked for or held.
+    /// ext-session-lock (see `lock`), and the lock asked for or held,
+    /// with the request it is for.
     session_locks: SessionLockState,
-    session_lock: Option<SessionLock>,
+    session_lock: Option<lock::Held>,
     compositor: CompositorState,
     subcompositor: SubcompositorState,
     viewporter: SimpleGlobal<WpViewporter, 1>,
@@ -583,6 +584,8 @@ pub struct Win {
     scale_given: bool,
     /// The first responder takes text from input methods.
     text_input: bool,
+    /// What it takes, for input methods.
+    text_purpose: TextPurpose,
     /// Where its caret is, in points from the top left of the content.
     caret: Option<Rect>,
     /// Where the content takes pointer input, if not everywhere.
@@ -1067,7 +1070,7 @@ impl State {
                 }
             }
             ToRender::ReserveBuffers { bytes } => self.reserve_buffers(bytes),
-            ToRender::LockSession => lock::lock(self),
+            ToRender::LockSession { lock } => lock::lock(self, lock),
             ToRender::UnlockSession => lock::unlock(self),
             ToRender::RequestActivationToken { request, app_id } => self.request_token(request, app_id),
             ToRender::StartDrag { window, drag, contents, actions, icon } => {
@@ -1196,7 +1199,9 @@ impl State {
             }
             ToRender::DndFinish { drag, performed } => dnd::finish(self, drag, performed),
             ToRender::PublishOutputs => outputs::requested(self),
-            ToRender::TextInput { window, wanted, caret } => textinput::set_wanted(self, window, wanted, caret),
+            ToRender::TextInput { window, wanted, purpose, caret } => {
+                textinput::set_wanted(self, window, wanted, purpose, caret)
+            }
             ToRender::ResetTextInput { window } => textinput::reset(self, window),
             ToRender::SetInputRegion { window, rects } => {
                 if let Some(win) = self.windows.get_mut(&window) {
@@ -1370,6 +1375,7 @@ impl State {
                 passthrough: false,
                 scale_given: false,
                 text_input: false,
+                text_purpose: TextPurpose::Normal,
                 caret: None,
                 raster_time: std::time::Duration::ZERO,
                 raster_pixels: 0.0,

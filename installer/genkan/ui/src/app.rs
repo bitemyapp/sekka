@@ -8,10 +8,13 @@
 //! Polkit) and the helper's events come from threads of their own through
 //! the kit's message stream. Answers from an older request (its epoch or
 //! generation) are dropped, as are stale sessions, which cancels them.
-use crate::flow::{Flow, FlowAny, FlowState, HelperAnswer, ReviewAnswer, ReviewRequest, Said};
+use crate::flow::{
+    Erasing, Flow, FlowAny, FlowState, HelperAnswer, ReviewAnswer, ReviewRequest, Said,
+};
 use crate::ram::{Memory, MemoryAnswer, SwapSize};
 use crate::{format::size, media, zone};
 use aizome_ipc::{KeyboardInfo, setup::Beside};
+use aizome_kit::agree::{Agreed, Pressed};
 use aizome_kit::cx::MsgSender;
 use aizome_kit::prelude::*;
 use aizome_typestate::{Answer, Fresh, Generation, Ticket};
@@ -295,6 +298,13 @@ impl From<Update> for Helper {
     }
 }
 
+/// How a review is confirmed: by the person's press of the Review page's
+/// button, or, for a preview's sample with no helper behind it, without one.
+enum How {
+    Agreed(Agreed<Erasing>),
+    Sample,
+}
+
 #[derive(Clone, Debug)]
 pub enum Msg {
     // Navigation.
@@ -364,6 +374,14 @@ pub enum Msg {
     Reviewed(Handoff<ReviewAnswer>),
     Session(HelperAnswer),
     Erase(String),
+    /// The Review page's Erase Disk and Install button: the person agreed to
+    /// the review it showed, with the phrase typed.
+    Install(Pressed<Erasing>),
+    /// Return in the phrase field: on to the Erase Disk and Install button,
+    /// which only a press of its own confirms. This Return isn't one however
+    /// long it's held: the kit presses a button only as a key goes down
+    /// (`tests/early_confirmation.rs` holds it).
+    ToConfirm,
     Consent(bool),
     Tick,
     ToggleLog,
@@ -952,8 +970,9 @@ impl Genkan {
                 self.start_review(cx);
                 return;
             }
+            // The Review page's button agrees (`Msg::Install`): only a
+            // person's press of it confirms, never Next sent for them.
             Step::Review => {
-                self.confirm_install(cx);
                 return;
             }
             Step::Install => {
@@ -1918,6 +1937,13 @@ impl Genkan {
             && self.erase == self.phrase
     }
 
+    /// What the Review page's Erase Disk and Install button agrees to: the
+    /// review it shows, with the phrase as typed. None without a review.
+    pub fn erasing(&self) -> Option<Erasing> {
+        self.review_ticket
+            .map(|review| Erasing::new(review, self.erase.as_str()))
+    }
+
     fn prepared_text(summary: &Summary) -> (String, String) {
         if summary.deferred {
             return (
@@ -1982,7 +2008,15 @@ impl Genkan {
 
     // ---- Installation -----------------------------------------------------
 
-    fn confirm_install(&mut self, cx: &mut Cx<Msg>) {
+    /// A preview's sample review, confirmed as if pressed: it has no helper
+    /// to send the confirmation to, and the flow refuses a running helper's.
+    pub(crate) fn confirm_sample(&mut self, cx: &mut Cx<Msg>) {
+        self.confirm_install(How::Sample, cx);
+    }
+
+    /// The person agreed to the review on the page (or a preview confirms
+    /// its sample): confirm it, sending it to the helper once prepared.
+    fn confirm_install(&mut self, how: How, cx: &mut Cx<Msg>) {
         if !self.confirmation_ready() {
             self.note(
                 "Type the exact phrase and confirm that the disk will be erased.",
@@ -1990,17 +2024,28 @@ impl Genkan {
             );
             return;
         }
-        let typed = self.erase.clone();
+        // The flow checks this too, and refuses; here it's to say why.
+        if let How::Agreed(agreed) = &how
+            && Some(agreed.target()) != self.erasing().as_ref()
+        {
+            self.note(
+                "The review changed as you confirmed. Check it and confirm again.",
+                cx,
+            );
+            return;
+        }
         let (moved, ()) = self.moved(|state| {
             let state = match state {
-                FlowAny::Ready(ready) => match ready.confirm(&typed) {
-                    Ok(installing) => installing.into(),
-                    Err(ready) => ready.into(),
-                },
-                FlowAny::Preparing(preparing) => match preparing.confirm(&typed) {
-                    Ok(queued) => queued.into(),
-                    Err(preparing) => preparing.into(),
-                },
+                FlowAny::Ready(ready) => match how {
+                    How::Agreed(agreed) => ready.confirm(agreed),
+                    How::Sample => ready.confirm_sample(),
+                }
+                .map_or_else(Into::into, Into::into),
+                FlowAny::Preparing(preparing) => match how {
+                    How::Agreed(agreed) => preparing.confirm(agreed),
+                    How::Sample => preparing.confirm_sample(),
+                }
+                .map_or_else(Into::into, Into::into),
                 FlowAny::Editing(s) => s.into(),
                 FlowAny::Checking(s) => s.into(),
                 FlowAny::Unprepared(s) => s.into(),
@@ -2415,6 +2460,11 @@ impl Program for Genkan {
     fn update(&mut self, msg: Msg, cx: &mut Cx<Msg>) {
         match msg {
             Msg::Next => self.forward(cx),
+            Msg::Install(pressed) => {
+                if let Some(agreed) = pressed.take() {
+                    self.confirm_install(How::Agreed(agreed), cx);
+                }
+            }
             Msg::Back => self.backward(cx),
             Msg::Jump(step) => self.jump(step, cx),
             Msg::ClearNote(note) => {
@@ -2680,6 +2730,11 @@ impl Program for Genkan {
                 }
             }
             Msg::Erase(text) => self.erase = text,
+            Msg::ToConfirm => {
+                if self.confirmation_ready() {
+                    cx.focus("next");
+                }
+            }
             Msg::Consent(on) => self.consent = on,
             Msg::Tick => {
                 if let Some(started) = self.started

@@ -21,6 +21,12 @@ use tansu::mock::Mock;
 use tansu::plan::{NewFs, Plan, Queued};
 use tansu::run::{Outcome, Run};
 
+/// The run of `plan`, as if the person pressed Apply on the sheet listing it
+/// (the kit's test agreement stands for their press).
+fn agree(plan: &Plan, state: &aizome_sys::disks::DisksState) -> Run {
+    Run::agree(aizome_kit::agree::testing::agreed(plan.shown(state)), plan, state).expect("the plan as shown")
+}
+
 /// The mock, with a format that takes `slow` and a note of each
 /// confirmation's age when it arrives.
 struct Slow {
@@ -95,8 +101,9 @@ impl Backend for Slow {
         type_id: Option<&str>,
         name: &str,
         format: Option<FormatSpec>,
+        flags: u64,
     ) -> Task<String> {
-        self.inner.create_partition(confirm, offset, size, type_id, name, format)
+        self.inner.create_partition(confirm, offset, size, type_id, name, format, flags)
     }
     fn delete_partition(&self, confirm: Confirm<DeletePartition, Queued>) -> Task<()> {
         self.inner.delete_partition(confirm)
@@ -154,7 +161,7 @@ fn each_operation_is_confirmed_as_it_starts_not_at_apply() {
     plan.flags(at(&state, &layout, "sdc1"), Flags { hidden: true, ..Flags::of("dos", "0x0c", 0x80) }).unwrap();
 
     let applied = Instant::now();
-    let mut run = Run::agree(&plan, &state);
+    let mut run = agree(&plan, &state);
     while run.is_running() && applied.elapsed() < Duration::from_secs(10) {
         run.advance(&backend);
     }
@@ -167,4 +174,43 @@ fn each_operation_is_confirmed_as_it_starts_not_at_apply() {
         age < slow / 2,
         "the flags' confirmation was {age:?} old when it arrived, made at Apply rather than when it started: {ages:?}"
     );
+}
+
+/// An agreement to the plan as the sheet listed it runs only that plan: one
+/// whose operations changed since (one added, or one dropped as its device
+/// went) is refused.
+#[test]
+fn an_agreement_runs_only_the_plan_it_was_given_for() {
+    let mock = Mock::default();
+    let state = mock.snapshot();
+    let mut plan = Plan::default();
+    let layout = plan.preview(&state, STICK).unwrap();
+    let erase = NewFs { fs: "vfat".into(), label: "BOOT".into(), erase: Erase::Quick, encrypt: None };
+    plan.format(at(&state, &layout, "sdc1"), erase).unwrap();
+    let agreed = aizome_kit::agree::testing::agreed(plan.shown(&state));
+    let mut changed = plan.clone();
+    let layout = changed.preview(&state, STICK).unwrap();
+    changed.flags(at(&state, &layout, "sdc1"), Flags { hidden: true, ..Flags::of("dos", "0x0c", 0x80) }).unwrap();
+    assert_eq!(Run::agree(agreed, &changed, &state).err(), Some(tansu::run::PlanChanged));
+    let agreed = aizome_kit::agree::testing::agreed(plan.shown(&state));
+    assert!(Run::agree(agreed, &plan, &state).is_ok());
+}
+
+/// Nor does it run against a plan put together elsewhere with the same
+/// operations: it names the plan it was given for.
+#[test]
+fn an_agreement_runs_only_against_the_plan_it_listed() {
+    let mock = Mock::default();
+    let state = mock.snapshot();
+    let mut plan = Plan::default();
+    let layout = plan.preview(&state, STICK).unwrap();
+    let erase = NewFs { fs: "vfat".into(), label: "BOOT".into(), erase: Erase::Quick, encrypt: None };
+    plan.format(at(&state, &layout, "sdc1"), erase).unwrap();
+    let agreed = aizome_kit::agree::testing::agreed(plan.shown(&state));
+    let mut own = Plan::default();
+    own.ops = plan.ops.clone();
+    assert_eq!(Run::agree(agreed, &own, &state).err(), Some(tansu::run::PlanChanged));
+    // A clone of the plan it listed (the undo history keeps them) is that plan.
+    let agreed = aizome_kit::agree::testing::agreed(plan.shown(&state));
+    assert!(Run::agree(agreed, &plan.clone(), &state).is_ok());
 }

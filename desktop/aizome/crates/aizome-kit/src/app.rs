@@ -9,8 +9,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use sidestep_ui::{
-    Background, Canvas, Cursor, Drag, DropResponse, PopupPosition, ScrollDelta, TimerId, WindowEvent, WindowId,
-    WindowOptions,
+    Background, Canvas, Cursor, Drag, DropResponse, PopupPosition, ScrollDelta, TextPurpose, TimerId, WindowEvent,
+    WindowId, WindowOptions,
 };
 
 use crate::cx::{Cx, Pool};
@@ -41,7 +41,10 @@ pub fn try_run<P: Program>(program: P) -> Result<P, sidestep_ui::Error> {
     let info = program.info();
     let quit = program.quit_when_last_window_closes();
     let app = sidestep_ui::App::new().app_id(info.app_id.clone()).quit_when_last_window_closes(quit);
-    let glue = Glue { rt: Runtime::new(program, Appearance::load()), maps: Maps::default() };
+    let mut glue = Glue { rt: Runtime::new(program, Appearance::load()), maps: Maps::default() };
+    // Input comes from the compositor here: a press of an agreeing button
+    // is a person's (or what the compositor takes for one), and agrees.
+    glue.rt.core.agreeing = true;
     app.run(glue).map(|g| g.rt.program)
 }
 
@@ -556,9 +559,15 @@ impl Platform for SidestepPlatform<'_> {
         }
     }
 
-    fn set_text_input(&mut self, id: WinId, wanted: bool, caret: Option<Rect>) {
+    fn set_text_input(&mut self, id: WinId, wanted: bool, purpose: TextPurpose, caret: Option<Rect>) {
         if let Some(mut w) = self.maps.to_side.get(&id).and_then(|s| self.sx.window(*s)) {
-            w.set_text_input(wanted, caret);
+            w.set_text_input(wanted, purpose, caret);
+        }
+    }
+
+    fn reset_text_input(&mut self, id: WinId) {
+        if let Some(mut w) = self.maps.to_side.get(&id).and_then(|s| self.sx.window(*s)) {
+            w.reset_text_input();
         }
     }
 

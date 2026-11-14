@@ -9,7 +9,7 @@ use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, Instant};
 
-use sidestep_ui::{Canvas, Cursor, Ime, Key, KeyEvent, Modifiers, NamedKey, PointerButton, ScrollPhase};
+use sidestep_ui::{Canvas, Cursor, Ime, Key, KeyEvent, Modifiers, NamedKey, PointerButton, ScrollPhase, TextPurpose};
 
 use crate::element::{AnyMsg, Common, Mapper, MsgFn, RawElement};
 use crate::layout::{Length, Point, Rect, Size, Vec2};
@@ -161,7 +161,7 @@ pub(crate) struct Win {
     pub tooltip_shown: Option<WinId>,
     /// The nearest tooltip under the pointer, including one dismissed by a click.
     tooltip_target: Option<(NodeId, Arc<str>)>,
-    pub ime: (bool, Option<Rect>),
+    pub ime: (bool, TextPurpose, Option<Rect>),
     pub title: String,
     /// Popups open over it, in order.
     pub popups: Vec<WinId>,
@@ -220,7 +220,7 @@ impl Win {
             tooltip: None,
             tooltip_shown: None,
             tooltip_target: None,
-            ime: (false, None),
+            ime: (false, TextPurpose::Normal, None),
             title: String::new(),
             popups: Vec::new(),
             built: false,
@@ -319,6 +319,14 @@ pub(crate) struct Core {
     /// The keys that are down, by their codes and what they are, since the
     /// keyboard last came to a window or left one ([`Core::first_press`]).
     keys_down: Vec<(u32, Key)>,
+    /// Whether a press of an agreeing button makes its agreement
+    /// ([`crate::agree`]): in a program run on a display, where presses come
+    /// from the compositor's input; in the testing harness only when a test
+    /// build asks.
+    pub agreeing: bool,
+    /// A release is going to what's under the pointer though no widget took
+    /// its press: buttons' presses then make no agreement.
+    pub unpressed_release: bool,
 }
 
 impl Core {
@@ -351,6 +359,8 @@ impl Core {
             quit: false,
             wm: None,
             keys_down: Vec::new(),
+            agreeing: false,
+            unpressed_release: false,
         }
     }
 
@@ -794,8 +804,8 @@ impl Core {
         if focus_gone {
             w.focused = None;
             if w.ime.0 {
-                w.ime = (false, None);
-                platform.set_text_input(win, false, None);
+                w.ime = (false, TextPurpose::Normal, None);
+                platform.set_text_input(win, false, TextPurpose::Normal, None);
             }
         }
         self.restore_modal_focus(win, platform);
@@ -1735,6 +1745,7 @@ impl Core {
             capture,
             cursor,
             ime,
+            ime_reset,
             ticks,
             widget_timers,
             menus,
@@ -1742,6 +1753,7 @@ impl Core {
             reveal,
             begin_move,
             drag,
+            agreements,
             ..
         } = out;
         if let Some(source) = drag {
@@ -1758,6 +1770,20 @@ impl Core {
             w.relayout.push(n.id);
         }
         for (node, msg) in msgs {
+            let msg = self.map_up(win, node, msg);
+            self.queue.push_back(msg);
+        }
+        // Only buttons push these, and only as a person presses them: their
+        // `event` for the pointer's release, their `activate` for the keys.
+        for (node, agree) in agreements {
+            if self.unpressed_release {
+                continue;
+            }
+            if !self.agreeing {
+                log::warn!("an agreeing button was pressed where presses make no agreement (a test harness)");
+                continue;
+            }
+            let msg = agree.make(crate::agree::Mint::by_input());
             let msg = self.map_up(win, node, msg);
             self.queue.push_back(msg);
         }
@@ -1800,7 +1826,10 @@ impl Core {
                 && i != w.ime
             {
                 w.ime = i;
-                platform.set_text_input(win, i.0, i.1);
+                platform.set_text_input(win, i.0, i.1, i.2);
+            }
+            if ime_reset && w.ime.0 {
+                platform.reset_text_input(win);
             }
         }
         for (node, after) in ticks {
@@ -1983,8 +2012,8 @@ impl Core {
         if let Some(w) = self.wins.get_mut(&win)
             && w.ime.0
         {
-            w.ime = (false, None);
-            platform.set_text_input(win, false, None);
+            w.ime = (false, TextPurpose::Normal, None);
+            platform.set_text_input(win, false, TextPurpose::Normal, None);
         }
         if let Some(i) = new_idx {
             self.send(win, i, &Event::Focus(true), platform);
@@ -2275,8 +2304,13 @@ impl Core {
                 }
                 None => {
                     let path = w.tree.path_at(p, w.modal());
+                    // No widget took the press (it began on nothing, and the
+                    // pointer came here): the release is no press of a button
+                    // there, and agrees to nothing.
                     if let Some(&last) = path.last() {
+                        self.unpressed_release = true;
                         self.bubble(win, last, &ev, platform);
+                        self.unpressed_release = false;
                     }
                 }
             }
@@ -2295,12 +2329,18 @@ impl Core {
         let Some(w) = self.wins.get_mut(&win) else { return };
         let active = w.active.take().and_then(|a| w.tree.get(a));
         let ev = Event::PointerUp { pos: p, button: PointerButton::Left, mods };
+        // Nothing under the drags-only widget took the press: the release
+        // goes to what's under the pointer now, which no press began on, so
+        // it agrees to nothing.
+        let unpressed = active.is_none();
         let target = active.or_else(|| w.tree.path_under(p, w.modal()).last().copied());
         if let Some(i) = target {
             if w.tree.nodes[i].widget.hover_paints() {
                 platform.invalidate(win, w.tree.nodes[i].own_rect());
             }
+            self.unpressed_release = unpressed;
             self.bubble(win, i, &ev, platform);
+            self.unpressed_release = false;
         }
     }
 

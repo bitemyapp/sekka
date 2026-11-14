@@ -427,15 +427,37 @@ fn logind_actions_events_and_the_sleep_delay() {
     };
     emit(true);
     assert!(eventually(|| logind.snapshot().preparing_for_sleep));
-    assert_eq!(logind.take_events(), [SessionEvent::PrepareForSleep]);
+    let mut events = logind.take_events();
+    let Some(SessionEvent::PrepareForSleep(sleep)) = events.pop() else { panic!("{events:?}") };
+    assert!(events.is_empty(), "{events:?}");
     assert!(!released(&log.lock().unwrap().inhibitor_reads[0]), "held until the screen is locked");
-    logind.sleep_ready();
+    logind.sleep_ready(sleep);
     assert!(eventually(|| released(&log.lock().unwrap().inhibitor_reads[0])));
     // After resuming the delay is taken again.
     emit(false);
     assert!(eventually(|| log.lock().unwrap().inhibits == 2));
     assert!(eventually(|| logind.snapshot().sleep_delay_held && !logind.snapshot().preparing_for_sleep));
     assert_eq!(logind.take_events(), [SessionEvent::Resumed]);
+    // Taking it again while it's held keeps the one held.
+    logind.take_sleep_delay().unwrap();
+    assert_eq!(log.lock().unwrap().inhibits, 2);
+
+    // A sleep that comes and goes before the screen locks (logind stops
+    // waiting after InhibitDelayMaxSec): the delay is still held after the
+    // resume, for the next sleep, and the late release of the sleep that's
+    // over leaves it held.
+    emit(true);
+    assert!(eventually(|| logind.snapshot().preparing_for_sleep));
+    emit(false);
+    assert!(eventually(|| !logind.snapshot().preparing_for_sleep));
+    let mut events = logind.take_events();
+    assert_eq!(events.pop(), Some(SessionEvent::Resumed));
+    let Some(SessionEvent::PrepareForSleep(over)) = events.pop() else { panic!("{events:?}") };
+    logind.sleep_ready(over);
+    std::thread::sleep(std::time::Duration::from_millis(50));
+    assert!(!released(&log.lock().unwrap().inhibitor_reads[1]), "held for the next sleep");
+    assert!(logind.snapshot().sleep_delay_held);
+    assert_eq!(log.lock().unwrap().inhibits, 2);
 
     // Other inhibitors are released when dropped.
     let keep_awake = logind.inhibit("idle:sleep", "Playing a video", "block").wait().unwrap();

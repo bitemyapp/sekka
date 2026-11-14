@@ -42,6 +42,8 @@ pub trait Backend {
 
     // Queued, and run after the Apply sheet.
     fn create_partition_table(&self, confirm: Confirm<NewPartitionTable, Queued>, kind: TableKind) -> Task<()>;
+    // aizome-sys's create, with the flags it sets on the partition it makes.
+    #[allow(clippy::too_many_arguments)]
     fn create_partition(
         &self,
         confirm: Confirm<CreatePartition, Queued>,
@@ -50,6 +52,7 @@ pub trait Backend {
         type_id: Option<&str>,
         name: &str,
         format: Option<FormatSpec>,
+        flags: u64,
     ) -> Task<String>;
     fn delete_partition(&self, confirm: Confirm<DeletePartition, Queued>) -> Task<()>;
     fn format(&self, confirm: Confirm<Format, Queued>, spec: FormatSpec) -> Task<()>;
@@ -123,8 +126,9 @@ impl Backend for Disks {
         type_id: Option<&str>,
         name: &str,
         format: Option<FormatSpec>,
+        flags: u64,
     ) -> Task<String> {
-        Disks::create_partition(self, confirm, offset, size, type_id, name, format)
+        Disks::create_partition(self, confirm, offset, size, type_id, name, format, flags)
     }
     fn delete_partition(&self, confirm: Confirm<DeletePartition, Queued>) -> Task<()> {
         Disks::delete_partition(self, confirm)

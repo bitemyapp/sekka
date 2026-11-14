@@ -570,9 +570,10 @@ fn seen(disks: &Disks, path: &str) -> Identity {
     disks.snapshot().identity(path).unwrap_or_else(|| panic!("{path}"))
 }
 
-/// A confirmation of the device as the test sees it (any brand will do).
+/// A confirmation of the device as the test sees it, agreed to as a person
+/// would (any brand will do).
 fn agree<Op: AsSeen>(seen: Identity) -> Confirm<Op, ()> {
-    Confirm::new(seen, ())
+    Confirm::new(&aizome_kit::agree::testing::agreed(seen), ())
 }
 
 fn start(bus: &common::TestBus) -> Disks {
@@ -683,10 +684,13 @@ fn partitions_are_made_in_free_space_and_deleted_on_confirmation() {
     let disk = block_path("sdb");
     // Over an existing partition: refused without asking UDisks.
     assert!(
-        disks.create_partition(agree::<CreatePartition>(seen(&disks, &disk)), MIB, GIB, None, "", None).wait().is_err()
+        disks
+            .create_partition(agree::<CreatePartition>(seen(&disks, &disk)), MIB, GIB, None, "", None, 0)
+            .wait()
+            .is_err()
     );
     let made = disks
-        .create_partition(agree::<CreatePartition>(seen(&disks, &disk)), 2 * GIB, GIB, None, "Data", None)
+        .create_partition(agree::<CreatePartition>(seen(&disks, &disk)), 2 * GIB, GIB, None, "Data", None, 0)
         .wait()
         .unwrap();
     assert_eq!(made, block_path("sdb2"));

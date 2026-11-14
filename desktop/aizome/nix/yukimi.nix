@@ -110,7 +110,13 @@ rustPlatform.buildRustPackage (
     };
     preBuild = workspace.sameEnvironment + workspace.restoreTarget dependencies;
     # Only Yukimi's own crates may compile here (workspace.nix).
-    postBuild = workspace.onlyFirstParty;
+    postBuild = workspace.onlyFirstParty + ''
+      # What installPhase installs: the app as this build made it. The
+      # check's integration tests relink it into release-lto with the kit's
+      # `testing` feature, which a shipped app must not have.
+      mkdir -p "$NIX_BUILD_TOP/release-lto-bin"
+      cp -t "$NIX_BUILD_TOP/release-lto-bin" target/${target}/release-lto/aizome-yukimi
+    '';
     postCheck = workspace.onlyFirstParty;
     checkPhase = ''
       runHook preCheck
@@ -120,7 +126,7 @@ rustPlatform.buildRustPackage (
     '';
     installPhase = ''
       runHook preInstall
-      install -Dm755 target/${target}/release-lto/aizome-yukimi $out/libexec/aizome-yukimi
+      install -Dm755 "$NIX_BUILD_TOP/release-lto-bin/aizome-yukimi" $out/libexec/aizome-yukimi
       mkdir -p $out/bin
       substitute apps/yukimi/data/yukimi-launch $out/bin/aizome-yukimi \
         --subst-var-by bash ${bash}/bin/bash \

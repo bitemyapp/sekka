@@ -100,12 +100,24 @@ impl State {
         std::fs::read_to_string(path).ok().and_then(|t| toml::from_str(&t).ok()).unwrap_or_default()
     }
 
-    /// Write it whole: a new file, renamed over the old.
+    /// Write it whole: a new file, on the disk before it's renamed over the
+    /// old, and the rename on the disk before this returns. greetd starts
+    /// the session as soon as the greeter has gone, and a crash or a power
+    /// cut then mustn't leave an empty or half-written file.
     pub fn save(&self, path: &Path) -> std::io::Result<()> {
+        use std::io::Write;
         let text = toml::to_string(self).map_err(std::io::Error::other)?;
         let new = path.with_extension("new");
-        std::fs::write(&new, text)?;
-        std::fs::rename(new, path)
+        let mut file = std::fs::File::create(&new)?;
+        file.write_all(text.as_bytes())?;
+        file.sync_all()?;
+        drop(file);
+        std::fs::rename(&new, path)?;
+        let dir = match path.parent() {
+            Some(d) if !d.as_os_str().is_empty() => d,
+            _ => Path::new("."),
+        };
+        std::fs::File::open(dir)?.sync_all()
     }
 
     /// `user` logged in to `session`.

@@ -677,6 +677,82 @@ pub enum Corner {
     BottomRight,
 }
 
+/// The kind of request the main thread counts its session locks in
+/// (`aizome_typestate::Generation<SessionLockRequest>`).
+pub enum SessionLockRequest {}
+
+/// One session lock request (`ToRender::LockSession`), as both threads
+/// name it: the main thread's lock machine that asked (each counts its
+/// tickets from 1, so the process numbers them apart), and its ticket. The
+/// render thread's answers carry the request they answer, so the main
+/// thread can tell the answer for a lock it withdrew from the answer for
+/// the lock it asks for now.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LockRequest {
+    pub machine: u64,
+    pub ticket: aizome_typestate::Ticket<SessionLockRequest>,
+}
+
+/// What the render thread heard from the compositor about a request, one
+/// type for each answer: [`LockConfirmed`] (`FromRender::SessionLocked`)
+/// and [`LockFinished`] (`SessionLockFinished`). Only the render thread
+/// makes one, so the main thread can apply only an answer it was sent,
+/// never one for a request it picks itself (say, the one it asks for
+/// now), and never one answer as the other (a refusal as a confirmation
+/// would have it believe the session locked).
+macro_rules! lock_answer {
+    ($(#[$doc:meta])* $name:ident) => {
+        $(#[$doc])*
+        #[derive(Debug)]
+        pub struct $name {
+            request: LockRequest,
+        }
+
+        impl $name {
+            pub(crate) fn heard(request: LockRequest) -> $name {
+                $name { request }
+            }
+
+            /// The request it answers.
+            pub fn request(&self) -> LockRequest {
+                self.request
+            }
+
+            /// An answer no render thread gave, for tests that play the
+            /// compositor (the `testing` feature, which only tests enable).
+            #[cfg(feature = "testing")]
+            pub fn forged(request: LockRequest) -> $name {
+                $name { request }
+            }
+        }
+    };
+}
+
+lock_answer! {
+    /// The compositor locked the session for a request
+    /// (`FromRender::SessionLocked`).
+    LockConfirmed
+}
+
+lock_answer! {
+    /// The compositor refused or ended the lock asked for under a request
+    /// (`FromRender::SessionLockFinished`).
+    LockFinished
+}
+
+/// What a text input takes, as input methods are told it
+/// (zwp_text_input_v3's content type).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum TextPurpose {
+    /// Any text.
+    #[default]
+    Normal,
+    /// A password or another secret: hidden as it's typed, nothing to
+    /// learn, predict or keep. Input methods that honour it type it
+    /// directly, without composing.
+    Password,
+}
+
 pub enum ToRender {
     CreateWindow {
         window: WindowId,
@@ -824,10 +900,12 @@ pub enum ToRender {
     /// thread, when a program asks for screens before showing a window).
     PublishOutputs,
     /// Whether the window's first responder takes text from input methods,
-    /// and where its caret is, in points from the top left of the content.
+    /// what text it takes, and where its caret is, in points from the top
+    /// left of the content.
     TextInput {
         window: WindowId,
         wanted: bool,
+        purpose: TextPurpose,
         caret: Option<Rect>,
     },
     /// The program dropped the text being composed: the input method starts
@@ -891,12 +969,14 @@ pub enum ToRender {
         window: WindowId,
         at: Option<f64>,
     },
-    /// Lock the session (ext-session-lock): the compositor hides
-    /// everything but the lock's surfaces and gives them all input, and
-    /// answers `FromRender::SessionLocked` once it has, or
-    /// `SessionLockFinished` if it won't. Nothing while a lock is asked
-    /// for or held.
-    LockSession,
+    /// Lock the session (ext-session-lock) for request `lock`: the
+    /// compositor hides everything but the lock's surfaces and gives them
+    /// all input, and answers `FromRender::SessionLocked` once it has, or
+    /// `SessionLockFinished` if it won't, both under `lock`. A lock asked
+    /// for or held already becomes this request's.
+    LockSession {
+        lock: LockRequest,
+    },
     /// Unlock the session (or stop asking for a lock).
     UnlockSession,
     /// Make room for `bytes` of window buffers in the shared memory windows
@@ -1154,8 +1234,11 @@ pub enum FromRender {
         window: WindowId,
         time: f64,
     },
-    /// The compositor locked the session, as `ToRender::LockSession` asked.
-    SessionLocked,
+    /// The compositor locked the session, as `ToRender::LockSession` asked
+    /// under the request `lock` answers.
+    SessionLocked {
+        lock: LockConfirmed,
+    },
     /// A destination wants the data drag `drag` promised as `mime`: answer
     /// `ToRender::SelectionData` under `token`.
     ProvideDragData {
@@ -1175,10 +1258,13 @@ pub enum FromRender {
         request: u64,
         token: Option<String>,
     },
-    /// The session lock is over without the program unlocking it: the
-    /// compositor refused it (another program holds one, or it has no
-    /// ext-session-lock) or ended it. Its surfaces show nothing more.
-    SessionLockFinished,
+    /// The session lock asked for under `lock`'s request is over without the program
+    /// unlocking it: the compositor refused it (another program holds one,
+    /// or it has no ext-session-lock) or ended it. Its surfaces show
+    /// nothing more.
+    SessionLockFinished {
+        lock: LockFinished,
+    },
     /// Parts of a target the render thread can't draw again on its own (a
     /// layer animated outside where its tree was recorded): the main
     /// thread repaints them.

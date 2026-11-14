@@ -64,10 +64,31 @@ in
     ];
     buildInputs = libraries;
     env.KAKEHASHI_TOOL_PATH = lib.makeBinPath tools;
+    nativeCheckInputs = [ pkgs.clippy ];
+    # Only the person's press of the "Erase …?" dialog's OK starts the
+    # helper; app/clippy.toml denies GPUI's input dispatch, which would let
+    # the window's code press OK itself. Only that lint fails the build, so
+    # a toolchain's new lints don't. The window's library and binary forbid
+    # it, so nothing in them can allow it, and no other file names it.
+    #
     # The default check's `cargo test` runs the doctests too, their
     # compile_fail error codes checked.
     preCheck = ''
       source ${./checked-doctests.sh}
+      cargo clippy --offline --locked -p kakehashi --all-targets -- \
+        -A clippy::all -D clippy::disallowed_methods
+      found=$(grep -rnE --include='*.rs' '(allow|expect|warn|deny|forbid)\([^)]*disallowed_methods' app core write helper \
+        | sed -E 's/^([^:]*):[0-9]+: */\1:/' | sort)
+      expected=$(sort <<'EOF'
+      app/src/lib.rs:#![forbid(clippy::disallowed_methods)]
+      app/src/main.rs:#![forbid(clippy::disallowed_methods)]
+      EOF
+      )
+      if [ "$found" != "$expected" ]; then
+        echo "The input-dispatch ban's lint levels differ from the allowed ones:"
+        printf 'found:\n%s\nallowed:\n%s\n' "$found" "$expected"
+        exit 1
+      fi
     '';
     # Sekka's app icon, from the brand's generated logos.
     postInstall = ''

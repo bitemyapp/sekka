@@ -19,6 +19,8 @@ let
       ../desktop/aizome/crates/aizome-theme
       ../desktop/aizome/crates/aizome-config
       ../desktop/aizome/crates/aizome-shell-proto
+      # The typestate support Sukumo's crates take by path.
+      ../desktop/aizome/crates/aizome-typestate
       ../desktop/aizome/sukumo/Cargo.toml
       ../desktop/aizome/sukumo/crates
     ];

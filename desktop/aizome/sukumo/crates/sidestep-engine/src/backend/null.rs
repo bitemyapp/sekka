@@ -25,7 +25,10 @@ use std::sync::{Mutex, mpsc};
 use smithay_client_toolkit::reexports::calloop::channel::{self, Channel};
 
 use super::{Backend, MainSender, Waker};
-use crate::protocol::{FromRender, LayerKeyboard, LayerPlacement, Op, ToRender, WindowId, WindowRequest, WindowState};
+use crate::protocol::{
+    FromRender, LayerKeyboard, LayerPlacement, LockConfirmed, LockRequest, Op, ToRender, WindowId, WindowRequest,
+    WindowState,
+};
 
 /// What the main thread asked the null render thread for, besides drawing.
 #[derive(Clone, Debug, PartialEq)]
@@ -164,6 +167,11 @@ pub fn sending() {
 
 /// What the main thread asked for, oldest first.
 pub static LOG: Mutex<Vec<Seen>> = Mutex::new(Vec::new());
+
+/// The session lock the null render thread holds, under the request that
+/// asked for it (as a compositor holds one until it is unlocked or ends
+/// it): tests that play the compositor end it by this request.
+pub static LOCK: Mutex<Option<LockRequest>> = Mutex::new(None);
 
 /// The text painted, oldest first, while a test notes it.
 pub static TEXT: Mutex<Option<Vec<PaintedText>>> = Mutex::new(None);
@@ -430,11 +438,15 @@ fn run(channel: Channel<ToRender>, to_main: MainSender) {
             ToRender::FrameTicks { window, on } => note(Seen::FrameTicks { window, on }),
             // No shared memory to make room in.
             ToRender::ReserveBuffers { .. } => {}
-            ToRender::LockSession => {
+            ToRender::LockSession { lock } => {
+                *LOCK.lock().unwrap_or_else(|e| e.into_inner()) = Some(lock);
                 note(Seen::SessionLock { locked: true });
-                send(FromRender::SessionLocked);
+                send(FromRender::SessionLocked { lock: LockConfirmed::heard(lock) });
             }
-            ToRender::UnlockSession => note(Seen::SessionLock { locked: false }),
+            ToRender::UnlockSession => {
+                *LOCK.lock().unwrap_or_else(|e| e.into_inner()) = None;
+                note(Seen::SessionLock { locked: false });
+            }
             ToRender::RequestActivationToken { request, .. } => {
                 send(FromRender::ActivationToken { request, token: Some(format!("null-activation-{request}")) });
             }

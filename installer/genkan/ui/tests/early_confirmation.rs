@@ -12,6 +12,7 @@
 //! helper's events go through the real `Msg::Session` handler, with the
 //! review's ticket, in the order the helper sends them for this case:
 //! `Failed`, then the exit (status 1).
+use aizome_kit::sidestep_ui::{Key, Modifiers, NamedKey};
 use aizome_kit::testing::Harness;
 use aizome_kit::theme::{Appearance, ThemeChoice};
 use calamares_nixos::install::Event;
@@ -27,6 +28,7 @@ fn a_failure_before_any_disk_write_is_not_reported_as_a_failed_partitioning() {
         ..Appearance::default()
     };
     let mut h = Harness::with(Genkan::new(Some("review".into())), appearance, false);
+    h.allow_agreements();
     let w = h.window();
     assert_eq!(h.program().step, Step::Review);
     assert!(!h.program().prepared(), "preparation is still running");
@@ -38,7 +40,7 @@ fn a_failure_before_any_disk_write_is_not_reported_as_a_failed_partitioning() {
     h.send(Msg::Erase(phrase));
     h.send(Msg::Consent(true));
     assert!(h.program().next_enabled(), "confirming early is allowed");
-    h.send(Msg::Next);
+    press_confirm(&mut h);
     assert_eq!(h.program().step, Step::Install);
     println!("after confirming: {:?}", h.program().install_message);
 
@@ -110,11 +112,12 @@ fn a_queued_confirmation_starts_the_installation_once_prepared() {
         Appearance::default(),
         false,
     );
+    h.allow_agreements();
     let ticket = h.program().review_ticket().unwrap();
     let phrase = h.program().phrase.clone();
     h.send(Msg::Erase(phrase));
     h.send(Msg::Consent(true));
-    h.send(Msg::Next);
+    press_confirm(&mut h);
     assert!(h.program().installing() && !h.program().prepared());
     assert!(!h.program().password.is_empty(), "nothing was sent yet");
     h.send(Msg::Session(HelperAnswer::new(
@@ -151,4 +154,205 @@ fn a_queued_confirmation_starts_the_installation_once_prepared() {
             .iter()
             .any(|t| t.contains("The disk may have been modified"))
     );
+}
+
+/// A press of the Review page's Erase Disk and Install button, as a person's:
+/// the agreement only such a press makes is what confirms.
+fn press_confirm(h: &mut Harness<Genkan>) {
+    let w = h.window();
+    let at = h
+        .find_id(w, "next")
+        .expect("the Review page's button")
+        .center();
+    h.click(w, at);
+}
+
+/// Nothing but a person's press of the button confirms: not Next sent for
+/// them (as the Review page's Next once confirmed, and the preview's sample
+/// still confirms by its own path), not a press the harness makes without
+/// letting it agree, and not a press before the phrase is typed.
+#[test]
+fn only_a_press_of_the_button_confirms() {
+    let mut h = Harness::with(
+        Genkan::new(Some("review".into())),
+        Appearance::default(),
+        false,
+    );
+    let phrase = h.program().phrase.clone();
+    h.send(Msg::Consent(true));
+    h.allow_agreements();
+    press_confirm(&mut h);
+    assert_eq!(
+        h.program().step,
+        Step::Review,
+        "a press before the phrase is typed"
+    );
+    h.send(Msg::Erase(phrase));
+    h.send(Msg::Next);
+    assert_eq!(
+        h.program().step,
+        Step::Review,
+        "Next sent by code confirms nothing"
+    );
+    assert!(!h.program().installing());
+
+    let mut h = Harness::with(
+        Genkan::new(Some("review".into())),
+        Appearance::default(),
+        false,
+    );
+    let phrase = h.program().phrase.clone();
+    h.send(Msg::Erase(phrase));
+    h.send(Msg::Consent(true));
+    press_confirm(&mut h);
+    assert_eq!(
+        h.program().step,
+        Step::Review,
+        "a press that makes no agreement"
+    );
+    h.allow_agreements();
+    press_confirm(&mut h);
+    assert_eq!(h.program().step, Step::Install, "the person's press");
+}
+
+/// A keyboard-only person: Return in the phrase field moves to Erase Disk
+/// and Install without confirming, and Return there confirms.
+#[test]
+fn return_in_the_phrase_field_moves_to_the_button_which_confirms() {
+    let mut h = Harness::with(
+        Genkan::new(Some("review".into())),
+        Appearance::default(),
+        false,
+    );
+    h.allow_agreements();
+    let w = h.window();
+    h.send(Msg::Consent(true));
+    let phrase = h.program().phrase.clone();
+    let field = h.find_id(w, "erase").expect("the phrase field").center();
+    h.click(w, field);
+    h.type_text(w, &phrase);
+    assert_eq!(h.program().erase, phrase);
+    h.named(w, NamedKey::Enter, Modifiers::NONE);
+    assert_eq!(
+        h.program().step,
+        Step::Review,
+        "Return in the field confirms nothing"
+    );
+    assert_eq!(h.focused_name(w).as_deref(), Some("next"));
+    h.named(w, NamedKey::Enter, Modifiers::NONE);
+    assert_eq!(
+        h.program().step,
+        Step::Install,
+        "Return on the button is the person's press"
+    );
+}
+
+/// The prepared sample review ("Ready to install"), with the phrase typed in
+/// its field by the keyboard and Return pressed there and not let go: the
+/// focus has moved to Erase Disk and Install, and the key is still down.
+fn return_down_in_the_phrase_field() -> Harness<Genkan> {
+    let mut h = Harness::with(
+        Genkan::new(Some("ready".into())),
+        Appearance::default(),
+        false,
+    );
+    h.allow_agreements();
+    let w = h.window();
+    assert!(
+        h.program().prepared(),
+        "the helper has prepared and waits for the confirmation"
+    );
+    // The preview fills the phrase in: type it as a person does.
+    h.send(Msg::Erase(String::new()));
+    assert!(!h.program().next_enabled());
+    let phrase = h.program().phrase.clone();
+    let field = h.find_id(w, "erase").expect("the phrase field").center();
+    h.click(w, field);
+    h.type_text(w, &phrase);
+    assert_eq!(h.program().erase, phrase);
+    assert!(h.program().next_enabled());
+    h.key_down(w, Key::Named(NamedKey::Enter), Modifiers::NONE);
+    assert_eq!(h.focused_name(w).as_deref(), Some("next"));
+    assert_eq!(h.program().step, Step::Review);
+    h
+}
+
+/// Nothing was confirmed: the review is still the page, and nothing went to
+/// the helper (which erases the disk once it has the confirmation).
+fn assert_nothing_confirmed(h: &Harness<Genkan>, after: &str) {
+    let app = h.program();
+    assert!(
+        app.step == Step::Review && !app.installing() && app.prepared(),
+        "{after} confirmed the erase: step {:?}, installing: {}, {:?}",
+        app.step,
+        app.installing(),
+        app.install_message
+    );
+    assert!(
+        !app.password.is_empty(),
+        "{after}: nothing was sent to the helper"
+    );
+}
+
+/// One Return, held: in the phrase field it moves to Erase Disk and Install,
+/// and its repeats there are no press of the button. Holding a key down must
+/// never start the erase; letting go and pressing Return again is the
+/// person's press.
+#[test]
+fn a_return_held_in_the_phrase_field_confirms_nothing() {
+    let mut h = return_down_in_the_phrase_field();
+    let w = h.window();
+    for _ in 0..50 {
+        h.key_repeat(w, Key::Named(NamedKey::Enter), Modifiers::NONE);
+    }
+    assert_nothing_confirmed(&h, "a held Return's repeats");
+    h.key_up(w, Key::Named(NamedKey::Enter), Modifiers::NONE);
+    assert_nothing_confirmed(&h, "letting the held Return go");
+    assert_eq!(h.focused_name(w).as_deref(), Some("next"));
+    h.named(w, NamedKey::Enter, Modifiers::NONE);
+    assert_eq!(
+        h.program().step,
+        Step::Install,
+        "Return pressed again on the button is the person's press"
+    );
+    assert!(h.program().installing());
+}
+
+/// The same from a platform that doesn't mark a held key's repeats: Return
+/// presses with no release between them confirm nothing either.
+#[test]
+fn return_presses_with_no_release_between_confirm_nothing() {
+    let mut h = return_down_in_the_phrase_field();
+    let w = h.window();
+    for _ in 0..50 {
+        h.key_down(w, Key::Named(NamedKey::Enter), Modifiers::NONE);
+    }
+    assert_nothing_confirmed(&h, "Return presses with no release between");
+    h.key_up(w, Key::Named(NamedKey::Enter), Modifiers::NONE);
+    h.named(w, NamedKey::Enter, Modifiers::NONE);
+    assert_eq!(h.program().step, Step::Install);
+}
+
+/// A held Space on the consent box flips it once, so what it shows when the
+/// key is let go is what the person set.
+#[test]
+fn a_space_held_on_the_consent_box_ticks_it_once() {
+    let mut h = Harness::with(
+        Genkan::new(Some("review".into())),
+        Appearance::default(),
+        false,
+    );
+    let w = h.window();
+    assert!(!h.program().consent);
+    let field = h.find_id(w, "erase").expect("the phrase field").center();
+    h.click(w, field);
+    h.named(w, NamedKey::Tab, Modifiers::NONE);
+    assert_eq!(h.focused_name(w).as_deref(), Some("consent"));
+    let space = Key::Character(" ".into());
+    h.key_down(w, space.clone(), Modifiers::NONE);
+    for _ in 0..7 {
+        h.key_repeat(w, space.clone(), Modifiers::NONE);
+    }
+    h.key_up(w, space, Modifiers::NONE);
+    assert!(h.program().consent, "a held Space left the box unticked");
 }

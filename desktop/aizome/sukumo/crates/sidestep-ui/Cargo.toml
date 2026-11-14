@@ -7,14 +7,26 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[features]
+# `testing`'s helpers that play the compositor and forge its answers
+# (the session lock's). Only tests enable it: Sukumo's own, through the
+# dev-dependency on this crate below.
+testing = ["sidestep-engine/testing"]
+
 # Linux (and other non-Apple Unix) only: on macOS, programs use AppKit
 # through objc2.
 [target.'cfg(not(target_vendor = "apple"))'.dependencies]
+# The session lock's states and requests (src/session_lock.rs).
+aizome-typestate.workspace = true
 sidestep-engine.workspace = true
 # Geometry in the API (points, rectangles, transforms, shapes), re-exported.
 kurbo = { version = "0.13", default-features = false, features = ["std"] }
 tiny-skia = { version = "0.12", default-features = false, features = ["std", "simd"] }
 smithay-client-toolkit = { version = "0.19", default-features = false, features = ["calloop"] }
+
+[dev-dependencies]
+# This crate with `testing`, for its own tests.
+sidestep-ui = { path = ".", features = ["testing"] }
 
 # Windows, input and drawing through the null render thread (see the
 # file).

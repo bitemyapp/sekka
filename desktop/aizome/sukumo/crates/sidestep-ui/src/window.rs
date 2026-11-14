@@ -28,6 +28,8 @@ use crate::layer_shell::{Anchors, KeyboardInteractivity, Layer, LayerOptions, Ma
 /// A pointer's appearance, named as cursor themes (and
 /// wp_cursor_shape_v1) name them.
 pub use sidestep_engine::protocol::Cursor;
+/// What a text input takes, as input methods are told it.
+pub use sidestep_engine::protocol::TextPurpose;
 
 /// A window, as long as it's open. Ids aren't reused.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -381,7 +383,7 @@ pub(crate) struct WindowData {
     pub pointer_inside: bool,
     pub outputs: Vec<u32>,
     pub cursor: Cursor,
-    pub text_input: (bool, Option<Rect>),
+    pub text_input: (bool, TextPurpose, Option<Rect>),
     /// Where the content takes pointer input, and where it's opaque, as
     /// the program set them.
     pub input_region: Option<Vec<Rect>>,
@@ -478,7 +480,7 @@ impl WindowData {
             pointer_inside: false,
             outputs: Vec::new(),
             cursor: Cursor::Default,
-            text_input: (false, None),
+            text_input: (false, TextPurpose::Normal, None),
             input_region: None,
             opaque_region: None,
             layer_size: options.size,
@@ -581,7 +583,7 @@ impl WindowData {
             send(tx, ToRender::PlaceVideo { window: showing, video, place: Some(place) });
         }
         self.shared_showing.store(showing, std::sync::atomic::Ordering::Release);
-        self.text_input = (false, None);
+        self.text_input = (false, TextPurpose::Normal, None);
         self.showing = Some(showing);
         self.configured = false;
         self.frame_pending = false;
@@ -995,17 +997,19 @@ impl Window<'_> {
         self.request(WindowRequest::Move);
     }
 
-    /// Take text from input methods (or stop), with the caret where a
-    /// candidate window should go, in content points. What they type
-    /// arrives as [`Ime`](crate::Ime) events; keys still arrive as keys.
-    pub fn set_text_input(&mut self, wanted: bool, caret: Option<Rect>) {
-        if self.data.text_input == (wanted, caret) {
+    /// Take text from input methods (or stop), text of `purpose`, with the
+    /// caret where a candidate window should go, in content points. What
+    /// they type arrives as [`Ime`](crate::Ime) events; keys still arrive as
+    /// keys. A change of purpose while taking text starts the input method
+    /// over.
+    pub fn set_text_input(&mut self, wanted: bool, purpose: TextPurpose, caret: Option<Rect>) {
+        if self.data.text_input == (wanted, purpose, caret) {
             return;
         }
-        self.data.text_input = (wanted, caret);
+        self.data.text_input = (wanted, purpose, caret);
         let caret = caret.map(|r| protocol::Rect::new(r.x0 as f32, r.y0 as f32, r.x1 as f32, r.y1 as f32));
         if let Some(showing) = self.data.showing {
-            send(self.tx, ToRender::TextInput { window: showing, wanted, caret });
+            send(self.tx, ToRender::TextInput { window: showing, wanted, purpose, caret });
         }
     }
 

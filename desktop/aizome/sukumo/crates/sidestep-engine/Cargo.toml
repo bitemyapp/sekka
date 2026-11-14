@@ -7,9 +7,16 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[features]
+# Answers no render thread gave (`protocol::LockAnswer::forged`), for tests
+# that play the compositor. Only tests enable it.
+testing = []
+
 # Linux (and other non-Apple Unix) only; nothing here touches the
 # Objective-C runtime.
 [target.'cfg(not(target_vendor = "apple"))'.dependencies]
+# The session lock's requests and answers (protocol::LockRequest).
+aizome-typestate.workspace = true
 smithay-client-toolkit = { version = "0.19", default-features = false, features = ["calloop"] }
 tiny-skia = { version = "0.12", default-features = false, features = ["std", "simd"] }
 # Path geometry: bounds, winding, flattening, stroking.

@@ -89,7 +89,7 @@ fn clock_updates_reach_lock_screens_and_theme_transitions_refresh_the_shell() {
 
     h.send(Msg::Run(Action::Session(SessionVerb::Lock)));
     h.confirm_lock();
-    let lock = h.program().lock.surfaces[0].0;
+    let lock = h.program().lock.surfaces()[0].0;
     h.reset_stats();
     h.send(Msg::TimeChanged);
     let time = h.program().now.time_label(h.program().bar_cfg.clock, false);

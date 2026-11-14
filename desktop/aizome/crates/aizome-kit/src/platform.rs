@@ -6,7 +6,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use sidestep_ui::{Color, Cursor};
+use sidestep_ui::{Color, Cursor, TextPurpose};
 
 use crate::layout::{Rect, Size, Vec2};
 use crate::program::Output;
@@ -81,7 +81,12 @@ pub trait Platform {
     fn invalidate(&mut self, id: WinId, rect: Rect);
     fn invalidate_all(&mut self, id: WinId);
     fn set_cursor(&mut self, id: WinId, cursor: Cursor);
-    fn set_text_input(&mut self, id: WinId, wanted: bool, caret: Option<Rect>);
+    /// Take text of `purpose` from input methods in the window, with the
+    /// caret at `caret`, or stop.
+    fn set_text_input(&mut self, id: WinId, wanted: bool, purpose: TextPurpose, caret: Option<Rect>);
+    /// The window dropped what an input method was composing: it starts
+    /// over.
+    fn reset_text_input(&mut self, id: WinId);
     fn request_size(&mut self, id: WinId, size: Size);
     fn minimize(&mut self, id: WinId);
     fn set_maximized(&mut self, id: WinId, on: bool);

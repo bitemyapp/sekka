@@ -178,6 +178,7 @@ pub fn page(app: &Genkan) -> Element<Msg> {
                     .placeholder(app.phrase.clone())
                     .mono()
                     .on_change(Msg::Erase)
+                    .on_submit(Msg::ToConfirm)
                     .id("erase")
                     .width(260.0),
             )

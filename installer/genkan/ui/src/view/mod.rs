@@ -218,14 +218,21 @@ fn footer(app: &Genkan) -> Element<Msg> {
     items.push(spacer().into());
     let next_shown = app.step != Step::Install || (app.finished() && !app.completed());
     if next_shown {
-        let next = button(app.next_label())
-            .on_press(Msg::Next)
-            .enabled(app.next_enabled())
-            .id("next");
-        items.push(if app.step == Step::Review {
-            next.destructive().into()
-        } else {
-            next.primary().into()
+        let next = button(app.next_label()).id("next");
+        items.push(match (app.step, app.erasing()) {
+            // Its press is the person's agreement to the review shown, with
+            // the phrase as typed: only that confirms (`Msg::Install`).
+            (Step::Review, Some(erasing)) => next
+                .on_agree(erasing, Msg::Install)
+                .destructive()
+                .enabled(app.next_enabled())
+                .into(),
+            (Step::Review, None) => next.destructive().enabled(false).into(),
+            _ => next
+                .on_press(Msg::Next)
+                .enabled(app.next_enabled())
+                .primary()
+                .into(),
         });
     }
     container(row_of(items).spacing(10.0).width(Fill))
