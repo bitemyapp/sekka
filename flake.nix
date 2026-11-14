@@ -920,6 +920,11 @@
               python3 ${./tests/test_yukimi_preflight.py} ${self.packages.${system}.yukimi.helper}/bin -v
               touch $out
             '';
+        # The helper's worker against stand-ins for Nix, in namespaces: the
+        # tests a plain `cargo test` leaves ignored.
+        yukimi-namespace = pkgs.callPackage ./apps/yukimi/nix/namespace-tests.nix {
+          inherit (self.packages.${system}.yukimi) helper;
+        };
         yukimi-x11 = import ./nix/yukimi-x11-test.nix {
           inherit pkgs;
           desktopsModule = inputs.calamares.nixosModules.desktops;

@@ -1739,7 +1739,10 @@ to start a program. Run them with
 `cargo test -p yukimi-helper --test namespace -- --ignored` runs the real
 helper worker against stand-in Nix tools, in an unprivileged user and mount
 namespace with private `/run`, `/nix/var/nix`, `/var/lib/yukimi`,
-`/etc/yukimi` and `/etc/nixos`.
+`/etc/yukimi` and `/etc/nixos`. They stay ignored in a plain `cargo test`;
+`nix build .#checks.x86_64-linux.yukimi-namespace` runs them in the build
+sandbox, under bubblewrap for a root that has those directories
+(`apps/yukimi/nix/namespace-tests.nix`).
 
 The authenticated helper launches the entire operation in an independent systemd
 service. The client follows progress from regular files, rather than connecting

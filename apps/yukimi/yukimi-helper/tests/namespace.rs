@@ -3,11 +3,15 @@
 //! script re-runs itself in an unprivileged user and mount namespace whose
 //! /run, /nix/var/nix, /var/lib/yukimi, /etc/yukimi and /etc/nixos are
 //! private, and checks that before running the helper. They need
-//! unprivileged user namespaces, which build sandboxes don't have:
+//! unprivileged user namespaces, and those directories to mount over:
 //!
 //! ```sh
 //! cargo test --locked -p yukimi-helper --test namespace -- --ignored
 //! ```
+//!
+//! A build sandbox's root has none of those directories, so
+//! `checks.x86_64-linux.yukimi-namespace` (nix/namespace-tests.nix) runs
+//! the same tests under bubblewrap, which supplies them.
 // Tests run the scripts that run the helper; they are not the helper.
 #![allow(clippy::disallowed_methods)]
 use std::process::Command;
