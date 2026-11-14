@@ -1332,6 +1332,24 @@ mod tests {
             nar_sizes(&serde_json::json!([{ "narSize": u64::MAX }, { "narSize": 1 }])).is_err()
         );
     }
+    /// GEN-07: both routes ask `room::check` before anything is erased, the
+    /// deferred one with its estimate (tests/deferred_route.rs runs it).
+    #[test]
+    fn a_root_too_small_for_the_system_is_refused() {
+        let small = Layout::new(40 * memory::GIB, Firmware::Uefi, None).unwrap();
+        let refusal = room::check(&small, 300 * memory::GIB)
+            .err()
+            .expect("a 40 GiB disk has no room for a 300 GiB system")
+            .to_string();
+        assert!(refusal.contains("on the root filesystem"), "{refusal}");
+        assert!(
+            refusal.contains("No disk data has been changed"),
+            "{refusal}"
+        );
+        // Control: a disk with room for the system and the reserve.
+        let large = Layout::new(400 * memory::GIB, Firmware::Uefi, None).unwrap();
+        assert!(room::check(&large, 300 * memory::GIB).is_ok());
+    }
     #[test]
     fn cleanup_never_recursively_deletes_contents() {
         let outer = tempfile::tempdir().unwrap();
