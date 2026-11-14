@@ -890,7 +890,7 @@ impl Shell {
     fn sync_rename_keys(&mut self, cx: &mut Cx<Msg>) {
         let Some(keys) = self.rename_keys else { return };
         let refocused = self.wm.focused.is_some() && self.wm.focused != keys.focused;
-        let locked = self.wm.locked || !self.lock.surfaces.is_empty();
+        let locked = self.wm.locked || !self.lock.surfaces().is_empty();
         let taken = self.palette.is_some() || self.confirm.is_some() || self.auth.is_some();
         let gone = !self.surfaces.contains_key(&keys.bar)
             || self.renaming.as_ref().is_some_and(|(index, _)| self.wm.desk(*index).is_none());
