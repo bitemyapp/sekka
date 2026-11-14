@@ -6,9 +6,10 @@ explicit ones? To find out, six of the catalog's High-priority machines were
 implemented eleven ways: three plain-Rust baselines and eight crates. Every
 implementation was checked against the same conformance traces, property
 tests and compile-time probes, then measured. This page gives the answer,
-the evidence and the design rules that follow from it. The workspace, the
-raw data and the scripts to rerun everything are in
-[`state-machine-crates/eval/`](state-machine-crates/eval/).
+the evidence and the design rules that follow from it. The evaluation
+workspace, its raw data, the survey of about 40 crates and the review of each
+crate's implementation are in the history of [#282](https://github.com/bitemyapp/sekka/pull/282), under
+`docs/state-machine-crates/`.
 
 ## Answer
 
@@ -43,7 +44,7 @@ weighting. Ranks 4–9 are within 0.55 of each other, so their order is weak.
 ### Targets
 
 Each target is a High-priority machine from the catalog, reduced to a
-normative spec (`eval/spec/src/<target>/SPEC.md`) with conformance traces.
+normative spec with conformance traces.
 Sixteen of the traces are the catalog's confirmed bugs, written as the
 correct behaviour.
 
@@ -56,7 +57,7 @@ correct behaviour.
 | `lock` | SHB-12, SYB-12 | two orthogonal regions; `Lockscreen ⊃ Locked ⊃ Checking` | Regions, entry/exit order, delay tokens |
 | `install` | GEN-07, GEN-06 | 20 linear states with an irreversible point | Ordering enforceable at compile time |
 
-The specs simplify the real machines, as their `SPEC.md`s list. For
+The specs simplify the real machines. For
 example, wrap has no graphemes or resize, and polkit handles one request at
 a time.
 
@@ -68,16 +69,16 @@ a time.
   per state, consuming transitions and a runtime wrapper enum.
 - **Crates.** statig, smlang, stateforward-sml (imported as `sml`), finny,
   fsmentry, statum, state-machines and rust-fsm. These were the
-  [survey](state-machine-crates/survey.md)'s shortlist from about 40 crates.
+  survey's shortlist from about 40 crates.
 
 Each crate slot was written by its own agent in the crate's idiom (its
-states, superstates, guards, actions, entry/exit and generated handles) and
-recorded in `eval/impl-<slot>/NOTES.md`. An independent reviewer then checked
+states, superstates, guards, actions, entry/exit and generated handles). An
+independent reviewer then checked
 each slot for two kinds of error. One is a crate given too much credit: a
 hand-written enum doing the work behind a crate facade, or a compile-fail
 case that fails for the wrong reason. The other is a crate judged too
 harshly: a workaround written where the crate has a feature for it. The
-implementers applied the [reviews](state-machine-crates/reviews/). Every
+implementers applied the reviews. Every
 slot represents its crate fairly enough to rank.
 
 ### Compile-time probes
@@ -85,15 +86,25 @@ slot represents its crate fairly enough to rank.
 Each spec ends with numbered illegal operations: 36 in all. Examples are K3,
 restarting a polkit conversation after an unanswered failure without
 backing off (SYB-09's spin loop), and I4, reaching `Prepared` on the deferred
-route without the space check (GEN-07). Every implementation has one
-trybuild case per probe, classed by what happens:
+route without the space check (GEN-07).
+
+| Target | Probes |
+|---|---|
+| `pointer` | P1 release-without-owner, P2 owner-after-native-drag, P3 click-under-after-drag, P4 press-point-outside-edge-press, P5 hover-outside, P6 owner-mismatch |
+| `wrap` | W1 pending-off-the-edge, W2 wrap-without-autowrap, W3 clear-on-tab, W4 print-while-pending, W5 dangling-link |
+| `polkit` | K1 answer-without-prompt, K2 stale-conversation, K3 restart-without-backoff, K4 double-reply, K5 retry-timer-outside-wait, K6 conversation-after-unavailable |
+| `transfer` | T1 dispose-before-placed, T2 dispose-by-kind, T3 lost-aside, T4 place-without-answer, T5 response-for-other-item, T6 merge-non-folders |
+| `lock` | L1 release-delay-before-confirmed, L2 stale-pam-result, L3 check-while-unlocked, L4 pending-sleep-after-resume, L5 refusal-as-wrong-password, L6 shake-outside-locked, L7 double-delay |
+| `install` | I1 erase-without-confirmation, I2 bootloader-before-copy, I3 confirm-during-preparation, I4 deferred-without-space-check, I5 cancel-after-erase, I6 closure-on-deferred-route |
+
+Every implementation has one trybuild case per probe, classed by what
+happens:
 
 - **R**: rejected at compile time;
 - **T**: compiles, but the implementation refuses at run time;
 - **A**: compiles, and the illegal operation happens.
 
-Two rules, set after the first reviews, keep the classes comparable
-(`eval/IMPLEMENTING.md`, "Transitions and forging"):
+Two rules, set after the first reviews, keep the classes comparable:
 
 - **A probe is classed by the transition API**: `handle` and the typed
   transitions. *Forging* never decides a class. Forging means building a
@@ -105,8 +116,7 @@ Two rules, set after the first reviews, keep the classes comparable
 
 ## Results
 
-All numbers are from [`eval/results/results.md`](state-machine-crates/eval/results/results.md),
-which traces every cell to a raw file. The instruction counts are callgrind
+The instruction counts are callgrind
 `Ir` from gungraun, per event or per printed cell, with the harness's
 overhead subtracted. They are the primary performance number, because the
 host was shared. "LTO" is thin LTO with one codegen unit, which is how
@@ -141,8 +151,7 @@ Notes on the table:
   counts on the long streams. There are two exceptions: statum's pointer
   stream ran at 0.72× enum's time (its timed binary is compiled
   differently, and its instructions-per-ns is higher), and the short replay
-  benchmarks varied more than 10% between runs. See the results' anomalies
-  section.
+  benchmarks varied more than 10% between runs.
 - **Build sensitivity.** The same enum code counts 95 to 122 instructions
   per pointer event, depending on what else the bench crate contains, because
   the inliner's choices change. Ratios within about 1.3× of each other on
@@ -209,7 +218,6 @@ places with small weight changes.
 
 ## Per implementation
 
-Each slot's `NOTES.md` has the full account and the review has the checks.
 These are the findings that decided the ratings.
 
 - **typestate (by hand).**
@@ -334,9 +342,8 @@ cell, against the enum's 14 and 9: 136 instructions against 65. The enum
 version stores a 1-byte state beside the context and changes it in place. At
 80 columns, 79 of every 80 cells don't change state at all.
 
-The follow-up in
-[`eval/experiments/typestate-wrap/`](state-machine-crates/eval/experiments/typestate-wrap/)
-measured four layouts. All pass wrap's traces and the differential test.
+A follow-up experiment measured four layouts. All pass wrap's traces and the
+differential test.
 Instruction ratios to enum, default build / LTO:
 
 | Layout | wrap-80 | replay-wrap | Guarantees |
@@ -387,8 +394,8 @@ event before matching it. That is hot-path ordering, not typestate.
 4. **Route the hottest event first** in `handle`.
 5. **Keep the typed layer the only way to change state**: private fields, no
    public constructors of mid-machine states, and `with_typed` where code
-   outside the module needs typed access. Adopt the slot's compile-fail
-   probes as the machine's trybuild tests.
+   outside the module needs typed access. Keep a compile-fail test for each
+   illegal operation the types reject.
 
 Where a machine has no hot path and its states carry their own data, as
 polkit, transfer, lock and install do, rule 1 matters less: polkit already
@@ -400,20 +407,20 @@ everywhere.
 The implementers found these, and the reviewers confirmed them against the
 crate sources. None has been reported upstream.
 
-| Crate | Defect | Evidence |
-|---|---|---|
-| statig 0.4.1 | `before_transition` gets source and target swapped (`inner.rs:42`) | `reviews/statig.md` |
-| statig 0.4.1 | Safe `UninitializedStateMachine::state_mut` starts a machine in any state, running its entry actions | `reviews/statig.md` |
-| smlang 0.8.0 | An action returning `Err` leaves the state unchanged after its exit hook ran; a retry runs the hook again | `reviews/smlang.md` |
-| smlang 0.8.0 | State equality compares only the variant (`Pressed(1) == Pressed(99)`) | `reviews/smlang.md` |
-| stateforward-sml 2.0.0 | Any composite-to-composite transition skips the child's exit, reset and entry (`composite_codegen.rs:4559`) | `eval/impl-sml/tests/crate_findings.rs` |
-| stateforward-sml 2.0.0 | Sync `process(E)` recurses instead of queueing; an untaken processed event aborts the step | same |
-| stateforward-sml 2.0.0 | An orthogonal table without children and no row reaching `X` doesn't compile (`orthogonal_codegen.rs:768`) | same |
-| statum 0.9.0 | Public `CanTransitionTo/With/Map` and `transition_map` for every declared edge, even from private methods; `state_data` always `pub` | `reviews/statum.md` |
-| state-machines 0.34.0 | Generic names aren't hygienic (a machine named `C` breaks); `initialize()` re-runs entry hooks | `reviews/state-machines.md` |
-| fsmentry 0.4.0 | A misspelt node silently creates a state; generated methods aren't `#[inline]` | `reviews/fsmentry.md` |
-| rust-fsm 0.8.0 | Duplicate rows compile and the first wins | `reviews/rust-fsm.md` |
-| finny 0.3.0 | Generated transition types run from any state, skipping the guard | `reviews/finny.md` |
+| Crate | Defect |
+|---|---|
+| statig 0.4.1 | `before_transition` gets source and target swapped (`inner.rs:42`) |
+| statig 0.4.1 | Safe `UninitializedStateMachine::state_mut` starts a machine in any state, running its entry actions |
+| smlang 0.8.0 | An action returning `Err` leaves the state unchanged after its exit hook ran; a retry runs the hook again |
+| smlang 0.8.0 | State equality compares only the variant (`Pressed(1) == Pressed(99)`) |
+| stateforward-sml 2.0.0 | Any composite-to-composite transition skips the child's exit, reset and entry (`composite_codegen.rs:4559`) |
+| stateforward-sml 2.0.0 | Sync `process(E)` recurses instead of queueing; an untaken processed event aborts the step |
+| stateforward-sml 2.0.0 | An orthogonal table without children and no row reaching `X` doesn't compile (`orthogonal_codegen.rs:768`) |
+| statum 0.9.0 | Public `CanTransitionTo/With/Map` and `transition_map` for every declared edge, even from private methods; `state_data` always `pub` |
+| state-machines 0.34.0 | Generic names aren't hygienic (a machine named `C` breaks); `initialize()` re-runs entry hooks |
+| fsmentry 0.4.0 | A misspelt node silently creates a state; generated methods aren't `#[inline]` |
+| rust-fsm 0.8.0 | Duplicate rows compile and the first wins |
+| finny 0.3.0 | Generated transition types run from any state, skipping the guard |
 
 ## Limits of this evaluation
 
@@ -430,20 +437,3 @@ crate sources. None has been reported upstream.
   found, but a second idiom could still change a rating by a point.
 - **The typestate layout fix was measured on wrap only.** Pointer and the
   replays still use the starting layout.
-
-## Reproducing
-
-Everything runs from the root flake's default dev shell through
-`eval/isolate` (a private HOME, no display, no session bus). From the
-repository root:
-
-```sh
-s=/tmp/sme-scratch
-CARGO_TARGET_DIR=$s/target docs/state-machine-crates/eval/isolate default $s \
-  bash -c 'cd docs/state-machine-crates/eval && cargo test --locked --workspace'
-```
-
-`eval/results/run.sh` reruns the whole measurement in order. The
-instruction counts need valgrind and `gungraun-runner` 0.20.0; the script
-says how to get them. `eval/IMPLEMENTING.md` is the contract every slot
-followed, and `method/` holds the briefs the agents worked from.

@@ -348,14 +348,14 @@ cargo test --locked --manifest-path rust/Cargo.toml
 Do not merge unrelated Cargo workspaces or broaden package source filters as part of routine edits. Preserve Genkan, Yukimi and Kakehashi's unprivileged GUI/privileged helper boundaries. Keep slow I/O off the interface thread.
 
 Before changing code that keeps state across events, look it up in the
-[implicit state machine catalog](docs/implicit-state-machines.md). Its entries
-list the states, transitions and hazards found by an audit of every in-scope
-first-party file at `8e0acbe5`. Its suspected bugs on High machines were
-reproduced with tests ([reproductions](docs/implicit-state-machines/reproductions.md)),
-which a fix can adopt as its regression test; the rest are leads. When a
-change reifies, removes or reshapes a machine,
-update its entry and its follow-up status in the index; add new files to their
-slice's ledger as `pending` until audited. Reify a machine as hand-written
+[implicit state machine catalog](docs/implicit-state-machines.md). Its index
+lists every machine found by an audit of every in-scope first-party file at
+`8e0acbe5`, and the machines rated High have entries with their states,
+transitions and hazards. Its suspected bugs on High machines were reproduced
+with tests ([suspected bugs](docs/implicit-state-machines/reproductions.md));
+the rest are leads. When a change reifies, removes or reshapes a machine,
+update its follow-up status in the index, and its entry if it has one. Reify
+a machine as hand-written
 typestate, following the design rules in the
 [state-machine crate evaluation](docs/state-machine-crates.md): states hold only
 their own data and borrow the shared context, instance checks take a proof
