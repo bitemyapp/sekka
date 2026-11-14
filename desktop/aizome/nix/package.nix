@@ -147,10 +147,13 @@ let
   # its own, so the dependency build compiles what each one's tests need on
   # its own too. The check stops if this list and the source disagree.
   doctested = [
+    "aizome-face"
+    "aizome-greeter"
     "aizome-hako"
     "aizome-hotaru"
     "aizome-kit"
     "aizome-media"
+    "aizome-shell"
     "aizome-sys"
     "aizome-tansu"
     "aizome-typestate"
