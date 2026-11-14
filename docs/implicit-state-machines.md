@@ -440,7 +440,7 @@ Every in-scope file was audited.
 | SYA-10 | Daemon follower (subscription, owner tracking, Appeared/Vanished/Idle) | Medium |  | implicit | `desktop/aizome/crates/aizome-sys/src/bus.rs:573` |
 | SYA-11 | Single-object property follower with keep-on-exit (timedated, localed, hostnamed) | Medium |  | implicit | `desktop/aizome/crates/aizome-sys/src/bus.rs:757` |
 | SYA-12 | Wait-until-serving ping retry loop | Low |  | implicit | `desktop/aizome/crates/aizome-sys/src/bus.rs:719` |
-| [SYA-13](implicit-state-machines/sys-a.md#sya-13) | Destructive-operation confirmation token | High | [confirmed](implicit-state-machines/reproductions.md#sya-13) | implicit | `desktop/aizome/crates/aizome-sys/src/disks/confirm.rs:80` |
+| [SYA-13](implicit-state-machines/sys-a.md#sya-13) | Destructive-operation confirmation token | High | [confirmed](implicit-state-machines/reproductions.md#sya-13) | reified ([#290](https://github.com/bitemyapp/sekka/pull/290)) | `desktop/aizome/crates/aizome-sys/src/disks/confirm.rs:80` |
 | SYA-14 | Disk image mount: attach, probe, mount, autoclear, clean up | Medium |  | implicit | `desktop/aizome/crates/aizome-sys/src/disks/mod.rs:387` |
 | SYA-15 | Drive release before eject or power-off | Low |  | implicit | `desktop/aizome/crates/aizome-sys/src/disks/mod.rs:704` |
 | SYA-16 | GeoClue locate request with deadline and cancellation | Low |  | implicit | `desktop/aizome/crates/aizome-sys/src/location.rs:160` |
@@ -708,11 +708,11 @@ Every in-scope file was audited.
 | HAKO-02 | bsdtar child process run (compress/extract) with pause, cancel and partial output | Medium |  | implicit | `desktop/aizome/apps/hako/src/fsops/archive.rs:275` |
 | HAKO-03 | Operation pause/cancel control | Low |  | implicit | `desktop/aizome/apps/hako/src/fsops/control.rs:22` |
 | HAKO-04 | In-kernel copy with buffered fallback | Low |  | implicit | `desktop/aizome/apps/hako/src/fsops/sys.rs:63` |
-| [HAKO-05](implicit-state-machines/hako.md#hako-05) | Transfer placement with conflict prompt and replace-aside protocol | High | [confirmed](implicit-state-machines/reproductions.md#hako-05) | implicit | `desktop/aizome/apps/hako/src/fsops/transfer.rs:355` |
-| [HAKO-06](implicit-state-machines/hako.md#hako-06) | Copy-to-partial commit and cross-filesystem move (copy, fsync, delete arrived sources) | High | [confirmed](implicit-state-machines/reproductions.md#hako-06) | implicit | `desktop/aizome/apps/hako/src/fsops/transfer.rs:481` |
+| [HAKO-05](implicit-state-machines/hako.md#hako-05) | Transfer placement with conflict prompt and replace-aside protocol | High | [confirmed](implicit-state-machines/reproductions.md#hako-05) | reified ([#290](https://github.com/bitemyapp/sekka/pull/290)) | `desktop/aizome/apps/hako/src/fsops/transfer.rs:355` |
+| [HAKO-06](implicit-state-machines/hako.md#hako-06) | Copy-to-partial commit and cross-filesystem move (copy, fsync, delete arrived sources) | High | [confirmed](implicit-state-machines/reproductions.md#hako-06) | reified ([#290](https://github.com/bitemyapp/sekka/pull/290)) | `desktop/aizome/apps/hako/src/fsops/transfer.rs:481` |
 | HAKO-07 | Ask-and-retry loops of the file operations | Low |  | implicit | `desktop/aizome/apps/hako/src/fsops/transfer.rs:342` |
-| [HAKO-08](implicit-state-machines/hako.md#hako-08) | Trash can item protocol (trashinfo claim, rename, directorysizes, forget) | High | [confirmed](implicit-state-machines/reproductions.md#hako-08) | implicit | `desktop/aizome/apps/hako/src/fsops/trash.rs:298` |
-| [HAKO-09](implicit-state-machines/hako.md#hako-09) | Undo/redo history with in-flight inversion jobs | High | [confirmed](implicit-state-machines/reproductions.md#hako-09) | implicit | `desktop/aizome/apps/hako/src/fsops/undo.rs:67` |
+| [HAKO-08](implicit-state-machines/hako.md#hako-08) | Trash can item protocol (trashinfo claim, rename, directorysizes, forget) | High | [confirmed](implicit-state-machines/reproductions.md#hako-08) | reified ([#290](https://github.com/bitemyapp/sekka/pull/290)) | `desktop/aizome/apps/hako/src/fsops/trash.rs:298` |
+| [HAKO-09](implicit-state-machines/hako.md#hako-09) | Undo/redo history with in-flight inversion jobs | High | [confirmed](implicit-state-machines/reproductions.md#hako-09) | reified ([#290](https://github.com/bitemyapp/sekka/pull/290)) | `desktop/aizome/apps/hako/src/fsops/undo.rs:67` |
 | HAKO-10 | Thumbnail disk cache validity and failure marks | Low |  | implicit | `desktop/aizome/apps/hako/src/model/thumbs.rs:261` |
 | [HAKO-11](implicit-state-machines/hako.md#hako-11) | inotify folder watcher and its watch-descriptor map | High | [confirmed](implicit-state-machines/reproductions.md#hako-11) | implicit | `desktop/aizome/apps/hako/src/model/watch.rs:27` |
 | HAKO-12 | Desks follower thread (compositor IPC) | Low |  | implicit | `desktop/aizome/apps/hako/src/ui/actions.rs:642` |
@@ -810,16 +810,16 @@ Every in-scope file was audited.
 | ID | Machine | Reify | Bug | Follow-up | Where |
 | --- | --- | --- | --- | --- | --- |
 | [YUK-01](implicit-state-machines/yukimi.md#yuk-01) | Sekka update channel and legacy migration in flake.nix | High |  | implicit | `apps/yukimi/crates/yukimi-config/src/sekka.rs:28` |
-| [YUK-02](implicit-state-machines/yukimi.md#yuk-02) | Update receipt and system completion advice | High | [confirmed](implicit-state-machines/reproductions.md#yuk-02) | implicit | `apps/yukimi/crates/yukimi-system/src/completion.rs:59` |
+| [YUK-02](implicit-state-machines/yukimi.md#yuk-02) | Update receipt and system completion advice | High | [confirmed](implicit-state-machines/reproductions.md#yuk-02) | reified ([#290](https://github.com/bitemyapp/sekka/pull/290)) | `apps/yukimi/crates/yukimi-system/src/completion.rs:59` |
 | YUK-03 | Tatami session update record and Keep Awake check | Medium |  | implicit | `apps/yukimi/crates/yukimi-system/src/completion.rs:63` |
 | YUK-04 | Aizome live-session completion probe | Medium |  | implicit | `apps/yukimi/crates/yukimi-system/src/completion/aizome.rs:27` |
 | YUK-05 | (test harness) fake Aizome IPC server and stubbed session launcher | Low |  | implicit | `apps/yukimi/crates/yukimi-system/src/completion/aizome.rs:1044` |
 | YUK-06 | Nix activity tracker and the helper's stage protocol | Low |  | implicit | `apps/yukimi/crates/yukimi-system/src/log.rs:91` |
 | YUK-07 | Stop handle and streamed child lifecycle | Medium |  | implicit | `apps/yukimi/crates/yukimi-system/src/nix.rs:68` |
 | [YUK-08](implicit-state-machines/yukimi.md#yuk-08) | Helper cancellation phase (Working / Stopping / Committed) | High |  | implicit | `apps/yukimi/yukimi-helper/src/main.rs:83` |
-| [YUK-09](implicit-state-machines/yukimi.md#yuk-09) | Privileged change transaction (back up, edit, update, build, commit, activate) | High | [confirmed](implicit-state-machines/reproductions.md#yuk-09) | implicit | `apps/yukimi/yukimi-helper/src/main.rs:804` |
-| [YUK-10](implicit-state-machines/yukimi.md#yuk-10) | Saved per-generation configuration snapshots | High | [confirmed](implicit-state-machines/reproductions.md#yuk-10) | implicit | `apps/yukimi/yukimi-helper/src/main.rs:62` |
-| [YUK-11](implicit-state-machines/yukimi.md#yuk-11) | Rollback and clean-up sequences | High | [confirmed](implicit-state-machines/reproductions.md#yuk-11) | implicit | `apps/yukimi/yukimi-helper/src/main.rs:1011` |
+| [YUK-09](implicit-state-machines/yukimi.md#yuk-09) | Privileged change transaction (back up, edit, update, build, commit, activate) | High | [confirmed](implicit-state-machines/reproductions.md#yuk-09) | reified ([#290](https://github.com/bitemyapp/sekka/pull/290)) | `apps/yukimi/yukimi-helper/src/main.rs:804` |
+| [YUK-10](implicit-state-machines/yukimi.md#yuk-10) | Saved per-generation configuration snapshots | High | [confirmed](implicit-state-machines/reproductions.md#yuk-10) | reified ([#290](https://github.com/bitemyapp/sekka/pull/290)) | `apps/yukimi/yukimi-helper/src/main.rs:62` |
+| [YUK-11](implicit-state-machines/yukimi.md#yuk-11) | Rollback and clean-up sequences | High | [confirmed](implicit-state-machines/reproductions.md#yuk-11) | reified ([#290](https://github.com/bitemyapp/sekka/pull/290)) | `apps/yukimi/yukimi-helper/src/main.rs:1011` |
 | [YUK-12](implicit-state-machines/yukimi.md#yuk-12) | Privileged operation client and worker (pkexec client, transient unit, result file) | High |  | implicit | `apps/yukimi/yukimi-helper/src/transaction.rs:45` |
 | YUK-13 | X11 fallback nested Weston lifecycle | Low |  | implicit | `desktop/aizome/apps/yukimi/data/yukimi-launch:12` |
 | YUK-14 | GUI reading epochs (configuration, store, Nixpkgs path, deferred launch) | Medium |  | implicit | `desktop/aizome/apps/yukimi/src/app.rs:345` |
@@ -948,7 +948,7 @@ Every in-scope file was audited.
 | TSH-22 | (test harness) Shiori settle and wait loops | Low |  | implicit | `desktop/aizome/apps/shiori/tests/budget.rs:20` |
 | TSH-23 | Tansu UDisks snapshot refresh and drive fallback | Medium |  | implicit | `desktop/aizome/apps/tansu/src/app.rs:174` |
 | TSH-24 | Tansu segment selection tracking | Medium |  | implicit | `desktop/aizome/apps/tansu/src/app.rs:180` |
-| [TSH-25](implicit-state-machines/tansu-shiori.md#tsh-25) | Tansu sheet lifecycle (forms holding segment indexes) | High | [confirmed](implicit-state-machines/reproductions.md#tsh-25) | implicit | `desktop/aizome/apps/tansu/src/app.rs:184` |
+| [TSH-25](implicit-state-machines/tansu-shiori.md#tsh-25) | Tansu sheet lifecycle (forms holding segment indexes) | High | [confirmed](implicit-state-machines/reproductions.md#tsh-25) | reified ([#290](https://github.com/bitemyapp/sekka/pull/290)) | `desktop/aizome/apps/tansu/src/app.rs:184` |
 | [TSH-26](implicit-state-machines/tansu-shiori.md#tsh-26) | Tansu apply session (Apply sheet → Run → Running sheet) | High | [confirmed](implicit-state-machines/reproductions.md#tsh-26) | implicit | `desktop/aizome/apps/tansu/src/app.rs:185` |
 | TSH-27 | Tansu immediate operations in flight (mount, unlock, attach…) | Low |  | implicit | `desktop/aizome/apps/tansu/src/app.rs:187` |
 | TSH-28 | Tansu filesystem-tool probing | Low |  | implicit | `desktop/aizome/apps/tansu/src/app.rs:200` |
@@ -1098,11 +1098,11 @@ Every in-scope file was audited.
 | --- | --- | --- | --- | --- | --- |
 | GEN-01 | (test harness) Encrypted-storage and boot-splash VM drivers | Low |  | implicit | `installer/genkan/nix/encrypted-splash-test.nix:162` |
 | GEN-02 | Generated initrd unlock sequence (root first, swap with root's passphrase, no device timeout) | Low |  | implicit | `installer/genkan/rust/src/config.rs:263` |
-| [GEN-03](implicit-state-machines/genkan.md#gen-03) | Selected-disk identity: discovered → reviewed → revalidated before and after the first write | High | [confirmed](implicit-state-machines/reproductions.md#gen-03) | implicit | `installer/genkan/rust/src/disk.rs:19` |
+| [GEN-03](implicit-state-machines/genkan.md#gen-03) | Selected-disk identity: discovered → reviewed → revalidated before and after the first write | High | [confirmed](implicit-state-machines/reproductions.md#gen-03) | reified ([#290](https://github.com/bitemyapp/sekka/pull/290)) | `installer/genkan/rust/src/disk.rs:19` |
 | GEN-04 | LUKS mapping registry and its cleanup order | Medium |  | implicit | `installer/genkan/rust/src/encryption.rs:38` |
 | GEN-05 | (test harness) Loop-device image guard in the reformat matrix | Low |  | implicit | `installer/genkan/rust/src/filesystem.rs:624` |
-| [GEN-06](implicit-state-machines/genkan.md#gen-06) | Privileged helper session: request → preparation → confirmation or cancel → execution | High |  | implicit | `installer/genkan/rust/src/helper.rs:24` |
-| [GEN-07](implicit-state-machines/genkan.md#gen-07) | Install transaction: non-destructive preparation stages, then destructive steps 1–6 | High | [confirmed](implicit-state-machines/reproductions.md#gen-07) | implicit | `installer/genkan/rust/src/install.rs:267` |
+| [GEN-06](implicit-state-machines/genkan.md#gen-06) | Privileged helper session: request → preparation → confirmation or cancel → execution | High |  | reified ([#290](https://github.com/bitemyapp/sekka/pull/290)) | `installer/genkan/rust/src/helper.rs:24` |
+| [GEN-07](implicit-state-machines/genkan.md#gen-07) | Install transaction: non-destructive preparation stages, then destructive steps 1–6 | High | [confirmed](implicit-state-machines/reproductions.md#gen-07) | reified ([#290](https://github.com/bitemyapp/sekka/pull/290)) | `installer/genkan/rust/src/install.rs:267` |
 | GEN-08 | Install target mount guard | Low |  | implicit | `installer/genkan/rust/src/install.rs:234` |
 | GEN-09 | Installer exclusivity lock and the partition-table disk lock | Low |  | implicit | `installer/genkan/rust/src/install.rs:286` |
 | GEN-10 | (test harness) Encrypted storage matrix in the disposable VM | Low |  | implicit | `installer/genkan/rust/src/install.rs:994` |
@@ -1123,13 +1123,13 @@ Every in-scope file was audited.
 | GEN-25 | (test harness) VM fixture stages and the PAM pty conversation | Low |  | implicit | `installer/genkan/tests/vm-fixture/src/main.rs:502` |
 | GEN-26 | Wizard navigation and page locking | Medium |  | implicit | `installer/genkan/ui/src/app.rs:484` |
 | GEN-27 | Bottom-bar activity slot and timed notes | Low |  | implicit | `installer/genkan/ui/src/app.rs:486` |
-| [GEN-28](implicit-state-machines/genkan.md#gen-28) | Disk scan, selection and installed-memory read | High | [confirmed](implicit-state-machines/reproductions.md#gen-28) | implicit | `installer/genkan/ui/src/app.rs:496` |
+| [GEN-28](implicit-state-machines/genkan.md#gen-28) | Disk scan, selection and installed-memory read | High | [confirmed](implicit-state-machines/reproductions.md#gen-28) | reified ([#290](https://github.com/bitemyapp/sekka/pull/290)) | `installer/genkan/ui/src/app.rs:496` |
 | GEN-29 | Derived fields that follow until edited (username, Git name, Git email) | Low |  | implicit | `installer/genkan/ui/src/app.rs:507` |
 | GEN-30 | GitHub account lookup | Medium |  | implicit | `installer/genkan/ui/src/app.rs:515` |
 | GEN-31 | Time zone detection versus manual choice | Medium |  | implicit | `installer/genkan/ui/src/app.rs:544` |
 | GEN-32 | World-map hover and click-to-pick | Low |  | implicit | `installer/genkan/ui/src/app.rs:545` |
 | [GEN-33](implicit-state-machines/genkan.md#gen-33) | Keyboard step: catching the key beside the space bar through the compositor | High | [partly](implicit-state-machines/reproductions.md#gen-33) | implicit | `installer/genkan/ui/src/app.rs:560` |
-| [GEN-34](implicit-state-machines/genkan.md#gen-34) | Review, background preparation and confirmation (GUI side of the helper session) | High | [confirmed](implicit-state-machines/reproductions.md#gen-34) | implicit | `installer/genkan/ui/src/app.rs:569` |
+| [GEN-34](implicit-state-machines/genkan.md#gen-34) | Review, background preparation and confirmation (GUI side of the helper session) | High | [confirmed](implicit-state-machines/reproductions.md#gen-34) | reified ([#290](https://github.com/bitemyapp/sekka/pull/290)) | `installer/genkan/ui/src/app.rs:569` |
 | [GEN-35](implicit-state-machines/genkan.md#gen-35) | Installation progress and outcome on the Install page | High |  | implicit | `installer/genkan/ui/src/app.rs:580` |
 | GEN-36 | Speculative page-cache warming of the current selection | Medium |  | implicit | `installer/genkan/ui/src/app.rs:598` |
 | GEN-37 | (test harness) Preview and sample-data driver | Low |  | implicit | `installer/genkan/ui/src/preview.rs:61` |
@@ -1212,8 +1212,8 @@ Every in-scope file was audited.
 | --- | --- | --- | --- | --- | --- |
 | KTL-01 | Kakehashi image selection and checksum check | Medium |  | implicit | `apps/kakehashi/app/src/view.rs:75` |
 | [KTL-02](implicit-state-machines/kakehashi-tools.md#ktl-02) | Kakehashi nightly download session | High | [confirmed](implicit-state-machines/reproductions.md#ktl-02) | implicit | `apps/kakehashi/app/src/view.rs:85` |
-| [KTL-03](implicit-state-machines/kakehashi-tools.md#ktl-03) | Kakehashi write job, GUI side of the helper protocol | High | [confirmed](implicit-state-machines/reproductions.md#ktl-03) | implicit | `apps/kakehashi/app/src/view.rs:100` |
-| [KTL-04](implicit-state-machines/kakehashi-tools.md#ktl-04) | Kakehashi drive list polling and chosen drive | High | [confirmed](implicit-state-machines/reproductions.md#ktl-04) | implicit | `apps/kakehashi/app/src/view.rs:117` |
+| [KTL-03](implicit-state-machines/kakehashi-tools.md#ktl-03) | Kakehashi write job, GUI side of the helper protocol | High | [confirmed](implicit-state-machines/reproductions.md#ktl-03) | reified ([#290](https://github.com/bitemyapp/sekka/pull/290)) | `apps/kakehashi/app/src/view.rs:100` |
+| [KTL-04](implicit-state-machines/kakehashi-tools.md#ktl-04) | Kakehashi drive list polling and chosen drive | High | [confirmed](implicit-state-machines/reproductions.md#ktl-04) | reified ([#290](https://github.com/bitemyapp/sekka/pull/290)) | `apps/kakehashi/app/src/view.rs:117` |
 | KTL-05 | Resumable nightly download on disk | Medium |  | implicit | `apps/kakehashi/core/src/nightly.rs:90` |
 | KTL-06 | Adaptive range-connection controller | Low |  | implicit | `apps/kakehashi/core/src/nightly/parallel.rs:23` |
 | KTL-07 | Range-support mode: probe, sequential fallback, recheck | Medium |  | implicit | `apps/kakehashi/core/src/nightly/parallel.rs:149` |
