@@ -763,6 +763,12 @@ impl Tansu {
                 }
             }
             (SheetKind::Apply(f), SheetMsg::Submit) => {
+                // Every pending operation was dropped under the open
+                // sheet (its device went or changed): the sheet says so,
+                // and there is nothing to agree to or run.
+                if self.plan.is_empty() {
+                    return;
+                }
                 let problems = self.plan.problems(&state);
                 if !problems.is_empty() {
                     sheet.error = Some(problems.join(" "));

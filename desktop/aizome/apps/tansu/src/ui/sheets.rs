@@ -486,6 +486,9 @@ fn attach(path: &str, read_only: bool) -> Vec<Element<Msg>> {
     ]
 }
 
+/// What the Apply sheet says once nothing is pending any more.
+pub const NOTHING_TO_APPLY: &str = "Nothing is left to apply: the pending operations were dropped.";
+
 fn apply(t: &Tansu, f: &crate::app::ApplyForm) -> Vec<Element<Msg>> {
     let n = t.plan.len();
     let mut v = vec![title(&format!("Apply {n} Operation{}", if n == 1 { "" } else { "s" })), sub("In this order:")];
@@ -537,6 +540,11 @@ fn apply(t: &Tansu, f: &crate::app::ApplyForm) -> Vec<Element<Msg>> {
         );
     }
     v.push(well(list, 12.0, 52.0, 300.0));
+    // The operations can be dropped while this is open, when their devices
+    // go or change.
+    if n == 0 {
+        v.push(warning(Icon::CircleX, Role::Danger, NOTHING_TO_APPLY));
+    }
     for p in t.plan.problems(&t.state) {
         v.push(warning(Icon::CircleX, Role::Danger, p));
     }
@@ -564,7 +572,8 @@ fn apply(t: &Tansu, f: &crate::app::ApplyForm) -> Vec<Element<Msg>> {
         );
     }
     v.push(note("Administrator rights may be asked for. Operations run one at a time; the first that fails stops the rest, which stay pending."));
-    let ready = t.plan.problems(&t.state).is_empty() && f.typed.iter().all(|(name, typed)| typed.trim() == name);
+    let ready =
+        n > 0 && t.plan.problems(&t.state).is_empty() && f.typed.iter().all(|(name, typed)| typed.trim() == name);
     v.push(buttons(&format!("Apply {n} Operation{}", if n == 1 { "" } else { "s" }), ready, destroys));
     v
 }

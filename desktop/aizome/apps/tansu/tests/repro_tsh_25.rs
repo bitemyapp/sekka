@@ -231,3 +231,51 @@ fn pending_operations_do_not_follow_a_swapped_stick() {
         h.program().notice
     );
 }
+
+/// The Apply sheet is open when the stick with the only pending operation
+/// is unplugged, so the plan is pruned to nothing under the sheet. Apply
+/// then has nothing to agree to: it must start no run (a run of no
+/// operations looked for its first one and panicked), and the sheet must
+/// say that nothing is left.
+#[test]
+fn applying_a_plan_emptied_under_the_sheet_runs_nothing() {
+    let (mut h, mock) = start(sd_card_first());
+    let key = h.program().drives.iter().find(|d| d.name.contains("Cruzer")).expect("the stick").key.clone();
+    select(&mut h, "Cruzer", "sdc1");
+    h.send(Msg::Do(Action::Format));
+    h.send(Msg::Sheet(SheetMsg::Fs(0)));
+    h.send(Msg::Sheet(SheetMsg::Submit));
+    assert_eq!(queued(&h), ["Format /dev/sdc1"]);
+    h.send(Msg::Apply);
+    assert!(matches!(h.program().sheet.as_ref().map(|s| &s.kind), Some(SheetKind::Apply(_))), "the apply sheet");
+
+    // The stick is unplugged (UDisks drops it).
+    let _ = mock.power_off(&key);
+    h.send(Msg::Changed);
+    assert!(h.program().plan.is_empty(), "the gone stick's operation is still pending: {:?}", queued(&h));
+    let sheet = h.program().sheet.as_ref().expect("the apply sheet is still open").key;
+    let texts = h.texts(sheet);
+    assert!(texts.iter().any(|t| t == tansu::ui::sheets::NOTHING_TO_APPLY), "the sheet doesn't say so: {texts:?}");
+
+    h.send(Msg::Sheet(SheetMsg::Submit));
+    for _ in 0..4 {
+        h.send(Msg::Tick);
+    }
+    let t = h.program();
+    assert!(t.run.is_none(), "a run of no operations started");
+    assert!(matches!(t.sheet.as_ref().map(|s| &s.kind), Some(SheetKind::Apply(_))), "the sheet moved on to a run");
+    // Nothing but the unplugging reached the disks.
+    assert!(mock.calls().iter().all(|c| c.starts_with("PowerOff")), "{:?}", mock.calls());
+}
+
+/// A run agreed for a plan with no operations is done at once, whoever
+/// starts one.
+#[test]
+fn a_run_of_no_operations_is_done_at_once() {
+    let mock = Mock::new(mock::sample());
+    let mut run = tansu::run::Run::agree(&tansu::plan::Plan::default(), &mock.snapshot());
+    assert!(run.advance(&mock), "the run didn't move");
+    assert!(!run.is_running());
+    assert!(run.done_ids().is_empty());
+    assert!(mock.calls().is_empty(), "{:?}", mock.calls());
+}

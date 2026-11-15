@@ -177,6 +177,11 @@ impl Run {
             if self.outcome.is_some() {
                 return changed;
             }
+            // A run of no operations has none to start: it is done.
+            if self.items.is_empty() {
+                self.outcome = Some(Outcome::Done);
+                return true;
+            }
             if let Some(f) = &self.inflight {
                 let done = match f {
                     InFlight::Unit(t) => t.is_done(),
