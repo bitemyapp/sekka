@@ -35,7 +35,7 @@ fn same_dir(a: &Path, b: &Path) -> bool {
 /// TTY without `--no-session`), and what the shell goes by for Keep Awake
 /// and logind.
 fn login_session(az: &Aizome) -> bool {
-    az.children.env.iter().rev().find(|(name, _)| name == "AIZOME_SESSION").is_some_and(|(_, value)| value == "1")
+    aizome_comp_core::session::real_session(&az.options)
 }
 
 /// The Desks as they are here, as the settings keep them: by name and

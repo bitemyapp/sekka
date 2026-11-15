@@ -10,13 +10,18 @@ let
     cp ${../session/aizome-session.target} $out/lib/systemd/user/aizome-session.target
     cp ${../session/aizome-shutdown.target} $out/lib/systemd/user/aizome-shutdown.target
     cp ${../session/aizome.service} $out/lib/systemd/user/aizome.service
+    cp ${../session/aizome-session-watch.service} $out/lib/systemd/user/aizome-session-watch.service
     cp ${../session/aizome-file-manager.service} $out/lib/systemd/user/aizome-file-manager.service
     substituteInPlace $out/lib/systemd/user/aizome-file-manager.service \
       --replace-fail '@bindir@/aizome-hako --file-manager-service' \
         '${python}/bin/python3 /etc/launcher-test/file-manager.py'
     substituteInPlace $out/lib/systemd/user/aizome.service \
       --replace-fail 'ExecStart=/usr/bin/env aizome --backend udev' \
-        'ExecStart=${pkgs.python3}/bin/python3 /etc/launcher-test/compositor.py'
+        'ExecStart=${pkgs.python3}/bin/python3 /etc/launcher-test/compositor.py' \
+      --replace-fail '@systemctl@' '${pkgs.systemd}/bin/systemctl'
+    substituteInPlace $out/lib/systemd/user/aizome-session-watch.service \
+      --replace-fail '@flock@' '${pkgs.util-linux}/bin/flock' \
+      --replace-fail '@bindir@/aizome-session' '${pkgs.bash}/bin/sh /etc/launcher-test/launcher'
     # Aizome's D-Bus activation files, as the package ships them.
     for service in ${../session/dbus}/*.service; do
       install -Dm644 "$service" "$out/share/dbus-1/services/$(basename "$service")"
@@ -65,12 +70,23 @@ pkgs.testers.runNixOSTest {
       asyncio.run(main())
     '';
     environment.etc."launcher-test/compositor.py".text = ''
-      import os, socket, time
+      import os, signal, socket, subprocess, time
       from pathlib import Path
       root = Path('/home/alice/launcher-test')
       (root / 'compositor-pid').write_text(str(os.getpid()))
+
+      def stop(signum, frame):
+          # A compositor slow to stop keeps its launcher's cleanup waiting.
+          while (root / 'hold-stop').exists():
+              time.sleep(.01)
+          raise SystemExit(0)
+
+      signal.signal(signal.SIGTERM, stop)
       while (root / 'hold-ready').exists():
           time.sleep(.01)
+      # Exported as the compositor's own, for aizome.service to remove.
+      subprocess.run(['${pkgs.systemd}/bin/systemctl', '--user', 'set-environment',
+                      'WAYLAND_DISPLAY=wayland-test', 'AIZOME_SESSION=1'], check=True)
       sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
       sock.connect(os.environ['NOTIFY_SOCKET'].replace('@', '\0', 1))
       sock.send(b'READY=1')
