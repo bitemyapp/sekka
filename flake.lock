@@ -566,6 +566,20 @@
         "type": "github"
       }
     },
+    "nixpkgs_7": {
+      "locked": {
+        "lastModified": 1793726008,
+        "narHash": "sha256-jQp1wKvbwWdLBASTXkSi/VYmDJ5AbBi1WvcMt9HWJC8=",
+        "rev": "1d060086d60cb76a40cf37109f979d88a5bd6396",
+        "revCount": 1107793,
+        "type": "tarball",
+        "url": "https://api.flakehub.com/f/pinned/NixOS/nixpkgs/0.1.1107793%2Brev-1d060086d60cb76a40cf37109f979d88a5bd6396/01a1a7a2-6937-7252-bb94-d02ebbc1f792/source.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://flakehub.com/f/NixOS/nixpkgs/0.1"
+      }
+    },
     "omp": {
       "inputs": {
         "bun2nix": "bun2nix_2",
@@ -599,6 +613,7 @@
         "fh": "fh",
         "nixpkgs": "nixpkgs_5",
         "omp": "omp",
+        "shikka": "shikka",
         "superluminal": "superluminal",
         "tracy": "tracy",
         "uta": "uta"
@@ -639,6 +654,47 @@
       "original": {
         "owner": "oxalica",
         "repo": "rust-overlay",
+        "type": "github"
+      }
+    },
+    "rust-overlay_2": {
+      "inputs": {
+        "nixpkgs": [
+          "shikka",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1791276535,
+        "narHash": "sha256-iwqAmHTX1IgzTumJR3JayNAQAo5xEmmOuGzB6b2pT/Q=",
+        "owner": "oxalica",
+        "repo": "rust-overlay",
+        "rev": "b962e5d0c8cd97196c6a882d659fe451b52ad989",
+        "type": "github"
+      },
+      "original": {
+        "owner": "oxalica",
+        "repo": "rust-overlay",
+        "type": "github"
+      }
+    },
+    "shikka": {
+      "inputs": {
+        "nixpkgs": "nixpkgs_7",
+        "rust-overlay": "rust-overlay_2"
+      },
+      "locked": {
+        "lastModified": 1794689905,
+        "narHash": "sha256-cnLSrukxiTvsU9CvNiCtGjxhF2tl1IMQk4z4+mtFFCo=",
+        "owner": "bitemyapp",
+        "repo": "shikka",
+        "rev": "13bf7fcdec82a2a9dfd19ff66b4dcc05c3998dc1",
+        "type": "github"
+      },
+      "original": {
+        "owner": "bitemyapp",
+        "repo": "shikka",
+        "rev": "13bf7fcdec82a2a9dfd19ff66b4dcc05c3998dc1",
         "type": "github"
       }
     },

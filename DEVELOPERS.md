@@ -2638,11 +2638,21 @@ Sekka gives it two things:
   Cargo, and that its build script reads the workspace's lockfile and the
   sources of the core's path dependencies. Cargo ignores the table.
 
-Shikka's repository is private, and neither the builder nor CI can fetch it,
-so it is not an input of this flake. Build it from a checkout of it, then:
+Shikka is an input of this flake, pinned by revision in `flake.nix` with the
+Nixpkgs and Rust of its own lock, and `.#shikka` is its package. No check
+builds it and Sekka's cache does not hold it: the first build compiles the
+engine and runs its tests. To move the pin, put the new revision in
+`inputs.shikka.url` and run `nix flake update shikka`.
+
+The input has a cost on installed systems, which never build it. Their lock
+carries Sekka's inputs beneath Sekka (`nix/installed-lock.nix`), and Yukimi's
+update copies every source that is new in a lock into the store before it
+builds. With this input that is Shikka's source (100 MB), its Nixpkgs
+(339 MB) and its rust-overlay (25 MB), once, and Shikka's source again each
+time the pin moves.
 
 ```sh
-nix build path:/path/to/shikka#shikka --no-update-lock-file --out-link ~/shikka
+nix build .#shikka --out-link ~/shikka
 export SHIKKA_TOOLCHAIN=$(nix build .#shikka-toolchain --no-link --print-out-paths)/env.json
 cd desktop/aizome
 ~/shikka/bin/shikka --root ../.. init
@@ -2657,12 +2667,12 @@ and `BUCK` files through the checkout and keeps them out of commits with
 Git's local exclude file. `--cache managed --nativelink PATH` adds the cache.
 Run it from a plain shell, not `nix develop .#aizome`: Shikka refuses that
 shell's `RUSTFLAGS` and `RUSTC_WRAPPER`, whose work the toolchain file and
-the manifest table do. Shikka's Nix package must take `SHIKKA_TOOLCHAIN` from
-the caller; one that sets it unconditionally builds with its own toolchain,
-which has none of Aizome's libraries.
+the manifest table do. The pinned revision is the first whose package takes
+`SHIKKA_TOOLCHAIN` from the caller: an earlier one builds with its own
+toolchain, which has none of Aizome's libraries.
 
-On wx-workstation on 2026-11-14, from `main` at `a9e50870`, the dev profile
-(709 actions) with the managed cache:
+On wx-workstation on 2026-11-14, from `main` at `a9e50870` with the package
+this flake pins, the dev profile (709 actions) with the managed cache:
 
 | | Seconds |
 |---|---|
