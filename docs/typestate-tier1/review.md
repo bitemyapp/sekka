@@ -27,6 +27,13 @@ Line numbers are for the commit that adds this file, on main at `d866289c`.
   partition to the size it was queued at or the size chosen. Tansu's plan
   checks the same confirmation without spending it, so the pending resize is
   dropped and Apply refuses it.
+- **The shared crate let a cloneable brand make reviews.**
+  `Confirmed::brand()` returned `&B`. With a brand that derives `Clone`, as
+  Genkan's `DiskReview` does, `Reviewed::new(any_target,
+  confirmed.brand().clone())` made a review of another target. Genkan keeps
+  its raw `Confirmed` wrapped, so nothing reached it, and nothing called it.
+  It is removed, and a doctest on `Confirmed` holds that the call doesn't
+  compile.
 
 ## Open findings
 
@@ -116,15 +123,6 @@ name just freed. The step is then kept as still holding the first item,
 which is now the displaced one. The next ⌘Z puts back an item the person
 never trashed, and Skip or Cancel leaves the step at the top of Undo. Find
 the remaining items by the entries `restore` reported, not by path.
-
-### 7. The shared crate lets a cloneable brand make reviews
-
-Confirmed in the crate, not reachable today. `Confirmed::brand()`
-(`desktop/aizome/crates/aizome-typestate/src/confirm.rs:156`) returns `&B`.
-With a brand that derives `Clone`, as Genkan's `DiskReview` does,
-`Reviewed::new(any_target, confirmed.brand().clone())` makes a review of
-another target. Genkan keeps its raw `Confirmed` wrapped, so nothing reaches
-it. Nothing calls `brand()`, so remove it.
 
 ## Lower severity
 
@@ -255,9 +253,8 @@ it. Nothing calls `brand()`, so remove it.
 - **Kakehashi:** KTL-04 on Linux and macOS; `Plan` has private fields and no
   `Deserialize`, `Default` or `Clone`; the job directory outlives the
   reports' last read.
-- **aizome-sys and Tansu:** the `Queued` brand isn't `Clone`, and nothing
-  reaches `brand()`; renumbered MBR partitions and remade sibling partitions
-  behave correctly.
+- **aizome-sys and Tansu:** the `Queued` brand isn't `Clone`; renumbered MBR
+  partitions and remade sibling partitions behave correctly.
 - **Yukimi:** the clean-up record is synced before deleting; the helper
   unwinds on panic, so its fallbacks run, and they don't panic themselves.
 - **Hako:** nothing traced deletes a displaced item; symlinks aren't

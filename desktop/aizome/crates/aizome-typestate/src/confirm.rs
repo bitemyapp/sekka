@@ -131,6 +131,26 @@ impl<T: fmt::Debug, B> fmt::Debug for Reviewed<T, B> {
 /// use aizome_typestate::Confirmed;
 /// let _ = Confirmed { target: "/dev/sdb", brand: () };
 /// ```
+///
+/// Nor does it hand its brand out. A brand that can be cloned (Genkan's can,
+/// so that a review is confirmed again before each phase) would otherwise
+/// make a review of any other target:
+///
+/// ```compile_fail,E0599
+/// mod sheet {
+///     use aizome_typestate::{Reviewed, SameTarget};
+///     pub struct Disk(pub &'static str);
+///     impl SameTarget for Disk {
+///         fn same_target(&self, fresh: &Self) -> bool { self.0 == fresh.0 }
+///     }
+///     #[derive(Clone)]
+///     pub struct Review(());
+///     pub fn review(disk: Disk) -> Reviewed<Disk, Review> { Reviewed::new(disk, Review(())) }
+/// }
+/// use sheet::Disk;
+/// let Ok(confirmed) = sheet::review(Disk("A")).confirm(Disk("A")) else { return };
+/// let _ = aizome_typestate::Reviewed::new(Disk("B"), confirmed.brand().clone());
+/// ```
 #[must_use = "a confirmation is spent by the step it allows"]
 pub struct Confirmed<T, B> {
     target: T,
@@ -149,12 +169,6 @@ impl<T, B> Confirmed<T, B> {
     #[inline]
     pub fn into_target(self) -> T {
         self.target
-    }
-
-    /// The brand of the review it came from.
-    #[inline]
-    pub fn brand(&self) -> &B {
-        &self.brand
     }
 
     /// Checks the target again before a later step (Genkan re-checks its
