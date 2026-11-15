@@ -222,5 +222,41 @@ exec 9>&-
 expect "the recovery had nothing to do" "$status" "0"
 expect "the recovery didn't ask for the lock" "$(grep -c 'Not recovering now' "$T/recover-idle.log")" "0"
 
+# H and I: the boot menu can't be written (a full boot partition), and
+# Clean Up is asked to collect without deleting anything. It deletes no
+# generation, so it collects unless an interrupted clean-up's generations
+# may still be on the menu.
+collections() { grep -c '^nix-store --gc' "$T/calls"; }
+
+echo "== H: plain Clean Up collects though the boot menu can't be written"
+setup; echo ok >"$T/ctl/gc"; touch "$T/ctl/switch-fail"; : >"$T/calls"
+expect "no clean-up left a record" "$(recorded)" "gone"
+result=$(helper clean)
+rm "$T/ctl/switch-fail"
+echo "result: $result"
+expect "the clean-up succeeded" "$(grep -c '"ok":true' <<<"$result")" "1"
+expect "garbage was collected" "$(collections)" "1"
+expect "the result says the menu wasn't updated" "$(grep -c '"menu_error"' <<<"$result")" "1"
+expect "no generation was deleted" "$(links)" "system-1-link system-2-link system-3-link "
+expect "the boot menu still lists what exists" "$(menu)" "$(links)"
+
+echo "== I: plain Clean Up collects nothing while an interrupted clean-up's menu can't be written"
+setup; echo ok >"$T/ctl/gc"; touch "$T/ctl/slow-delete"
+helper_killed "$T/state/delete-started" clean --older-than-days 7
+rm "$T/ctl/slow-delete"
+expect "the killed clean-up left its record" "$(recorded)" "recorded"
+expect "the boot menu is stale after the kill" "$(stale)" "stale"
+touch "$T/ctl/switch-fail"; : >"$T/calls"
+result=$(helper clean)
+rm "$T/ctl/switch-fail"
+echo "result: $result"
+expect "the clean-up failed" "$(grep -c '"ok":false' <<<"$result")" "1"
+expect "no garbage was collected" "$(collections)" "0"
+expect "the record is still there" "$(recorded)" "recorded"
+echo "result: $(helper clean)"
+expect "once the menu can be written, the next clean-up collects" "$(collections)" "1"
+expect "boot menu lists only what exists after it" "$(menu)" "$(links)"
+expect "the record is gone after it" "$(recorded)" "gone"
+
 echo "== helper calls (A, B and C)"; cat "$T/calls"
 exit $FAILED

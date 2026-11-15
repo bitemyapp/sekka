@@ -106,12 +106,32 @@ impl<'o> Generations<'o> {
     }
 
     /// Updates the boot menu without deleting anything.
+    ///
+    /// Nothing is deleted here, so a menu that can't be written (a full
+    /// boot partition, say) is no staler than it was. Unless a clean-up left
+    /// its record ([`interrupted`]), every deletion so far was followed by a
+    /// written menu: the menu still lists only generations that exist, and
+    /// garbage can be collected all the same. The [`BootMenu`] then says the
+    /// menu wasn't rewritten ([`BootMenu::not_rewritten`]), for the caller to
+    /// report. With a record left, the menu may list deleted generations,
+    /// and this fails.
     pub fn update_boot_menu(self) -> Result<BootMenu<'o>> {
         let menu = update_menu();
         drop(self.step);
         match menu {
-            Ok(()) => Ok(BootMenu { operation: PhantomData }),
-            Err(Failure(message)) => Err(Failure(format!("{message}, so garbage wasn't collected"))),
+            Ok(()) => Ok(BootMenu { not_rewritten: None, operation: PhantomData }),
+            Err(Failure(message)) if !interrupted() => {
+                process::report(
+                    1,
+                    &format!(
+                        "{message}. Nothing was deleted since the boot menu was last written, so garbage is collected all the same"
+                    ),
+                );
+                Ok(BootMenu { not_rewritten: Some(message), operation: PhantomData })
+            }
+            Err(Failure(message)) => Err(Failure(format!(
+                "{message}. An interrupted clean-up deleted generations the boot menu may still list, so garbage wasn't collected"
+            ))),
         }
     }
 }
@@ -142,14 +162,15 @@ impl<'o> Deleted<'o> {
                 "{message}. The boot menu may still list deleted generations: don't collect garbage until a system switch has rewritten it"
             ))),
             (Err(failure), Ok(())) => Err(failure),
-            (Ok(()), Ok(())) => Ok(BootMenu { operation: PhantomData }),
+            (Ok(()), Ok(())) => Ok(BootMenu { not_rewritten: None, operation: PhantomData }),
         }
     }
 }
 
-/// The boot menu was written after the last deletion: it lists only the
-/// generations that exist. It is spent by collecting garbage, and holds
-/// the operation until then.
+/// The boot menu lists only the generations that exist: it was written
+/// after the last deletion, or it couldn't be written and nothing was
+/// deleted since it last was ([`not_rewritten`](Self::not_rewritten)). It is
+/// spent by collecting garbage, and holds the operation until then.
 ///
 /// Collecting while the menu still lists deleted generations, as Yukimi
 /// once did when the collection was stopped or failed, doesn't compile:
@@ -176,10 +197,18 @@ impl<'o> Deleted<'o> {
 #[derive(Debug)]
 #[must_use = "the menu is what allows collecting garbage"]
 pub struct BootMenu<'o> {
+    not_rewritten: Option<String>,
     operation: PhantomData<&'o mut Operation>,
 }
 
 impl BootMenu<'_> {
+    /// Why the menu wasn't rewritten, when it wasn't: only after
+    /// [`Generations::update_boot_menu`], which deletes nothing. It lists
+    /// only generations that exist all the same.
+    pub fn not_rewritten(&self) -> Option<&str> {
+        self.not_rewritten.as_deref()
+    }
+
     /// Collects garbage. Returns Nix's line saying how much was freed.
     pub fn collect_garbage(self) -> Result<String> {
         process::stage(3, "Collecting garbage");

@@ -809,6 +809,9 @@ fn clean(operation: &mut Operation, args: &[String]) -> Result<String> {
         Some(days) => generations.delete_older_than(days).update_boot_menu()?,
         None => generations.update_boot_menu()?,
     };
+    // A clean-up that deletes nothing collects even when the menu couldn't
+    // be written: Yukimi says so beside what was freed.
+    let menu_error = menu.not_rewritten().map(str::to_owned);
     let freed = menu.collect_garbage().map_err(|Failure(message)| match days {
         Some(_) => Failure(format!(
             "{}. The old generations were deleted, and the boot menu lists only the ones left",
@@ -816,7 +819,11 @@ fn clean(operation: &mut Operation, args: &[String]) -> Result<String> {
         )),
         None => Failure(message),
     })?;
-    Ok(serde_json::json!({"ok": true, "freed": freed}).to_string())
+    let mut report = serde_json::json!({"ok": true, "freed": freed});
+    if let Some(error) = menu_error {
+        report["menu_error"] = error.into();
+    }
+    Ok(report.to_string())
 }
 
 /// The free blocks of the filesystem holding `path`, in bytes, counting

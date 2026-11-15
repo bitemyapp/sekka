@@ -316,7 +316,10 @@ port, or a stick moved to another port, no longer matches.
 **Yukimi**
 - A failed or stopped change restores root's channels.
 - Clean Up rewrites the boot menu before collecting garbage, and Stop waits
-  for that step.
+  for that step. When the menu can't be written, a clean-up that deletes
+  generations collects nothing. One that deletes nothing still collects and
+  says the menu wasn't updated, unless an interrupted clean-up's generations
+  may still be on the menu.
 - A copy saved for a generation number that Nix has since reused is set
   aside as `generation-<n>.unrecorded`, not used for the new generation.
 

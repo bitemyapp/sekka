@@ -34,6 +34,15 @@ Line numbers are for the commit that adds this file, on main at `d866289c`.
   its raw `Confirmed` wrapped, so nothing reached it, and nothing called it.
   It is removed, and a doctest on `Confirmed` holds that the call doesn't
   compile.
+- **Clean Up without an age refused to collect garbage when the boot menu
+  couldn't be written.** With `switch-to-configuration boot` failing, for
+  example on a full or unmounted ESP, it freed nothing, though it had
+  deleted nothing and YUK-11 didn't need that. Builds that run out of room
+  tell the person to free space in Storage, which then refused too. It now
+  collects and says the menu wasn't updated, as long as no clean-up left
+  its record: every deletion so far was then followed by a written menu.
+  With a record left it still refuses, and so do Clean Up with an age and
+  deleting generations.
 
 ## Open findings
 
@@ -151,11 +160,6 @@ the remaining items by the entries `restore` reported, not by path.
   past.
 
 **Yukimi**
-- Clean Up without an age now refuses to collect garbage when
-  `switch-to-configuration boot` fails (`yukimi-helper/src/clean.rs:114`),
-  for example with an unmounted ESP. Nothing was deleted, so YUK-11 doesn't
-  need that. Builds that run out of room tell the person to free space in
-  Storage, which then refuses too.
 - After a power cut, recovery waits for the next Yukimi operation
   (`yukimi-helper/src/main.rs:1041`). A persistent `nix.gc` timer, Nix's
   `min-free` or a manual collection can run first, while the menu still lists
