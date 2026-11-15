@@ -684,17 +684,17 @@
         "rust-overlay": "rust-overlay_2"
       },
       "locked": {
-        "lastModified": 1794689905,
-        "narHash": "sha256-cnLSrukxiTvsU9CvNiCtGjxhF2tl1IMQk4z4+mtFFCo=",
+        "lastModified": 1794718263,
+        "narHash": "sha256-Qh6oEiiRCcKIXGz1sSwUw6LXH62FjgYaiGfqeZqOc5Q=",
         "owner": "bitemyapp",
         "repo": "shikka",
-        "rev": "13bf7fcdec82a2a9dfd19ff66b4dcc05c3998dc1",
+        "rev": "2eb9d5733e594ebc4deaacd51e9f984125d693c9",
         "type": "github"
       },
       "original": {
         "owner": "bitemyapp",
         "repo": "shikka",
-        "rev": "13bf7fcdec82a2a9dfd19ff66b4dcc05c3998dc1",
+        "rev": "2eb9d5733e594ebc4deaacd51e9f984125d693c9",
         "type": "github"
       }
     },

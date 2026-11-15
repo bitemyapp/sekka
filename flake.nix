@@ -36,7 +36,7 @@
   # its own lock, which its engine is built and tested with. Those are three
   # more sources in an installed system's lock, beneath Sekka, and Yukimi's
   # update fetches each new one: about 460 MB, once.
-  inputs.shikka.url = "github:bitemyapp/shikka/13bf7fcdec82a2a9dfd19ff66b4dcc05c3998dc1";
+  inputs.shikka.url = "github:bitemyapp/shikka/2eb9d5733e594ebc4deaacd51e9f984125d693c9";
 
   # Sekka's own packages, and numtide's for the AI applications, also
   # configured on Sekka systems by installer/genkan/rust/system/binary-cache.nix
