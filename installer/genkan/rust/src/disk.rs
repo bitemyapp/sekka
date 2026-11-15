@@ -103,6 +103,14 @@ pub fn discover() -> Result<Vec<Disk>> {
 
 /// lsblk's device tree: every disk, or only `device`'s.
 fn list(device: Option<&str>) -> Result<Vec<Disk>> {
+    parse(&output(Program::LSBLK, &listing(device)?, 30)?)
+}
+
+/// lsblk's arguments for every disk, or for `device` alone. The device's
+/// path comes from the installation's request and lsblk runs as root, so a
+/// path that could leave /dev is refused, and the path follows `--`, where
+/// lsblk can't read it as an option.
+fn listing(device: Option<&str>) -> Result<Vec<&str>> {
     let mut args = vec![
         "--json",
         "--tree",
@@ -111,8 +119,17 @@ fn list(device: Option<&str>) -> Result<Vec<Disk>> {
         "--output",
         "PATH,TYPE,SIZE,RO,MODEL,SERIAL,WWN,MAJ:MIN,MOUNTPOINTS",
     ];
-    args.extend(device);
-    parse(&output(Program::LSBLK, &args, 30)?)
+    if let Some(device) = device {
+        ensure!(
+            device.starts_with("/dev/")
+                && !Path::new(device)
+                    .components()
+                    .any(|part| part == std::path::Component::ParentDir),
+            "Invalid device path"
+        );
+        args.extend(["--", device]);
+    }
+    Ok(args)
 }
 
 /// The checks lsblk can't make: the node is the disk lsblk named, and its
@@ -714,6 +731,30 @@ mod tests {
         assert!(boot_sector_block(crate::Firmware::Bios, 512).is_none());
         assert!(boot_sector_block(crate::Firmware::Bios, 4096).is_some());
         assert!(boot_sector_block(crate::Firmware::Uefi, 4096).is_none());
+    }
+    #[test]
+    fn lsblk_is_given_only_a_path_under_dev_and_never_as_an_option() {
+        let all = listing(None).unwrap();
+        assert!(!all.contains(&"--"));
+        let one = listing(Some("/dev/nvme0n1")).unwrap();
+        assert_eq!(one[..all.len()], all[..]);
+        assert_eq!(one[all.len()..], ["--", "/dev/nvme0n1"]);
+        for path in [
+            "--output=NAME",
+            "-J",
+            "",
+            "sda",
+            "/etc/shadow",
+            "/dev",
+            "/dev/../etc/shadow",
+            "/dev/disk/../../etc/shadow",
+        ] {
+            assert!(listing(Some(path)).is_err(), "{path:?} reached lsblk");
+            // Refused before lsblk runs: the error is the refusal, not
+            // lsblk's.
+            let error = format!("{:#}", read(path).unwrap_err());
+            assert!(error.contains("Invalid device path"), "{path:?}: {error}");
+        }
     }
     #[test]
     #[ignore = "requires the marked disposable disks in the storage VM"]
