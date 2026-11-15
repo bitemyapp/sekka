@@ -1031,6 +1031,13 @@ fn main() -> ExitCode {
     // was killed before it rewrote the boot menu. While another operation
     // holds the lock, that operation's own start does it instead.
     if args.first().is_some_and(|s| s == "__recover") {
+        // It runs after every operation and almost never has work. Asking
+        // for the lock first would hold it for an instant each time, and
+        // an operation started right after the last one would be told
+        // another is running.
+        if !cleaning::interrupted() {
+            return ExitCode::SUCCESS;
+        }
         let mut operation = match Operation::begin() {
             Ok(operation) => operation,
             Err(Failure(message)) => {

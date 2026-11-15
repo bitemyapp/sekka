@@ -206,5 +206,21 @@ echo "result: $(cat "$dir/result.json")"
 expect "boot menu lists only what exists after the live clean-up" "$(menu)" "$(links)"
 expect "the live clean-up removed its record" "$(recorded)" "gone"
 
+# The recovery runs after every operation. Were it to ask for the lock
+# before looking for a record, an operation started right after the last
+# one would find the lock taken. Something else holds the lock here, so a
+# recovery that asks for it says so.
+echo "== G: with nothing to recover, the recovery leaves the lock alone"
+setup
+expect "no clean-up left a record" "$(recorded)" "gone"
+exec 9>/run/lock/yukimi.lock
+flock -n 9
+status=0
+"$T/yukimi-helper" __recover </dev/null 2>"$T/recover-idle.log" || status=$?
+flock -u 9
+exec 9>&-
+expect "the recovery had nothing to do" "$status" "0"
+expect "the recovery didn't ask for the lock" "$(grep -c 'Not recovering now' "$T/recover-idle.log")" "0"
+
 echo "== helper calls (A, B and C)"; cat "$T/calls"
 exit $FAILED

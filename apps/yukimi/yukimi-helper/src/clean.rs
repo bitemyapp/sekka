@@ -286,6 +286,14 @@ fn forget_deletion() -> std::io::Result<()> {
     std::fs::File::open(path.parent().unwrap_or(Path::new("/")))?.sync_all()
 }
 
+/// Whether a clean-up left its record behind. It only looks, so it needs no
+/// lock: a caller with nothing to recover can leave the lock alone. With a
+/// record there, only [`recover`], under the lock, can tell an interrupted
+/// clean-up from a live one.
+pub fn interrupted() -> bool {
+    Path::new(INTERRUPTED).exists()
+}
+
 /// What [`recover`] found.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Recovery {
@@ -303,7 +311,7 @@ pub enum Recovery {
 /// holds the operation, and so the lock: never alongside a live clean-up,
 /// which finishes the job itself.
 pub fn recover(_operation: &mut Operation) -> Result<Recovery> {
-    if !Path::new(INTERRUPTED).exists() {
+    if !interrupted() {
         return Ok(Recovery::Nothing);
     }
     let _step = Unstoppable::begin("Rewriting the boot menu after an interrupted clean-up")?;
