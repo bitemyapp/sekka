@@ -4260,7 +4260,11 @@ that action still reports possible damage.
 
 Windows opening only locks and dismounts the volumes and queries the disk.
 Layout deletion happens in `Ready::begin`, after the final checks, followed
-by unbuffered, write-through writes from sector-aligned buffers. The public
+by unbuffered, write-through writes from sector-aligned buffers. Windows
+refusing the deletion doesn't stop the write, as it didn't before the
+stages: the request can be refused where there is no layout to remove, the
+volumes are already locked and dismounted, and the image is read back after
+it is written. The public
 Windows interface exposes only fixed geometry/length output types, with
 bufferless destructive controls confined to a private enum in the helper's
 write crate. Neither accepts an arbitrary IOCTL code or Rust output buffer.

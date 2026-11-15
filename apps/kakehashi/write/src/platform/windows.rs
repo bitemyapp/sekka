@@ -94,10 +94,18 @@ pub(crate) fn open(drive: &Drive) -> Result<Device> {
 }
 
 /// The first destructive action, called only by Ready::begin after the
-/// final checks and after recording that the disk may have changed.
-pub(super) fn start(file: &File) -> Result<()> {
-    control(file, Control::DeleteDriveLayout).context("could not remove the drive layout")?;
-    Ok(())
+/// final checks and after recording that the disk may have changed: asks
+/// Windows to forget the drive's layout, so that it mounts nothing on the
+/// drive while it is written.
+///
+/// It returns nothing, because a refusal doesn't stop the write. The request
+/// can be refused where there is no layout to remove. The write doesn't
+/// depend on it: the volumes found on the drive are already locked and
+/// dismounted, the image replaces the layout either way, and what was
+/// written is read back and compared. A drive that can't be written fails at
+/// the first write.
+pub(super) fn start(file: &File) {
+    let _ = control(file, Control::DeleteDriveLayout);
 }
 
 /// The drive was written unbuffered: there is nothing cached to forget.

@@ -144,15 +144,14 @@ impl Opened {
 impl Ready {
     /// Record possible damage before any platform-specific write, including
     /// Windows' partition-table deletion. An error still leaves touched true.
+    /// Windows refusing that deletion is not one: the write goes on.
     pub fn begin(self, touched: &mut bool) -> Result<Writing> {
         self.begin_with(touched, |file| {
             #[cfg(windows)]
-            return imp::start(file);
+            imp::start(file);
             #[cfg(not(windows))]
-            {
-                let _ = file;
-                Ok(())
-            }
+            let _ = file;
+            Ok(())
         })
     }
 

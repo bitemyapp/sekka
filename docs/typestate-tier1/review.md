@@ -67,6 +67,16 @@ Line numbers are for the commit that adds this file, on main at `d866289c`.
   the helper's write crate. The remaining raw buffer helper is private and
   unsafe, with a safety argument at each call. Windows compile-fail tests
   reject the old generic/control imports and arbitrary output buffers.
+- **A refused layout removal stopped a Windows write.** The fix two items up
+  made a failed layout-deletion request end the write, where `main` ignores
+  its result. It is ignored again: `start` in the write crate's
+  `platform/windows.rs` returns nothing, so `Ready::begin` has no error of
+  its to pass on. The request can be refused where there is no layout to
+  remove, and the write doesn't depend on it. Raspberry Pi Imager sends the
+  same request and accepts its refusal, and Fedora Media Writer continues
+  after one. The drive is still marked as possibly changed first. Read, not
+  run: there is no Windows disk here, and the tests never send this request
+  to anything, a temporary file included.
 
 The follow-up checks ran on `wx-workstation`: Hako's 136 unit/integration
 tests and 28 doctests; Kakehashi's package, elevation and disposable-VM checks;
