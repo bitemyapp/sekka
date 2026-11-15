@@ -10,10 +10,11 @@
 mod platform;
 mod recheck;
 
+pub use platform::{Opened, Ready, Writing};
 pub use recheck::{Recheck, StillThere, still_there};
 
 use anyhow::{Context, Result, bail, ensure};
-use kakehashi_core::drive::{Drive, human};
+use kakehashi_core::drive::Drive;
 use kakehashi_core::image::{CHUNK, Cancelled, hex};
 use kakehashi_core::write::{Progress, TAIL};
 use serde::Deserialize;
@@ -167,27 +168,13 @@ pub fn execute(
     let len = image.metadata()?.len();
     ensure!(len > 0, "the image is empty");
     platform::unmount(&confirmed)?;
-    let mut device = platform::open(&confirmed, cancelled)?;
-    let drive = confirmed.target();
-    ensure!(device.bytes == drive.bytes, "{} reports {} bytes, not {}", drive.name, device.bytes, drive.bytes);
-    // Opened: check once more that it is still the drive that was picked.
-    let _still = still_there(plan)?;
-    let sector = device.sector;
-    ensure!(
-        round_up(len, sector) + TAIL <= device.bytes,
-        "the image ({}) doesn't fit on {} ({})",
-        human(len),
-        drive.label(),
-        human(device.bytes)
-    );
-
-    if cancelled() {
-        bail!(Cancelled);
-    }
-    *touched = true;
+    let mut device = platform::open(&confirmed, cancelled)?.check(plan, len, cancelled)?.begin(touched)?;
+    let sector = device.sector();
+    let bytes = device.bytes();
+    let drive = device.drive().clone();
     let written = copy(
         &mut image,
-        &mut device.file,
+        device.file(),
         len,
         sector,
         &mut |done| {
@@ -196,18 +183,18 @@ pub fn execute(
         cancelled,
     )?;
     ensure!(written == plan.sha256, "the image changed while it was being written (SHA-256 {written})");
-    device.file.seek(SeekFrom::Start(device.bytes - TAIL))?;
+    device.file().seek(SeekFrom::Start(bytes - TAIL))?;
     let mut tail = Aligned::new(TAIL as usize);
-    device.file.write_all(tail.slice(TAIL as usize))?;
-    device.file.flush()?;
-    platform::sync(&device)?;
-    platform::drop_cache(&device);
+    device.file().write_all(tail.slice(TAIL as usize))?;
+    device.file().flush()?;
+    device.sync()?;
+    device.drop_cache();
 
     image.seek(SeekFrom::Start(0))?;
-    device.file.seek(SeekFrom::Start(0))?;
+    device.file().seek(SeekFrom::Start(0))?;
     let read = verify(
         &mut image,
-        &mut device.file,
+        device.file(),
         len,
         sector,
         &mut |done| {
@@ -216,13 +203,13 @@ pub fn execute(
         cancelled,
     )?;
     ensure!(read == plan.sha256, "what was read back has SHA-256 {read}");
-    device.file.seek(SeekFrom::Start(device.bytes - TAIL))?;
+    device.file().seek(SeekFrom::Start(bytes - TAIL))?;
     let back = tail.slice(TAIL as usize);
-    device.file.read_exact(back)?;
+    device.file().read_exact(back)?;
     ensure!(back.iter().all(|&b| b == 0), "the end of the drive was not cleared");
     drop(device);
 
-    Ok(match platform::eject(drive) {
+    Ok(match platform::eject(&drive) {
         Ok(()) => Outcome { ejected: true, note: None },
         Err(e) => Outcome { ejected: false, note: Some(format!("{e:#}")) },
     })

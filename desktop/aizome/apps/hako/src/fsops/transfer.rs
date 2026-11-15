@@ -124,7 +124,7 @@ pub fn trash_items(paths: &[PathBuf], trash: &Trash, env: &mut Env) -> (Report, 
         loop {
             match trash.trash(p) {
                 Ok(t) => {
-                    report.done.push((p.clone(), t.file.clone()));
+                    report.done.push((p.clone(), t.file().to_path_buf()));
                     trashed.push(t);
                 }
                 Err(e) => {

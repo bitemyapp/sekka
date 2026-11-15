@@ -37,11 +37,11 @@ pub fn image_drive(image: &Path) -> Option<String> {
 }
 
 /// What listing shares with the helper's write step: running the system's
-/// tools, and on Windows opening a raw handle and sending it IOCTLs. None
-/// of it finds, checks or writes a drive by itself.
+/// tools, and on Windows opening a raw handle and querying its geometry or
+/// length. Destructive Windows controls live only in the helper's write crate.
 pub mod sys {
     #[cfg(windows)]
-    pub use super::imp::{ioctl, no_output, open_raw, volumes};
+    pub use super::imp::{disk_geometry, disk_length, open_raw, volumes};
     #[cfg(unix)]
     use anyhow::Result;
     #[cfg(unix)]

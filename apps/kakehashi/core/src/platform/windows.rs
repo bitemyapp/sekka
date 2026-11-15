@@ -1,5 +1,5 @@
 //! Windows: drives from the storage IOCTLs of each `\\.\PhysicalDriveN`, and
-//! the handle and IOCTL primitives the helper's write step uses.
+//! the handle and fixed read-only queries the helper's write step uses.
 
 // Windows' own names for the storage bus types.
 #![allow(non_upper_case_globals)]
@@ -9,7 +9,7 @@ use anyhow::Result;
 use std::collections::HashMap;
 use std::ffi::c_void;
 use std::os::windows::ffi::OsStrExt;
-use std::os::windows::io::{FromRawHandle, OwnedHandle};
+use std::os::windows::io::{AsHandle, AsRawHandle, FromRawHandle, OwnedHandle};
 use std::path::Path;
 use windows::Win32::Foundation::{ERROR_WRITE_PROTECT, HANDLE};
 use windows::Win32::Storage::FileSystem::{
@@ -21,9 +21,9 @@ use windows::Win32::Storage::FileSystem::{
 };
 use windows::Win32::System::IO::DeviceIoControl;
 use windows::Win32::System::Ioctl::{
-    DISK_GEOMETRY_EX, IOCTL_DISK_GET_DRIVE_GEOMETRY_EX, IOCTL_DISK_IS_WRITABLE, IOCTL_STORAGE_QUERY_PROPERTY,
-    PropertyStandardQuery, STORAGE_DEVICE_DESCRIPTOR, STORAGE_PROPERTY_QUERY, StorageDeviceProperty,
-    VOLUME_DISK_EXTENTS,
+    DISK_GEOMETRY_EX, GET_LENGTH_INFORMATION, IOCTL_DISK_GET_DRIVE_GEOMETRY_EX, IOCTL_DISK_GET_LENGTH_INFO,
+    IOCTL_DISK_IS_WRITABLE, IOCTL_STORAGE_QUERY_PROPERTY, PropertyStandardQuery, STORAGE_DEVICE_DESCRIPTOR,
+    STORAGE_PROPERTY_QUERY, StorageDeviceProperty, VOLUME_DISK_EXTENTS,
 };
 use windows::Win32::System::SystemInformation::GetSystemWindowsDirectoryW;
 use windows::core::PCWSTR;
@@ -59,23 +59,74 @@ pub fn open_raw(path: &str, access: u32, flags: FILE_FLAGS_AND_ATTRIBUTES) -> wi
     Ok(unsafe { OwnedHandle::from_raw_handle(handle.0) })
 }
 
-fn raw(handle: &OwnedHandle) -> HANDLE {
-    use std::os::windows::io::AsRawHandle;
-    HANDLE(handle.as_raw_handle())
+fn raw(handle: &impl AsHandle) -> HANDLE {
+    HANDLE(handle.as_handle().as_raw_handle())
 }
 
-/// One IOCTL with an optional input, filling `out`.
-pub fn ioctl<I, O>(handle: &OwnedHandle, code: u32, input: Option<&I>, out: &mut O) -> windows::core::Result<u32> {
-    ioctl_bytes(
-        handle,
-        code,
-        input.map(|i| (i as *const I as *const c_void, size_of::<I>() as u32)),
-        (out as *mut O as *mut c_void, size_of::<O>() as u32),
-    )
+/// Read the fixed disk geometry result; callers cannot choose its buffer type.
+///
+/// ```compile_fail,E0432
+/// use kakehashi_core::platform::sys::ioctl;
+/// ```
+///
+/// ```compile_fail,E0432
+/// use kakehashi_core::platform::sys::control;
+/// ```
+///
+/// ```compile_fail,E0061
+/// use kakehashi_core::platform::sys::disk_geometry;
+/// fn corrupt(handle: &std::fs::File, invalid: &mut [bool; 64]) {
+///     disk_geometry(handle, invalid);
+/// }
+/// ```
+///
+/// ```
+/// use kakehashi_core::platform::sys::disk_geometry;
+/// fn geometry(handle: &std::fs::File) -> windows::core::Result<u64> {
+///     Ok(disk_geometry(handle)?.DiskSize as u64)
+/// }
+/// ```
+pub fn disk_geometry(handle: &impl AsHandle) -> windows::core::Result<DISK_GEOMETRY_EX> {
+    let mut geometry = DISK_GEOMETRY_EX::default();
+    // SAFETY: this IOCTL writes DISK_GEOMETRY_EX, whose integer/newtype
+    // fields accept every bit pattern. The owned output lives through the call.
+    unsafe {
+        ioctl_bytes(
+            handle,
+            IOCTL_DISK_GET_DRIVE_GEOMETRY_EX,
+            None,
+            (&mut geometry as *mut _ as *mut c_void, size_of_val(&geometry) as u32),
+        )?;
+    }
+    Ok(geometry)
 }
 
-fn ioctl_bytes(
-    handle: &OwnedHandle,
+/// Read the disk length with the API's fixed output representation.
+pub fn disk_length(handle: &impl AsHandle) -> windows::core::Result<u64> {
+    let mut length = GET_LENGTH_INFORMATION::default();
+    // SAFETY: GET_LENGTH_INFORMATION contains only the integer this IOCTL writes.
+    unsafe {
+        ioctl_bytes(
+            handle,
+            IOCTL_DISK_GET_LENGTH_INFO,
+            None,
+            (&mut length as *mut _ as *mut c_void, size_of_val(&length) as u32),
+        )?;
+    }
+    Ok(length.Length as u64)
+}
+
+fn is_writable(handle: &impl AsHandle) -> windows::core::Result<()> {
+    // SAFETY: this fixed read-only query takes no buffers.
+    unsafe { ioctl_bytes(handle, IOCTL_DISK_IS_WRITABLE, None, (std::ptr::null_mut(), 0)) }.map(|_| ())
+}
+
+/// # Safety
+/// Each pointer must outlive the synchronous call, with the size, alignment
+/// and representation required by this specific control. The output must
+/// accept every bit pattern the control can write.
+unsafe fn ioctl_bytes(
+    handle: &impl AsHandle,
     code: u32,
     input: Option<(*const c_void, u32)>,
     out: (*mut c_void, u32),
@@ -95,10 +146,6 @@ fn ioctl_bytes(
         )?;
     }
     Ok(returned)
-}
-
-pub fn no_output(handle: &OwnedHandle, code: u32) -> windows::core::Result<()> {
-    ioctl_bytes(handle, code, None, (std::ptr::null_mut(), 0)).map(|_| ())
 }
 
 /// An ANSI string at `offset` in a descriptor, or empty.
@@ -171,12 +218,15 @@ fn disks_of(volume: &str) -> Vec<u32> {
     };
     // Room for a few extents beyond the one the struct declares.
     let mut buf = [0u64; 64];
-    let Ok(_) = ioctl_bytes(
-        &handle,
-        IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS,
-        None,
-        (buf.as_mut_ptr() as *mut c_void, size_of_val(&buf) as u32),
-    ) else {
+    // SAFETY: the aligned integer buffer can hold the variable-length extents output.
+    let Ok(_) = (unsafe {
+        ioctl_bytes(
+            &handle,
+            IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS,
+            None,
+            (buf.as_mut_ptr() as *mut c_void, size_of_val(&buf) as u32),
+        )
+    }) else {
         return Vec::new();
     };
     // SAFETY: the buffer is aligned for and large enough to hold the header
@@ -205,23 +255,23 @@ fn describe(number: u32, volumes: &HashMap<u32, Vec<(String, Vec<String>)>>, roo
         AdditionalParameters: [0],
     };
     let mut buf = [0u64; 128];
-    ioctl_bytes(
-        &handle,
-        IOCTL_STORAGE_QUERY_PROPERTY,
-        Some((&query as *const _ as *const c_void, size_of_val(&query) as u32)),
-        (buf.as_mut_ptr() as *mut c_void, size_of_val(&buf) as u32),
-    )
+    // SAFETY: query is the required input; the aligned integer buffer accepts
+    // all bytes returned by the storage descriptor query. Both outlive the call.
+    unsafe {
+        ioctl_bytes(
+            &handle,
+            IOCTL_STORAGE_QUERY_PROPERTY,
+            Some((&query as *const _ as *const c_void, size_of_val(&query) as u32)),
+            (buf.as_mut_ptr() as *mut c_void, size_of_val(&buf) as u32),
+        )
+    }
     .ok()?;
     // SAFETY: the buffer is aligned for and at least as large as the header.
     let descriptor = unsafe { &*(buf.as_ptr() as *const STORAGE_DEVICE_DESCRIPTOR) };
     // SAFETY: plain bytes of the same buffer.
     let bytes = unsafe { std::slice::from_raw_parts(buf.as_ptr() as *const u8, size_of_val(&buf)) };
-    let mut geometry = DISK_GEOMETRY_EX::default();
-    let size = ioctl(&handle, IOCTL_DISK_GET_DRIVE_GEOMETRY_EX, None::<&()>, &mut geometry)
-        .map(|_| geometry.DiskSize as u64)
-        .unwrap_or(0);
-    let read_only =
-        matches!(no_output(&handle, IOCTL_DISK_IS_WRITABLE), Err(e) if e.code() == ERROR_WRITE_PROTECT.to_hresult());
+    let size = disk_geometry(&handle).map(|geometry| geometry.DiskSize as u64).unwrap_or(0);
+    let read_only = matches!(is_writable(&handle), Err(e) if e.code() == ERROR_WRITE_PROTECT.to_hresult());
     let bus = descriptor.BusType;
     let usb_or_removable = matches!(bus, BusTypeUsb | BusTypeSd | BusTypeMmc) || descriptor.RemovableMedia;
     let mounts: Vec<String> = volumes.get(&number).into_iter().flatten().flat_map(|(_, p)| p.clone()).collect();
@@ -258,4 +308,22 @@ pub(crate) fn image_drive(image: &Path) -> Option<String> {
     // SAFETY: as above.
     unsafe { GetVolumeNameForVolumeMountPointW(PCWSTR(root.as_ptr()), &mut volume) }.ok()?;
     disks_of(&from_wide(&volume)).first().map(|n| format!("PhysicalDrive{n}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn disk_queries_reject_an_ordinary_file_without_changing_it() {
+        use std::io::{Read, Seek, Write};
+        let mut file = tempfile::tempfile().unwrap();
+        file.write_all(b"an ordinary file").unwrap();
+        assert!(disk_geometry(&file).is_err());
+        assert!(disk_length(&file).is_err());
+        file.rewind().unwrap();
+        let mut bytes = Vec::new();
+        file.read_to_end(&mut bytes).unwrap();
+        assert_eq!(bytes, b"an ordinary file");
+    }
 }

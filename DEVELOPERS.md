@@ -2784,7 +2784,11 @@ component checks, not browser or ISO qualification.
 The same phase runs `aizome-sys`'s disks client against a fake UDisks2 on such
 a bus (`crates/aizome-sys/tests/disks.rs`), Hako's `repro_hako_*` regressions,
 and Tansu's unit and integration tests, whose `udisks` tests run plans through
-that client to a fake UDisks2 of their own. A bus test passes where
+that client to a fake UDisks2 of their own. Hako's undo tests also restore
+same-named Trash items while replacing a newer file: the new occupant of a
+freed Trash name must not remain in the completed undo step. `Trashed` keeps
+its info file's private identity and resolves only that receipt; a partially
+restored folder keeps its unchanged receipt for retry. A bus test passes where
 `dbus-daemon` is missing, by skipping, so the phase requires it first. None of
 these touches a real block device.
 
@@ -4231,9 +4235,24 @@ I/O Registry's location ID, Windows not at all) and rejects one the
 rules now exclude, unmounts it, opens it exclusively, checks again, writes in
 sector-padded chunks, zeroes the last MiB, syncs, drops the page cache where
 it can, reads everything back against the image, checks the zeroed tail and
-ejects. Windows locks and dismounts each volume on the disk, deletes the drive
-layout, and writes with unbuffered, write-through I/O from sector-aligned
-buffers. On Linux the helper finds `lsblk`, `umount` and `udisksctl` through
+ejects. The helper's owned stages are `Opened`, `Ready` and `Writing`.
+`Opened` hides the handle until `check` binds a fresh drive reading to the
+opened drive using `aizome-typestate::Reviewed`/`Confirmed`, checks image
+capacity with checked arithmetic, and observes cancellation. `Ready::begin`
+marks the drive touched before its first destructive action; a failure in
+that action still reports possible damage.
+
+Windows opening only locks and dismounts the volumes and queries the disk.
+Layout deletion happens in `Ready::begin`, after the final checks, followed
+by unbuffered, write-through writes from sector-aligned buffers. The public
+Windows interface exposes only fixed geometry/length output types, with
+bufferless destructive controls confined to a private enum in the helper's
+write crate. Neither accepts an arbitrary IOCTL code or Rust output buffer.
+Compile-fail doctests enforce these API boundaries. Temporary-file
+regressions cover cancellation after opening, identity/size/capacity failures,
+and a first destructive action that changes the file before returning an
+error. They do not certify writing a physical Windows disk. On Linux the
+helper finds `lsblk`, `umount` and `udisksctl` through
 `KAKEHASHI_TOOL_PATH`, set when the Nix package is built, because `pkexec`
 resets `PATH`.
 

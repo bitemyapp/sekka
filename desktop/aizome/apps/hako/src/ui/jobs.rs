@@ -261,10 +261,10 @@ pub fn run(work: Work, trash: &Trash, env: &mut Env) -> Done {
             let (report, items) = transfer::trash_items(&paths, trash, env);
             let label = format!(
                 "Move to Trash of {}",
-                items_label(&items.iter().map(|t| t.original.clone()).collect::<Vec<_>>())
+                items_label(&items.iter().map(|t| t.original().to_path_buf()).collect::<Vec<_>>())
             );
             let mut changed = parents(&paths);
-            changed.extend(items.iter().filter_map(|t| t.file.parent().map(PathBuf::from)));
+            changed.extend(items.iter().filter_map(|t| t.file().parent().map(PathBuf::from)));
             Done { report, step: Some(Step { record: Record::Trash { items }, label }), inverted: None, changed }
         }
         Work::Restore { entries } => {

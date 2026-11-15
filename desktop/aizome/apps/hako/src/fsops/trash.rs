@@ -69,15 +69,54 @@ impl Can {
     }
 }
 
-/// An item just trashed.
+/// An item just trashed, bound to the info file that claimed its name.
+/// Its paths are read-only: a record cannot be retargeted to another item.
+///
+/// ```compile_fail,E0616
+/// use hako::fsops::trash::Trashed;
+/// fn retarget(item: &mut Trashed) {
+///     item.file = "/another/Trash/files/item".into();
+/// }
+/// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Trashed {
     /// Where it was.
-    pub original: PathBuf,
+    original: PathBuf,
     /// Where it is now, in a can's `files/`.
-    pub file: PathBuf,
+    file: PathBuf,
     /// Its `.trashinfo`.
-    pub info: PathBuf,
+    info: PathBuf,
+    receipt: InfoId,
+}
+
+impl Trashed {
+    pub fn original(&self) -> &Path {
+        &self.original
+    }
+
+    pub fn file(&self) -> &Path {
+        &self.file
+    }
+
+    pub fn info(&self) -> &Path {
+        &self.info
+    }
+
+    /// This item, if its own receipt is still at the recorded name. A
+    /// restoration can free a name which a later replacement immediately
+    /// reuses; that replacement must never become this record's undo target.
+    /// Check again after reading the entry, and keep partial folders whose
+    /// original receipt remains. Filesystem changes still require a runtime
+    /// check; the private receipt prevents constructing one from a path alone.
+    pub fn entry(&self, trash: &Trash) -> Option<Entry> {
+        let ours = || fs::symlink_metadata(&self.info).is_ok_and(|m| InfoId::of(&m) == self.receipt);
+        if !ours() {
+            return None;
+        }
+        trash
+            .entry_for(&self.file)
+            .filter(|e| e.info.as_ref() == Some(&self.info) && e.original.as_ref() == Some(&self.original) && ours())
+    }
 }
 
 /// An item in a trash can.
@@ -379,7 +418,7 @@ impl Trash {
             }
             let Some(claim) = Claim::make(&can, &name, &body)? else { continue };
             match claim.fill(path) {
-                Ok((file, info_path)) => {
+                Ok((file, info_path, receipt)) => {
                     let _ = sys::sync_dir(&files);
                     let _ = sys::sync_dir(&info);
                     if meta.is_dir()
@@ -388,7 +427,7 @@ impl Trash {
                         let mtime = fs::metadata(&info_path).map(|m| m.mtime()).unwrap_or(0);
                         let _ = edit_sizes(&can, |lines| lines.push(format!("{bytes} {mtime} {}", encode_name(&name))));
                     }
-                    return Ok(Trashed { original, file, info: info_path });
+                    return Ok(Trashed { original, file, info: info_path, receipt });
                 }
                 Err(e) if e.kind() == io::ErrorKind::AlreadyExists => continue,
                 Err(e) => return Err(e),
@@ -489,6 +528,7 @@ impl Trash {
 struct Claim {
     info: Option<PathBuf>,
     file: PathBuf,
+    handle: fs::File,
 }
 
 impl Claim {
@@ -500,21 +540,24 @@ impl Claim {
             return Ok(None);
         }
         let info = can.info().join(info_name(name));
-        let mut f = match OpenOptions::new().write(true).create_new(true).mode_private().open(&info) {
+        let f = match OpenOptions::new().write(true).create_new(true).mode_private().open(&info) {
             Ok(f) => f,
             Err(e) if e.kind() == io::ErrorKind::AlreadyExists => return Ok(None),
             Err(e) => return Err(e),
         };
-        let claim = Claim { info: Some(info), file };
-        f.write_all(body.as_bytes()).and_then(|()| f.sync_all())?;
+        let mut claim = Claim { info: Some(info), file, handle: f };
+        claim.handle.write_all(body.as_bytes()).and_then(|()| claim.handle.sync_all())?;
         Ok(Some(claim))
     }
 
     /// Rename `item` in under the claimed name: its file and info.
-    fn fill(mut self, item: &Path) -> io::Result<(PathBuf, PathBuf)> {
+    fn fill(mut self, item: &Path) -> io::Result<(PathBuf, PathBuf, InfoId)> {
+        // Read through the owned handle before moving the item: failure
+        // leaves the source in place and Drop removes the unfilled claim.
+        let receipt = InfoId::of(&self.handle.metadata()?);
         sys::rename_noreplace(item, &self.file)?;
         let info = self.info.take().expect("a claim is filled once");
-        Ok((std::mem::take(&mut self.file), info))
+        Ok((std::mem::take(&mut self.file), info, receipt))
     }
 }
 

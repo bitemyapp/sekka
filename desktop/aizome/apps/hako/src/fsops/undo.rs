@@ -561,15 +561,16 @@ fn carry_out(record: &Record, trash: &Trash, env: &mut Env) -> (Report, Record, 
             let mut report = Report::default();
             let mut entries = Vec::new();
             for t in items {
-                match trash.entry_for(&t.file) {
+                match t.entry(trash) {
                     Some(e) => entries.push(e),
-                    None => report.failed.push((t.original.clone(), "it isn't in the Trash any more".into())),
+                    None => report.failed.push((t.original().to_path_buf(), "it isn't in the Trash any more".into())),
                 }
             }
             report.absorb(transfer::restore(&entries, trash, env));
             let paths = report.done.iter().map(|(_, to)| to.clone()).collect();
-            // Skipped, stopped, or put back in part: still in the Trash.
-            let left = items.iter().filter(|t| trash.entry_for(&t.file).is_some()).cloned().collect();
+            // Only the original receipt can keep a step. A later replacement
+            // may already have reused a name freed by this very restore.
+            let left = items.iter().filter(|t| t.entry(trash).is_some()).cloned().collect();
             (report, Record::Made { paths }, Record::Trash { items: left })
         }
     }
@@ -689,6 +690,100 @@ mod tests {
         assert!(r.is_clean(), "{r:?}");
         assert_eq!(read(&made), "c");
         assert_eq!(h.begin_undo().unwrap().record, Record::Made { paths: vec![made] });
+    }
+
+    #[test]
+    fn restoring_same_named_items_does_not_keep_a_displaced_items_receipt() {
+        let t = TempDir::new("undo-reused-trash-name");
+        let tr = trash(&t);
+        let a = t.file("one/a.txt", "original a");
+        let b = t.file("two/a.txt", "original b");
+        let items = vec![tr.trash(&a).unwrap(), tr.trash(&b).unwrap()];
+        let freed = items[0].file().to_path_buf();
+        t.file("two/a.txt", "newer b");
+        let mut h = History::default();
+        h.push(step(Record::Trash { items }, "Trash two files"));
+        let control = Control::new();
+        let mut asker = Always(Resolution::Replace, ErrorChoice::Cancel);
+        let mut reporter = ();
+        let mut env = Env::new(&control, &mut asker, &mut reporter);
+        let (report, result) = invert(h.begin_undo().unwrap(), &tr, &mut env);
+        assert!(report.is_clean(), "{report:?}");
+        assert_eq!(report.done.len(), 2);
+        h.finished(result, |_| ());
+        assert_eq!(read(&a), "original a");
+        assert_eq!(read(&b), "original b");
+        assert_eq!(read(&freed), "newer b", "the displaced item reused the first item's Trash name");
+        assert_eq!((h.undo_label(), h.redo_label()), (None, Some("Trash two files")));
+        assert!(h.begin_undo().is_none(), "neither completed item may remain in Undo");
+        assert!(redo(&mut h, &tr).is_clean());
+        assert!(undo(&mut h, &tr).is_clean());
+        assert_eq!(read(&a), "original a");
+        assert_eq!(read(&b), "original b");
+        assert_eq!(read(&freed), "newer b", "redo and undo must leave the unrelated item alone");
+    }
+
+    #[test]
+    fn a_partial_trash_restore_keeps_only_its_own_receipt_for_retry() {
+        struct MergeThenSkip;
+        impl super::super::Asker for MergeThenSkip {
+            fn conflict(&mut self, conflict: &super::super::Conflict) -> Resolution {
+                if conflict.can_merge() { Resolution::Merge } else { Resolution::Skip }
+            }
+            fn error(&mut self, _: &super::super::Failure) -> ErrorChoice {
+                ErrorChoice::Cancel
+            }
+        }
+        let t = TempDir::new("undo-partial-trash");
+        let tr = trash(&t);
+        let folder = t.dir("home/folder");
+        t.file("home/folder/a", "original a");
+        t.file("home/folder/b", "original b");
+        let trashed = tr.trash(&folder).unwrap();
+        t.file("home/folder/b", "newer b");
+        let mut h = History::default();
+        h.push(step(Record::Trash { items: vec![trashed.clone()] }, "Trash folder"));
+        let control = Control::new();
+        let mut asker = MergeThenSkip;
+        let mut reporter = ();
+        let mut env = Env::new(&control, &mut asker, &mut reporter);
+        let (report, result) = invert(h.begin_undo().unwrap(), &tr, &mut env);
+        assert_eq!(report.done.len(), 1);
+        assert!(!report.problems.is_empty());
+        h.finished(result, |_| ());
+        assert_eq!(h.undo_label(), Some("Trash folder"));
+        assert!(trashed.entry(&tr).is_some());
+        assert_eq!(read(folder.join("a")), "original a");
+        assert_eq!(read(trashed.file().join("b")), "original b");
+        std::fs::remove_file(folder.join("b")).unwrap();
+        let (report, result) = invert(h.begin_undo().unwrap(), &tr, &mut env);
+        assert!(report.is_clean(), "{report:?}");
+        h.finished(result, |_| ());
+        assert_eq!(h.undo_label(), None);
+        assert_eq!(read(folder.join("b")), "original b");
+    }
+
+    #[test]
+    fn a_reused_trash_name_before_undo_is_not_the_recorded_item() {
+        let t = TempDir::new("undo-replaced-receipt");
+        let tr = trash(&t);
+        let file = t.file("home/a", "original");
+        let old = tr.trash(&file).unwrap();
+        // Another file manager restores it, then trashes another item under
+        // exactly the same original and Trash paths.
+        let entry = old.entry(&tr).unwrap();
+        std::fs::rename(old.file(), &file).unwrap();
+        tr.forget(entry.gone().unwrap());
+        t.file("home/a", "replacement");
+        let new = tr.trash(&file).unwrap();
+        assert_eq!(old.file(), new.file());
+        let mut h = History::default();
+        h.push(step(Record::Trash { items: vec![old] }, "Trash"));
+        let report = undo(&mut h, &tr);
+        assert_eq!(report.failed.len(), 1);
+        assert_eq!(h.undo_label(), None);
+        assert!(!file.exists());
+        assert_eq!(read(new.file()), "replacement");
     }
 
     #[test]

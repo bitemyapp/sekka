@@ -44,6 +44,39 @@ Line numbers are for the commit that adds this file, on main at `d866289c`.
   With a record left it still refuses, and so do Clean Up with an age and
   deleting generations.
 
+### Follow-up fixes, 2026-11-15
+
+- **Hako Undo could retain another item's Trash name.** `Trashed` now owns
+  a private receipt identity captured through the claimed info file's open
+  handle before the item moves. Its paths are read-only. Undo resolves both
+  its initial targets and its remaining items through that receipt, so a
+  replacement reusing the name does not become the old undo target. Tests
+  cover reuse during restore, reuse before Undo, redo, and retrying a partial
+  folder restore. Identity still has to be checked against the filesystem at
+  runtime; the private fields prevent forging or retargeting the receipt.
+- **Windows could erase the layout while still reporting untouched.** Opening
+  now only locks, dismounts and queries the device. `Opened::check` binds a fresh
+  reading to that opened drive through `Reviewed`/`Confirmed`, checks capacity
+  and cancellation, and returns `Ready`. Only `Ready::begin` exposes `Writing`;
+  it records possible damage before the layout-deletion IOCTL, including when
+  that call fails. Compile-fail tests reject bypassing the checks or omitting
+  the damage flag. Temporary-file tests exercise rejection and write failures.
+- **The exported generic IOCTL wrapper accepted invalid Rust output types.**
+  It has been removed. Geometry and length queries own their fixed Windows
+  output types, and bufferless destructive controls accept a private enum in
+  the helper's write crate. The remaining raw buffer helper is private and
+  unsafe, with a safety argument at each call. Windows compile-fail tests
+  reject the old generic/control imports and arbitrary output buffers.
+
+The follow-up checks ran on `wx-workstation`: Hako's 136 unit/integration
+tests and 28 doctests; Kakehashi's package, elevation and disposable-VM checks;
+Windows temporary-file regressions and 28 doctests under Wine; and Clippy
+for the Linux, Windows and macOS Kakehashi core/write/helper targets (macOS
+was cross-checked, not executed). Compile-fail error codes were checked.
+Hako's Clippy pass excludes `deprecated`: the pinned nightly warns about
+the existing `AtomicUsize::fetch_update` in `aizome-kit`. These are component
+checks, not new ISO or physical-disk qualification.
+
 ## Open findings
 
 Most severe first. "Confirmed" means the path was traced in the code;
@@ -109,37 +142,9 @@ at `job.rs:107` holds only for `Job::handle`. The window doesn't do this.
 Make `exited` take an `Exit`, or make these methods and `with_typed`
 crate-private.
 
-### 5. On Windows, Kakehashi can report "Not written" for a stick it wiped
-
-Confirmed, and older than this branch, but the window now trusts the flag.
-`open()` sends `IOCTL_DISK_DELETE_DRIVE_LAYOUT`
-(`apps/kakehashi/write/src/platform/windows.rs:63`) before the size check,
-the second `still_there`, the fit check and the Stop check. `touched` is set
-only after them (`apps/kakehashi/write/src/lib.rs:187`). Pressing Stop while
-`open` waits on volume locks leaves a stick with no partition table and no
-warning. The deletion also comes before the check after opening, so a stick
-swapped just before `open` loses its layout. Set `touched` before `open` on
-Windows, or delete the layout after the second check.
-
-### 6. A Hako undo can keep a step that points at another item
-
-Confirmed. After restoring, undoing Move to Trash finds what's left in the
-Trash by path (`desktop/aizome/apps/hako/src/fsops/undo.rs:572`). One Move to
-Trash takes `/d1/a` (as `files/a`) and `/d2/a` (as `files/a 2`), and a new
-`/d2/a` appears. ⌘Z restores the first and forgets its info. The second's
-conflict is answered Replace, so the new `/d2/a` goes to the Trash, under the
-name just freed. The step is then kept as still holding the first item,
-which is now the displaced one. The next ⌘Z puts back an item the person
-never trashed, and Skip or Cancel leaves the step at the top of Undo. Find
-the remaining items by the entries `restore` reported, not by path.
-
 ## Lower severity
 
 **Kakehashi**
-- `platform::sys::ioctl` is a public safe function that writes raw bytes into
-  any `O` (`apps/kakehashi/core/src/platform/windows.rs:68`, re-exported at
-  `platform/mod.rs:44`). It was private before. Make it `unsafe`, or bound
-  `O` to plain data.
 - On Linux and Windows, the image file isn't checked again until after the
   drive is erased: `confirm` (`core/src/choice.rs:342`) compares the path and
   stored checksum, not the file. `Plan::with_image` (`core/src/write.rs:94`)
