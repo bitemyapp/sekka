@@ -820,11 +820,17 @@ impl Genkan {
 
     /// The person confirmed and the helper hasn't finished: the window stays
     /// open.
+    #[deny(clippy::wildcard_enum_match_arm)]
     pub fn installing(&self) -> bool {
         match self.flow.stored() {
             FlowState::Queued(_) | FlowState::Installing(_) => true,
             FlowState::Failed(failure) => failure.helper_running(),
-            _ => false,
+            FlowState::Editing(())
+            | FlowState::Checking(())
+            | FlowState::Preparing(_)
+            | FlowState::Ready(_)
+            | FlowState::Unprepared(_)
+            | FlowState::Installed(()) => false,
         }
     }
 

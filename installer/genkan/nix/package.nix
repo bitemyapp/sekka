@@ -75,6 +75,7 @@ let
       # compile_fail error codes checked.
       preCheck = ''
         source ${../../../nix/checked-doctests.sh}
+        source ${../../../nix/checked-state-matches.sh}
         # Without its configuration the ban names nothing, and passes.
         if [ ! -f clippy.toml ]; then
           echo "rust/clippy.toml isn't in the helper's source, so the program ban would check nothing"
@@ -164,7 +165,10 @@ pkgs.rustPlatform.buildRustPackage (
     src = source;
     sourceRoot = "genkan-source/installer/genkan/ui";
     cargoLock.lockFile = ../ui/Cargo.lock;
-    nativeBuildInputs = [ pkgs.pkg-config ];
+    nativeBuildInputs = [
+      pkgs.pkg-config
+      pkgs.clippy
+    ];
     buildInputs = [
       pkgs.glib
       pkgs.networkmanager
@@ -178,6 +182,8 @@ pkgs.rustPlatform.buildRustPackage (
     doCheck = true;
     preCheck = ''
       source ${../../../nix/checked-doctests.sh}
+      source ${../../../nix/checked-state-matches.sh}
+      cargo clippy --offline --locked --all-targets -- -A clippy::all
       export AIZOME_FONT_DIR=${fonts}
       export TZDIR=${pkgs.tzdata}/share/zoneinfo
     '';

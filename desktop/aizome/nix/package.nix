@@ -50,6 +50,7 @@
   systemd,
   util-linux,
   cmake,
+  clippy,
   shaderc,
   openblas,
   vulkan-headers,
@@ -158,6 +159,16 @@ let
     "aizome-typestate"
   ];
 
+  # Prime Clippy's dependency metadata in the dependency build as well:
+  # the package must still compile only first-party code after restoring it.
+  # Lint production libraries/binaries. Clippy emits lib<test>.rmeta for
+  # integration targets, which are not dependencies and would confuse the
+  # cache guard; the normal test commands below still run those targets.
+  stateMachineLint = ''
+    ${cargo}/bin/cargo clippy --offline --locked --target ${target} --release --lib --bins \
+      -p aizome-hako -p aizome-tansu -p aizome-sys -- -A clippy::all
+  '';
+
   # Everything the build's commands see, the same for the dependency build
   # and the package's: any difference would make Cargo compile the
   # dependencies again.
@@ -169,6 +180,7 @@ let
 
     nativeBuildInputs = [
       pkg-config
+      clippy
       makeWrapper
       ncurses
       jq
@@ -266,6 +278,7 @@ let
       checkPhase = ''
         runHook preCheck
         ${testEnvironment}
+        ${stateMachineLint}
         ${test} --no-run -p aizome-kit --lib
         ${test} --no-run -p aizome-sys -p aizome-shell -p aizome-hako --lib
         ${cargo}/bin/cargo test --offline --target ${target} --release --no-run -p aizome-comp-process-tests --lib
@@ -291,6 +304,8 @@ rustPlatform.buildRustPackage (
     checkPhase = ''
       runHook preCheck
       ${testEnvironment}
+      source ${../../../nix/checked-state-matches.sh}
+      ${stateMachineLint}
       # The compositor this package installs, as built above: its process
       # tests need only the IPC client, so nothing rebuilds the core with
       # aizome-comp's test dependencies. Exercise the socket fixture with a

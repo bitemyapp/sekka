@@ -51,7 +51,7 @@ impl Filesystem {
         }
     }
     /// Formats a device on the confirmed disk, with the chosen identity. It
-    /// takes a [`Device`], which only the confirmed disk yields, so it can't
+    /// takes a [`Device`], which only an erase-authorized, locked disk yields, so it can't
     /// format a partition named from a path passed beside the proof (GEN-03):
     ///
     /// ```compile_fail,E0308
@@ -62,8 +62,8 @@ impl Filesystem {
     /// ```
     ///
     /// ```
-    /// use calamares_nixos::{Filesystem, disk::Confirmed};
-    /// fn format(disk: &Confirmed, uuid: &str) -> anyhow::Result<()> {
+    /// use calamares_nixos::{Filesystem, disk::Locked};
+    /// fn format(disk: &Locked, uuid: &str) -> anyhow::Result<()> {
     ///     Filesystem::Ext4.format(&disk.partition(2), uuid)
     /// }
     /// ```

@@ -53,10 +53,10 @@
 #![forbid(unsafe_code)]
 use std::io::Write;
 
-mod transaction;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::atomic::{AtomicBool, Ordering};
+use yukimi_helper::transaction::{self, Action};
 
 use yukimi_config::packages;
 use yukimi_config::sekka;
@@ -1087,11 +1087,7 @@ fn main() -> ExitCode {
         }
         return if success { ExitCode::SUCCESS } else { ExitCode::FAILURE };
     }
-    let result = if args.first().is_some_and(|s| matches!(s.as_str(), "change" | "rollback" | "clean" | "delete")) {
-        transaction::client(&args)
-    } else {
-        Err(Failure("Usage: yukimi-helper change|rollback|clean|delete … (or estimate …)".into()))
-    };
+    let result = Action::parse(&args).and_then(transaction::client);
     let json = match result {
         Ok(json) => json,
         Err(Failure(message)) => {
@@ -1159,7 +1155,7 @@ fn check_activation(args: &[String]) -> Result<()> {
 }
 
 fn worker(args: &[String]) -> Result<String> {
-    let (command, rest) = args.split_first().ok_or_else(|| Failure("Missing operation".into()))?;
+    let action = Action::parse(args)?;
     // CLI and GUI must not edit the configuration or activate generations
     // concurrently: the operation holds the lock until it ends.
     let mut operation = Operation::begin()?;
@@ -1169,12 +1165,11 @@ fn worker(args: &[String]) -> Result<String> {
     if let Err(Failure(message)) = cleaning::recover(&mut operation) {
         report(0, &format!("Finishing an interrupted clean-up failed: {message}"));
     }
-    match command.as_str() {
-        "change" => change(&mut operation, rest),
-        "rollback" => rollback(&mut operation, rest),
-        "clean" => clean(&mut operation, rest),
-        "delete" => delete(&mut operation, rest),
-        _ => Err(Failure("Usage: yukimi-helper change|rollback|clean|delete … (or estimate …)".into())),
+    match action {
+        Action::Change(rest) => change(&mut operation, rest),
+        Action::Rollback(rest) => rollback(&mut operation, rest),
+        Action::Clean(rest) => clean(&mut operation, rest),
+        Action::Delete(rest) => delete(&mut operation, rest),
     }
 }
 

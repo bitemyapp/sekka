@@ -60,6 +60,7 @@ rec {
     cargoLock.lockFile = source + "/Cargo.lock";
     nativeBuildInputs = [
       pkgs.pkg-config
+      pkgs.clippy
       pkgs.makeWrapper
     ];
     buildInputs = libraries;
@@ -68,6 +69,8 @@ rec {
     # compile_fail error codes checked.
     preCheck = ''
       source ${./checked-doctests.sh}
+      source ${./checked-state-matches.sh}
+      cargo clippy --offline --locked --all-targets -p kakehashi-core -- -A clippy::all
     '';
     # Sekka's app icon, from the brand's generated logos.
     postInstall = ''

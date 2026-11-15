@@ -276,28 +276,6 @@ impl Reviewed {
         self.0.target()
     }
 
-    /// Locks the reviewed disk for its first writes: opens it by the reviewed
-    /// path, takes the partition-table lock, reads it again, and checks that
-    /// the locked node is the confirmed disk. Only this makes the [`Locked`]
-    /// disk the writes take, so they can't act on a proof made earlier.
-    pub fn lock(&self) -> Result<Locked> {
-        let device = fs::OpenOptions::new()
-            .read(true)
-            .write(true)
-            .open(&self.identity().path)?;
-        ensure!(
-            crate::sys::try_lock_exclusive(&device),
-            "Disk is locked by another installer"
-        );
-        let disk = self.revalidate()?;
-        let rdev = device_number(&device.metadata()?);
-        ensure!(
-            format!("{}:{}", libc::major(rdev), libc::minor(rdev)) == disk.identity().major_minor,
-            "The locked device is not the confirmed disk"
-        );
-        Ok(Locked { device, disk })
-    }
-
     /// Reads the reviewed disk again and checks it's the same disk and
     /// still usable.
     pub fn revalidate(&self) -> Result<Confirmed> {
@@ -339,9 +317,16 @@ impl Reviewed {
 }
 
 /// Proof that the disk is the one the person reviewed, read again just now.
-/// Only [`Reviewed::confirm`] makes one, and the destructive steps take it
-/// (or a [`Device`] only it yields): they act on the disk it carries, never
-/// on a path passed beside it.
+/// Only [`Reviewed::confirm`] makes one. This proves identity and availability,
+/// not permission to erase. Only [`Authorized::lock`] permits writes.
+///
+/// ```compile_fail,E0599
+/// use calamares_nixos::{Filesystem, InstallPlan, disk::Reviewed};
+/// fn bypass(plan: &InstallPlan, uuid: &str) -> anyhow::Result<()> {
+///     let disk = Reviewed::of(plan).revalidate()?;
+///     Filesystem::Ext4.format(&disk.partition(2), uuid)
+/// }
+/// ```
 #[derive(Debug)]
 pub struct Confirmed(aizome_typestate::Confirmed<Reading, DiskReview>);
 
@@ -390,16 +375,57 @@ impl Confirmed {
             .map_err(|_| anyhow::anyhow!("Disk identity changed during installation"))?;
         Self::usable(now)
     }
+}
 
-    /// Partition `index` of this disk.
-    pub fn partition(&self, index: u8) -> Device {
-        Device(partition(self.path(), index))
+/// Permission to erase the disk named by a confirmed installation. A live
+/// identity check alone is read-only; it cannot create this capability.
+///
+/// ```compile_fail,E0599
+/// use calamares_nixos::{InstallPlan, disk::Reviewed};
+/// fn erase(plan: &InstallPlan) -> anyhow::Result<()> {
+///     let _ = Reviewed::of(plan).lock()?;
+///     Ok(())
+/// }
+/// ```
+///
+/// ```compile_fail,E0308
+/// use calamares_nixos::{InstallPlan, disk::Authorized};
+/// fn erase(plan: &InstallPlan) { let _ = Authorized::of(plan); }
+/// ```
+#[derive(Debug)]
+pub struct Authorized(Reviewed);
+
+impl Authorized {
+    pub fn of(install: &crate::ConfirmedInstall) -> Self {
+        Self(Reviewed::of(install.plan()))
+    }
+
+    /// Locks the reviewed disk for its first writes: opens it by the reviewed
+    /// path, takes the partition-table lock, reads it again, and checks that
+    /// the locked node is the confirmed disk. Only this makes the [`Locked`]
+    /// disk the writes take, so they can't act on a proof made earlier.
+    pub fn lock(self) -> Result<Locked> {
+        let device = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&self.0.identity().path)?;
+        ensure!(
+            crate::sys::try_lock_exclusive(&device),
+            "Disk is locked by another installer"
+        );
+        let disk = self.0.revalidate()?;
+        let rdev = device_number(&device.metadata()?);
+        ensure!(
+            format!("{}:{}", libc::major(rdev), libc::minor(rdev)) == disk.identity().major_minor,
+            "The locked device is not the confirmed disk"
+        );
+        Ok(Locked { device, disk })
     }
 }
 
 /// The confirmed disk, opened and holding the partition-table lock, read
 /// again after the lock was taken: what the first writes take. Only
-/// [`Reviewed::lock`] makes one.
+/// [`Authorized::lock`] makes one after erase confirmation.
 #[derive(Debug)]
 pub struct Locked {
     device: fs::File,
@@ -407,6 +433,11 @@ pub struct Locked {
 }
 
 impl Locked {
+    /// Partition `index` of this disk.
+    pub fn partition(&self, index: u8) -> Device {
+        Device(partition(self.disk.path(), index))
+    }
+
     pub fn disk(&self) -> &Confirmed {
         &self.disk
     }
@@ -429,7 +460,7 @@ impl Locked {
 }
 
 /// A block device on the confirmed disk: one of its partitions, or an
-/// encrypted mapping over one. Only [`Confirmed::partition`] makes one, so
+/// encrypted mapping over one. Only [`Locked::partition`] makes one, so
 /// formatting can't be pointed at a device named from a path passed beside
 /// the proof.
 #[derive(Clone, Debug)]
@@ -474,9 +505,9 @@ impl Layout {
     /// ```
     ///
     /// ```
-    /// use calamares_nixos::{Filesystem, Firmware, InstallPlan, disk::{Layout, Reviewed}};
-    /// fn erase(plan: &InstallPlan, layout: &Layout) -> anyhow::Result<()> {
-    ///     layout.write(&Reviewed::of(plan).lock()?, Firmware::Uefi, Filesystem::Ext4)
+    /// use calamares_nixos::{Filesystem, Firmware, ConfirmedInstall, disk::{Layout, Authorized}};
+    /// fn erase(install: &ConfirmedInstall, layout: &Layout) -> anyhow::Result<()> {
+    ///     layout.write(&Authorized::of(install).lock()?, Firmware::Uefi, Filesystem::Ext4)
     /// }
     /// ```
     pub fn write(
@@ -726,6 +757,24 @@ pub(crate) fn verify_layout(disk: &Identity, layout: &Layout) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn erase_authority_names_only_the_phrase_confirmed_disk() {
+        let (_dir, settings, raw) = crate::plan_tests::fixture();
+        let plan = raw.parse(&settings).unwrap();
+        let path = plan.disk().path.clone();
+        assert!(plan.confirm("ERASE /dev/some-other-disk").is_err());
+        let (_dir, settings, raw) = crate::plan_tests::fixture();
+        let confirmed = raw
+            .parse(&settings)
+            .unwrap()
+            .confirm(&format!("ERASE {path}"))
+            .unwrap();
+        let authorized = Authorized::of(&confirmed);
+        assert_eq!(authorized.0.identity(), confirmed.plan().disk());
+        // Constructing permission did not read or open any device. Locking
+        // still performs the fresh identity and availability checks.
+    }
+
     #[test]
     fn bios_requires_512_logical_sectors_but_uefi_accepts_4kn() {
         assert!(boot_sector_block(crate::Firmware::Bios, 512).is_none());

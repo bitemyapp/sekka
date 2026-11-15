@@ -35,6 +35,14 @@
 //! # Ok(()) }
 //! ```
 //!
+//! The service launcher is private too: the public worker API fixes the
+//! executable, recovery hook and operation before starting it.
+//!
+//! ```compile_fail,E0599
+//! use yukimi_helper::process::{Program, command};
+//! let _ = command(Program::SYSTEMD_RUN).args(["--wait", "nix-store", "--gc"]);
+//! ```
+//!
 //! ```no_run
 //! use yukimi_helper::process::{Program, command, output};
 //! # fn main() -> yukimi_helper::process::Result<()> {
@@ -87,8 +95,6 @@ impl Program {
     pub const SYSTEMCTL: Program = Program("systemctl");
     /// logind: who is signed in.
     pub const LOGINCTL: Program = Program("loginctl");
-    /// Starts the operation as a service of its own.
-    pub const SYSTEMD_RUN: Program = Program("systemd-run");
 
     /// Names a program, for the step of this crate that runs it.
     pub(crate) const fn new(name: &'static str) -> Program {

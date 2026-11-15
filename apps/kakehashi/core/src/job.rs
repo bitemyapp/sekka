@@ -395,38 +395,37 @@ aizome_typestate::machine! {
             Ended(End),
         }
         new(private);
-        with_typed(pub);
     }
 }
 
 impl<'s> Preparing<'s> {
     /// The plan is written; the helper is being started.
-    pub fn authorizing(self) -> Authorizing<'s> {
+    fn authorizing(self) -> Authorizing<'s> {
         Authorizing::enter(self.ctx, ())
     }
 
     /// Preparing failed or was stopped. The helper was never started, so
     /// the drive was not touched.
-    pub fn failed(self, message: String) -> Ended<'s> {
+    fn failed(self, message: String) -> Ended<'s> {
         Ended::enter(self.ctx, End::Failed(Failure { message, touched: false }))
     }
 
     /// Stop: preparation checks the marker between steps.
-    pub fn stop(&mut self) {
+    fn stop(&mut self) {
         self.ctx.stop();
     }
 }
 
 impl<'s> Authorizing<'s> {
     /// The helper's first report.
-    pub fn report(self, report: Report, now: Instant) -> Running<'s> {
+    fn report(self, report: Report, now: Instant) -> Running<'s> {
         Running::enter(self.ctx, Pass::after(None, report, now))
     }
 
     /// The helper ended without reporting. Its first act is to report, and
     /// it does nothing to the drive if it can't, so the drive was not
     /// touched.
-    pub fn exited(self, ran: Ran) -> Ended<'s> {
+    fn exited(self, ran: Ran) -> Ended<'s> {
         let end = match ran {
             Ran::Declined => End::Declined,
             ran @ (Ran::Exited(_) | Ran::Failed(_)) => End::Failed(Failure { message: ran.message(), touched: false }),
@@ -437,7 +436,7 @@ impl<'s> Authorizing<'s> {
 
 impl<'s> Running<'s> {
     /// A later report.
-    pub fn report(self, report: Report, now: Instant) -> Running<'s> {
+    fn report(self, report: Report, now: Instant) -> Running<'s> {
         Running::enter(self.ctx, Pass::after(Some(self.data), report, now))
     }
 
@@ -445,67 +444,7 @@ impl<'s> Running<'s> {
     /// one, it stopped after it had started on the drive: the drive may have
     /// been changed, however the helper ended.
     ///
-    /// There is no way to end a job whose helper has reported with a
-    /// failure the window chose, as the window did when the helper was
-    /// killed mid-write (KTL-03):
-    ///
-    /// ```compile_fail,E0599
-    /// # use kakehashi_core::{Drive, choice::{DriveList, DriveListing, ImageId}, write::Plan};
-    /// # use std::time::Instant;
-    /// # let stick = Drive { name: "sdb".into(), bytes: 32_000_000_000, serial: "4C53".into(), usb_or_removable: true, ..Drive::default() };
-    /// # let mut list = DriveList::new();
-    /// # let listing = list.request(Instant::now()).unwrap();
-    /// # list.listed(DriveListing::new(listing, Ok(vec![stick.clone()])));
-    /// # list.choose(&stick);
-    /// # let image = ImageId { path: "sekka.iso".into(), sha256: "0".repeat(64) };
-    /// # let (review, _) = list.open_review(None, image.clone()).unwrap();
-    /// # let plan = Plan::new(list.confirm(review, None, Some(image)).unwrap());
-    /// # let dir = kakehashi_core::job::JobDir::new().unwrap();
-    /// # let path = dir.progress();
-    /// # std::fs::write(&path, "{\"stage\":\"writing\",\"done\":1073741824,\"total\":4294967296}\n").unwrap();
-    /// use kakehashi_core::job::{Event, Job, JobAny, ProgressFile};
-    /// let mut job = Job::start(&plan, &dir);
-    /// job.handle(Event::Authorizing, Instant::now());
-    /// for report in ProgressFile::new(&dir).read() {
-    ///     job.handle(Event::Report(report), Instant::now());
-    /// }
-    /// job.with_typed(|state| match state {
-    ///     // The helper was killed: "not written", as before it started.
-    ///     JobAny::Running(running) => (running.failed("the helper was killed".into()).into(), ()),
-    ///     other => (other, ()),
-    /// });
-    /// ```
-    ///
-    /// The exit is the only way out, and the outcome comes from the
-    /// reports:
-    ///
-    /// ```
-    /// # use kakehashi_core::{Drive, choice::{DriveList, DriveListing, ImageId}, write::Plan};
-    /// # use std::time::Instant;
-    /// # let stick = Drive { name: "sdb".into(), bytes: 32_000_000_000, serial: "4C53".into(), usb_or_removable: true, ..Drive::default() };
-    /// # let mut list = DriveList::new();
-    /// # let listing = list.request(Instant::now()).unwrap();
-    /// # list.listed(DriveListing::new(listing, Ok(vec![stick.clone()])));
-    /// # list.choose(&stick);
-    /// # let image = ImageId { path: "sekka.iso".into(), sha256: "0".repeat(64) };
-    /// # let (review, _) = list.open_review(None, image.clone()).unwrap();
-    /// # let plan = Plan::new(list.confirm(review, None, Some(image)).unwrap());
-    /// # let dir = kakehashi_core::job::JobDir::new().unwrap();
-    /// # let path = dir.progress();
-    /// # std::fs::write(&path, "{\"stage\":\"writing\",\"done\":1073741824,\"total\":4294967296}\n").unwrap();
-    /// use kakehashi_core::job::{End, Event, Job, JobAny, JobState, ProgressFile, Ran};
-    /// let mut job = Job::start(&plan, &dir);
-    /// job.handle(Event::Authorizing, Instant::now());
-    /// for report in ProgressFile::new(&dir).read() {
-    ///     job.handle(Event::Report(report), Instant::now());
-    /// }
-    /// job.with_typed(|state| match state {
-    ///     JobAny::Running(running) => (running.exited(Ran::Failed("the helper was killed".into())).into(), ()),
-    ///     other => (other, ()),
-    /// });
-    /// assert!(matches!(job.stored(), JobState::Ended(End::Failed(f)) if f.touched()));
-    /// ```
-    pub fn exited(self, ran: Ran) -> Ended<'s> {
+    fn exited(self, ran: Ran) -> Ended<'s> {
         let end = match self.data.last {
             Progress::Finished { ejected, note } => End::Finished { ejected, note },
             Progress::Failed { message, touched } => End::Failed(Failure { message, touched }),
@@ -517,7 +456,7 @@ impl<'s> Running<'s> {
     }
 
     /// Stop: the helper checks the marker between chunks.
-    pub fn stop(&mut self) {
+    fn stop(&mut self) {
         self.ctx.stop();
     }
 }
@@ -551,6 +490,53 @@ impl Job {
     }
 
     /// Takes in what the worker sent.
+    ///
+    /// There is no way to end a job whose helper has reported with a
+    /// failure the window chose, as the window did when the helper was
+    /// killed mid-write (KTL-03):
+    ///
+    /// ```compile_fail,E0624
+    /// use kakehashi_core::job::Job;
+    /// fn bypass(job: &mut Job) {
+    ///     job.with_typed(|state| (state, ()));
+    /// }
+    /// ```
+    ///
+    /// ```compile_fail,E0624
+    /// use kakehashi_core::job::{Authorizing, Ran};
+    /// fn bypass(state: Authorizing<'_>) { let _ = state.exited(Ran::Exited(1)); }
+    /// ```
+    ///
+    /// ```compile_fail,E0624
+    /// use kakehashi_core::job::{Running, Ran};
+    /// fn bypass(state: Running<'_>) { let _ = state.exited(Ran::Exited(1)); }
+    /// ```
+    ///
+    /// The exit is the only way out, and the outcome comes from the
+    /// reports:
+    ///
+    /// ```
+    /// # use kakehashi_core::{Drive, choice::{DriveList, DriveListing, ImageId}, write::Plan};
+    /// # use std::time::Instant;
+    /// # let stick = Drive { name: "sdb".into(), bytes: 32_000_000_000, serial: "4C53".into(), usb_or_removable: true, ..Drive::default() };
+    /// # let mut list = DriveList::new();
+    /// # let listing = list.request(Instant::now()).unwrap();
+    /// # list.listed(DriveListing::new(listing, Ok(vec![stick.clone()])));
+    /// # list.choose(&stick);
+    /// # let image = ImageId { path: "sekka.iso".into(), sha256: "0".repeat(64) };
+    /// # let (review, _) = list.open_review(None, image.clone()).unwrap();
+    /// # let plan = Plan::new(list.confirm(review, None, Some(image)).unwrap());
+    /// # let dir = kakehashi_core::job::JobDir::new().unwrap();
+    /// # let path = dir.progress();
+    /// # std::fs::write(&path, "{\"stage\":\"writing\",\"done\":1073741824,\"total\":4294967296}\n").unwrap();
+    /// use kakehashi_core::job::{End, Event, Job, JobState, ProgressFile, Ran};
+    /// let mut job = Job::start(&plan, &dir);
+    /// job.handle(Event::Authorizing, Instant::now());
+    /// // No poll read the last report. Finishing the file drains it first.
+    /// let reports = ProgressFile::new(&dir);
+    /// job.handle(Event::Exited(reports.finish(Ran::Exited(1))), Instant::now());
+    /// assert!(matches!(job.stored(), JobState::Ended(End::Failed(f)) if f.touched()));
+    /// ```
     pub fn handle(&mut self, event: Event, now: Instant) {
         match event {
             Event::Report(report) => self.step(Step::Report(report), now),
@@ -567,7 +553,8 @@ impl Job {
 
     /// Events the worker never sends in that state are taken the cautious
     /// way: a report or exit before `Authorizing` as coming from the
-    /// helper, and `NotStarted` after it as the helper's exit.
+    /// helper. A late `NotStarted` cannot claim that the drive was untouched:
+    /// reports may still be unread.
     fn step(&mut self, step: Step, now: Instant) {
         self.with_typed(|state| {
             let next: JobAny<'_> = match (state, step) {
@@ -578,7 +565,9 @@ impl Job {
                 (JobAny::Preparing(s), Step::NotStarted(message)) => s.failed(message).into(),
                 (JobAny::Preparing(s), Step::Exited(ran)) => s.authorizing().exited(ran).into(),
                 (JobAny::Authorizing(s), Step::Exited(ran)) => s.exited(ran).into(),
-                (JobAny::Authorizing(s), Step::NotStarted(message)) => s.exited(Ran::Failed(message)).into(),
+                (JobAny::Authorizing(s), Step::NotStarted(message)) => {
+                    Ended::enter(s.ctx, End::Failed(Failure { message, touched: true })).into()
+                }
                 (JobAny::Running(s), Step::Exited(ran)) => s.exited(ran).into(),
                 (JobAny::Running(s), Step::NotStarted(message)) => s.exited(Ran::Failed(message)).into(),
                 (state @ (JobAny::Authorizing(_) | JobAny::Running(_)), Step::Authorizing) => state,
@@ -710,6 +699,23 @@ mod tests {
     }
 
     #[test]
+    fn unread_final_failure_overrides_the_process_exit() {
+        let dir = JobDir::new().unwrap();
+        let mut reports = ProgressFile::new(&dir);
+        let mut job = job(&dir);
+        job.handle(Event::Authorizing, Instant::now());
+        std::fs::write(dir.progress(), "{\"stage\":\"writing\",\"done\":1,\"total\":2}\n").unwrap();
+        for report in reports.read() {
+            job.handle(Event::Report(report), Instant::now());
+        }
+        use std::io::Write;
+        let mut file = std::fs::OpenOptions::new().append(true).open(dir.progress()).unwrap();
+        writeln!(file, "{{\"stage\":\"failed\",\"message\":\"write failed\",\"touched\":true}}").unwrap();
+        job.handle(Event::Exited(reports.finish(Ran::Exited(0))), Instant::now());
+        assert_eq!(failure(&job), ("write failed", true));
+    }
+
+    #[test]
     fn the_helpers_final_report_decides() {
         let job = run(vec![
             Event::Authorizing,
@@ -740,7 +746,9 @@ mod tests {
     }
 
     #[test]
-    fn a_late_not_started_is_the_helpers_exit() {
+    fn a_late_not_started_cannot_claim_the_drive_is_untouched() {
+        let job = run(vec![Event::Authorizing, Event::NotStarted("x".into())]);
+        assert_eq!(failure(&job), ("x", true));
         let job = run(vec![Event::Authorizing, report(WRITING), Event::NotStarted("x".into())]);
         assert_eq!(failure(&job), ("x", true));
     }

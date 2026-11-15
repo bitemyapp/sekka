@@ -204,7 +204,9 @@ takes a proof only the comparison makes.
   example a handler that ignores an event. `with_typed` accepts that.
   - **Closed in part:** the typestate modules in all five components deny
     `clippy::wildcard_enum_match_arm`, and every `_ =>` arm in them names
-    its cases. A `_ =>` that hides a new state or event fails clippy.
+    its cases. A `_ =>` that hides a new state or event fails Clippy. The
+    component Nix checks run it, with positive and negative lint sentinels.
+    Genkan's `installing()` query names every flow state under the same deny.
   - **Still open:** an arm that names a state and hands it back unchanged.
 - **GEN-28:** a caller could collapse the swap partition's size into
   "reading". **Closed:** it's an enum (`Off`, `Known`, `Reading`,
@@ -230,6 +232,14 @@ other ways to start a program are banned by clippy `disallowed-methods`,
 which their Nix check phases run.
 
 **Closed:**
+- **The generic service launcher:** Yukimi exposes a closed worker `Action`
+  and executes its fixed command internally; callers cannot append a
+  replacement program or launcher options to `systemd-run`.
+- **Genkan write authority:** only a `ConfirmedInstall` yields `Authorized`;
+  only locking that authority yields formatting devices. Read-only review
+  and revalidation do not grant permission to erase.
+- **Kakehashi completion:** the state visitor and phase transitions are
+  private; the public completion event takes a drained-report `Exit`.
 - **The program ban:** the helper and window binaries now `forbid` it, so a
   local `#[allow]` there is an error (E0453). The libraries keep `deny`,
   because their one process module must start programs.
@@ -240,7 +250,7 @@ which their Nix check phases run.
   anywhere but those modules.
 
 **Still open:**
-- free-form `nix build` and `systemctl` arguments (Yukimi);
+- free-form `nix build`, `nix eval` and `systemctl` arguments (Yukimi);
 - the update check's commands (Yukimi): the shared backend builds them, for
   the unprivileged side too, and the helper makes each one again as its own
   (`process::preflight`). It refuses any program but `nix` and `git` when

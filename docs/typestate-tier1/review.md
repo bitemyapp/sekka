@@ -77,70 +77,51 @@ Hako's Clippy pass excludes `deprecated`: the pinned nightly warns about
 the existing `AtomicUsize::fetch_update` in `aizome-kit`. These are component
 checks, not new ISO or physical-disk qualification.
 
-## Open findings
+### Remaining API and lint findings resolved, 2026-11-15
 
-Most severe first. "Confirmed" means the path was traced in the code;
-"plausible" needs a build or a run to be sure.
+The four remaining findings were reproduced again against `e9174ebe` before
+this follow-up. The first three compiled through public APIs; the Kakehashi
+probe also reproduced the incorrect untouched result with a temporary file.
 
-### 1. The catch-all match ban is enforced only in Genkan's backend
+- **The catch-all match ban now runs in the package checks.** Aizome checks
+  Hako, Tansu and aizome-sys; Kakehashi checks core; Genkan checks both the
+  backend and the window. `checked-state-matches.sh` proves the compiler
+  accepts an exhaustive match and rejects a wildcard with the intended lint.
+  Genkan's `installing()` names every flow state under the same deny.
+  `matches!` and deliberately ignored, explicitly named states remain outside
+  what this lint can prove.
+- **Genkan write permission requires erase confirmation.** Read-only
+  `Reviewed`/`Confirmed` values cannot lock a disk or yield a formatting
+  device. `Authorized::of(&ConfirmedInstall)` binds permission to the confirmed
+  plan's disk; consuming `lock()` performs the existing live identity and busy
+  checks. Only `Locked` yields partitions. Regression tests check the matching
+  phrase and identity; compile-fail examples reject the old review-to-write
+  paths. The production storage VM fixture now obtains this same authority.
+- **Yukimi's general service launcher is private.** The helper's client and
+  worker share the closed `transaction::Action` enum. The launcher fixes the
+  helper, worker entry point, operation and recovery hook; it executes the
+  command internally. No public `SYSTEMD_RUN` constant or mutable launcher
+  command escapes. Tests check all four operations and arguments resembling
+  launcher options; compile-fail tests reject the old escape and raw client
+  arguments. The free-form Nix and systemctl interfaces remain the limitations
+  listed below, not a claim of a general process sandbox.
+- **Kakehashi completion cannot bypass the final report drain.** The state
+  visitor and phase transitions are private. Public completion takes the
+  `Exit` made by `ProgressFile::finish`. Compile-fail tests independently check
+  visitor and transition privacy, and temporary-file tests cover unread first
+  and final reports. A late `NotStarted` event also reports possible damage
+  instead of claiming the drive was untouched.
 
-Confirmed. The typestate modules of all five components carry
-`#![deny(clippy::wildcard_enum_match_arm)]`, and `docs/typestate-tier1.md`
-says that a `_ =>` hiding a new state fails Clippy. But only the Genkan and
-Yukimi helpers' Nix checks run Clippy, and no workflow does. So the deny is
-never enforced for Genkan's window, Kakehashi, Hako, Tansu or aizome-sys.
-
-The matches that matter most in Genkan's window aren't under the deny either.
-`installing()` (`installer/genkan/ui/src/app.rs:823`) ends with `_ => false`,
-and it decides whether the window may close. A state added later that writes
-the disk would count as not installing. `matches!` and `let … else` in
-`flow.rs` aren't linted at all.
-
-Run the lint, alone like the program ban (`-A clippy::all -D
-clippy::wildcard_enum_match_arm`), in each component's Nix check. Then put the
-window's matches on the flow under it.
-
-### 2. Genkan can make a disk review without the erase phrase
-
-Confirmed. `disk::Reviewed::of` is public (`installer/genkan/rust/src/disk.rs:252`),
-and so are `RawRequest`'s fields and `RawRequest::parse`
-(`installer/genkan/rust/src/plan.rs:17`, `:179`). Together they lead to
-`lock()` and `Layout::write` with no `ConfirmedInstall`, which contradicts
-the comment above `Reviewed`. `Filesystem::format` went from `pub(crate)` to
-`pub` (`installer/genkan/rust/src/filesystem.rs:70`), and it takes a `Device`
-from an unlocked `revalidate()`. The code the installer runs doesn't misuse
-either.
-
-Make `lock()` (or a write-only `of`) take `&ConfirmedInstall`, and return
-`format` to `pub(crate)`.
-
-### 3. Yukimi's typed programs leave a way to run anything as root
-
-Confirmed. `Program::SYSTEMD_RUN` is public to the helper's binary
-(`apps/yukimi/yukimi-helper/src/process.rs:91`), and `command()` returns a
-plain `Command`. So `command(Program::SYSTEMD_RUN).args(["--wait", "--pipe",
-"nix-store", "--gc"])` collects garbage outside `BootMenu`, and the same goes
-for `nix-channel --update` outside a restore point. `nix(Nix::Eval)` with
-`allow-unsafe-native-code-during-evaluation` is another way. The doc lists
-only free-form `nix build` and `systemctl` arguments.
-
-The ban also stops at the helper's call sites. `yukimi_system` functions that
-start programs themselves get past it: `nix::setting`, the completion checks,
-and #270's `reclaim::estimate`, which `delete` calls as root. That one runs
-`nix-store --gc --print-roots` (`apps/yukimi/crates/yukimi-system/src/nix.rs:58`)
-without the helper's environment clearing or stop tracking. It only reads.
-
-Give `systemd-run` a typed step that names the unit's program, and ban, or
-route through the helper, the `yukimi_system` functions that start programs.
-
-### 4. Kakehashi's KTL-03 fix can be bypassed
-
-Confirmed. With `with_typed(pub)` (`apps/kakehashi/core/src/job.rs:398`) and
-a public `Authorizing::exited(Ran)` (`:429`), a job can end as "not touched"
-without reading the helper's reports, which is KTL-03. The guarantee claimed
-at `job.rs:107` holds only for `Job::handle`. The window doesn't do this.
-Make `exited` take an `Exit`, or make these methods and `with_typed`
-crate-private.
+These fixes passed their checks on `wx-workstation`: the full Aizome,
+Genkan UI/helper, Yukimi helper and Kakehashi packages; checked-code doctests
+and the three original external bypass probes (now rejected); Genkan and
+Yukimi namespace tests; Kakehashi elevation tests; and all 12 encrypted-storage
+cases with BIOS/UEFI boots. Windows ran 60 core/write tests and 30 doctests
+under Wine; Windows and macOS core/write/helper Clippy checks passed (macOS
+was cross-compiled only). Aizome's first attempt exposed integration-test
+metadata in its dependency-cache guard. Linting production libraries and
+binaries fixed that without weakening the guard or removing integration tests.
+These are component checks, with no new ISO or physical-hardware qualification.
 
 ## Lower severity
 
@@ -165,6 +146,13 @@ crate-private.
   past.
 
 **Yukimi**
+- Free-form `nix build`, `nix eval` (including unsafe native evaluation
+  options), and `systemctl` arguments are not a complete process sandbox.
+  Shared `yukimi_system` read-only helpers also start programs outside the
+  privileged helper's command wrapper, including `reclaim::estimate`'s
+  `nix-store --gc --print-roots`. The service-launcher fix does not change
+  those interfaces.
+
 - After a power cut, recovery waits for the next Yukimi operation
   (`yukimi-helper/src/main.rs:1041`). A persistent `nix.gc` timer, Nix's
   `min-free` or a manual collection can run first, while the menu still lists

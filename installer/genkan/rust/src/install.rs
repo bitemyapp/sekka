@@ -904,7 +904,7 @@ fn build_on_target(
 
 /// Shared destructive storage phase; tests call this only on a marked VM disk.
 fn prepare_storage(
-    reviewed: &disk::Reviewed,
+    authorized: disk::Authorized,
     request: &InstallPlan,
     ids: &Identities,
     layout: &Layout,
@@ -916,7 +916,7 @@ fn prepare_storage(
     // Lock while editing the partition table. The lock re-reads the disk's
     // stable identity and its mount and holder state immediately before the
     // first write; every write acts on the locked disk, through the proof.
-    let locked = reviewed.lock()?;
+    let locked = authorized.lock()?;
     // For diagnostics and udev only: every write takes the proof.
     let path = locked.disk().path().to_owned();
     let mount = target.0.to_str().context("Target path encoding")?;
@@ -939,11 +939,10 @@ fn prepare_storage(
         // From here the disk is half written: only the target is read again,
         // so another disk coming or going can't abandon it.
         let locked = locked.recheck(&[])?;
-        let disk = locked.disk();
         progress(2, "Formatting, verifying and mounting the new filesystems");
-        let boot = disk.partition(1);
-        let root = disk.partition(2);
-        let swap = disk.partition(3);
+        let boot = locked.partition(1);
+        let root = locked.partition(2);
+        let swap = locked.partition(3);
         let root_device = match &ids.encryption {
             Some(encryption) => mappings.format_open(&root, &encryption.root, passphrase)?,
             None => root.clone(),
@@ -970,7 +969,7 @@ fn prepare_storage(
         }
         let bios_boot = layout
             .bios_boot_partition()
-            .map(|index| disk.partition(index));
+            .map(|index| locked.partition(index));
         if let (Some(boot), Some(uuid)) = (&bios_boot, &ids.bios_boot) {
             crate::Filesystem::Ext4.format(boot, uuid)?;
         }
@@ -1018,6 +1017,7 @@ pub fn execute(confirmed: ConfirmedInstall, prepared: Prepared) -> Result<()> {
     let started = Instant::now();
     // From before the first disk write until the system is complete.
     let awake = crate::power::stay_awake("Installing NixOS");
+    let authorized = disk::Authorized::of(&confirmed);
     let mut request = confirmed.into_plan();
     // The prepared files must be exactly what this confirmed plan generates.
     ensure!(
@@ -1048,7 +1048,7 @@ pub fn execute(confirmed: ConfirmedInstall, prepared: Prepared) -> Result<()> {
     let mount = target.0.to_str().context("Target path encoding")?;
     let stage = Stage::start("storage");
     prepare_storage(
-        &disk::Reviewed::of(&request),
+        authorized,
         &request,
         &prepared.ids,
         &prepared.layout,
@@ -1527,7 +1527,9 @@ mod encryption_tests {
                 raw.swap = swap;
                 raw.encrypt = true;
                 raw.encryption_password = PASSPHRASE.into();
-                let plan = raw.parse(&settings)?;
+                let plan = raw
+                    .parse(&settings)?
+                    .confirm(&format!("ERASE {}", identity.path))?;
                 let ids = identities(firmware, swap);
                 let layout = Layout::for_install(
                     identity.bytes,
@@ -1538,8 +1540,8 @@ mod encryption_tests {
                 let mut mappings = encryption::Mappings::default();
                 let target = Target::new()?;
                 prepare_storage(
-                    &disk::Reviewed::of(&plan),
-                    &plan,
+                    disk::Authorized::of(&plan),
+                    plan.plan(),
                     &ids,
                     &layout,
                     PASSPHRASE,

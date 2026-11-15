@@ -724,6 +724,22 @@ the doctests of every crate with a `compile_fail` one; the other packages'
 `docs/typestate-tier1.md` lists the machines done so far and what their types
 still can't rule out.
 
+The package checks also run Clippy over the state-machine modules in Hako,
+Tansu, aizome-sys, Kakehashi, and Genkan's backend and window. Their local
+`deny(clippy::wildcard_enum_match_arm)` attributes remain active under
+`-A clippy::all`; `nix/checked-state-matches.sh` checks that exhaustive matches
+compile and wildcard arms fail with that restriction lint. Aizome primes
+Clippy's dependency metadata in its dependency build, preserving the check
+that subsequent builds compile only first-party crates.
+
+Genkan separates read-only disk identity proofs (`Reviewed`/`Confirmed`) from
+write permission (`Authorized`, made only from `ConfirmedInstall`). Locking
+consumes that permission and rechecks the live disk; only the locked disk
+can yield a partition for formatting. Yukimi's service launcher accepts a
+closed `transaction::Action` and keeps its `Command` private. Kakehashi's job
+transitions are private: completion goes through the `Exit` that drains the
+progress file, and a late preparation failure cannot claim an untouched disk.
+
 The retained VM tooling is available through `nix build .#tools`. Run `result/bin/respin-tools qemu-test --help` for its firmware, storage, desktop, and application options. The Genkan fixture now builds from `installer/genkan/tests/vm-fixture`, not a remote installer revision. The rootless builder's static guest tools require the Rust musl target. The older reports in `TESTING.md`, `installer/genkan/RUST-TESTING.md`, and `docs/test-results/` describe their named predecessor revisions only.
 
 BIOS fixtures keep PCI memory windows below 4 GiB with SeaBIOS's
