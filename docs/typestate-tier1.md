@@ -237,7 +237,11 @@ which their Nix check phases run.
   replacement program or launcher options to `systemd-run`.
 - **Genkan write authority:** only a `ConfirmedInstall` yields `Authorized`;
   only locking that authority yields formatting devices. Read-only review
-  and revalidation do not grant permission to erase.
+  and revalidation do not grant permission to erase. Partitions and encrypted
+  mappings borrow that lock, including their clones: formatting after dropping
+  or releasing the lock does not compile. Before releasing it for udev and
+  mounting, the installer gives up formatting permission and keeps only the
+  checked device paths.
 - **Kakehashi completion:** the state visitor and phase transitions are
   private; the public completion event takes a drained-report `Exit`.
 - **The program ban:** the helper and window binaries now `forbid` it, so a

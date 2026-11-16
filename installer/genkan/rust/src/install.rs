@@ -973,6 +973,13 @@ fn prepare_storage(
         if let (Some(boot), Some(uuid)) = (&bios_boot, &ids.bios_boot) {
             crate::Filesystem::Ext4.format(boot, uuid)?;
         }
+        // Formatting ends here. Keep only the paths that udev and mounting
+        // need; these cannot be used to format after the disk is unlocked.
+        let boot = boot.into_mount();
+        let root = root.into_mount();
+        let swap = swap.into_mount();
+        let root_device = root_device.into_mount();
+        let bios_boot = bios_boot.map(disk::Device::into_mount);
         // udev postpones events for a locked disk: release the lock before
         // triggering. A fresh explicit change event updates UUID/type
         // information, including events skipped while locked. Never rely on
@@ -1600,7 +1607,10 @@ mod encryption_tests {
                     PASSPHRASE.as_bytes(),
                     60,
                 )?;
-                filesystem.mount(&disk::Device::for_test("/dev/mapper/genkan-reopen"), mount)?;
+                filesystem.mount(
+                    &disk::Device::for_test("/dev/mapper/genkan-reopen").into_mount(),
+                    mount,
+                )?;
                 target.1.set(true);
                 assert_eq!(
                     fs::read(target.0.join("encrypted-sentinel"))?,

@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Closed filesystem choices and the shared format/probe/mount protocol.
-use crate::{Firmware, disk::Device, process::output, storage::Program};
+use crate::{
+    Firmware,
+    disk::{Device, MountDevice},
+    process::output,
+    storage::Program,
+};
 use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
 use std::{fs, io::Write};
@@ -67,12 +72,12 @@ impl Filesystem {
     ///     Filesystem::Ext4.format(&disk.partition(2), uuid)
     /// }
     /// ```
-    pub fn format(self, device: &Device, uuid: &str) -> Result<()> {
+    pub fn format(self, device: &Device<'_>, uuid: &str) -> Result<()> {
         let device = device.path();
         format_with(self, device, uuid, output)
             .with_context(|| format!("Formatting {device} as {}", self.name()))
     }
-    pub(crate) fn mount(self, device: &Device, target: &str) -> Result<()> {
+    pub(crate) fn mount(self, device: &MountDevice, target: &str) -> Result<()> {
         mount_with(
             self.name(),
             device.path(),
@@ -299,7 +304,7 @@ fn format_with(
     verify_with(device, filesystem.name(), &mut run)?;
     verify_identity(device, filesystem.name(), uuid, &mut run)
 }
-pub(crate) fn format_efi(device: &Device, serial: &str) -> Result<()> {
+pub(crate) fn format_efi(device: &Device<'_>, serial: &str) -> Result<()> {
     format_efi_with(device.path(), serial, output)
 }
 fn format_efi_with(
@@ -323,11 +328,11 @@ pub(crate) fn swap_preflight() -> Result<()> {
         .context("The installation media is missing mkswap; no disk writes were made")
         .map(drop)
 }
-pub(crate) fn format_swap(device: &Device, uuid: &str) -> Result<()> {
+pub(crate) fn format_swap(device: &Device<'_>, uuid: &str) -> Result<()> {
     format_swap_with(device.path(), uuid, output)
 }
 /// Erases a device's signatures (a BIOS boot partition keeps none).
-pub(crate) fn wipe(device: &Device) -> Result<()> {
+pub(crate) fn wipe(device: &Device<'_>) -> Result<()> {
     output(Program::WIPEFS, &["--all", "--force", device.path()], 60).map(drop)
 }
 fn format_swap_with(
@@ -365,7 +370,7 @@ fn verify_identity(
     );
     Ok(())
 }
-pub(crate) fn mount_efi(device: &Device, target: &str) -> Result<()> {
+pub(crate) fn mount_efi(device: &MountDevice, target: &str) -> Result<()> {
     mount_with("vfat", device.path(), target, "umask=0077", output)
 }
 fn mount_with(
@@ -734,7 +739,7 @@ mod tests {
                         probe_uuid(&image.device, next.name())? == new_uuid,
                         "Reformat did not apply the requested UUID"
                     );
-                    next.mount(&device, mount)?;
+                    next.mount(&device.clone().into_mount(), mount)?;
                     ensure!(
                         output(
                             Program::FINDMNT,
@@ -751,7 +756,7 @@ mod tests {
                     )?;
                     output(Program::SYNC, &[], 30)?;
                     output(Program::UMOUNT, &[mount], 30)?;
-                    next.mount(&device, mount)?;
+                    next.mount(&device.clone().into_mount(), mount)?;
                     ensure!(
                         fs::read(std::path::Path::new(mount).join("sentinel"))?
                             == b"persistent storage",
@@ -773,7 +778,7 @@ mod tests {
                 probe_uuid(&image.device, "vfat")? == serial,
                 "FAT reformat did not apply the requested serial"
             );
-            mount_efi(&device, mount)?;
+            mount_efi(&device.clone().into_mount(), mount)?;
             ensure!(
                 output(
                     Program::FINDMNT,
