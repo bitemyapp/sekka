@@ -8,7 +8,6 @@ Usage: python3 tests/test_yukimi_preflight.py /nix/store/...-yukimi-helper/bin
 import json
 import os
 from pathlib import Path
-import re
 import selectors
 import shutil
 import subprocess
@@ -21,6 +20,10 @@ BIN = Path(sys.argv.pop(1)).resolve()
 NIX = Path(shutil.which('nix')).resolve()
 SHELL = Path(shutil.which('sh')).resolve()
 GIT = Path(shutil.which('git')).resolve()
+# More settings for the fixture's Nix, one to a line. `lazy-trees = true`, as
+# Determinate Nix sets on Sekka's installations, keeps fetched sources out of
+# the store unless something puts them there.
+NIX_CONF = os.environ.get('YUKIMI_TEST_NIX_CONF', '')
 RUNTIME = (Path(os.environ['YUKIMI_TEST_RUNTIME']).read_text().split()
            if 'YUKIMI_TEST_RUNTIME' in os.environ else subprocess.check_output(
                ['nix-store', '-qR', str(BIN.parent), str(NIX.parents[1]), str(SHELL.parents[1]), str(GIT.parents[1])], text=True).split())
@@ -66,7 +69,7 @@ class Preflight(unittest.TestCase):
         (self.root / 'etc/group').write_text('root:x:0:\n')
         (self.root / 'etc/nix/nix.conf').write_text(
             'experimental-features = nix-command flakes\nbuild-users-group =\n'
-            'sandbox = false\nsubstituters =\nflake-registry =\n')
+            'sandbox = false\nsubstituters =\nflake-registry =\n' + NIX_CONF + '\n')
         (self.root / 'run/current-system/sw/bin/nix').symlink_to(NIX)
         (self.root / 'run/current-system/sw/bin/git').symlink_to(GIT)
         (self.root / 'bin/yukimi-helper').symlink_to(BIN / 'yukimi-helper')
@@ -361,10 +364,11 @@ exec {GIT} "$@"
     def test_cancel_during_streamed_fetch_leaves_configuration_unchanged(self):
         self.check_live_fetch(cancel=True)
 
-    # Yukimi checks an update as the person at the desktop, and root repeats
-    # the check before applying it. Nix keeps Git clones in the home of
-    # whoever fetches, so each fetch root makes of Sekka is a whole clone the
-    # first time. The check has to ask where a branch is; root doesn't.
+    # Yukimi checks an update as the person at the desktop; root then repeats
+    # the check and builds. Nix keeps Git clones in the home of whoever
+    # fetches, so anything root fetches of Sekka is a whole clone the first
+    # time. Root has nothing to fetch: its check starts from what the first
+    # one found, and the first one leaves each updated source in the store.
 
     def record_fetches(self):
         """Record each Git fetch: the home it ran under, and what it asked for."""
@@ -388,15 +392,6 @@ exec {GIT} "$@"
             return [tuple(line.split()) for line in log.read_text().splitlines()] if log.exists() else []
         return fetches
 
-    def assert_only_the_check_asked_for_a_branch(self, fetches, applied):
-        # Nix asks for a branch as `refs/heads/x:refs/heads/x`, and for a
-        # commit it already knows of by its ID.
-        commit = re.compile('[0-9a-f]{40}').fullmatch
-        self.assertEqual({home for home, asked in fetches() if not commit(asked)}, {'/home/user'}, applied.stderr)
-        # Root may still fetch the checked commit when it builds: the check
-        # leaves its source in the store only when Nix copies fetched sources
-        # there, which it doesn't with lazy trees or in nixpkgs' Nix.
-
     def check_as_the_user(self, *update):
         check = self.run_cmd('/bin/yukimi-helper', 'preflight', *update, home='/home/user')
         report = json.loads(check.stdout)
@@ -406,26 +401,32 @@ exec {GIT} "$@"
         return self.run_cmd('/bin/yukimi-helper', '__worker', '/var/lib/yukimi/operations/test', 'change', *update,
                             '--lock', lock or report['lock'], '--checked-source', report['source'], **expected)
 
-    def test_moving_sekka_to_git_asks_for_its_branch_in_the_check_only(self):
-        self.prepare_git_source(migrate=True)
+    def assert_only_the_check_fetches(self, *update, expect):
         fetches = self.record_fetches()
-        update = ['--update', 'sekka', '--sekka']
         report, proposed = self.check_as_the_user(*update)
-        self.assertEqual(proposed['nodes']['sekka']['locked']['type'], 'git')
+        sekka = proposed['nodes']['sekka']
+        self.assertEqual((sekka['locked']['type'], sekka['original']['ref']), expect)
         # Root accepts the checked lock and builds from it; the fixture's
         # builder then fails, as every build here does.
         applied = self.apply_as_root(report, *update, ok=False, builds=True)
-        self.assert_only_the_check_asked_for_a_branch(fetches, applied)
+        self.assertEqual({home for home, _ in fetches()}, {'/home/user'}, f'{fetches()}\n{applied.stderr}')
 
-    def test_switching_sekka_branch_asks_for_it_in_the_check_only(self):
+    def test_updating_sekka_fetches_it_for_the_check_only(self):
+        self.prepare_git_source(migrate=False)
+        self.assert_only_the_check_fetches('--update', 'sekka', '--sekka', expect=('git', 'nightly'))
+
+    def test_moving_sekka_to_git_fetches_it_for_the_check_only(self):
+        self.prepare_git_source(migrate=True)
+        # As a real update does, it also finds a newer nightly.
+        (self.root / 'remote/flake.nix').write_text(DEPENDENCY.replace('cargo-geiger-fixture', 'updated-fixture'))
+        self.git('commit', '-am', 'next nightly', directory='/remote')
+        self.assert_only_the_check_fetches('--update', 'sekka', '--sekka', expect=('git', 'nightly'))
+
+    def test_switching_sekka_branch_fetches_it_for_the_check_only(self):
         self.prepare_git_source(migrate=False)
         self.git('branch', 'main', directory='/remote')
-        fetches = self.record_fetches()
-        update = ['--update', 'sekka', '--sekka', '--follow', 'sekka=main']
-        report, proposed = self.check_as_the_user(*update)
-        self.assertEqual(proposed['nodes']['sekka']['original']['ref'], 'main')
-        applied = self.apply_as_root(report, *update, ok=False, builds=True)
-        self.assert_only_the_check_asked_for_a_branch(fetches, applied)
+        self.assert_only_the_check_fetches('--update', 'sekka', '--sekka', '--follow', 'sekka=main',
+                                           expect=('git', 'main'))
 
     def test_checked_lock_from_another_address_is_refused(self):
         self.prepare_git_source(migrate=False)

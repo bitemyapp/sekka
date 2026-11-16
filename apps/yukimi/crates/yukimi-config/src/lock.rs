@@ -428,6 +428,20 @@ pub fn with_checked_sources(current: &str, checked: &str, updated: &[String]) ->
     serde_json::to_string_pretty(&lock).ok().map(|text| text + "\n")
 }
 
+/// What the lock holds each input in `updated` to, as its `locked` entry,
+/// for the inputs Nix fetches from somewhere else: not one that follows
+/// another input, which has no entry of its own, and not a `path:`, which
+/// is read where it lies.
+pub fn fetched_sources(lock: &str, updated: &[String]) -> Vec<serde_json::Value> {
+    let Ok((nodes, inputs)) = raw_parts(lock) else { return Vec::new() };
+    updated
+        .iter()
+        .filter_map(|name| nodes.get(inputs.get(name)?.as_str()?)?.get("locked"))
+        .filter(|locked| locked.is_object() && locked.get("type").is_some_and(|kind| kind != "path"))
+        .cloned()
+        .collect()
+}
+
 impl Locked {
     /// For a FlakeHub source, the address that redirects to its newest
     /// release matching the version asked for: `https://api.flakehub.com/f/NixOS/nixpkgs/0.1`.
@@ -669,6 +683,24 @@ mod tests {
             .replace("\"tatami\": {\n          \"inputs\"", "\"tatami_2\": {\n          \"inputs\"");
         assert_eq!(check_update(LOCK, &renamed, &only(&[])), Ok(()));
         assert!(check_update(LOCK, "{}", &only(&[])).is_err());
+    }
+
+    #[test]
+    fn fetched_sources_are_the_updated_inputs_with_entries_of_their_own() {
+        let only = |names: &[&str]| names.iter().map(|n| n.to_string()).collect::<Vec<_>>();
+        let lock: serde_json::Value = serde_json::from_str(LOCK).unwrap();
+        // In the order asked for; `pkgs` follows nixpkgs, and `absent` isn't there.
+        assert_eq!(
+            fetched_sources(LOCK, &only(&["tatami", "pkgs", "absent", "nixpkgs"])),
+            [lock["nodes"]["tatami"]["locked"].clone(), lock["nodes"]["nixpkgs"]["locked"].clone()]
+        );
+        // A path is read where it lies.
+        let local =
+            LOCK.replace("\"rev\": \"b925d7a9c9\", \"type\": \"github\"", "\"path\": \"./tatami\", \"type\": \"path\"");
+        assert_ne!(local, LOCK);
+        assert!(fetched_sources(&local, &only(&["tatami"])).is_empty());
+        assert!(fetched_sources(LOCK, &only(&[])).is_empty());
+        assert!(fetched_sources("{ broken", &only(&["tatami"])).is_empty());
     }
 
     #[test]

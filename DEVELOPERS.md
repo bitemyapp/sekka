@@ -1518,17 +1518,23 @@ itself, and `check_update` then refuses the checked lock as before. Only an
 entry's `original` and `locked` are taken, and only for inputs being updated.
 A legacy flake that gains its `sekka` input in the same update has no entry
 to start from, so root still fetches there.
-Root's build is a separate matter. It needs the source of each commit the
-check found, and the check leaves that in the store only when Nix copies
-fetched sources there, as Determinate Nix does with `lazy-trees` off. With
-`lazy-trees = true`, which Determinate Nix sets on Sekka's installations (both
-machines checked have it), and with nixpkgs' Nix
-(2.35.6 when measured), the source stays in the checking account's Git cache.
-Root then fetches the checked commit itself when it builds, on any update
-through Yukimi: a whole clone of Sekka into root's cache the first time, and
-what changed after that. In the fixture, the checking account running
-`nix flake prefetch` on the locked address put the source in the store, and
-root then fetched nothing; the check doesn't do that yet.
+Root's build needs the source of each commit the check found, and Nix doesn't
+always leave a fetched source in the store. With `lazy-trees = true`, which
+Determinate Nix sets on Sekka's installations (both machines checked have
+it), and in nixpkgs' Nix (2.35.6 when measured), it stays in the fetching
+account's Git or tarball cache, and root fetched the checked commit itself
+when it built, on every update through Yukimi. The check therefore ends by
+putting each updated input's source in the store (`preflight::keep_sources`):
+Nix names the locked address (`builtins.flakeRefToString`), and
+`nix flake prefetch` copies it from that account's cache with nothing more to
+download. Root's Nix then uses the copy. For Sekka this is one more copy of
+its tree in the store with each update: 299 MB in 0.6 s on wx-workstation.
+Only inputs with a lock entry of their own are kept. The inputs that follow
+Sekka's (`nixpkgs` and the rest) move with it and aren't, so root fetches
+what it needs of them as before. An input that can't be kept is left for
+root to fetch. `YUKIMI_TEST_NIX_CONF='lazy-trees = true'` runs
+`tests/test_yukimi_preflight.py` as an installation's Determinate Nix
+behaves; the flake's check runs nixpkgs' Nix.
 The migration reads Nix attribute paths and literal strings through `rnix`,
 then parses flake URLs with `fluent-uri` (RFC 3986) and Nix's ref/revision
 rules. It reconstructs changed URLs with the URI builder and writes only the

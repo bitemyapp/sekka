@@ -1029,7 +1029,8 @@ fn change(args: &[String]) -> Result<String> {
         if !change.update.is_empty() {
             stage(2, "Fetching the newest versions");
             match &change.lock {
-                // Prepared by Yukimi, with every new source already in the store.
+                // Prepared by Yukimi's check, which leaves each updated
+                // input's source in the store (`preflight::keep_sources`).
                 Some(prepared) => {
                     let proposed = if let Some(checked) = &checked_lock {
                         checked.clone()
