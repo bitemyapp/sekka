@@ -949,6 +949,10 @@ impl Cx {
         self.windows.get(&window)?.showing
     }
 
+    pub(crate) fn text_input_generation(&self, window: WindowId) -> sidestep_engine::protocol::TextInputGeneration {
+        self.windows[&window].text_input_generation
+    }
+
     /// A handle that wakes this loop from other threads.
     pub fn proxy(&self) -> Proxy {
         Proxy { wake: self.wake.clone() }
@@ -1533,9 +1537,14 @@ impl Cx {
                 self.tell(handler, window, WindowEvent::PopupDismissed);
                 self.close_window(window);
             }
-            FromRender::TextInput { window, commit, preedit } => {
+            FromRender::TextInput { window, commit, preedit, generation } => {
                 let Some(window) = of(self, window) else { return };
                 for ime in Ime::from_protocol(commit, preedit) {
+                    // Recheck between commit and preedit: the handler may
+                    // change the prompt or reset input in response to either.
+                    if self.windows.get(&window).is_none_or(|w| w.text_input_generation != generation) {
+                        break;
+                    }
                     self.tell(handler, window, WindowEvent::Ime(ime));
                 }
             }

@@ -107,6 +107,16 @@ while the field has the focus. A change of value or mode drops it, and the
 input method is told to start over. What a widget keeps is tied to the mode
 its type names.
 
+Sukumo advances a window's input generation when its purpose or enabled
+state changes, or when the field resets composition. Batches queued from
+the render thread carry that generation and are checked before both their
+commit and preedit reach the field. On the Wayland side, `done` serials
+from before the latest enable are discarded; caret updates keep the same
+context. An arrival timer therefore cannot make an old password batch
+current again. The null-backend `ime_generations` test covers delayed
+commits and preedits across both mode changes, resets, repeated resets,
+and a reset made while handling a commit.
+
 ### A person's agreement
 
 The kit makes an `Agreed<T>` only when a person presses a button made with
@@ -140,8 +150,9 @@ shipped build enables. The destructive steps take it:
   The check is inside the only release.
 - **polkit:** which request instance an answer belongs to. A type can't name
   an instance, so the only write compares it.
-- **SYC-07:** whether an input method honours the password purpose, and when
-  its in-flight events stop after a change of mode.
+- **SYC-07:** whether an input method honours the password purpose and the
+  compositor associates its events with the correct input context. Queued
+  generations and Wayland context serials are checked at runtime.
 - **SVC-05:** greetd's answers, checked with `Generation::check_answer`.
 
 ### What a type can't require

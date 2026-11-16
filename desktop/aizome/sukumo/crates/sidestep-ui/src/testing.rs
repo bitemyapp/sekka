@@ -200,12 +200,29 @@ pub fn inject_close_request(cx: &mut Cx, window: WindowId) {
 
 /// An input method committing `text`, then composing `preedit`.
 pub fn inject_ime(cx: &mut Cx, window: WindowId, commit: Option<&str>, preedit: &str) {
+    pending_ime(cx, window, commit, preedit).deliver(cx);
+}
+
+/// An input batch captured now but delivered later, across a prompt
+/// change or reset. It retains the context in which the input was made.
+pub struct PendingIme(FromRender);
+
+impl PendingIme {
+    pub fn deliver(self, cx: &mut Cx) {
+        cx.inject(self.0);
+    }
+}
+
+/// Capture a batch in the window's current input context without yet
+/// queuing it. Use [`PendingIme::deliver`] after advancing the application.
+pub fn pending_ime(cx: &Cx, window: WindowId, commit: Option<&str>, preedit: &str) -> PendingIme {
     let end = preedit.len() as i32;
-    cx.inject(FromRender::TextInput {
+    PendingIme(FromRender::TextInput {
         window: showing(cx, window),
         commit: commit.map(str::to_owned),
         preedit: (preedit.to_owned(), end, end),
-    });
+        generation: cx.text_input_generation(window),
+    })
 }
 
 /// Drag `drag` entering the window at `at`, offering `mimes` and, as

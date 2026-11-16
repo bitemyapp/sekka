@@ -8,6 +8,17 @@
 /// A window, as the two threads name it.
 pub type WindowId = u32;
 
+/// One window's input context. Changes of purpose and explicit resets
+/// retire earlier input, including messages already queued to the UI.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct TextInputGeneration(u64);
+
+impl TextInputGeneration {
+    pub fn advance(&mut self) {
+        self.0 = self.0.checked_add(1).expect("text input generation exhausted");
+    }
+}
+
 /// A layer of a window: [`ROOT_LAYER`] for the window's own surface, or a
 /// scroll view's document, named by its clip view.
 pub type LayerId = u64;
@@ -907,11 +918,13 @@ pub enum ToRender {
         wanted: bool,
         purpose: TextPurpose,
         caret: Option<Rect>,
+        generation: TextInputGeneration,
     },
     /// The program dropped the text being composed: the input method starts
     /// over.
     ResetTextInput {
         window: WindowId,
+        generation: TextInputGeneration,
     },
     /// The desktop's light or dark preference changed (from the settings
     /// portal's watcher).
@@ -1176,6 +1189,7 @@ pub enum FromRender {
         window: WindowId,
         commit: Option<String>,
         preedit: (String, i32, i32),
+        generation: TextInputGeneration,
     },
     /// Another client asked for a type of our selection that the program
     /// promised: answer `ToRender::SelectionData` under `token`.

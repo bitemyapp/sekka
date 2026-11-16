@@ -384,6 +384,7 @@ pub(crate) struct WindowData {
     pub outputs: Vec<u32>,
     pub cursor: Cursor,
     pub text_input: (bool, TextPurpose, Option<Rect>),
+    pub text_input_generation: protocol::TextInputGeneration,
     /// Where the content takes pointer input, and where it's opaque, as
     /// the program set them.
     pub input_region: Option<Vec<Rect>>,
@@ -481,6 +482,7 @@ impl WindowData {
             outputs: Vec::new(),
             cursor: Cursor::Default,
             text_input: (false, TextPurpose::Normal, None),
+            text_input_generation: protocol::TextInputGeneration::default(),
             input_region: None,
             opaque_region: None,
             layer_size: options.size,
@@ -1006,18 +1008,31 @@ impl Window<'_> {
         if self.data.text_input == (wanted, purpose, caret) {
             return;
         }
+        if (self.data.text_input.0, self.data.text_input.1) != (wanted, purpose) {
+            self.data.text_input_generation.advance();
+        }
         self.data.text_input = (wanted, purpose, caret);
         let caret = caret.map(|r| protocol::Rect::new(r.x0 as f32, r.y0 as f32, r.x1 as f32, r.y1 as f32));
         if let Some(showing) = self.data.showing {
-            send(self.tx, ToRender::TextInput { window: showing, wanted, purpose, caret });
+            send(
+                self.tx,
+                ToRender::TextInput {
+                    window: showing,
+                    wanted,
+                    purpose,
+                    caret,
+                    generation: self.data.text_input_generation,
+                },
+            );
         }
     }
 
     /// The program dropped the text being composed: the input method
     /// starts over.
     pub fn reset_text_input(&mut self) {
+        self.data.text_input_generation.advance();
         if let Some(showing) = self.data.showing {
-            send(self.tx, ToRender::ResetTextInput { window: showing });
+            send(self.tx, ToRender::ResetTextInput { window: showing, generation: self.data.text_input_generation });
         }
     }
 
