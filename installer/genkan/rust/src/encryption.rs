@@ -40,12 +40,12 @@ pub(crate) fn preflight() -> Result<()> {
 pub(crate) struct Mappings(Vec<String>);
 impl Mappings {
     /// Formats `partition` as LUKS2 with `uuid` and opens it: the mapping.
-    pub(crate) fn format_open(
+    pub(crate) fn format_open<'disk>(
         &mut self,
-        partition: &Device,
+        partition: &Device<'disk>,
         uuid: &str,
         passphrase: &str,
-    ) -> Result<Device> {
+    ) -> Result<Device<'disk>> {
         let device = partition.path();
         filesystem::check_uuid(uuid, "crypto_LUKS")?;
         validate_passphrase(passphrase)?;

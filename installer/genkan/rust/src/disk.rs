@@ -434,8 +434,11 @@ pub struct Locked {
 
 impl Locked {
     /// Partition `index` of this disk.
-    pub fn partition(&self, index: u8) -> Device {
-        Device(partition(self.disk.path(), index))
+    pub fn partition(&self, index: u8) -> Device<'_> {
+        Device {
+            path: partition(self.disk.path(), index),
+            locked: std::marker::PhantomData,
+        }
     }
 
     pub fn disk(&self) -> &Confirmed {
@@ -459,25 +462,81 @@ impl Locked {
     }
 }
 
-/// A block device on the confirmed disk: one of its partitions, or an
-/// encrypted mapping over one. Only [`Locked::partition`] makes one, so
-/// formatting can't be pointed at a device named from a path passed beside
-/// the proof.
+/// A writable block device on the confirmed disk: one of its partitions,
+/// or an encrypted mapping over one. It borrows the [`Locked`] disk, so
+/// formatting cannot outlive the lock and its checked device handle.
+/// Keeping a partition after dropping or releasing that lock is rejected:
+///
+/// ```compile_fail,E0505
+/// use calamares_nixos::{Filesystem, disk::Locked};
+/// fn format_after_drop(locked: Locked, uuid: &str) -> anyhow::Result<()> {
+///     let partition = locked.partition(2);
+///     drop(locked);
+///     Filesystem::Ext4.format(&partition, uuid)
+/// }
+/// ```
+///
+/// ```compile_fail,E0505
+/// use calamares_nixos::{Filesystem, disk::Locked};
+/// fn format_after_release(locked: Locked, uuid: &str) -> anyhow::Result<()> {
+///     let partition = locked.partition(2).clone();
+///     locked.release()?;
+///     Filesystem::Ext4.format(&partition, uuid)
+/// }
+/// ```
+///
+/// Formatting while the disk stays locked, then releasing it, is allowed:
+///
+/// ```
+/// use calamares_nixos::{Filesystem, disk::Locked};
+/// fn format_then_release(locked: Locked, uuid: &str) -> anyhow::Result<()> {
+///     let partition = locked.partition(2);
+///     Filesystem::Ext4.format(&partition, uuid)?;
+///     locked.release()?;
+///     Ok(())
+/// }
+/// ```
 #[derive(Clone, Debug)]
-pub struct Device(String);
+pub struct Device<'disk> {
+    path: String,
+    locked: std::marker::PhantomData<&'disk Locked>,
+}
 
-impl Device {
+impl<'disk> Device<'disk> {
     pub fn path(&self) -> &str {
-        &self.0
+        &self.path
     }
-    /// The device-mapper node `name`, opened over this device.
-    pub(crate) fn mapping(&self, name: &str) -> Device {
-        Device(format!("/dev/mapper/{name}"))
+    /// The device-mapper node `name`, opened over this device. Its write
+    /// permission borrows the same disk lock as the underlying partition.
+    pub(crate) fn mapping(&self, name: &str) -> Device<'disk> {
+        Device {
+            path: format!("/dev/mapper/{name}"),
+            locked: self.locked,
+        }
+    }
+    /// Give up formatting permission, retaining only the path needed for
+    /// udev and mounting after releasing the disk lock.
+    pub(crate) fn into_mount(self) -> MountDevice {
+        MountDevice(self.path)
     }
     /// A disposable test device (a loop device, a VM disk's partition).
     #[cfg(test)]
-    pub(crate) fn for_test(path: &str) -> Device {
-        Device(path.into())
+    pub(crate) fn for_test(path: &'disk str) -> Device<'disk> {
+        Device {
+            path: path.into(),
+            locked: std::marker::PhantomData,
+        }
+    }
+}
+
+/// A checked device path retained after formatting. It carries no formatting
+/// permission: only a lock-borrowing [`Device`] may be formatted.
+#[derive(Debug)]
+pub(crate) struct MountDevice(String);
+
+impl MountDevice {
+    pub(crate) fn path(&self) -> &str {
+        &self.0
     }
 }
 
