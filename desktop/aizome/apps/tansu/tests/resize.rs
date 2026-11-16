@@ -143,16 +143,19 @@ fn a_grow_that_stopped_part_way_can_be_applied_again() {
 #[test]
 fn a_partition_another_tool_resized_is_not_resized_from_the_size_queued() {
     // Queued: grow sda3 from 140 to 160 GiB. Before it runs, another tool
-    // grows it, filesystem and all, to 200 GiB. Taken from the size queued,
-    // the grow would move the partition's end back to 160 GiB, under a
-    // filesystem of 200.
-    for fs in ["vfat", "ext4"] {
+    // grows it, filesystem and all, past 160 GiB. Even within the MiB of
+    // alignment tolerance, taking the size queued would move its end back
+    // under the filesystem.
+    for (fs, changed) in ["vfat", "ext4"]
+        .into_iter()
+        .flat_map(|fs| [160 * GIB + 512, 160 * GIB + MIB / 2, 160 * GIB + MIB, 200 * GIB].map(|size| (fs, size)))
+    {
         let (mock, plan, mut run) = fixture_with_plan(fs, 160 * GIB);
         mock.edit(|s| {
             let block = s.blocks.iter_mut().find(|b| b.path == PART).unwrap();
-            block.size = 200 * GIB;
-            block.partition.as_mut().unwrap().size = 200 * GIB;
-            block.filesystem.as_mut().unwrap().size = Some(200 * GIB);
+            block.size = changed;
+            block.partition.as_mut().unwrap().size = changed;
+            block.filesystem.as_mut().unwrap().size = Some(changed);
         });
         // A run agreed to before the other tool's resize refuses at its
         // first step, and resizes nothing.
@@ -161,10 +164,11 @@ fn a_partition_another_tool_resized_is_not_resized_from_the_size_queued() {
         let block = state.block(PART).unwrap();
         assert_eq!(
             (block.size, block.partition.as_ref().unwrap().size, block.filesystem.as_ref().unwrap().size),
-            (200 * GIB, 200 * GIB, Some(200 * GIB)),
+            (changed, changed, Some(changed)),
             "{fs}: nothing was resized"
         );
         assert!(matches!(outcome, Outcome::Failed { error, .. } if error.contains("changed since")), "{fs}");
+        assert_eq!(mock.calls().len(), 1, "{fs}: the first attempted step refuses");
         // The plan sees it too: refused at Apply, and dropped.
         let mut plan = plan;
         assert!(!plan.problems(&state).is_empty(), "{fs}: refused at Apply");

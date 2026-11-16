@@ -117,6 +117,17 @@ impl Trashed {
             .entry_for(&self.file)
             .filter(|e| e.info.as_ref() == Some(&self.info) && e.original.as_ref() == Some(&self.original) && ours())
     }
+
+    /// Whether an unsuccessful restore should keep this receipt to retry.
+    /// Failure to read it isn't proof that the item went away. A different
+    /// receipt, however, belongs to a later item and must never be retried.
+    pub(crate) fn may_remain(&self) -> bool {
+        match fs::symlink_metadata(&self.info) {
+            Ok(m) if InfoId::of(&m) != self.receipt => false,
+            Err(e) if e.kind() == io::ErrorKind::NotFound => false,
+            Ok(_) | Err(_) => !fs::symlink_metadata(&self.file).is_err_and(|e| e.kind() == io::ErrorKind::NotFound),
+        }
+    }
 }
 
 /// An item in a trash can.

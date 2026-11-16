@@ -344,6 +344,12 @@ impl Sizes {
     /// its steps (or an earlier run's) took it. Any other size is another
     /// tool's resize: growing it from `from` would then shrink it.
     fn hold(self, size: u64) -> bool {
+        // A grow changes the partition before its filesystem. Even an
+        // alignment-sized overshoot would turn that step into a shrink
+        // underneath a filesystem another tool may already have grown.
+        if self.to >= self.from && size > self.to {
+            return false;
+        }
         size.abs_diff(self.from) <= Self::SLACK || size.abs_diff(self.to) <= Self::SLACK
     }
 }
@@ -459,10 +465,11 @@ impl<Op: AsSeen, B> Confirm<Op, B> {
 impl<B> Confirm<Resize, B> {
     /// The person agreed to resize the partition they saw (`seen`, as for
     /// [`Confirm::new`]) from `from` bytes, its size then, to `to`. Each
-    /// step's check holds the partition to one of those sizes, give or take
-    /// the MiB that aligning its end may move it: a partition another tool
-    /// resized meanwhile (grown past `to`, say) isn't resized from a size it
-    /// no longer has, which would shrink it under its filesystem. A resize
+    /// step's check holds the partition to one of those sizes, allowing the
+    /// MiB that aligning its end may move it, but never past a grow's target:
+    /// a partition another tool resized meanwhile (grown past `to`, say)
+    /// isn't resized from a size it no longer has, which would shrink it
+    /// under its filesystem. A resize
     /// can't be confirmed without them:
     ///
     /// ```compile_fail,E0599
@@ -707,6 +714,13 @@ mod tests {
         assert!(grow().matches(&at(100 * MIB)));
         assert!(grow().check(&at(160 * MIB)).is_ok());
         assert!(grow().check(&at(160 * MIB - MIB / 2)).is_ok());
+        for extra in [1, MIB / 2, MIB] {
+            assert!(!grow().matches(&at(160 * MIB + extra)));
+            assert!(grow().check(&at(160 * MIB + extra)).is_err());
+        }
+        // The starting-size tolerance must not admit an overshoot either
+        // when the requested growth is smaller than that tolerance.
+        assert!(!Confirm::resize(seen.clone(), 100 * MIB, 100 * MIB + 512, ()).matches(&at(100 * MIB + 1024)));
         // Another tool grew it past the size chosen: growing it "from 100"
         // would move its end back, under its filesystem.
         assert!(!grow().matches(&at(200 * MIB)));

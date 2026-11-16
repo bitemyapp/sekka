@@ -518,13 +518,20 @@ fn nothing() -> Record {
 /// inverse (to redo, or undo again), and what's left of `record`: the
 /// part not carried out whose items are still there to try again with.
 fn carry_out(record: &Record, trash: &Trash, env: &mut Env) -> (Report, Record, Record) {
-    let there = |p: &PathBuf| std::fs::symlink_metadata(p).is_ok();
+    // An inaccessible item may still be there. Only definite absence
+    // removes it from a step's retry record.
+    let there = |p: &PathBuf| !std::fs::symlink_metadata(p).is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound);
     match record {
         Record::Rename { from, to } => {
             let mut report = Report::default();
-            if !there(to) {
-                report.failed.push((to.clone(), "it isn't there any more".into()));
-                return (report, nothing(), nothing());
+            if let Err(e) = std::fs::symlink_metadata(to) {
+                let (why, left) = if e.kind() == std::io::ErrorKind::NotFound {
+                    ("it isn't there any more".into(), nothing())
+                } else {
+                    (super::describe(&e), record.clone())
+                };
+                report.failed.push((to.clone(), why));
+                return (report, nothing(), left);
             }
             match sys::rename_noreplace(to, from) {
                 Ok(()) => {
@@ -570,7 +577,7 @@ fn carry_out(record: &Record, trash: &Trash, env: &mut Env) -> (Report, Record, 
             let paths = report.done.iter().map(|(_, to)| to.clone()).collect();
             // Only the original receipt can keep a step. A later replacement
             // may already have reused a name freed by this very restore.
-            let left = items.iter().filter(|t| t.entry(trash).is_some()).cloned().collect();
+            let left = items.iter().filter(|t| t.may_remain()).cloned().collect();
             (report, Record::Made { paths }, Record::Trash { items: left })
         }
     }
@@ -609,6 +616,46 @@ mod tests {
 
     fn step(record: Record, label: &str) -> Step {
         Step { record, label: label.into() }
+    }
+
+    #[test]
+    fn inaccessible_items_keep_their_undo_until_access_returns() {
+        use std::os::unix::fs::PermissionsExt;
+        if crate::fsops::testing::is_root() {
+            return;
+        }
+        for kind in ["Rename", "Move", "Copy", "Trash"] {
+            let t = TempDir::new("undo-inaccessible");
+            let tr = trash(&t);
+            let b = t.file("home/locked/b.txt", "b");
+            let a = t.join("home/locked/a.txt");
+            let (record, locked, probe) = match kind {
+                "Rename" => (Record::Rename { from: a, to: b.clone() }, t.join("home/locked"), b.clone()),
+                "Move" => (Record::Move { pairs: vec![(a, b.clone())] }, t.join("home/locked"), b.clone()),
+                "Copy" => (Record::Made { paths: vec![b.clone()] }, t.join("home/locked"), b.clone()),
+                "Trash" => {
+                    let item = tr.trash(&b).unwrap();
+                    let info = item.info().to_path_buf();
+                    (Record::Trash { items: vec![item] }, info.parent().unwrap().to_path_buf(), info)
+                }
+                _ => unreachable!(),
+            };
+            let mut h = History::default();
+            h.push(step(Record::Made { paths: vec![t.file("previous.txt", "previous")] }, "Previous copy"));
+            h.push(step(record, kind));
+            std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o000)).unwrap();
+            let error = std::fs::symlink_metadata(&probe).unwrap_err();
+            let (report, inverted) = run(h.begin_undo().unwrap(), &tr);
+            let filed = h.finished(inverted, |_| ());
+            std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o700)).unwrap();
+            assert_eq!(error.kind(), std::io::ErrorKind::PermissionDenied);
+            assert!(!report.failed.is_empty(), "{kind}: {report:?}");
+            assert_eq!(filed, Filed::Kept, "{kind}");
+            assert_eq!(h.undo_label(), Some(kind));
+            assert!(t.join("previous.txt").exists());
+            assert!(undo(&mut h, &tr).is_clean(), "{kind}: retry succeeds");
+            assert_eq!(h.undo_label(), Some("Previous copy"));
+        }
     }
 
     #[test]
