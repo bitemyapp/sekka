@@ -223,6 +223,17 @@ impl Candidate {
         let file = candidate.dir.join("flake.nix");
         let text = prepare_flake(&std::fs::read_to_string(&file).map_err(|e| e.to_string())?, request)?;
         std::fs::write(file, &text).map_err(|e| e.to_string())?;
+        // Sekka's address moving from GitHub's tarball to Git names the same
+        // commit, so its lock entry moves with it. Nix then has nothing to
+        // fetch to lock the new spelling, here or when root repeats this
+        // with a Git cache of its own; the update's fetch is the only one.
+        if let Ok(Some(url)) = edit::string_value(&text, &["inputs", "sekka", "url"]) {
+            let file = candidate.dir.join("flake.lock");
+            let lock = std::fs::read_to_string(&file).map_err(|e| e.to_string())?;
+            if let Some(lock) = sekka::lock_fetched_with_git(&lock, &url) {
+                std::fs::write(file, lock).map_err(|e| e.to_string())?;
+            }
+        }
         if request.sekka {
             let following = sekka::following(&text);
             candidate.inputs.retain(|input| !following.contains(&input.as_str()));
