@@ -524,8 +524,8 @@ impl Job {
     /// # list.listed(DriveListing::new(listing, Ok(vec![stick.clone()])));
     /// # list.choose(&stick);
     /// # let image = ImageId { path: "sekka.iso".into(), sha256: "0".repeat(64) };
-    /// # let (review, _) = list.open_review(None, image.clone()).unwrap();
-    /// # let plan = Plan::new(list.confirm(review, None, Some(image)).unwrap());
+    /// # let (review, shown) = list.open_review(None, image.clone()).map(|(r, t)| (r, t.clone())).unwrap();
+    /// # let plan = Plan::new(list.confirm(review, None, Some(image)).unwrap(), shown).unwrap();
     /// # let dir = kakehashi_core::job::JobDir::new().unwrap();
     /// # let path = dir.progress();
     /// # std::fs::write(&path, "{\"stage\":\"writing\",\"done\":1073741824,\"total\":4294967296}\n").unwrap();
