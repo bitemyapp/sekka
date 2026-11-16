@@ -441,9 +441,11 @@ pub fn output(mut c: Command, what: &str) -> Result<String> {
 ///
 /// The check is written for the unprivileged side too, so it makes its own
 /// commands; the helper doesn't run them as given. It makes each one again
-/// as it makes every command: one of the two programs the check may ask
-/// for, found on [`PATH`], with the helper's clean environment, the
-/// helper's own home, and then the variables the check set. A command for
+/// as one of the two programs the check may ask for, found on [`PATH`].
+/// Without privilege it inherits the caller's environment, including SSH
+/// agent access and Nix's configuration. As root it keeps the helper's clean
+/// environment. Both use the helper's own home, then the variables the check
+/// set. A command for
 /// any other program is refused before anything runs. The check works on a
 /// copy of the configuration, so these commands change neither the
 /// configuration nor root's channels.
@@ -458,19 +460,21 @@ pub fn preflight(built: Command) -> std::result::Result<std::process::Output, St
 
 /// The update check's command, made again by the helper.
 fn reissued(built: &Command) -> Result<Command> {
-    reissued_at_home(built, std::env::var_os("HOME"))
+    reissued_with_environment(built, sys::is_root(), std::env::vars_os())
 }
 
-/// [`reissued`], for a helper whose own home is `home`.
+/// [`reissued`], with an explicit caller environment for isolated tests.
 ///
 /// The check also runs without privilege: Yukimi starts `yukimi-helper
-/// preflight` as the person using it. Nix and Git keep what they fetch in
-/// the home of whoever runs them, and what that check fetches belongs in
-/// the person's home, not in root's. So the check's programs are given the
-/// helper's own home in place of root's. A helper that runs as root has
-/// root's home: pkexec sets it, and so does the unit the worker runs in.
-/// With no home of its own it keeps root's, as every other program has.
-fn reissued_at_home(built: &Command, home: Option<OsString>) -> Result<Command> {
+/// preflight` as the person using it. Fetching private inputs may need their
+/// SSH agent, proxies and Nix configuration. Root inherits only its own
+/// HOME: pkexec sets it, and so does the unit the worker runs in. With no
+/// HOME it keeps /root, as every other helper command does.
+fn reissued_with_environment(
+    built: &Command,
+    privileged: bool,
+    environment: impl IntoIterator<Item = (OsString, OsString)>,
+) -> Result<Command> {
     let program = match built.get_program().to_str() {
         Some("nix") => Program::new("nix"),
         Some("git") => Program::new("git"),
@@ -482,9 +486,13 @@ fn reissued_at_home(built: &Command, home: Option<OsString>) -> Result<Command> 
         }
     };
     let mut c = command(program);
-    if let Some(home) = home {
-        c.env("HOME", home);
+    for (name, value) in environment {
+        if !privileged || name == "HOME" {
+            c.env(name, value);
+        }
     }
+    // Inheriting credentials must not change how the allowed programs are found.
+    c.env("PATH", PATH);
     c.args(built.get_args());
     for (name, value) in built.get_envs() {
         match value {
@@ -515,11 +523,10 @@ mod tests {
     fn the_update_checks_commands_are_made_again_as_the_helpers_own() {
         let mut built = new_command(Path::new("git"));
         built.args(["-C", "/somewhere", "rev-parse"]).env("GIT_TERMINAL_PROMPT", "0").current_dir("/somewhere");
-        let set = |c: &Command, name: &str| {
-            c.get_envs().find(|(n, _)| *n == name).and_then(|(_, v)| v.map(|v| v.to_owned()))
-        };
+        let set =
+            |c: &Command, name: &str| c.get_envs().find(|(n, _)| *n == name).and_then(|(_, v)| v.map(|v| v.to_owned()));
         // The check as the person's Yukimi starts it, without privilege.
-        let c = reissued_at_home(&built, Some("/home/someone".into())).unwrap();
+        let c = reissued_with_environment(&built, false, [("HOME".into(), "/home/someone".into())]).unwrap();
         assert_eq!(c.get_program(), "git");
         assert_eq!(c.get_args().collect::<Vec<_>>(), ["-C", "/somewhere", "rev-parse"]);
         assert_eq!(c.get_current_dir(), Some(Path::new("/somewhere")));
@@ -528,12 +535,12 @@ mod tests {
         assert_eq!(set(&c, "HOME").as_deref(), Some(std::ffi::OsStr::new("/home/someone")));
         assert_eq!(set(&c, "GIT_TERMINAL_PROMPT").as_deref(), Some(std::ffi::OsStr::new("0")));
         // A helper with no home of its own gives root's, as to every program.
-        let c = reissued_at_home(&built, None).unwrap();
+        let c = reissued_with_environment(&built, false, []).unwrap();
         assert_eq!(set(&c, "HOME").as_deref(), Some(std::ffi::OsStr::new("/root")));
         // A home the check names itself still wins.
         let mut named = new_command(Path::new("nix"));
         named.env("HOME", "/var/empty");
-        let c = reissued_at_home(&named, Some("/home/someone".into())).unwrap();
+        let c = reissued_with_environment(&named, false, [("HOME".into(), "/home/someone".into())]).unwrap();
         assert_eq!(set(&c, "HOME").as_deref(), Some(std::ffi::OsStr::new("/var/empty")));
 
         assert_eq!(reissued(&new_command(Path::new("nix"))).unwrap().get_program(), "nix");
@@ -541,6 +548,44 @@ mod tests {
         for refused in ["/tmp/nix", "./git", "sh", "systemctl"] {
             let e = reissued(&new_command(Path::new(refused))).unwrap_err();
             assert!(e.0.contains(refused), "{}", e.0);
+        }
+    }
+
+    #[test]
+    fn update_checks_inherit_credentials_only_without_privilege() {
+        let mut built = new_command(Path::new("git"));
+        built.env("LC_ALL", "C").env_remove("GIT_DIR");
+        let inherited = [
+            ("HOME", "/home/someone"),
+            ("PATH", "/caller/bin"),
+            ("SSH_AUTH_SOCK", "/run/user/1000/agent.sock"),
+            ("https_proxy", "http://proxy.invalid:8080"),
+            ("XDG_CONFIG_HOME", "/home/someone/config"),
+            ("NIX_CONFIG", "connect-timeout = 5"),
+            ("LC_ALL", "ja_JP.UTF-8"),
+            ("GIT_DIR", "/unrelated/repository"),
+        ];
+        for privileged in [false, true] {
+            let c = reissued_with_environment(
+                &built,
+                privileged,
+                inherited.map(|(name, value)| (name.into(), value.into())),
+            )
+            .unwrap();
+            // Reconstruction clears inheritance, so get_envs lists the whole
+            // effective environment. No process-global variables are changed.
+            let effective: std::collections::BTreeMap<_, _> =
+                c.get_envs().filter_map(|(k, v)| v.map(|v| (k, v))).collect();
+            let value = |name: &str| effective.get(std::ffi::OsStr::new(name)).copied();
+            assert_eq!(value("HOME"), Some(std::ffi::OsStr::new("/home/someone")));
+            assert_eq!(value("PATH"), Some(std::ffi::OsStr::new(PATH)));
+            assert_eq!(value("LC_ALL"), Some(std::ffi::OsStr::new("C")));
+            assert_eq!(value("GIT_DIR"), None, "the check's explicit removal must win");
+            for name in ["SSH_AUTH_SOCK", "https_proxy", "XDG_CONFIG_HOME", "NIX_CONFIG"] {
+                let expected = (!privileged)
+                    .then(|| std::ffi::OsStr::new(inherited.iter().find(|(key, _)| *key == name).unwrap().1));
+                assert_eq!(value(name), expected, "{name}, privileged={privileged}");
+            }
         }
     }
 
