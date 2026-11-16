@@ -80,7 +80,7 @@ alternate-screen identity, reflow, projection, whitespace dependencies and
 bounded result retention. An independent seeded review compared every accepted
 old match against a fresh search through mutations and eviction. Exact source
 hashes, commands and retained reproducers are recorded in
-`upstream/search-anchor-validation.json`; this is a targeted invariant check,
+[`hotaru-benchmark-data/search-anchor-validation.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/search-anchor-validation.json); this is a targeted invariant check,
 not an exhaustive proof of all terminal behavior.
 
 The application keeps at most primary and alternate result caches for its
@@ -104,7 +104,7 @@ the named tested binary, not automatically to later source or package builds.
 `tools/search-benchmark.py` and the Rust `search` example compare fresh static
 searches of identical resident history, checking every match coordinate and
 both history counts before accepting timings. The initial record is
-`upstream/search-benchmark-initial.json`: CPU 8 on wx-workstation, native CPU,
+[`hotaru-benchmark-data/search-benchmark-initial.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/search-benchmark-initial.json): CPU 8 on wx-workstation, native CPU,
 thin LTO, System allocator, 20 repeated searches per case. Ratios below are
 Rust/Ghostty median latency, so values below one are faster:
 
@@ -122,8 +122,8 @@ before the concurrent byte-budget and Unicode-write changes. It has no cold-hist
 live-update, cross-process confidence or whole-application performance coverage.
 
 The combined byte-budget, Unicode and live-anchor checkpoint was rebuilt and
-measured separately in `upstream/search-checkpoint-build.json` and
-`upstream/search-benchmark-checkpoint.json`. These static-search timings retain
+measured separately in [`hotaru-benchmark-data/search-checkpoint-build.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/search-checkpoint-build.json) and
+[`hotaru-benchmark-data/search-benchmark-checkpoint.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/search-benchmark-checkpoint.json). These static-search timings retain
 the **legacy width configuration** in both engines, with the same resident
 history, needle cases and exclusions as above:
 
@@ -146,7 +146,7 @@ cancellation and records the formatting position. A complete match necessarily
 writes its full needle-length sequence into the ring, so overlapping matches
 and byte-to-cell coordinates remain unchanged.
 
-`upstream/search-ring-skip-build.json` identifies this isolated candidate;
+[`hotaru-benchmark-data/search-ring-skip-build.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/search-ring-skip-build.json) identifies this isolated candidate;
 `search-ring-skip-benchmark.json` retains its reference comparisons. The paired
 Rust comparison is separate: `tools/search-compare.py` alternates the unchanged
 checkpoint and candidate on the same CPU, checks all coordinates and byte

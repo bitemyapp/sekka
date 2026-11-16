@@ -26,7 +26,7 @@ unsupported scalars, masks above 4 MiB and reservation failures are explicit
 errors. The separate Ghostty MIT notice accompanies adapted logic and fixtures.
 
 The historical isolated raster qualification remains under
-`upstream/sprites/reference/`. It used unchanged pinned Ghostty drawing files
+[`hotaru-benchmark-data/sprites/reference`](https://github.com/bitemyapp/hotaru-benchmark-data/tree/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/sprites/reference). It used unchanged pinned Ghostty drawing files
 and actual pinned z2d surfaces: 310,896 complete padded masks across 2,032 metric
 sets, plus exact placement/ink bounds, and 612 comparisons to upstream PNG
 atlases. These reports retain their original source identities. The current
@@ -95,7 +95,7 @@ tests (including 612 committed-PNG expectations), four Alpha8 raster tests and
 the generic-state UI test. Strict native package Clippy passes. The standalone
 workspace's locked metadata resolves the new crate. The Linux ppem calculation
 matches 126 recorded FreeType size/scale cases. Final source identities and
-checks are in `upstream/sprites/native/summary.json`; no package acceptance is
+checks are in [`hotaru-benchmark-data/sprites/native/summary.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/sprites/native/summary.json); no package acceptance is
 claimed until the integrated Nix build and package suites pass.
 
 The native regressions include mask ownership/eviction, shaping boundaries,
@@ -151,9 +151,9 @@ full-terminal damage path and disable pixel-scroll reuse. Thus exact rendering
 does not establish an efficiency improvement. A candidate-only cold raster
 measurement is recorded separately and is not a comparative benchmark.
 
-`upstream/sprites/curves/README.md` gives exact sources, evidence, bounds,
+[`hotaru-benchmark-data/sprites/curves/README.md`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/sprites/curves/README.md) gives exact sources, evidence, bounds,
 reproduction commands and the preserved initial failing mask report.
-`upstream/sprites/curves/remaining-inventory.json` lists all 54 registered ranges:
+[`hotaru-benchmark-data/sprites/curves/remaining-inventory.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/sprites/curves/remaining-inventory.json) lists all 54 registered ranges:
 907 of 1,085 character slots and 11 internal sprite rasters still lack this port's
 exact-raster qualification. Registered slots may include intentional blanks;
 ordinary font fallback and native decorations do not prove sprite equivalence.
@@ -180,7 +180,7 @@ Combined native captures compare all 434 glyphs at 1/1.25/2/back 1: 1,736 compar
 [434-sprite/partial-scroll package](region-checkpoint.md) passes its release
 Nix build and all eight native runtime suites. No comparative speed claim
 follows from these checks.
-`upstream/sprites/braille/README.md` contains reproduction, hashes, failure evidence
+[`hotaru-benchmark-data/sprites/braille/README.md`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/sprites/braille/README.md) contains reproduction, hashes, failure evidence
 and scope. Its inventory leaves 651 registered character slots plus 11 internal
 sprite rasters unqualified, preserving prior reports unchanged.
 
@@ -207,6 +207,6 @@ All 442 native glyphs match the real oracle at 1/1.25/2/back 1: 1,768 captures a
 tests, 62 ordinary native tests and strict pure/native Clippy pass. Package
 acceptance remains a separate Nix/runtime step. Ownership, cache bounds and
 padded-ink behavior are unchanged; no throughput or GPU claim follows.
-`upstream/sprites/geometric/README.md` records sources, licensing, reproduction,
+[`hotaru-benchmark-data/sprites/geometric/README.md`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/sprites/geometric/README.md) records sources, licensing, reproduction,
 failures and limits. Its inventory leaves 643 registered character slots plus
 11 internal sprite rasters unqualified, preserving earlier evidence unchanged.

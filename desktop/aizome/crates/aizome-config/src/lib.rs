@@ -15,6 +15,7 @@ use std::path::{Path, PathBuf};
 
 pub use aizome_theme::{Effects, FocusColor, ThemeName};
 
+pub mod bindings;
 pub mod compositor;
 pub mod greeter;
 pub mod location;

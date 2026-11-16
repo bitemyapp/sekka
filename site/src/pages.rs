@@ -375,7 +375,7 @@ pub fn aizome(site: &Site) -> Result<Page> {
   <h2 id="anywhere">On any NixOS system</h2>
   <p>On Sekka, choose Aizome in the installer, where it is selected by default, or add it later in Yukimi's Desktops page. On any NixOS system with flakes, add Sekka's flake, import the module and enable it; then pick Aizome on the login screen.</p>
   <pre class="code"><code>{
-  inputs.sekka.url = "github:bitemyapp/sekka/nightly";
+  inputs.sekka.url = "git+https://github.com/bitemyapp/sekka?ref=nightly&amp;shallow=1";
   outputs = { nixpkgs, sekka, ... }: {
     nixosConfigurations.example = nixpkgs.lib.nixosSystem {
       modules = [
@@ -575,7 +575,7 @@ pub fn tatami(site: &Site) -> Result<Page> {
   <pre class="code"><code>{
   inputs.nixpkgs.url = "https://flakehub.com/f/NixOS/nixpkgs/0.1";
   inputs.sekka = {
-    url = "github:bitemyapp/sekka/nightly";
+    url = "git+https://github.com/bitemyapp/sekka?ref=nightly&amp;shallow=1";
     inputs.nixpkgs.follows = "nixpkgs";
   };
   outputs = { nixpkgs, sekka, ... }: {
@@ -997,7 +997,7 @@ pub fn yukimi(site: &Site) -> Result<Page> {
   <h2 id="anynixos">On any NixOS system</h2>
   <p>Yukimi finds the configuration the way <code>nixos-rebuild</code> does: a flake when <code>/etc/nixos/flake.nix</code> exists, following it if it links elsewhere, and channels otherwise. It works without the rest of Sekka:</p>
   <pre class="code"><code>{
-  inputs.sekka.url = "github:bitemyapp/sekka/nightly";
+  inputs.sekka.url = "git+https://github.com/bitemyapp/sekka?ref=nightly&amp;shallow=1";
   inputs.sekka.inputs.nixpkgs.follows = "nixpkgs";
   outputs = { nixpkgs, sekka, ... }: {
     nixosConfigurations.host = nixpkgs.lib.nixosSystem {

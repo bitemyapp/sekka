@@ -40,7 +40,7 @@ chunk sizes (402 comparisons), plus plain/VT/HTML output (402 comparisons).
 repair a bug in the pinned formatter. Independent dense-array testing covers
 20,000 sparse range mutations and dictionary restoration. Owned content tests
 cover compressed-history capture, decode, eviction, resize and terminal teardown.
-`upstream/hyperlink-report.json` identifies exact source and fixture hashes.
+[`hotaru-benchmark-data/hyperlink-report.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/hyperlink-report.json) identifies exact source and fixture hashes.
 
 The intentional HTML correction is narrow: crossing terminal style and link
 scopes can produce `<div style="...">a<a href="...">b</div>c</a>` or
@@ -69,14 +69,14 @@ relying only on URI equality.
 An independent review additionally checked 529 actual Rust outputs using
 Python's HTML parser and a separate URI projection, including deterministic
 mixtures of valid Unicode, malformed UTF8, controls and existing percent escapes;
-see `upstream/formatter-uri-audit.json` and its reproducible driver scripts.
+see [`hotaru-benchmark-data/formatter-uri-audit.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/formatter-uri-audit.json) and its reproducible driver scripts.
 
 This is partial subsystem coverage. Search across scrollback, selection gesture
 policies, configurable copy codepoint maps, hyperlink hover/activation policy,
 full terminal state serialization and C API compatibility are separate work.
 No broad performance acceptance is inferred from these correctness fixtures.
 
-The serial diagnostic in `upstream/hyperlink-performance-verified.json` uses
+The serial diagnostic in [`hotaru-benchmark-data/hyperlink-performance-verified.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/hyperlink-performance-verified.json) uses
 four deterministic approximately 2 MiB streams, a pinned CPU, zero history,
 native optimized builds, three warmups and twenty measured iterations per
 engine. Full grid/effects, every visible URI and exact content VT transitions

@@ -8,16 +8,22 @@ Usage: python3 tests/test_yukimi_preflight.py /nix/store/...-yukimi-helper/bin
 import json
 import os
 from pathlib import Path
+import selectors
 import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 
 BIN = Path(sys.argv.pop(1)).resolve()
 NIX = Path(shutil.which('nix')).resolve()
 SHELL = Path(shutil.which('sh')).resolve()
 GIT = Path(shutil.which('git')).resolve()
+# More settings for the fixture's Nix, one to a line. `lazy-trees = true`, as
+# Determinate Nix sets on Sekka's installations, keeps fetched sources out of
+# the store unless something puts them there.
+NIX_CONF = os.environ.get('YUKIMI_TEST_NIX_CONF', '')
 RUNTIME = (Path(os.environ['YUKIMI_TEST_RUNTIME']).read_text().split()
            if 'YUKIMI_TEST_RUNTIME' in os.environ else subprocess.check_output(
                ['nix-store', '-qR', str(BIN.parent), str(NIX.parents[1]), str(SHELL.parents[1]), str(GIT.parents[1])], text=True).split())
@@ -63,7 +69,7 @@ class Preflight(unittest.TestCase):
         (self.root / 'etc/group').write_text('root:x:0:\n')
         (self.root / 'etc/nix/nix.conf').write_text(
             'experimental-features = nix-command flakes\nbuild-users-group =\n'
-            'sandbox = false\nsubstituters =\nflake-registry =\n')
+            'sandbox = false\nsubstituters =\nflake-registry =\n' + NIX_CONF + '\n')
         (self.root / 'run/current-system/sw/bin/nix').symlink_to(NIX)
         (self.root / 'run/current-system/sw/bin/git').symlink_to(GIT)
         (self.root / 'bin/yukimi-helper').symlink_to(BIN / 'yukimi-helper')
@@ -85,8 +91,11 @@ class Preflight(unittest.TestCase):
     def configuration(self):
         return {str(p.relative_to(self.config)): p.read_bytes() for p in self.config.rglob('*') if p.is_file() and '.git' not in p.relative_to(self.config).parts}
 
-    def run_cmd(self, *args, ok=True, builds=False):
-        result = subprocess.run(self.base + list(args), stdin=subprocess.DEVNULL,
+    def run_cmd(self, *args, ok=True, builds=False, home=None):
+        # Root's home unless another account's is given: Nix keeps its Git
+        # clones in the home of whoever fetches.
+        base = self.base + (['--setenv', 'HOME', home] if home else [])
+        result = subprocess.run(base + list(args), stdin=subprocess.DEVNULL,
                                 capture_output=True, text=True, timeout=60)
         self.assertEqual(result.returncode == 0, ok, result.stdout + result.stderr)
         self.assertEqual((self.root / 'state/compiled').exists(), builds, 'unexpected builder execution')
@@ -233,6 +242,205 @@ class Preflight(unittest.TestCase):
             FLAKE.replace('package = dependency.package;', '__structuredAttrs = true;'))
         self.before = self.configuration()
         self.assertEqual(self.check()['builds'], [])
+
+    def prepare_git_source(self, migrate):
+        """Sekka as a local Git remote, which real Nix fetches with real Git."""
+        remote = self.root / 'remote'
+        remote.mkdir()
+        (remote / 'flake.nix').write_text(DEPENDENCY)
+        self.git('init', '-q', '-b', 'nightly', directory='/remote')
+        self.git('add', '.', directory='/remote')
+        self.git('commit', '-qm', 'initial source', directory='/remote')
+        (self.root / 'root/.gitconfig').write_text(
+            '[url "file:///remote"]\n    insteadOf = https://github.com/bitemyapp/sekka\n')
+        # Nix reads file:// repositories directly. Use an HTTPS address that
+        # Git redirects locally so the real fetch subprocess is exercised.
+        address = ('git+file:///remote?ref=nightly&shallow=1' if migrate else
+                   'git+https://github.com/bitemyapp/sekka?ref=nightly&shallow=1')
+        seed = FLAKE.replace('dependency', 'sekka').replace('path:./sekka', address)
+        (self.config / 'flake.nix').write_text(seed)
+        self.run_cmd(str(NIX), 'flake', 'lock', '/etc/nixos')
+        self.run_cmd(str(NIX), 'flake', 'archive', '--json', '/etc/nixos')
+        if migrate:
+            # Reuse the identical cached source as an installed github: lock.
+            # Migration fetches Git during flake lock, before flake update.
+            lock = json.loads((self.config / 'flake.lock').read_text())
+            source = lock['nodes']['sekka']
+            source['locked'] = {k: v for k, v in source['locked'].items()
+                                if k in ['lastModified', 'narHash', 'rev']}
+            source['locked'].update(type='github', owner='bitemyapp', repo='sekka')
+            source['original'] = dict(type='github', owner='bitemyapp', repo='sekka', ref='nightly')
+            (self.config / 'flake.lock').write_text(json.dumps(lock))
+            (self.config / 'flake.nix').write_text(seed.replace(
+                'git+file:///remote?ref=nightly&shallow=1', 'github:bitemyapp/sekka/nightly'))
+        else:
+            (remote / 'flake.nix').write_text(DEPENDENCY.replace('cargo-geiger-fixture', 'updated-fixture'))
+            self.git('commit', '-am', 'next nightly', directory='/remote')
+        self.before = self.configuration()
+
+    def prepare_paused_fetch(self, migrate):
+        """Real Nix fetches a local Git remote; only its progress is injected."""
+        self.prepare_git_source(migrate)
+        # A FIFO releases Git only after the parent has observed progress.
+        # This proves delivery before command completion without a timed sleep.
+        gate = self.root / 'state/release-fetch'
+        os.mkfifo(gate)
+        wrapper = self.root / 'run/current-system/sw/bin/git'
+        wrapper.unlink()
+        wrapper.write_text(f'''#!{SHELL}
+for arg in "$@"; do
+    if [ "$arg" = fetch ] && [ ! -e /state/fetch-released ]; then
+        printf 'Receiving objects:  25%% (1/4), 1.00 MiB | 1.00 MiB/s\\r' >&2
+        IFS= read -r release < /state/release-fetch
+        : > /state/fetch-released
+        break
+    fi
+done
+exec {GIT} "$@"
+''')
+        wrapper.chmod(0o755)
+        return gate
+
+    def check_live_fetch(self, migrate=False, cancel=False):
+        gate = self.prepare_paused_fetch(migrate)
+        args = ['/bin/yukimi-helper', 'preflight', '--update', 'sekka']
+        if migrate:
+            args.append('--sekka')
+        release = os.open(gate, os.O_RDWR)
+        child = subprocess.Popen(self.base + args, stdin=subprocess.PIPE,
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        live_input = child.stdin
+        # communicate() must drain both outputs without closing the stop pipe.
+        child.stdin = None
+        try:
+            chunks = bytearray()
+            progress = b'Receiving objects:  25% (1/4), 1.00 MiB | 1.00 MiB/s\r'
+            with selectors.DefaultSelector() as poll:
+                poll.register(child.stderr, selectors.EVENT_READ)
+                deadline = time.monotonic() + 20
+                while progress not in chunks and time.monotonic() < deadline:
+                    for key, _ in poll.select(.1):
+                        chunk = os.read(key.fd, 65536)
+                        if not chunk:
+                            self.fail(f'helper exited before live progress: {chunks.decode()}')
+                        chunks.extend(chunk)
+            self.assertIn(progress, chunks, 'progress was buffered or lost its carriage-return delimiter')
+            events = [json.loads(line[5:]) for line in chunks.decode().split('\n')[:-1] if line.startswith('@nix ')]
+            self.assertTrue(any(e.get('action') == 'start' and e.get('type') == 112 for e in events),
+                            'the GUI needs a structured fetch activity to display Git progress')
+            self.assertIsNone(child.poll(), 'progress arrived only after the check finished')
+            if cancel:
+                live_input.close()
+            else:
+                os.write(release, b'continue\n')
+            stdout, stderr = child.communicate(timeout=20)
+            if cancel:
+                self.assertNotEqual(child.returncode, 0)
+                self.assertIn(b'Stopped', stderr)
+                self.assertEqual(stdout, b'')
+            else:
+                self.assertEqual(child.returncode, 0, stderr.decode())
+                report = json.loads(stdout)
+                self.assertEqual(report['builds'], ['cargo-geiger-fixture' if migrate else 'updated-fixture'])
+                proposed = json.loads((self.root / report['lock'].lstrip('/')).read_text())
+                self.assertEqual(proposed['nodes']['sekka']['locked']['type'], 'git')
+            self.assertEqual(self.configuration(), self.before)
+            self.assertFalse((self.root / 'state/compiled').exists())
+            self.assertFalse(list((self.root / 'tmp').glob('yukimi-preflight-*')))
+        finally:
+            live_input.close()
+            os.write(release, b'cleanup\n')
+            os.close(release)
+            if child.poll() is None:
+                child.kill()
+            child.communicate()
+
+    def test_update_fetch_progress_arrives_before_git_finishes(self):
+        self.check_live_fetch()
+
+    def test_migration_fetch_progress_arrives_before_git_finishes(self):
+        self.check_live_fetch(migrate=True)
+
+    def test_cancel_during_streamed_fetch_leaves_configuration_unchanged(self):
+        self.check_live_fetch(cancel=True)
+
+    # Yukimi checks an update as the person at the desktop; root then repeats
+    # the check and builds. Nix keeps Git clones in the home of whoever
+    # fetches, so anything root fetches of Sekka is a whole clone the first
+    # time. Root has nothing to fetch: its check starts from what the first
+    # one found, and the first one leaves each updated source in the store.
+
+    def record_fetches(self):
+        """Record each Git fetch: the home it ran under, and what it asked for."""
+        (self.root / 'home/user').mkdir(parents=True)
+        shutil.copy(self.root / 'root/.gitconfig', self.root / 'home/user/.gitconfig')
+        wrapper = self.root / 'run/current-system/sw/bin/git'
+        wrapper.unlink()
+        wrapper.write_text(f'''#!{SHELL}
+for arg in "$@"; do
+    if [ "$arg" = fetch ]; then
+        for asked in "$@"; do :; done
+        echo "$HOME $asked" >> /state/fetches
+    fi
+done
+exec {GIT} "$@"
+''')
+        wrapper.chmod(0o755)
+
+        def fetches():
+            log = self.root / 'state/fetches'
+            return [tuple(line.split()) for line in log.read_text().splitlines()] if log.exists() else []
+        return fetches
+
+    def check_as_the_user(self, *update):
+        check = self.run_cmd('/bin/yukimi-helper', 'preflight', *update, home='/home/user')
+        report = json.loads(check.stdout)
+        return report, json.loads((self.root / report['lock'].lstrip('/')).read_text())
+
+    def apply_as_root(self, report, *update, lock=None, **expected):
+        return self.run_cmd('/bin/yukimi-helper', '__worker', '/var/lib/yukimi/operations/test', 'change', *update,
+                            '--lock', lock or report['lock'], '--checked-source', report['source'], **expected)
+
+    def assert_only_the_check_fetches(self, *update, expect):
+        fetches = self.record_fetches()
+        report, proposed = self.check_as_the_user(*update)
+        sekka = proposed['nodes']['sekka']
+        self.assertEqual((sekka['locked']['type'], sekka['original']['ref']), expect)
+        # Root accepts the checked lock and builds from it; the fixture's
+        # builder then fails, as every build here does.
+        applied = self.apply_as_root(report, *update, ok=False, builds=True)
+        self.assertEqual({home for home, _ in fetches()}, {'/home/user'}, f'{fetches()}\n{applied.stderr}')
+
+    def test_updating_sekka_fetches_it_for_the_check_only(self):
+        self.prepare_git_source(migrate=False)
+        self.assert_only_the_check_fetches('--update', 'sekka', '--sekka', expect=('git', 'nightly'))
+
+    def test_moving_sekka_to_git_fetches_it_for_the_check_only(self):
+        self.prepare_git_source(migrate=True)
+        # As a real update does, it also finds a newer nightly.
+        (self.root / 'remote/flake.nix').write_text(DEPENDENCY.replace('cargo-geiger-fixture', 'updated-fixture'))
+        self.git('commit', '-am', 'next nightly', directory='/remote')
+        self.assert_only_the_check_fetches('--update', 'sekka', '--sekka', expect=('git', 'nightly'))
+
+    def test_switching_sekka_branch_fetches_it_for_the_check_only(self):
+        self.prepare_git_source(migrate=False)
+        self.git('branch', 'main', directory='/remote')
+        self.assert_only_the_check_fetches('--update', 'sekka', '--sekka', '--follow', 'sekka=main',
+                                           expect=('git', 'main'))
+
+    def test_checked_lock_from_another_address_is_refused(self):
+        self.prepare_git_source(migrate=False)
+        fetches = self.record_fetches()
+        update = ['--update', 'sekka', '--sekka']
+        report, proposed = self.check_as_the_user(*update)
+        for part in ['original', 'locked']:
+            proposed['nodes']['sekka'][part]['url'] = 'https://github.com/someone/sekka'
+        (self.root / 'state/elsewhere.lock').write_text(json.dumps(proposed))
+        refused = self.apply_as_root(report, *update, lock='/state/elsewhere.lock', ok=False)
+        self.assertIn('comes from somewhere else', refused.stderr)
+        self.assertEqual(self.configuration(), self.before)
+        # Nix didn't keep the entry: root asked where its own flake's branch is.
+        self.assertTrue(any(home == '/root' and 'nightly' in asked for home, asked in fetches()), refused.stderr)
 
     def test_single_configuration_may_differ_from_the_hostname(self):
         (self.config / 'flake.nix').write_text(FLAKE.replace('nixosConfigurations.preflight-host', 'nixosConfigurations.custom'))

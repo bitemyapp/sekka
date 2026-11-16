@@ -5,7 +5,7 @@ result. It extends [the earlier software GUI probes](gui-probe.md), whose DSR
 timings must not be relabeled as frame-completion timings. The reference is
 Ghostty `6ba144158577d033ccb6ed4b574e4013957c9161`; the Hotaru, Aizome and patched
 Sidestep files inspected here are individually hashed in
-[`upstream/renderer-audit/source-manifest.json`](../upstream/renderer-audit/source-manifest.json).
+[`hotaru-benchmark-data/renderer-audit/source-manifest.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/renderer-audit/source-manifest.json).
 These hashes identify the source audit, not a subsequently built package.
 
 The later [cursor/cache checkpoint](cursor-cache-checkpoint.md) integrates
@@ -91,7 +91,7 @@ The following gaps remain visible in the inspected source:
 
 ## Workstation capability, without desktop changes
 
-[`hardware.json`](../upstream/renderer-audit/hardware.json) and its stderr log are
+[`hardware.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/renderer-audit/hardware.json) and its stderr log are
 from `tools/renderer-discovery.py --egl` on `ssh wx-workstation`. The tool only
 inventories devices/libraries and creates a 16×16 offscreen pbuffer; it changes
 no ACL, group, display, power, clock or desktop configuration.

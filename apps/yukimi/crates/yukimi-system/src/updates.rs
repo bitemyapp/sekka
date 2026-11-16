@@ -91,7 +91,7 @@ fn agent() -> ureq::Agent {
 
 /// A request's answer as text, with failures in words.
 fn get(url: &str, accept: &str) -> Result<String, String> {
-    let host = url.split('/').nth(2).unwrap_or(url).to_owned();
+    let host = yukimi_config::url::host(url).unwrap_or_else(|| url.to_owned());
     let response = agent().get(url).header("Accept", accept).call().map_err(|e| match e {
         ureq::Error::StatusCode(403 | 429) if host == "api.github.com" => {
             "GitHub's limit of 60 checks an hour was reached".to_owned()
@@ -106,16 +106,18 @@ fn get(url: &str, accept: &str) -> Result<String, String> {
 /// Read the lock file at an immutable GitHub revision without evaluating or
 /// building the flake. Used when an update target has no saved generation yet.
 pub fn revision_lock(source: &Locked) -> Result<String, String> {
-    if source.kind != "github" || source.host.as_deref().unwrap_or("github.com") != "github.com" {
+    let Some((owner, repo)) = source.github_repo() else {
         return Err("This source has no saved lock file; remote input browsing supports github.com sources.".into());
-    }
-    let (Some(owner), Some(repo), Some(rev)) = (&source.owner, &source.repo, &source.rev) else {
+    };
+    let Some(rev) = &source.rev else {
         return Err("This source has no exact repository revision.".into());
     };
     if !rev.bytes().all(|b| b.is_ascii_hexdigit()) || rev.len() != 40 {
         return Err("This source has no full commit ID.".into());
     }
-    get(&format!("https://raw.githubusercontent.com/{owner}/{repo}/{rev}/flake.lock"), "text/plain")
+    let url = yukimi_config::url::https("raw.githubusercontent.com", &[&owner, &repo, rev, "flake.lock"], &[])
+        .ok_or("Invalid repository address")?;
+    get(&url, "text/plain")
 }
 
 /// Parse an RFC 3339 time in UTC (`2026-10-08T08:01:05Z`, with or without
@@ -140,7 +142,8 @@ pub fn parse_time(text: &str) -> Option<i64> {
 
 /// The commit a GitHub branch or tag is at, and when it was made.
 fn github(owner: &str, repo: &str, reference: &str) -> Result<Release, String> {
-    let url = format!("https://api.github.com/repos/{owner}/{repo}/commits/{reference}");
+    let url = yukimi_config::url::https("api.github.com", &["repos", owner, repo, "commits", reference], &[])
+        .ok_or("Invalid repository address")?;
     let body: serde_json::Value =
         serde_json::from_str(&get(&url, "application/vnd.github+json")?).map_err(|e| e.to_string())?;
     let rev = body["sha"].as_str().ok_or("GitHub's answer had no commit")?.to_owned();
@@ -150,7 +153,8 @@ fn github(owner: &str, repo: &str, reference: &str) -> Result<Release, String> {
 
 /// The branches of a GitHub repository, for choosing one to follow.
 pub fn github_branches(owner: &str, repo: &str) -> Result<Vec<String>, String> {
-    let url = format!("https://api.github.com/repos/{owner}/{repo}/branches?per_page=100");
+    let url = yukimi_config::url::https("api.github.com", &["repos", owner, repo, "branches"], &[("per_page", "100")])
+        .ok_or("Invalid repository address")?;
     let body: serde_json::Value =
         serde_json::from_str(&get(&url, "application/vnd.github+json")?).map_err(|e| e.to_string())?;
     let mut names: Vec<String> =
@@ -161,10 +165,8 @@ pub fn github_branches(owner: &str, repo: &str) -> Result<Vec<String>, String> {
 
 /// FlakeHub's newest release matching a version (`0.1`, `*`).
 fn flakehub(latest_url: &str) -> Result<Release, String> {
-    let rest = latest_url.strip_prefix("https://api.flakehub.com/f/").ok_or("not a FlakeHub address")?;
-    let body: serde_json::Value =
-        serde_json::from_str(&get(&format!("https://api.flakehub.com/version/{rest}"), "application/json")?)
-            .map_err(|e| e.to_string())?;
+    let url = yukimi_config::lock::flakehub_version_url(latest_url).ok_or("not a FlakeHub address")?;
+    let body: serde_json::Value = serde_json::from_str(&get(&url, "application/json")?).map_err(|e| e.to_string())?;
     Ok(Release {
         rev: Some(body["revision"].as_str().ok_or("FlakeHub's answer had no revision")?.to_owned()),
         last_modified: body["published_at"].as_str().and_then(parse_time),
@@ -180,9 +182,12 @@ pub fn ask(input: &Input) -> Option<Result<Release, String>> {
     let locked = input.locked.as_ref()?;
     let original = input.original.as_ref().unwrap_or(locked);
     match original.kind.as_str() {
-        "github" if original.rev.is_none() => {
-            let (owner, repo) = (original.owner.as_deref()?, original.repo.as_deref()?);
-            Some(github(owner, repo, original.reference.as_deref().unwrap_or("HEAD")))
+        // A Git source on GitHub, too: Sekka is fetched with Git so that an
+        // update downloads only what changed, but GitHub still knows its
+        // branches.
+        "github" | "git" if original.rev.is_none() => {
+            let (owner, repo) = original.github_repo()?;
+            Some(github(&owner, &repo, original.reference.as_deref().unwrap_or("HEAD")))
         }
         "tarball" | "file" => original.flakehub_latest_url().map(|url| flakehub(&url)),
         _ => None,
@@ -211,6 +216,14 @@ fn lock_anew(flake: &str, input: &str, scratch: &Path) -> Result<Release, String
     Ok(Release::of(&locked))
 }
 
+/// Whether Nix may lock an input anew when its host couldn't be asked. Not a
+/// Git source: Nix would clone it into this user's own cache, all of it the
+/// first time (hundreds of megabytes for Sekka), for an answer that GitHub
+/// gives again once its hourly limit has passed.
+fn retry_with_nix(input: &Input) -> bool {
+    input.original.as_ref().or(input.locked.as_ref()).is_none_or(|source| source.kind != "git")
+}
+
 /// The gist of an error: its first line, without an "error:" label.
 pub fn first_line(error: &str) -> String {
     error
@@ -231,6 +244,7 @@ pub fn check_flake(flake: &str, inputs: &[Input], scratch: &Path) -> BTreeMap<St
             .map(|input| {
                 scope.spawn(move || match ask(input) {
                     Some(Ok(release)) => Ok(release),
+                    Some(Err(asked)) if !retry_with_nix(input) => Err(asked),
                     // When the host can't be asked (offline, or GitHub's hourly
                     // limit), Nix may still get through.
                     Some(Err(asked)) => lock_anew(flake, &input.name, scratch).map_err(|_| asked),
@@ -258,15 +272,21 @@ pub fn check_flake(flake: &str, inputs: &[Input], scratch: &Path) -> BTreeMap<St
 /// Sekka's own move with it, and aren't checked by themselves.
 pub fn sekka_targets(flake: &str, inputs: &[Input], newest: &mut BTreeMap<String, Result<Release, String>>) {
     let address = yukimi_config::edit::string_value(flake, &["inputs", "sekka", "url"]).ok().flatten();
-    if address.as_deref().is_some_and(yukimi_config::sekka::early) {
+    // Use the same parsed migration decision as the writer. In particular,
+    // custom fetcher options can prevent a legacy main URL from migrating.
+    let Some(target) = address.as_deref().and_then(yukimi_config::sekka::fetched_with_git) else {
+        return;
+    };
+    if yukimi_config::sekka::early(&target) {
         return;
     }
     let Some(original) = inputs.iter().find(|i| i.name == "sekka").and_then(|i| i.original.as_ref()) else {
         return;
     };
+    // Only the old tarball addresses can move to another branch during
+    // prepare. Existing Git sources keep their URL and check_flake's answer.
     if original.kind != "github"
-        || original.owner.as_deref() != Some("bitemyapp")
-        || original.repo.as_deref() != Some("sekka")
+        || !original.github_repo().is_some_and(|(owner, repo)| owner == "bitemyapp" && repo == "sekka")
         || original.rev.is_some()
         || !matches!(original.reference.as_deref(), None | Some("main" | "nightly"))
     {
@@ -418,7 +438,7 @@ mod tests {
     }
 
     #[test]
-    fn early_updates_keep_mains_answer() {
+    fn retained_main_sources_keep_mains_answer() {
         let lock = FlakeLock::parse(
             r#"{ "root": "root", "version": 7, "nodes": {
               "root": { "inputs": { "sekka": "sekka" } },
@@ -427,10 +447,88 @@ mod tests {
         )
         .unwrap();
         let main = Release { rev: Some("2".repeat(40)), last_modified: Some(2), ..Release::default() };
-        let mut newest = BTreeMap::from([("sekka".to_owned(), Ok(main.clone()))]);
-        let flake = format!("{{ inputs.sekka.url = \"{}\"; outputs = _: {{ }}; }}", yukimi_config::sekka::EARLY);
-        sekka_targets(&flake, &lock.inputs(), &mut newest);
-        assert_eq!(newest["sekka"], Ok(main));
+        // Explicit early updates and custom settings that prevent migration
+        // must keep the target of their original main source.
+        for early in [
+            yukimi_config::sekka::EARLY,
+            "github:bitemyapp/sekka?ref=main",
+            "github:bitemyapp/sekka?%72ef=%6dain",
+            "github:bitemyapp/sekka/main?dir=sub",
+            "github:bitemyapp/sekka/main?narHash=sha256-custom",
+        ] {
+            let mut newest = BTreeMap::from([("sekka".to_owned(), Ok(main.clone()))]);
+            let flake = format!("{{ inputs.sekka.url = \"{early}\"; outputs = _: {{ }}; }}");
+            sekka_targets(&flake, &lock.inputs(), &mut newest);
+            assert_eq!(newest["sekka"], Ok(main.clone()), "{early}");
+        }
+    }
+
+    #[test]
+    fn sekka_from_other_repositories_keeps_its_answer() {
+        let lock = FlakeLock::parse(
+            r#"{ "root": "root", "version": 7, "nodes": {
+              "root": { "inputs": { "sekka": "sekka" } },
+              "sekka": { "locked": { "type": "git", "url": "https://github.com/someone/sekka", "ref": "nightly", "rev": "1", "narHash": "sha256-y", "lastModified": 1 },
+                         "original": { "type": "git", "url": "https://github.com/someone/sekka", "ref": "nightly" } } } }"#,
+        )
+        .unwrap();
+        let fork = Release { rev: Some("3".repeat(40)), ..Release::default() };
+        let mut newest = BTreeMap::from([("sekka".to_owned(), Ok(fork.clone()))]);
+        sekka_targets(
+            "{ inputs.sekka.url = \"git+https://github.com/someone/sekka?ref=nightly\"; }",
+            &lock.inputs(),
+            &mut newest,
+        );
+        assert_eq!(newest["sekka"], Ok(fork));
+    }
+
+    #[test]
+    fn existing_git_sources_keep_their_update_target() {
+        let lock = FlakeLock::parse(
+            r#"{ "root": "root", "version": 7, "nodes": {
+              "root": { "inputs": { "sekka": "sekka" } },
+              "sekka": { "locked": { "type": "git", "url": "https://github.com/bitemyapp/sekka", "ref": "main", "rev": "1" },
+                         "original": { "type": "git", "url": "https://github.com/bitemyapp/sekka", "ref": "main" } } } }"#,
+        )
+        .unwrap();
+        let mut inputs = lock.inputs();
+        let target = Release { rev: Some("2".repeat(40)), last_modified: Some(2), ..Release::default() };
+        // prepare leaves these Git URLs unchanged. Checking must retain
+        // the answer for that source, including the repository's HEAD.
+        for (query, reference) in [
+            ("?ref=main", Some("main")),
+            ("?shallow=1&ref=main", Some("main")),
+            ("?ref=refs/heads/main&shallow=1", Some("refs/heads/main")),
+            ("?ref=nightly&shallow=1", Some("nightly")),
+            ("?shallow=1", None),
+            ("", None),
+        ] {
+            let flake = format!(
+                "{{ inputs.sekka.url = \"git+https://github.com/bitemyapp/sekka{query}\"; outputs = _: {{ }}; }}"
+            );
+            assert_eq!(yukimi_config::sekka::prepare(&flake).unwrap(), flake);
+            inputs[0].original.as_mut().unwrap().reference = reference.map(str::to_owned);
+            let mut newest = BTreeMap::from([("sekka".to_owned(), Ok(target.clone()))]);
+            sekka_targets(&flake, &inputs, &mut newest);
+            assert_eq!(newest["sekka"], Ok(target.clone()), "{query}");
+        }
+    }
+
+    #[test]
+    fn git_sources_wait_for_github_rather_than_cloning() {
+        let lock = FlakeLock::parse(
+            r#"{ "root": "root", "version": 7, "nodes": {
+              "root": { "inputs": { "sekka": "sekka", "tatami": "tatami" } },
+              "sekka": { "locked": { "type": "git", "url": "https://github.com/bitemyapp/sekka", "ref": "nightly", "rev": "1" },
+                         "original": { "type": "git", "url": "https://github.com/bitemyapp/sekka", "ref": "nightly", "shallow": true } },
+              "tatami": { "locked": { "type": "github", "owner": "bitemyapp", "repo": "tatami", "rev": "1" },
+                          "original": { "type": "github", "owner": "bitemyapp", "repo": "tatami" } } } }"#,
+        )
+        .unwrap();
+        // GitHub's limit reached: a tarball source may still be locked by
+        // Nix, but a Git one would be cloned into the user's cache.
+        assert!(!retry_with_nix(&lock.input("sekka").unwrap()));
+        assert!(retry_with_nix(&lock.input("tatami").unwrap()));
     }
 
     /// Asks GitHub; run with `cargo test -- --ignored` when online.
@@ -453,5 +551,20 @@ mod tests {
         sekka_targets("{ inputs.sekka.url = \"github:bitemyapp/sekka/main\"; }", &inputs, &mut newest);
         let sekka = newest["sekka"].as_ref().unwrap();
         assert_eq!(sekka.rev.as_deref().map(str::len), Some(40));
+        // Fetched with Git, it is asked of GitHub all the same.
+        let git = FlakeLock::parse(
+            r#"{ "root": "root", "version": 7, "nodes": {
+              "root": { "inputs": { "sekka": "sekka" } },
+              "sekka": { "locked": { "type": "git", "url": "https://github.com/bitemyapp/sekka", "ref": "nightly", "shallow": true, "rev": "1", "narHash": "sha256-y", "lastModified": 1 },
+                         "original": { "type": "git", "url": "https://github.com/bitemyapp/sekka", "ref": "nightly", "shallow": true } } } }"#,
+        )
+        .unwrap();
+        let mut newest = BTreeMap::from([("sekka".to_owned(), ask(&git.input("sekka").unwrap()).unwrap())]);
+        sekka_targets(
+            &format!("{{ inputs.sekka.url = \"{}\"; }}", yukimi_config::sekka::NIGHTLY),
+            &git.inputs(),
+            &mut newest,
+        );
+        assert_eq!(newest["sekka"].as_ref().unwrap().rev, sekka.rev);
     }
 }

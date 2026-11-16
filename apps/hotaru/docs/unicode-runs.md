@@ -3,8 +3,8 @@
 This candidate was measured in isolated workstation workspaces based on exact
 checkpoint `1d3c9cf4df2744e6a714d2bea18a31d90f5ddc7a`. It has not been applied to
 the shared core by this experiment. The reviewable change is
-`upstream/positive-width-runs.patch`; all reports are under
-`upstream/unicode-runs/`. The work uses safe Rust and adds no cell/row fields.
+[`hotaru-benchmark-data/positive-width-runs.patch`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/positive-width-runs.patch); all reports are under
+[`hotaru-benchmark-data/unicode-runs`](https://github.com/bitemyapp/hotaru-benchmark-data/tree/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/unicode-runs). The work uses safe Rust and adds no cell/row fields.
 
 ## Measured cause and chosen change
 
@@ -75,7 +75,7 @@ be relabeled as measurements of a later merged binary.
 ## Reproduction
 
 Archive `apps/hotaru` from the checkpoint into a new workstation directory,
-apply `upstream/positive-width-runs.patch` at the Sekka repository path level,
+apply [`hotaru-benchmark-data/positive-width-runs.patch`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/positive-width-runs.patch) at the Sekka repository path level,
 and copy `tools/hyperlink-probe.rs` into the isolated core `examples/` directory
 for the diagnostic probe. `tools/build-candidate.py` records the exact native
 build; use the same environment for the probe. Run `cargo test -p hotaru-core

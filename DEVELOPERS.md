@@ -1444,7 +1444,7 @@ real PipeWire and wf-recorder, single-source/no-audio recording, cancellation,
 startup failure, interrupted processes and recovery. The component fixture
 supplies the capture rectangle; it does not qualify the exact ISO's GUI journey.
 
-`nix/installed-lock.nix` extends that external lock with Sekka itself. A clean Git build pins its commit and source hash; a dirty development build pins the exact source copied into the Nix store. The source is included on the ISO. The installed flake follows `github:bitemyapp/sekka/nightly` for subsequent updates, and every other input follows Sekka's own (`inputs.nixpkgs.follows = "sekka/nixpkgs"`, and likewise `determinate`, `fh`, `applications`, `ai-apps` and `omp`). Sekka's `superluminal`, `tracy` and `uta` inputs are the exception: only Sekka's own outputs use them, as catalog packages (`nix/components.nix`), so the installed flake doesn't name them and they stay locked beneath Sekka, where updating it moves them just the same. Updating Sekka therefore moves them together, and only to revisions the nightly workflow has checked and confirmed a fresh system downloads entirely: it moves `nightly` only then, so nothing upstream publishes reaches an installed system untested, and no update compiles. The exception is an unfree application such as Superluminal: Sekka's binary cache carries only free ones, so updates download it from its maker and build its small wrapper on the machine. The `tracy` input is bitemyapp's fork of Quince-Pie's flake, which nothing updates on its own: the nightly signs and publishes Tracy's build, so only upstream changes reviewed and pushed to the fork reach it. The `uta` input names its revision, so the nightly's input update never moves it: Sekka builds Uta against its own Aizome (`nix/uta.nix`), so a new Uta is a change to `flake.nix`, built with the Aizome it will run with.
+`nix/installed-lock.nix` extends that external lock with Sekka itself. A clean Git build pins its commit and source hash; a dirty development build pins the exact source copied into the Nix store. The source is included on the ISO. The installed flake follows `git+https://github.com/bitemyapp/sekka?ref=nightly&shallow=1` for subsequent updates: Nix keeps that one-commit clone (`~/.cache/nix/gitv3` of each account that fetches; which do is described below), so each update downloads only the objects that changed, where a `github:` address downloaded a tarball of the whole tree every time (GitHub generated the 344 MB tarball at about 450 KB/s when measured on 2026-11-07). The content hash is the same either way, so the ISO's source still serves the first build. Nix runs Git for that fetch and passes Git's progress on to Yukimi; only installations with a developer application have Git, so the helper's PATH ends with a `gitMinimal` of its own (`YUKIMI_HELPER_PATH`, set by `apps/yukimi/nix/helper.nix`). Without Git, Nix falls back to libgit2, which reports no progress and logs `executing "git"` errors. Every other input follows Sekka's own (`inputs.nixpkgs.follows = "sekka/nixpkgs"`, and likewise `determinate`, `fh`, `applications`, `ai-apps` and `omp`). Sekka's `superluminal`, `tracy` and `uta` inputs are the exception: only Sekka's own outputs use them, as catalog packages (`nix/components.nix`), so the installed flake doesn't name them and they stay locked beneath Sekka, where updating it moves them just the same. Updating Sekka therefore moves them together, and only to revisions the nightly workflow has checked and confirmed a fresh system downloads entirely: it moves `nightly` only then, so nothing upstream publishes reaches an installed system untested, and no update compiles. The exception is an unfree application such as Superluminal: Sekka's binary cache carries only free ones, so updates download it from its maker and build its small wrapper on the machine. The `tracy` input is bitemyapp's fork of Quince-Pie's flake, which nothing updates on its own: the nightly signs and publishes Tracy's build, so only upstream changes reviewed and pushed to the fork reach it. The `uta` input names its revision, so the nightly's input update never moves it: Sekka builds Uta against its own Aizome (`nix/uta.nix`), so a new Uta is a change to `flake.nix`, built with the Aizome it will run with.
 
 Update the distro through **Yukimi → Updates → Update** or `sekka-update`.
 The GUI checks flake updates before requesting administrator access. It copies
@@ -1455,6 +1455,10 @@ index and no checkout or hooks. It applies the requested migration/branch
 and input changes there, and evaluates a Nix dry
 run with import-from-derivation disabled. Evaluation failures stop the update
 and display Nix's diagnostic without writing the installed configuration.
+Snapshot, migration and update fetches stream Nix's structured activities and
+Git's carriage-return progress to the GUI while the commands run. The helper
+also retains stderr for diagnostics; only the dry-run command uses plain logs,
+whose build-plan headings the check reads before classifying derivations.
 Uncached package builds are named in a separate confirmation: they are
 unverified, not necessarily incompatible. This would flag an uncached
 cargo-geiger before attempting its build, but cannot predict its compiler or
@@ -1483,15 +1487,70 @@ tests, not ISO installation qualification.
 
 The GUI and CLI use the privileged helper transaction: recognize/migrate the flake,
 back up the configuration, update the selected inputs, and build the host once.
-A flake following Sekka's `main` (or its default branch) is moved to
+A flake at the installer's original `github:` address for Sekka's `main`
+(or its default branch) is moved to
 `nightly`, and each of the other inputs still at the address Sekka's
 installations have used is made to follow Sekka's (`yukimi_config::sekka`).
-Early updates are the exception: `github:bitemyapp/sekka?ref=main`, written
+Early updates are the exception: `git+https://github.com/bitemyapp/sekka?ref=main&shallow=1`, written
 only when chosen (Early updates in Aizome's Yukimi, `sekka-update --early`,
 or the helper's `--follow sekka=main`), stays, so the system gets every change
 as soon as it's merged, before the nightly checks; whatever the binary cache
 doesn't have yet builds on the machine. `--nightly` (`--follow sekka=nightly`)
-goes back.
+goes back. Git addresses following `main` are recognized as early updates
+with or without `shallow=1` and regardless of query parameter order.
+The known default, nightly and early-update `github:` addresses move to Git
+(`sekka::fetched_with_git`). Custom refs, pins and addresses with additional
+settings stay unchanged: a GitHub ref can be a tag or pull-request ref,
+where an unqualified Git ref would instead name a branch. Existing Git
+addresses also stay unchanged, and update checks retain their own targets.
+The check runs as the person at the desktop, and root repeats it before
+accepting the lock it proposed, each with a Git cache of its own. When the
+request changes an input's address (Sekka's move to Git, early updates on or
+off, another branch for any input), the old lock entry no longer answers it,
+and Nix fetches the input to lock the new address. The check needs that
+answer. Root doesn't use it: `lock::check_update` asks only that an updated
+input comes from the address root's own lock gives it. Root's copy therefore
+starts from the checked lock's entries for the updated inputs
+(`lock::with_checked_sources`, through `Candidate::prepare_to_judge`). Nix
+keeps an entry that is for the address root's own flake names, and fetches
+nothing. It replaces an entry for any other address by locking the input
+itself, and `check_update` then refuses the checked lock as before. Only an
+entry's `original` and `locked` are taken, and only for inputs being updated.
+A legacy flake that gains its `sekka` input in the same update has no entry
+to start from, so root still fetches there.
+Root's build needs the source of each commit the check found, and Nix doesn't
+always leave a fetched source in the store. With `lazy-trees = true`, which
+Determinate Nix sets on Sekka's installations (both machines checked have
+it), and in nixpkgs' Nix (2.35.6 when measured), it stays in the fetching
+account's Git or tarball cache, and root fetched the checked commit itself
+when it built, on every update through Yukimi. The check therefore ends by
+putting each updated input's source in the store (`preflight::keep_sources`):
+Nix names the locked address (`builtins.flakeRefToString`), and
+`nix flake prefetch` copies it from that account's cache with nothing more to
+download. Root's Nix then uses the copy. For Sekka this is one more copy of
+its tree in the store with each update: 299 MB in 0.6 s on wx-workstation.
+Only inputs with a lock entry of their own are kept. The inputs that follow
+Sekka's (`nixpkgs` and the rest) move with it and aren't, so root fetches
+what it needs of them as before. An input that can't be kept is left for
+root to fetch. `YUKIMI_TEST_NIX_CONF='lazy-trees = true'` runs
+`tests/test_yukimi_preflight.py` as an installation's Determinate Nix
+behaves; the flake's check runs nixpkgs' Nix.
+The migration reads Nix attribute paths and literal strings through `rnix`,
+then parses flake URLs with `fluent-uri` (RFC 3986) and Nix's ref/revision
+rules. It reconstructs changed URLs with the URI builder and writes only the
+affected Nix syntax nodes. Branch switching and update-target selection use
+the same parser; percent encoding, literal `+`, duplicate query keys and
+commit pins have the same meaning across these operations. The offline
+`reconstruction_agrees_with_nix` test compares reconstructed URLs with
+`builtins.parseFlakeRef`; run it explicitly with
+`cargo test --locked --manifest-path apps/yukimi/Cargo.toml -p yukimi-config reconstruction_agrees_with_nix -- --ignored`.
+Lock-file descriptions, GitHub links/API requests and FlakeHub release URLs
+use the same URI component encoders. Branch controls read the lock's `ref`
+directly; update-cache identities serialize source metadata rather than
+reusing visible labels, so a changed pin invalidates the previous answer.
+When GitHub can't be asked about a Git source (its hourly limit, say), the
+check keeps GitHub's answer instead of locking it anew with Nix, which would
+clone the repository into the user's own cache.
 One given an address of one's own keeps it, and Sekka follows it; that
 system may then build Sekka's packages itself. The build passes the binary
 caches the new configuration names (as root, so the daemon accepts them), so
@@ -2057,6 +2116,22 @@ systems (`aizome-login`, `aizome-ibus`, `aizome-greeter-desktops`,
 revision (`site`, `aizome-site`, `template-lock`). The network, display,
 activity, Plasma login, session environment, update and Yukimi checks no
 longer change, nor do the `hotaru`, `yukimi` and `yukimi-discover` packages.
+
+Command bindings, Settei's list of commands on keys and Koe's
+executable-name migration share `aizome_config::bindings::SpawnCommand`. The
+grammar is `spawn` followed by whitespace-separated arguments, with no shell
+expansion or quote processing; migrations edit the parsed executable and
+serialize representable arguments. The shell's carried notification state has
+an explicit version. Only unversioned history uses the old keyboard-offer text
+recognizer: nothing posts those offers any more, so versioned notifications
+are never judged by their wording.
+
+Ananicy's build-time rule filter parses JSON records and matches their decoded
+`name` fields. Surviving records, comments and malformed upstream lines stay
+unchanged, except a malformed line that still begins with a removed name's
+record (one followed by a comment, say): Ananicy might apply it, so the build
+fails instead. `checks.x86_64-linux.tuning-policy` builds the filtered provider
+and runs its regression tests alongside the scheduling policy tests.
 
 The shell observes application launch attempts through `aizome-sys`:
 process creation and exit are separate events, and only a compositor window

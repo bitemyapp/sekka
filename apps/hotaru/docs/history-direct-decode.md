@@ -28,8 +28,8 @@ row teardown/COW. Three small decoder tests pass with strict-provenance Miri in
 both default and Tree Borrows models. The maximum OS-mapping case passes natively
 and is ignored under Miri, where the same builder/owner logic uses heap backing.
 An independent source review found no concrete acceptance, ownership or budget
-defect. [Validation and hashes](../upstream/page-decode/validation.json) and the
-[patch](../upstream/page-decode/direct-decode.patch) are preserved.
+defect. [Validation and hashes](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/page-decode/validation.json) and the
+[patch](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/page-decode/direct-decode.patch) are preserved.
 
 Five fresh-process samples alternate three engines on CPU 8 under the shared
 workstation lock: prior uniform owner, refactored decoder with heap cells, and
@@ -37,7 +37,7 @@ the same refactored source with direct mapped cells. The heap control separates
 constructor cleanup from mapping effects. All cases pass complete content and
 equal-retention checks, including the 50 MB URI case and captures across owner
 mutation/destruction. Exact commands, source manifests, binary hashes, load
-snapshots and samples are in the [report](../upstream/page-decode/report.json).
+snapshots and samples are in the [report](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/page-decode/report.json).
 
 | Cold history read | Prior owner | Refactored heap | Direct pages |
 | --- | ---: | ---: | ---: |

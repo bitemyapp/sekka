@@ -104,6 +104,125 @@ pub struct Progress {
     expected_bytes: HashMap<u64, u64>,
     /// Activities started, most recent last, to say what is happening now.
     order: Vec<u64>,
+    /// How far Git is with the repository Nix is fetching, as Git said last.
+    git: Option<GitProgress>,
+}
+
+/// Git's own progress while it fetches a repository for Nix, which passes
+/// it on as Git writes it, each line rewritten in place with `\r`:
+/// `Receiving objects:  45% (2488/5529), 108.15 MiB | 917.00 KiB/s`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct GitProgress {
+    phase: GitPhase,
+    percent: Option<u8>,
+    /// What follows the counts while receiving: the size so far and the
+    /// speed, as Git writes them (`108.15 MiB | 917.00 KiB/s`).
+    detail: Option<String>,
+    /// The phase's last line, which ends `done.`
+    done: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum GitPhase {
+    /// The server finding and compressing what to send (`remote: …`).
+    Preparing,
+    Receiving,
+    /// Working out the objects sent as differences from others.
+    Resolving,
+}
+
+/// Git's progress, from one of its lines; `None` for anything else.
+fn git_progress(line: &str) -> Option<GitProgress> {
+    let line = line.trim();
+    let (remote, line) = match line.strip_prefix("remote: ") {
+        Some(rest) => (true, rest.trim_start()),
+        None => (false, line),
+    };
+    let (phase, rest) = line.split_once(':')?;
+    let phase = match (remote, phase) {
+        (true, "Enumerating objects" | "Counting objects" | "Compressing objects") => GitPhase::Preparing,
+        (false, "Receiving objects") => GitPhase::Receiving,
+        (false, "Resolving deltas") => GitPhase::Resolving,
+        _ => return None,
+    };
+    let rest = rest.trim();
+    let done = rest.ends_with("done.");
+    let rest = rest.trim_end_matches("done.").trim_end().trim_end_matches(',');
+    let percent = rest.split_once('%').and_then(|(p, _)| p.trim().parse::<u8>().ok()).filter(|p| *p <= 100);
+    let detail = rest.split_once("), ").map(|(_, detail)| detail.trim().to_owned()).filter(|d| !d.is_empty());
+    Some(GitProgress { phase, percent, detail, done })
+}
+
+/// The address an activity fetches: its first field, or the one quoted in
+/// its description (`fetching Git repository 'https://…'`).
+fn fetched_url(activity: &Activity) -> &str {
+    let address = |s: &str| s.contains("://") && !s.contains(char::is_whitespace);
+    if address(&activity.subject) {
+        return &activity.subject;
+    }
+    activity.text.split('\'').nth(1).filter(|q| address(q)).unwrap_or(&activity.subject)
+}
+
+/// What a source fetched from `url` is called: `bitemyapp/sekka` for a
+/// repository on GitHub or GitLab or a FlakeHub flake, else the host.
+fn source_name(url: &str) -> String {
+    // Other addresses (with user info, another port, SSH) are named by host.
+    let Some((host, parts)) = yukimi_config::url::https_parts(url) else {
+        return yukimi_config::url::host(url).unwrap_or_else(|| url.to_owned());
+    };
+    let parts: Vec<&str> = parts.iter().map(String::as_str).filter(|p| !p.is_empty()).collect();
+    let pair = |owner: &str, repo: &str| format!("{owner}/{}", repo.strip_suffix(".git").unwrap_or(repo));
+    match (host.as_str(), parts.as_slice()) {
+        ("api.github.com", ["repos", owner, repo, ..])
+        | ("github.com" | "codeload.github.com" | "gitlab.com", [owner, repo, ..])
+        | ("api.flakehub.com", ["f", "pinned", owner, repo, ..])
+        | ("flakehub.com", ["f", owner, repo, ..]) => pair(owner, repo),
+        _ => host,
+    }
+}
+
+/// Whether a download is part of copying a path from a binary cache, which
+/// that copy already reports by its package's name.
+fn from_binary_cache(url: &str) -> bool {
+    let path = url.split(['?', '#']).next().unwrap_or(url);
+    path.ends_with(".narinfo") || path.contains("/nar/") || path.ends_with("/nix-cache-info") || path.ends_with(".ls")
+}
+
+impl Activity {
+    /// Whether it fetches a source to evaluate, such as a flake input,
+    /// rather than part of a path copied from a binary cache.
+    fn is_source_fetch(&self) -> bool {
+        match self.kind {
+            FETCH_TREE => true,
+            FILE_TRANSFER => !from_binary_cache(fetched_url(self)),
+            _ => false,
+        }
+    }
+
+    /// Whether it only asks GitHub which commit a branch is at: a few
+    /// kilobytes before a `github:` source's tarball, not the source.
+    fn looks_up_commit(&self) -> bool {
+        self.kind == FILE_TRANSFER
+            && yukimi_config::url::https_parts(fetched_url(self)).is_some_and(|(host, parts)| {
+                host == "api.github.com" && parts.len() > 4 && parts[0] == "repos" && parts[3] == "commits"
+            })
+    }
+}
+
+impl GitProgress {
+    fn describe(&self, name: &str) -> String {
+        let percent = self.percent.map(|p| format!("{p}%"));
+        match (self.phase, &self.detail, percent) {
+            (GitPhase::Preparing, ..) => format!("Fetching {name}: the server is preparing it"),
+            (GitPhase::Receiving, Some(detail), Some(percent)) => {
+                format!("Downloading {name}: {percent}, {}", detail.replace(" | ", " at "))
+            }
+            (GitPhase::Receiving, None, Some(percent)) => format!("Downloading {name}: {percent}"),
+            (GitPhase::Receiving, ..) => format!("Downloading {name}"),
+            (GitPhase::Resolving, _, Some(percent)) => format!("Unpacking {name}: {percent}"),
+            (GitPhase::Resolving, ..) => format!("Unpacking {name}"),
+        }
+    }
 }
 
 /// Remove terminal colour codes from Nix's messages.
@@ -150,7 +269,17 @@ impl Progress {
             if line.trim().is_empty() {
                 return false;
             }
-            self.push_log(strip_ansi(line));
+            // Git pads what it rewrites in place with spaces.
+            let text = strip_ansi(line).trim_end().to_owned();
+            if let Some(git) = git_progress(&text) {
+                // Each phase's last line goes in the log, not every step.
+                if git.done {
+                    self.push_log(text);
+                }
+                self.git = Some(git);
+                return true;
+            }
+            self.push_log(text);
             return true;
         };
         let Ok(event) = serde_json::from_str::<Event>(json) else {
@@ -160,16 +289,33 @@ impl Progress {
             Event::Start { id, kind, text, fields } => {
                 let subject =
                     fields.first().and_then(|f| f.as_str()).map(str::to_owned).unwrap_or_else(|| text.clone());
-                self.activities.insert(id, Activity { kind, text, subject, done: 0, expected: 0, phase: None });
+                let activity = Activity { kind, text, subject, done: 0, expected: 0, phase: None };
+                // Fetching a source says so in the log, so a long download
+                // isn't taken for evaluating.
+                if activity.is_source_fetch() && !activity.text.is_empty() {
+                    self.push_log(activity.text.clone());
+                }
+                if kind == FETCH_TREE {
+                    self.git = None;
+                }
+                self.activities.insert(id, activity);
                 self.order.push(id);
             }
             Event::Stop { id } => {
                 self.order.retain(|&o| o != id);
-                if let Some(activity) = self.activities.remove(&id)
-                    && activity.kind == COPY_PATH
-                {
-                    // A finished download counts fully.
-                    self.bytes.0 = self.bytes.0.saturating_sub(activity.done) + activity.expected.max(activity.done);
+                let Some(activity) = self.activities.remove(&id) else { return true };
+                match activity.kind {
+                    COPY_PATH => {
+                        // A finished download counts fully.
+                        self.bytes.0 =
+                            self.bytes.0.saturating_sub(activity.done) + activity.expected.max(activity.done);
+                    }
+                    FILE_TRANSFER if activity.is_source_fetch() && !activity.looks_up_commit() && activity.done > 0 => {
+                        let name = source_name(fetched_url(&activity));
+                        self.push_log(format!("Downloaded {name}: {}", crate::human_size(activity.done)));
+                    }
+                    FETCH_TREE => self.git = None,
+                    _ => {}
                 }
             }
             Event::Result { id, kind, fields } => match kind {
@@ -258,7 +404,30 @@ impl Progress {
                     None => format!("Building {name}"),
                 }),
                 COPY_PATH => Some(format!("Downloading {name}")),
-                FILE_TRANSFER | FETCH_TREE => Some("Fetching sources".to_owned()),
+                // Part of copying a path, which says what it is.
+                FILE_TRANSFER if !activity.is_source_fetch() => None,
+                FILE_TRANSFER if activity.looks_up_commit() => {
+                    Some(format!("Fetching {}", source_name(fetched_url(activity))))
+                }
+                FILE_TRANSFER => {
+                    let source = source_name(fetched_url(activity));
+                    Some(match (activity.done, activity.expected) {
+                        (0, _) => format!("Downloading {source}"),
+                        (done, 0) => format!("Downloading {source}: {}", crate::human_size(done)),
+                        (done, expected) => format!(
+                            "Downloading {source}: {} of {}",
+                            crate::human_size(done.min(expected)),
+                            crate::human_size(expected)
+                        ),
+                    })
+                }
+                FETCH_TREE => {
+                    let source = source_name(fetched_url(activity));
+                    Some(match &self.git {
+                        Some(git) => git.describe(&source),
+                        None => format!("Fetching {source}"),
+                    })
+                }
                 0 if !activity.text.is_empty() => Some(activity.text.clone()),
                 _ => None,
             }
@@ -290,14 +459,33 @@ impl Progress {
         text
     }
 
-    /// How far along, from 0 to 1, when Nix has said what to expect.
+    /// How far along, from 0 to 1, when Nix has said what to expect. Before
+    /// anything is downloaded or built, how far the source being fetched is,
+    /// when its size is known.
     pub fn fraction(&self) -> Option<f64> {
         let total = self.downloads.expected + self.builds.expected * 4;
         if total == 0 {
-            return None;
+            return self.fetched();
         }
         let done = self.downloads.done + self.builds.done * 4;
         Some((done as f64 / total as f64).clamp(0.0, 1.0))
+    }
+
+    /// How far the most recent source fetch is, when it can tell.
+    fn fetched(&self) -> Option<f64> {
+        let activity =
+            self.order.iter().rev().filter_map(|id| self.activities.get(id)).find(|a| a.is_source_fetch())?;
+        match activity.kind {
+            FETCH_TREE => match &self.git {
+                Some(GitProgress { phase: GitPhase::Receiving, percent: Some(percent), .. }) => {
+                    Some(f64::from(*percent) / 100.0)
+                }
+                _ => None,
+            },
+            _ if activity.looks_up_commit() => None,
+            _ if activity.expected > 0 => Some((activity.done as f64 / activity.expected as f64).clamp(0.0, 1.0)),
+            _ => None,
+        }
     }
 }
 
@@ -345,5 +533,130 @@ mod tests {
         assert_eq!(p.errors().collect::<Vec<_>>(), vec!["error: attribute 'nope' missing"]);
         assert!(p.feed("plain stderr line"));
         assert!(!p.feed("@nix not json"));
+    }
+
+    const REV: &str = "2111c84ac0b4555518b9482ec436f813d26905ef";
+
+    /// A `github:` input, downloaded as one tarball, as Determinate Nix
+    /// reports it (with its own attempt activity beneath).
+    #[test]
+    fn source_tarballs_show_how_much_has_arrived() {
+        let mut p = Progress::default();
+        let url = format!("https://api.github.com/repos/bitemyapp/sekka/tarball/{REV}");
+        p.feed(&format!(
+            r#"@nix {{"action":"start","fields":["{url}"],"id":1,"level":4,"parent":0,"text":"downloading '{url}'","type":101}}"#
+        ));
+        p.feed(r#"@nix {"action":"start","id":2,"level":6,"name":"FileTransferAttempt","parent":1,"payload":{},"text":"","type":10113}"#);
+        assert_eq!(p.current().as_deref(), Some("Downloading bitemyapp/sekka"));
+        assert_eq!(p.log.back(), Some(&format!("downloading '{url}'")));
+        // GitHub generates the tarball as it sends it, so its size is unknown.
+        p.feed(r#"@nix {"action":"result","fields":[346489581,0,0,0],"id":1,"type":105}"#);
+        assert_eq!(p.current().as_deref(), Some("Downloading bitemyapp/sekka: 346 MB"));
+        assert_eq!(p.fraction(), None);
+        p.feed(r#"@nix {"action":"result","fields":[100000000,400000000,0,0],"id":1,"type":105}"#);
+        assert_eq!(p.current().as_deref(), Some("Downloading bitemyapp/sekka: 100 MB of 400 MB"));
+        assert_eq!(p.fraction(), Some(0.25));
+        p.feed(r#"@nix {"action":"result","id":2,"payload":{"bodySize":7822,"httpStatus":200}}"#);
+        p.feed(r#"@nix {"action":"stop","id":2}"#);
+        p.feed(r#"@nix {"action":"stop","id":1}"#);
+        assert_eq!(p.log.back().map(String::as_str), Some("Downloaded bitemyapp/sekka: 100 MB"));
+        assert_eq!(p.current(), None);
+    }
+
+    /// Before a `github:` tarball, Nix asks GitHub's API which commit the
+    /// branch is at: a few kilobytes that aren't the source.
+    #[test]
+    fn commit_lookups_are_not_downloads() {
+        let mut p = Progress::default();
+        let url = "https://api.github.com/repos/bitemyapp/sekka/commits/nightly";
+        let logged = p.logged;
+        p.feed(&format!(
+            r#"@nix {{"action":"start","fields":["{url}"],"id":1,"level":4,"parent":0,"text":"downloading '{url}'","type":101}}"#
+        ));
+        p.feed(r#"@nix {"action":"result","fields":[2155,2155,0,0],"id":1,"type":105}"#);
+        assert_eq!(p.current().as_deref(), Some("Fetching bitemyapp/sekka"));
+        assert_eq!(p.fraction(), None);
+        p.feed(r#"@nix {"action":"stop","id":1}"#);
+        assert_eq!(p.since(logged).collect::<Vec<_>>(), [format!("downloading '{url}'")]);
+    }
+
+    /// A `git+https:` input: Nix reports the fetch, and Git its progress,
+    /// as plain lines.
+    #[test]
+    fn git_fetches_show_gits_progress() {
+        let mut p = Progress::default();
+        p.feed(r#"@nix {"action":"start","id":1,"level":4,"parent":0,"text":"fetching Git repository 'https://github.com/bitemyapp/sekka'","type":112}"#);
+        assert_eq!(p.current().as_deref(), Some("Fetching bitemyapp/sekka"));
+        assert_eq!(
+            p.log.back().map(String::as_str),
+            Some("fetching Git repository 'https://github.com/bitemyapp/sekka'")
+        );
+        let logged = p.logged;
+        assert!(p.feed("remote: Counting objects:  10% (553/5529)        "));
+        assert_eq!(p.current().as_deref(), Some("Fetching bitemyapp/sekka: the server is preparing it"));
+        assert!(p.feed("remote: Compressing objects: 100% (3947/3947), done.        "));
+        assert!(p.feed("Receiving objects:   8% (462/5529), 10.04 MiB | 3.17 MiB/s"));
+        assert_eq!(p.current().as_deref(), Some("Downloading bitemyapp/sekka: 8%, 10.04 MiB at 3.17 MiB/s"));
+        assert_eq!(p.fraction(), Some(0.08));
+        assert!(p.feed("Receiving objects: 100% (5529/5529), 300.12 MiB | 1.20 MiB/s, done."));
+        assert!(p.feed("Resolving deltas:  40% (40/100)"));
+        assert_eq!(p.current().as_deref(), Some("Unpacking bitemyapp/sekka: 40%"));
+        assert_eq!(p.fraction(), None);
+        assert!(p.feed("From https://github.com/bitemyapp/sekka"));
+        // Only each phase's last line, and Git's other lines, are logged.
+        assert_eq!(
+            p.since(logged).collect::<Vec<_>>(),
+            [
+                "remote: Compressing objects: 100% (3947/3947), done.",
+                "Receiving objects: 100% (5529/5529), 300.12 MiB | 1.20 MiB/s, done.",
+                "From https://github.com/bitemyapp/sekka",
+            ]
+        );
+        p.feed(r#"@nix {"action":"stop","id":1}"#);
+        assert_eq!(p.current(), None);
+        // The next fetch starts afresh.
+        p.feed(r#"@nix {"action":"start","id":3,"level":4,"text":"fetching Git repository 'https://example.org/x.git'","type":112}"#);
+        assert_eq!(p.current().as_deref(), Some("Fetching example.org"));
+    }
+
+    #[test]
+    fn binary_cache_transfers_leave_the_package_named() {
+        let mut p = Progress::default();
+        p.feed(&format!(
+            r#"@nix {{"action":"start","id":3,"level":4,"type":100,"text":"copying path","fields":["/nix/store/{H}-glibc-2.40","https://cache.nixos.org","local"]}}"#
+        ));
+        let logged = p.logged;
+        p.feed(r#"@nix {"action":"start","id":4,"level":4,"type":101,"text":"downloading 'https://cache.nixos.org/nar/0abc.nar.xz'","fields":["https://cache.nixos.org/nar/0abc.nar.xz"]}"#);
+        p.feed(r#"@nix {"action":"result","id":4,"type":105,"fields":[500,1000,0,0]}"#);
+        assert_eq!(p.current().as_deref(), Some("Downloading glibc"));
+        p.feed(r#"@nix {"action":"stop","id":4}"#);
+        assert_eq!(p.logged, logged);
+    }
+
+    #[test]
+    fn sources_by_name() {
+        for (url, name) in [
+            (format!("https://api.github.com/repos/bitemyapp/sekka/tarball/{REV}"), "bitemyapp/sekka"),
+            (format!("https://codeload.github.com/bitemyapp/sekka/tar.gz/{REV}"), "bitemyapp/sekka"),
+            ("https://github.com/bitemyapp/sekka".into(), "bitemyapp/sekka"),
+            ("https://github.com/o/r.git?ref=main".into(), "o/r"),
+            ("https://GitHub.com:443/bit%65myapp/sekka/".into(), "bitemyapp/sekka"),
+            // Credentials and ports are never shown.
+            ("https://token@github.com/o/r".into(), "github.com"),
+            ("ssh://git@example.org:2222/r.git".into(), "example.org"),
+            ("https://api.flakehub.com/f/pinned/NixOS/nixpkgs/0.1.1%2Brev-1/1/source.tar.gz".into(), "NixOS/nixpkgs"),
+            (
+                "https://install.determinate.systems/flake-registry/stable/flake-registry.json".into(),
+                "install.determinate.systems",
+            ),
+        ] {
+            assert_eq!(source_name(&url), name, "{url}");
+        }
+        assert_eq!(git_progress("remote: Total 5529 (delta 12), reused 3 (delta 0)"), None);
+        assert_eq!(git_progress("Receiving objects"), None);
+        assert_eq!(
+            git_progress("remote: Enumerating objects: 5529, done.        "),
+            Some(GitProgress { phase: GitPhase::Preparing, percent: None, detail: None, done: true })
+        );
     }
 }

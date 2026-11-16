@@ -2,7 +2,7 @@
 
 The decoder and compressed-row recycling previously called `Row::new`, then
 immediately replaced its freshly allocated cell and style vectors. The narrow
-[patch](../upstream/row-construction/construction.patch) constructs the final
+[patch](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/row-construction/construction.patch) constructs the final
 retained capacities directly. All default fields, dirty-prefix bounds, logical
 charges and archive capacities remain identical. It adds no storage abstraction,
 dependency, unsafe code or archive-format change.
@@ -16,15 +16,15 @@ tests**, and strict all-target workspace Clippy pass. Full-content comparisons
 also pass for resident/compressed history, held captures across owner mutation
 and destruction, and the 50 MB URI case retaining 8,291 rows in both versions.
 
-[Validation](../upstream/row-construction/validation.json) records exact source
+[Validation](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/row-construction/validation.json) records exact source
 and artifact hashes. The isolated build used an older evidence helper whose
 aggregate source digest excludes `vendor`; that digest has not been relabelled.
-A separate [vendor manifest](../upstream/row-construction/vendor-provenance.json)
+A separate [vendor manifest](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/row-construction/vendor-provenance.json)
 verifies all 29 vendored files in both trees against their exact `cb91125` Git
 blobs and confirms they remained unchanged after measurement. The current
 production build helper already includes vendored files in its source digest.
 
-The five-sample [timing report](../upstream/row-construction/interference-report.json)
+The five-sample [timing report](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/row-construction/interference-report.json)
 is explicitly **unqualified for final speed claims**. Unrelated compiler jobs
 were active despite the cooperative benchmark lock; recorded load rose from
 about 29 to 41 and some samples nearly doubled. The observed ASCII cold-read

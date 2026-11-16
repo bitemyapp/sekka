@@ -9,7 +9,7 @@ use std::process::{Command, Output};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde::{Deserialize, Serialize};
-use yukimi_config::{branch, edit, sekka};
+use yukimi_config::{branch, edit, lock, sekka};
 
 use crate::{
     nix,
@@ -53,9 +53,9 @@ impl Report {
 
 fn command() -> Command {
     let mut c = nix::command();
-    // Evaluation must not start an import-from-derivation build. Plain C
-    // diagnostics also keep Nix's dry-run headings stable across locales.
-    c.args(["--option", "allow-import-from-derivation", "false", "--log-format", "raw"]);
+    // Evaluation must not start an import-from-derivation build. Fetches
+    // during snapshotting, migration and updating all report live progress.
+    c.args(["--option", "allow-import-from-derivation", "false", "--log-format", "internal-json", "-v"]);
     c.env("LC_ALL", "C");
     c
 }
@@ -64,7 +64,11 @@ fn output(c: Command, run: &mut impl FnMut(Command) -> Result<Output, String>) -
     let out = run(c)?;
     if !out.status.success() {
         let stderr = crate::log::strip_ansi(&String::from_utf8_lossy(&out.stderr));
-        return Err(nix::last_error(&stderr));
+        let mut progress = crate::log::Progress::default();
+        for line in stderr.split(['\r', '\n']) {
+            progress.feed(line);
+        }
+        return Err(nix::last_error(progress.errors().last().unwrap_or(&stderr)));
     }
     Ok(out)
 }
@@ -156,9 +160,35 @@ impl Drop for Candidate {
 }
 
 impl Candidate {
+    /// For checking an update: Nix locks whatever address the request changes.
     pub fn prepare(
         setup: &Setup,
         request: &Request,
+        run: &mut impl FnMut(Command) -> Result<Output, String>,
+    ) -> Result<Self, String> {
+        Self::prepared(setup, request, None, run)
+    }
+
+    /// For judging the lock a check proposed (`checked`), as root does before
+    /// accepting it. The updated inputs start from the checked lock's entries
+    /// (`lock::with_checked_sources`), and Nix still decides: it keeps an
+    /// entry that is for the address this copy's flake names, and locks the
+    /// input itself when it is for another. So root fetches nothing the check
+    /// already resolved, in a Git cache of its own that has no clone yet,
+    /// and a checked lock from another address is refused as before.
+    pub fn prepare_to_judge(
+        setup: &Setup,
+        request: &Request,
+        checked: &str,
+        run: &mut impl FnMut(Command) -> Result<Output, String>,
+    ) -> Result<Self, String> {
+        Self::prepared(setup, request, Some(checked), run)
+    }
+
+    fn prepared(
+        setup: &Setup,
+        request: &Request,
+        checked: Option<&str>,
         run: &mut impl FnMut(Command) -> Result<Output, String>,
     ) -> Result<Self, String> {
         if setup.kind != Kind::Flake {
@@ -233,6 +263,13 @@ impl Candidate {
         }
         if candidate.inputs.is_empty() {
             return Err("No update inputs were selected".into());
+        }
+        if let Some(checked) = checked {
+            let file = candidate.dir.join("flake.lock");
+            let ours = std::fs::read_to_string(&file).map_err(|e| e.to_string())?;
+            if let Some(ours) = lock::with_checked_sources(&ours, checked, &candidate.inputs) {
+                std::fs::write(file, ours).map_err(|e| e.to_string())?;
+            }
         }
         // Normalize migration/branch changes without refreshing unrelated
         // inputs. Root repeats this independently before accepting a lock.
@@ -362,7 +399,9 @@ pub fn check(
     };
     let host = edit::nix_string(host);
     let mut c = command();
-    c.args(["build", "--dry-run", "--json", "--no-link", "--no-update-lock-file"])
+    // The build plan is a plain diagnostic, not the requested-output JSON.
+    // Keep its C-locale headings for planned_builds, at normal verbosity.
+    c.args(["build", "--log-format", "raw", "--quiet", "--dry-run", "--json", "--no-link", "--no-update-lock-file"])
         .arg(format!("{}#nixosConfigurations.{host}.config.system.build.toplevel", candidate.dir.display()));
     let out = output(c, run)?;
     // Malformed/empty stdout must never look like a completed check.
@@ -387,6 +426,7 @@ pub fn check(
     }
     builds.sort();
     builds.dedup();
+    keep_sources(&candidate.dir.join("flake.lock"), &candidate.inputs, run)?;
     let mut c = command();
     c.args(["store", "add-path"]).arg(candidate.dir.join("flake.lock"));
     let lock = String::from_utf8(output(c, run)?.stdout).map_err(|e| e.to_string())?;
@@ -397,10 +437,110 @@ pub fn check(
     Ok(Report { source: candidate.source.clone(), lock, builds })
 }
 
+/// Leave the source of each updated input in the store, where root's build
+/// finds it. Nix doesn't always: with lazy trees, and in nixpkgs' Nix, what
+/// this account fetched stays in its own cache, and root would download the
+/// same commit again to build from it. An input that can't be kept is left
+/// for root to fetch, as before. Only a stop, or Nix not starting, ends the
+/// check.
+fn keep_sources(
+    lock: &Path,
+    inputs: &[String],
+    run: &mut impl FnMut(Command) -> Result<Output, String>,
+) -> Result<(), String> {
+    let lock = std::fs::read_to_string(lock).map_err(|e| e.to_string())?;
+    for locked in lock::fetched_sources(&lock, inputs) {
+        // Nix names the locked address itself, whatever kind of source it is.
+        let mut c = command();
+        c.args(["eval", "--raw", "--expr"])
+            .arg(format!("builtins.flakeRefToString (builtins.fromJSON {})", edit::nix_string(&locked.to_string())));
+        let named = run(c)?;
+        let address = String::from_utf8_lossy(&named.stdout);
+        if !named.status.success() || address.trim().is_empty() {
+            continue;
+        }
+        let mut c = command();
+        c.args(["flake", "prefetch", "--json"]).arg(address.trim());
+        run(c)?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn failed_fetch_reports_decoded_diagnostic_without_progress_json() {
+        use std::os::unix::process::ExitStatusExt;
+        let diagnostic = "error: could not fetch the input\n  remote branch is missing";
+        let stderr = format!(
+            "@nix {}\n@nix {}\n@nix {}\n",
+            json!({"action": "start", "id": 9, "type": 112, "text": "fetching Git repository"}),
+            json!({"action": "msg", "level": 0, "msg": diagnostic}),
+            json!({"action": "stop", "id": 9}),
+        );
+        let error = output(command(), &mut |_| {
+            Ok(Output {
+                status: std::process::ExitStatus::from_raw(1 << 8),
+                stdout: vec![],
+                stderr: stderr.as_bytes().to_vec(),
+            })
+        })
+        .unwrap_err();
+        assert_eq!(error, diagnostic);
+    }
+
+    #[test]
+    fn updated_sources_are_named_by_nix_and_kept_in_the_store() {
+        use std::os::unix::process::ExitStatusExt;
+        let dir = std::env::temp_dir().join(format!("yukimi-keep-sources-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let lock = dir.join("flake.lock");
+        let sekka = json!({
+            "type": "git", "url": "https://github.com/bitemyapp/sekka", "ref": "nightly", "shallow": true,
+            "rev": "2111c84ac0b4555518b9482ec436f813d26905ef", "narHash": "sha256-x", "lastModified": 1,
+        });
+        let text = json!({ "root": "root", "version": 7, "nodes": {
+            "root": { "inputs": { "sekka": "sekka", "nixpkgs": ["sekka", "nixpkgs"], "local": "local" } },
+            "sekka": { "locked": sekka, "original": {} },
+            "local": { "locked": { "type": "path", "path": "./local" }, "original": {} },
+        }});
+        std::fs::write(&lock, text.to_string()).unwrap();
+        let inputs: Vec<String> = ["sekka", "nixpkgs", "local"].map(String::from).into();
+        let address = "git+https://github.com/bitemyapp/sekka?ref=nightly&rev=2111c84&shallow=1";
+        let answer = |code: i32, stdout: &str| -> Result<Output, String> {
+            Ok(Output { status: std::process::ExitStatus::from_raw(code << 8), stdout: stdout.into(), stderr: vec![] })
+        };
+        let arguments =
+            |c: &Command| c.get_args().map(|a| a.to_string_lossy().into_owned()).collect::<Vec<_>>().join(" ");
+
+        // Only Sekka has a source to keep: Nix names it, then fetches it.
+        let mut ran = Vec::new();
+        keep_sources(&lock, &inputs, &mut |c| {
+            ran.push(arguments(&c));
+            answer(0, if ran.len() == 1 { address } else { "{}" })
+        })
+        .unwrap();
+        let [named, kept] = ran.as_slice() else { panic!("{ran:?}") };
+        assert!(named.contains("eval --raw --expr builtins.flakeRefToString (builtins.fromJSON \""), "{named}");
+        assert!(named.contains(r#"\"rev\":\"2111c84ac0b4555518b9482ec436f813d26905ef\""#), "{named}");
+        assert!(kept.ends_with(&format!("flake prefetch --json {address}")), "{kept}");
+
+        // A source Nix can't name or keep is left for root to fetch.
+        let mut ran = 0;
+        keep_sources(&lock, &inputs, &mut |_| {
+            ran += 1;
+            answer(1, "")
+        })
+        .unwrap();
+        assert_eq!(ran, 1, "nothing to fetch without an address");
+        keep_sources(&lock, &inputs, &mut |c| answer(i32::from(arguments(&c).contains("prefetch")), address)).unwrap();
+        // Stopping the check still stops it.
+        assert_eq!(keep_sources(&lock, &inputs, &mut |_| Err("Stopped".into())), Err("Stopped".into()));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 
     #[test]
     fn dry_run_separates_builds_from_downloads_and_warning_paths() {

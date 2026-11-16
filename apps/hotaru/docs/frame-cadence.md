@@ -85,7 +85,7 @@ The Hotaru ELF is
 `1d4e649540eed06b5ec4b43e756e1d9b5b8bdbb9a715487903f3613963d0b262`;
 Ghostty remains
 `ea356b4e5f33e0d0d55af99bb978afe419eed2a933edd31e457554db8970f61f`.
-The [machine-readable summary](../upstream/frame-cadence/summary.json),
+The [machine-readable summary](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/frame-cadence/summary.json),
 analysis script, and compressed raw archive preserve controllers, exact
 sources, activity, calibrations, every trial, logs, fixture/capture events
 and screenshots. The initial controller-preparation attempt failed its ELF

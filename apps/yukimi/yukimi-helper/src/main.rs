@@ -66,8 +66,14 @@ use yukimi_system::preflight;
 use yukimi_system::setup::{Choice, Kind, Setup};
 
 const PROFILE: &str = "/nix/var/nix/profiles/system";
-/// pkexec starts programs with an almost empty environment.
-const PATH: &str = "/run/current-system/sw/bin:/run/wrappers/bin";
+/// pkexec starts programs with an almost empty environment. The package adds
+/// a Git of its own (`YUKIMI_HELPER_PATH`): Nix runs Git to fetch Sekka, and
+/// only installations with a developer application have one. Without it,
+/// Nix falls back to libgit2, which reports no progress.
+const PATH: &str = match option_env!("YUKIMI_HELPER_PATH") {
+    Some(path) => path,
+    None => "/run/current-system/sw/bin:/run/wrappers/bin",
+};
 /// Where each generation's configuration is kept, as `generation-<n>`.
 const SAVED: &str = yukimi_system::SAVED_CONFIGURATIONS;
 /// Files bigger than this aren't configuration, and aren't kept with it.
@@ -172,7 +178,13 @@ fn settle() {
 
 /// Start a command, remembering it so it can be stopped, and wait for it.
 fn wait(c: &mut Command) -> Result<std::process::Output> {
-    let child = {
+    wait_with_progress(c, false)
+}
+
+/// Optionally tee stderr to the GUI while retaining it for diagnostics and
+/// the preflight build plan. Drain it alongside stdout so neither pipe fills.
+fn wait_with_progress(c: &mut Command, stream_stderr: bool) -> Result<std::process::Output> {
+    let mut child = {
         let mut state = state();
         if state.0 == Phase::Stopping {
             return Err(Failure("Stopped".into()));
@@ -181,10 +193,36 @@ fn wait(c: &mut Command) -> Result<std::process::Output> {
         state.1 = Some(child.id());
         child
     };
+    let errors = if stream_stderr {
+        child.stderr.take().map(|mut pipe| {
+            std::thread::spawn(move || -> std::io::Result<Vec<u8>> {
+                let mut captured = Vec::new();
+                let mut buffer = [0; 8192];
+                loop {
+                    let n = match pipe.read(&mut buffer) {
+                        Ok(0) => return Ok(captured),
+                        Ok(n) => n,
+                        Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+                        Err(error) => return Err(error),
+                    };
+                    captured.extend_from_slice(&buffer[..n]);
+                    // A closed GUI must not prevent draining and reaping Nix.
+                    let _ = std::io::stderr().write_all(&buffer[..n]);
+                }
+            })
+        })
+    } else {
+        None
+    };
     let out = child.wait_with_output();
     state().1 = None;
+    let errors = errors.map(|reader| reader.join());
     check_stopped()?;
-    Ok(out?)
+    let mut out = out?;
+    if let Some(errors) = errors {
+        out.stderr = errors.map_err(|_| Failure("The command's error reader stopped unexpectedly".into()))??;
+    }
+    Ok(out)
 }
 
 /// A failure, in words for the person who asked.
@@ -991,7 +1029,8 @@ fn change(args: &[String]) -> Result<String> {
         if !change.update.is_empty() {
             stage(2, "Fetching the newest versions");
             match &change.lock {
-                // Prepared by Yukimi, with every new source already in the store.
+                // Prepared by Yukimi's check, which leaves each updated
+                // input's source in the store (`preflight::keep_sources`).
                 Some(prepared) => {
                     let proposed = if let Some(checked) = &checked_lock {
                         checked.clone()
@@ -1479,10 +1518,7 @@ fn preflight_request(change: &Change) -> preflight::Request {
 
 fn preflight_command(mut c: Command) -> std::result::Result<std::process::Output, String> {
     c.env("PATH", PATH);
-    let out = wait(c.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped())).map_err(|e| e.0)?;
-    // Plain Nix diagnostics are understood by the GUI's progress reader.
-    let _ = std::io::stderr().write_all(&out.stderr);
-    Ok(out)
+    wait_with_progress(c.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()), true).map_err(|e| e.0)
 }
 
 fn check_update(args: &[String]) -> Result<preflight::Report> {
@@ -1500,16 +1536,20 @@ fn check_update(args: &[String]) -> Result<preflight::Report> {
 fn validate_preflight(change: &Change, setup: &Setup) -> Result<Option<String>> {
     let Some(expected) = &change.checked_source else { return Ok(None) };
     stage(1, "Verifying the checked configuration");
+    let proposed =
+        std::fs::read_to_string(change.lock.as_ref().ok_or_else(|| Failure("Missing checked lock".into()))?)?;
+    // Root's own copy, with its own migration and branch change. It starts
+    // from what the check found for the updated inputs, so that Nix has
+    // nothing to fetch for an address the check already resolved.
     let candidate =
-        preflight::Candidate::prepare(setup, &preflight_request(change), &mut preflight_command).map_err(Failure)?;
+        preflight::Candidate::prepare_to_judge(setup, &preflight_request(change), &proposed, &mut preflight_command)
+            .map_err(Failure)?;
     if &candidate.source != expected {
         return Err(Failure(
             "Your configuration changed after the compatibility check. Check the update again; nothing was changed."
                 .into(),
         ));
     }
-    let proposed =
-        std::fs::read_to_string(change.lock.as_ref().ok_or_else(|| Failure("Missing checked lock".into()))?)?;
     let baseline = std::fs::read_to_string(candidate.dir.join("flake.lock"))?;
     lock::check_update(&baseline, &proposed, &candidate.inputs)
         .map_err(|e| Failure(format!("The checked update was refused: {e}")))?;

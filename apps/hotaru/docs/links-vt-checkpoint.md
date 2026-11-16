@@ -15,7 +15,7 @@ Built on `ssh wx-workstation` from the frozen Sekka worktree:
 * ELF SHA-256: `bd9199bf737568e494e0e936e901f94da571608a7d573d6eb36950a60f883f3d`
 * Wrapper SHA-256: `b4165a2cd0132729f52ae209c7904ad29378a86ddbdc90859beaa0f0e940f11f`
 
-[`nix-links-vt-checkpoint.json`](../upstream/nix-links-vt-checkpoint.json)
+[`hotaru-benchmark-data/nix-links-vt-checkpoint.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/nix-links-vt-checkpoint.json)
 records the derivation, build log identity, release profile, installed files
 and package test summaries. The Nix build passed 38 ordinary native tests;
 six environment-dependent tests are explicitly ignored there.
@@ -25,14 +25,14 @@ the prepared source directly. The five intentional omissions are the separate
 core workspace lock and the four Sidestep patch inputs already applied by Nix.
 Seven installed shell/terminfo resource files, CJK and emoji fonts with OFL
 notices, six application notices and ELF runtime dependencies were verified.
-The [runtime report](../upstream/native-links-vt/package-runtime.json) retains
+The [runtime report](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/native-links-vt/package-runtime.json) retains
 the complete comparisons.
 
 ## Native qualification
 
 Five independent private headless Sway sessions used the exact installed
 package and the software pixman renderer. Their small JSON receipts are in
-[`upstream/native-links-vt/`](../upstream/native-links-vt/).
+[`hotaru-benchmark-data/native-links-vt`](https://github.com/bitemyapp/hotaru-benchmark-data/tree/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/native-links-vt).
 
 | Suite | Observed behavior |
 | --- | --- |
