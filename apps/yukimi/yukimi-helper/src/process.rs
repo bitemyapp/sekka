@@ -69,8 +69,14 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use yukimi_system::sys;
 
-/// pkexec starts programs with an almost empty environment.
-pub const PATH: &str = "/run/current-system/sw/bin:/run/wrappers/bin";
+/// pkexec starts programs with an almost empty environment. The package adds
+/// a Git of its own (`YUKIMI_HELPER_PATH`): Nix runs Git to fetch Sekka, and
+/// only installations with a developer application have one. Without it,
+/// Nix falls back to libgit2, which reports no progress.
+pub const PATH: &str = match option_env!("YUKIMI_HELPER_PATH") {
+    Some(path) => path,
+    None => "/run/current-system/sw/bin:/run/wrappers/bin",
+};
 
 /// A failure, in words for the person who asked.
 #[derive(Debug)]
@@ -293,7 +299,13 @@ impl Drop for Unstoppable {
 
 /// Start a command, remembering it so it can be stopped, and wait for it.
 pub fn wait(c: &mut Command) -> Result<std::process::Output> {
-    let child = {
+    wait_with_progress(c, false)
+}
+
+/// Optionally tee stderr to the GUI while retaining it for diagnostics and
+/// the preflight build plan. Drain it alongside stdout so neither pipe fills.
+fn wait_with_progress(c: &mut Command, stream_stderr: bool) -> Result<std::process::Output> {
+    let mut child = {
         let mut state = state();
         if state.0 == Phase::Stopping {
             return Err(Failure("Stopped".into()));
@@ -302,10 +314,36 @@ pub fn wait(c: &mut Command) -> Result<std::process::Output> {
         state.1 = Some(child.id());
         child
     };
+    let errors = if stream_stderr {
+        child.stderr.take().map(|mut pipe| {
+            std::thread::spawn(move || -> std::io::Result<Vec<u8>> {
+                let mut captured = Vec::new();
+                let mut buffer = [0; 8192];
+                loop {
+                    let n = match pipe.read(&mut buffer) {
+                        Ok(0) => return Ok(captured),
+                        Ok(n) => n,
+                        Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+                        Err(error) => return Err(error),
+                    };
+                    captured.extend_from_slice(&buffer[..n]);
+                    // A closed GUI must not prevent draining and reaping Nix.
+                    let _ = std::io::stderr().write_all(&buffer[..n]);
+                }
+            })
+        })
+    } else {
+        None
+    };
     let out = child.wait_with_output();
     state().1 = None;
+    let errors = errors.map(|reader| reader.join());
     check_stopped()?;
-    Ok(out?)
+    let mut out = out?;
+    if let Some(errors) = errors {
+        out.stderr = errors.map_err(|_| Failure("The command's error reader stopped unexpectedly".into()))??;
+    }
+    Ok(out)
 }
 
 /// A line of Nix's log format on standard error. Writing it never fails
@@ -407,12 +445,13 @@ pub fn output(mut c: Command, what: &str) -> Result<String> {
 /// variables the check set. A command for any other program is refused
 /// before anything runs. The check works on a copy of the configuration,
 /// so these commands change neither the configuration nor root's channels.
+///
+/// What a command writes to standard error reaches Yukimi as it is written,
+/// whose progress reader understands plain Nix diagnostics, and is kept in
+/// the output too.
 pub fn preflight(built: Command) -> std::result::Result<std::process::Output, String> {
     let mut c = reissued(&built).map_err(|e| e.0)?;
-    let out = wait(c.stdout(Stdio::piped()).stderr(Stdio::piped())).map_err(|e| e.0)?;
-    // Plain Nix diagnostics are understood by the GUI's progress reader.
-    let _ = std::io::stderr().write_all(&out.stderr);
-    Ok(out)
+    wait_with_progress(c.stdout(Stdio::piped()).stderr(Stdio::piped()), true).map_err(|e| e.0)
 }
 
 /// The update check's command, made again by the helper.
