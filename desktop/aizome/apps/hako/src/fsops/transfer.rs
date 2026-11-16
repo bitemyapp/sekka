@@ -34,6 +34,64 @@ pub struct Item {
     pub target: PathBuf,
 }
 
+/// An empty folder removed while merging a move. Its inverse recreates
+/// this container, never moves the destination folder and its other items.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct RemovedDir {
+    pub path: PathBuf,
+    pub mode: u32,
+}
+
+/// A container we may remove only if it is still this directory and empty.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct KeptDir {
+    pub path: PathBuf,
+    dev: u64,
+    ino: u64,
+}
+
+impl KeptDir {
+    pub fn at(path: &Path, meta: &fs::Metadata) -> Self {
+        Self { path: path.to_path_buf(), dev: meta.dev(), ino: meta.ino() }
+    }
+
+    pub fn matches(&self, meta: &fs::Metadata) -> bool {
+        meta.is_dir() && self.dev == meta.dev() && self.ino == meta.ino()
+    }
+}
+
+/// Actual move boundaries, separate from the top-level progress report.
+/// A merge replaces its pending parent with the children it found; only a
+/// placement whose source went away is recorded as moved.
+#[derive(Default)]
+pub(crate) struct Moves {
+    pub moved: Vec<Item>,
+    pub pending: Vec<Item>,
+    pub removed: Vec<RemovedDir>,
+    pub merge_parents: Vec<KeptDir>,
+    pub skipped: bool,
+}
+
+impl Moves {
+    fn remove_pending(&mut self, source: &Path) {
+        if let Some(i) = self.pending.iter().position(|i| i.source == source) {
+            self.pending.remove(i);
+        }
+    }
+
+    fn placed(&mut self, source: &Path, target: &Path) {
+        if source == target {
+            self.remove_pending(source);
+        } else if fs::symlink_metadata(source).is_err_and(|e| e.kind() == io::ErrorKind::NotFound) {
+            self.remove_pending(source);
+            self.moved.push(Item { source: source.to_path_buf(), target: target.to_path_buf() });
+        }
+        // A cross-filesystem copy may keep some or all of its sources.
+        // Keep that item pending, and don't claim its entire destination
+        // as a moved subtree for Redo.
+    }
+}
+
 /// Copy or move `sources` into the folder `dest`, each under its own
 /// name. Replaced items go to `trash`, once their replacements are in
 /// place. No caller can have them deleted instead:
@@ -78,8 +136,35 @@ pub fn duplicate(sources: &[PathBuf], env: &mut Env, trash: &Trash) -> Report {
 
 /// Copy or move each item to its target.
 pub fn transfer_items(items: &[Item], mode: Mode, env: &mut Env, trash: &Trash) -> Report {
+    transfer_items_with(items, mode, env, trash, None, &[], &[])
+}
+
+/// The inversion path also needs the precise moved and unfinished items:
+/// a top-level `done` entry can stand for a partly merged folder.
+pub(crate) fn move_items(
+    items: &[Item],
+    env: &mut Env,
+    trash: &Trash,
+    sources: &[KeptDir],
+    targets: &[KeptDir],
+) -> (Report, Moves) {
+    let mut moves = Moves { pending: items.to_vec(), ..Moves::default() };
+    let report = transfer_items_with(items, Mode::Move, env, trash, Some(&mut moves), sources, targets);
+    moves.pending.retain(|i| !fs::symlink_metadata(&i.source).is_err_and(|e| e.kind() == io::ErrorKind::NotFound));
+    (report, moves)
+}
+
+fn transfer_items_with(
+    items: &[Item],
+    mode: Mode,
+    env: &mut Env,
+    trash: &Trash,
+    moves: Option<&mut Moves>,
+    sources: &[KeptDir],
+    targets: &[KeptDir],
+) -> Report {
     let mut report = Report::default();
-    let mut w = Worker { env, mode, trash, problems: Vec::new() };
+    let mut w = Worker { env, mode, trash, problems: Vec::new(), moves, sources, targets };
     if w.count(items).is_err() {
         report.cancelled = true;
         return report;
@@ -163,7 +248,7 @@ pub fn restore(entries: &[trash::Entry], trash: &Trash, env: &mut Env) -> Report
             None => report.failed.push((e.file.clone(), "where it came from isn't known".into())),
         }
     }
-    let mut w = Worker { env, mode: Mode::Move, trash, problems: Vec::new() };
+    let mut w = Worker { env, mode: Mode::Move, trash, problems: Vec::new(), moves: None, sources: &[], targets: &[] };
     let plain: Vec<Item> = items.iter().map(|(_, i)| i.clone()).collect();
     if w.count(&plain).is_err() {
         report.cancelled = true;
@@ -288,6 +373,9 @@ struct Worker<'x, 'a> {
     /// Where the items replacements displace go.
     trash: &'x Trash,
     problems: Vec<(PathBuf, String)>,
+    moves: Option<&'x mut Moves>,
+    sources: &'x [KeptDir],
+    targets: &'x [KeptDir],
 }
 
 fn is_cancel(e: &io::Error) -> bool {
@@ -361,8 +449,21 @@ impl Worker<'_, '_> {
         }
     }
 
+    fn check_containers(&self, source: &Path, target: &Path) -> Step<()> {
+        let changed = |path: &Path, dir: &KeptDir| {
+            path.starts_with(&dir.path) && !fs::symlink_metadata(&dir.path).is_ok_and(|m| dir.matches(&m))
+        };
+        if self.sources.iter().chain(self.moves.iter().flat_map(|m| &m.merge_parents)).any(|dir| changed(source, dir))
+            || self.targets.iter().any(|dir| changed(target, dir))
+        {
+            return Err(Stop::Skip("its folder changed since this move was recorded".into()));
+        }
+        Ok(())
+    }
+
     /// Bring `source` to `target`, asking about whatever has the name.
     fn place_top(&mut self, source: &Path, target: &Path) -> Step<Placed> {
+        self.check_containers(source, target)?;
         let smeta = self.source_meta(source)?;
         let (src_n, mut target) = (names::normalize(source), names::normalize(target));
         let Some(dest) = target.parent().map(Path::to_path_buf) else {
@@ -370,7 +471,12 @@ impl Worker<'_, '_> {
         };
         if src_n == target {
             match self.mode {
-                Mode::Move => return Ok(Placed::Done(target)),
+                Mode::Move => {
+                    if let Some(moves) = &mut self.moves {
+                        moves.remove_pending(source);
+                    }
+                    return Ok(Placed::Done(target));
+                }
                 Mode::Copy => {
                     target =
                         dest.join(names::duplicate_name(&dest, source.file_name().unwrap_or_default(), smeta.is_dir()))
@@ -392,7 +498,12 @@ impl Worker<'_, '_> {
                     // name that differs only in case where case doesn't
                     // count): a plain rename does what can be done.
                     return match fs::rename(source, &target) {
-                        Ok(()) => Ok(Placed::Done(target)),
+                        Ok(()) => {
+                            if let Some(moves) = &mut self.moves {
+                                moves.placed(source, &target);
+                            }
+                            Ok(Placed::Done(target))
+                        }
                         Err(e) => Err(Stop::Skip(super::describe(&e))),
                     };
                 }
@@ -408,8 +519,15 @@ impl Worker<'_, '_> {
                     source_modified: smeta.modified().ok(),
                     target_modified: tmeta.modified().ok(),
                 };
-                match replace::ask(&mut *self.env.asker, &conflict, &tmeta) {
-                    Answer::Skip => return Ok(Placed::Skipped),
+                let answer = replace::ask(&mut *self.env.asker, &conflict, &tmeta);
+                self.check_containers(source, &target)?;
+                match answer {
+                    Answer::Skip => {
+                        if let Some(moves) = &mut self.moves {
+                            moves.skipped = true;
+                        }
+                        return Ok(Placed::Skipped);
+                    }
                     Answer::Cancel => return Err(Stop::Cancel),
                     Answer::KeepBoth => {
                         target =
@@ -434,6 +552,9 @@ impl Worker<'_, '_> {
         };
         match self.place(source, &target, &smeta) {
             Ok(placed) => {
+                if let Some(moves) = &mut self.moves {
+                    moves.placed(source, placed.target());
+                }
                 match aside.map(|a| a.replaced(placed)) {
                     Some(Ok(replaced)) => self.dispose(replaced),
                     // Placed elsewhere than the item it was to replace
@@ -493,6 +614,7 @@ impl Worker<'_, '_> {
     fn place(&mut self, source: &Path, target: &Path, smeta: &fs::Metadata) -> Step<InPlace> {
         if self.mode == Mode::Move {
             loop {
+                self.check_containers(source, target)?;
                 match place::rename_item(source, target, smeta) {
                     Ok(placed) => {
                         self.env.progress.items_done += 1;
@@ -565,6 +687,16 @@ impl Worker<'_, '_> {
     /// asked about) on its own; a moved folder left empty goes.
     fn merge(&mut self, source: &Path, target: &Path) -> Step<()> {
         let names = self.read_names(source)?;
+        let meta = fs::symlink_metadata(source).ok();
+        if let Some(moves) = &mut self.moves {
+            moves.remove_pending(source);
+            moves
+                .pending
+                .extend(names.iter().map(|name| Item { source: source.join(name), target: target.join(name) }));
+            if let Some(meta) = &meta {
+                moves.merge_parents.push(KeptDir::at(source, meta));
+            }
+        }
         let mut complete = true;
         for name in names {
             self.checkpoint()?;
@@ -579,8 +711,18 @@ impl Worker<'_, '_> {
                 Err(Stop::Cancel) => return Err(Stop::Cancel),
             }
         }
-        if self.mode == Mode::Move && complete {
-            let _ = fs::remove_dir(source);
+        let still_ours = self.moves.is_none()
+            || meta.as_ref().is_some_and(|seen| {
+                let kept = KeptDir::at(source, seen);
+                fs::symlink_metadata(source).is_ok_and(|now| kept.matches(&now))
+            });
+        if self.mode == Mode::Move
+            && complete
+            && still_ours
+            && fs::remove_dir(source).is_ok()
+            && let (Some(moves), Some(meta)) = (&mut self.moves, meta)
+        {
+            moves.removed.push(RemovedDir { path: source.to_path_buf(), mode: meta.mode() & 0o7777 });
         }
         self.env.progress.items_done += 1;
         Ok(())

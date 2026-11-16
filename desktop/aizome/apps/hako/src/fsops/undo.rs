@@ -23,7 +23,7 @@ use std::path::PathBuf;
 
 use aizome_typestate::{Answer, Fresh, Generation, Ticket};
 
-use super::transfer::{self, Item, Mode};
+use super::transfer::{self, Item, KeptDir, RemovedDir};
 use super::trash::{Trash, Trashed};
 use super::{Env, Report, sys};
 
@@ -34,6 +34,9 @@ pub enum Record {
     Rename { from: PathBuf, to: PathBuf },
     /// Each item moved from the first path to the second.
     Move { pairs: Vec<(PathBuf, PathBuf)> },
+    /// A move inverted through merges: only the children actually moved,
+    /// plus empty containers removed or recreated along the way.
+    MoveParts(Box<MoveParts>),
     /// These were made.
     Made { paths: Vec<PathBuf> },
     /// These went to the Trash.
@@ -46,6 +49,9 @@ impl Record {
         match self {
             Record::Rename { .. } => 1,
             Record::Move { pairs } => pairs.len(),
+            // Merge parents are best-effort cleanup alongside pending
+            // children, not another undo action once those children are done.
+            Record::MoveParts(parts) => parts.pairs.len() + parts.removed.len() + parts.created.len(),
             Record::Made { paths } => paths.len(),
             Record::Trash { items } => items.len(),
         }
@@ -53,6 +59,28 @@ impl Record {
 
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+}
+
+/// Precise inverse of a merged move. Its fields are private because the
+/// transfer worker, not a top-level progress report, supplies its receipts.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct MoveParts {
+    pairs: Vec<(PathBuf, PathBuf)>,
+    removed: Vec<RemovedDir>,
+    created: Vec<KeptDir>,
+    /// Source containers to remove if the remaining children leave them
+    /// empty. These never authorize moving their other children.
+    merge_parents: Vec<KeptDir>,
+}
+
+impl MoveParts {
+    fn record(self) -> Record {
+        if self.removed.is_empty() && self.created.is_empty() && self.merge_parents.is_empty() {
+            Record::Move { pairs: self.pairs }
+        } else {
+            Record::MoveParts(Box::new(self))
+        }
     }
 }
 
@@ -503,9 +531,11 @@ impl History {
 /// Carry out `inversion`: what happened, and its result for the history.
 pub fn invert(inversion: Inversion, trash: &Trash, env: &mut Env) -> (Report, Inverted) {
     let Inversion { ticket, record, .. } = inversion;
-    let (report, inverse, left) = carry_out(&record, trash, env);
+    let (report, inverse, left, skipped_inside) = carry_out(&record, trash, env);
     let some = |r: Record| (!r.is_empty()).then_some(r);
-    let declined = report.failed.is_empty() && (report.cancelled || !report.skipped.is_empty());
+    let declined = report.failed.is_empty()
+        && report.problems.is_empty()
+        && (skipped_inside || report.cancelled || !report.skipped.is_empty());
     (report, Inverted { ticket, inverse: some(inverse), left: some(left), declined })
 }
 
@@ -517,7 +547,7 @@ fn nothing() -> Record {
 /// Carry out the inverse of `record`: what happened, the record of the
 /// inverse (to redo, or undo again), and what's left of `record`: the
 /// part not carried out whose items are still there to try again with.
-fn carry_out(record: &Record, trash: &Trash, env: &mut Env) -> (Report, Record, Record) {
+fn carry_out(record: &Record, trash: &Trash, env: &mut Env) -> (Report, Record, Record, bool) {
     // An inaccessible item may still be there. Only definite absence
     // removes it from a step's retry record.
     let there = |p: &PathBuf| !std::fs::symlink_metadata(p).is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound);
@@ -531,12 +561,12 @@ fn carry_out(record: &Record, trash: &Trash, env: &mut Env) -> (Report, Record, 
                     (super::describe(&e), record.clone())
                 };
                 report.failed.push((to.clone(), why));
-                return (report, nothing(), left);
+                return (report, nothing(), left, false);
             }
             match sys::rename_noreplace(to, from) {
                 Ok(()) => {
                     report.done.push((to.clone(), from.clone()));
-                    (report, Record::Rename { from: to.clone(), to: from.clone() }, nothing())
+                    (report, Record::Rename { from: to.clone(), to: from.clone() }, nothing(), false)
                 }
                 Err(e) => {
                     let why = if e.kind() == std::io::ErrorKind::AlreadyExists {
@@ -545,24 +575,17 @@ fn carry_out(record: &Record, trash: &Trash, env: &mut Env) -> (Report, Record, 
                         super::describe(&e)
                     };
                     report.failed.push((to.clone(), why));
-                    (report, nothing(), record.clone())
+                    (report, nothing(), record.clone(), false)
                 }
             }
         }
-        Record::Move { pairs } => {
-            let items: Vec<Item> =
-                pairs.iter().map(|(was, now)| Item { source: now.clone(), target: was.clone() }).collect();
-            let report = transfer::transfer_items(&items, Mode::Move, env, trash);
-            let back = report.done.iter().map(|(now, was)| (now.clone(), was.clone())).collect();
-            let moved = |now: &PathBuf| report.done.iter().any(|(s, _)| s == now);
-            let left = pairs.iter().filter(|(_, now)| !moved(now) && there(now)).cloned().collect();
-            (report, Record::Move { pairs: back }, Record::Move { pairs: left })
-        }
+        Record::Move { pairs } => invert_move(&MoveParts { pairs: pairs.clone(), ..MoveParts::default() }, trash, env),
+        Record::MoveParts(parts) => invert_move(parts, trash, env),
         Record::Made { paths } => {
             let (report, items) = transfer::trash_items(paths, trash, env);
             let trashed = |p: &PathBuf| report.done.iter().any(|(s, _)| s == p);
             let left = paths.iter().filter(|p| !trashed(p) && there(p)).cloned().collect();
-            (report, Record::Trash { items }, Record::Made { paths: left })
+            (report, Record::Trash { items }, Record::Made { paths: left }, false)
         }
         Record::Trash { items } => {
             let mut report = Report::default();
@@ -578,9 +601,149 @@ fn carry_out(record: &Record, trash: &Trash, env: &mut Env) -> (Report, Record, 
             // Only the original receipt can keep a step. A later replacement
             // may already have reused a name freed by this very restore.
             let left = items.iter().filter(|t| t.may_remain()).cloned().collect();
-            (report, Record::Made { paths }, Record::Trash { items: left })
+            (report, Record::Made { paths }, Record::Trash { items: left }, false)
         }
     }
+}
+
+fn invert_move(parts: &MoveParts, trash: &Trash, env: &mut Env) -> (Report, Record, Record, bool) {
+    use std::fs;
+    use std::io;
+    use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt, PermissionsExt};
+
+    let mut report = Report::default();
+    let mut inverse = MoveParts::default();
+    let mut left = MoveParts::default();
+    let mut restored = Vec::new();
+    let mut targets = Vec::new();
+    let mut blocked = Vec::new();
+    let mut dirs = parts.removed.clone();
+    dirs.sort_by_key(|d| d.path.components().count());
+    for dir in dirs {
+        if blocked.iter().any(|parent: &PathBuf| dir.path.starts_with(parent)) {
+            left.removed.push(dir);
+            continue;
+        }
+        if env.control.checkpoint().is_err() {
+            report.cancelled = true;
+            left.removed.push(dir);
+            continue;
+        }
+        // Create just the containers this move removed, never recursively
+        // invent a parent outside its receipt. Fill them before restoring
+        // their permissions (a removed folder may have been read-only).
+        match fs::DirBuilder::new().mode(0o700).create(&dir.path) {
+            Ok(()) => {
+                match fs::OpenOptions::new()
+                    .read(true)
+                    .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW)
+                    .open(&dir.path)
+                    .and_then(|handle| handle.metadata().map(|meta| (handle, meta)))
+                {
+                    Ok((handle, meta)) => {
+                        let kept = KeptDir::at(&dir.path, &meta);
+                        targets.push(kept.clone());
+                        inverse.created.push(kept.clone());
+                        restored.push((dir, handle));
+                    }
+                    Err(e) => {
+                        report.failed.push((
+                            dir.path.clone(),
+                            format!("its new folder couldn't be recorded: {}", super::describe(&e)),
+                        ));
+                        blocked.push(dir.path.clone());
+                        left.removed.push(dir);
+                    }
+                }
+            }
+            Err(e)
+                if e.kind() == io::ErrorKind::AlreadyExists
+                    && fs::symlink_metadata(&dir.path).is_ok_and(|m| m.is_dir()) =>
+            {
+                if let Ok(meta) = fs::symlink_metadata(&dir.path) {
+                    targets.push(KeptDir::at(&dir.path, &meta));
+                }
+            }
+            Err(e) => {
+                report
+                    .failed
+                    .push((dir.path.clone(), format!("its folder couldn't be made again: {}", super::describe(&e))));
+                blocked.push(dir.path.clone());
+                left.removed.push(dir);
+            }
+        }
+    }
+    let items: Vec<Item> = parts
+        .pairs
+        .iter()
+        .filter_map(|(was, now)| {
+            if blocked.iter().any(|parent| was.starts_with(parent)) {
+                left.pairs.push((was.clone(), now.clone()));
+                None
+            } else {
+                Some(Item { source: now.clone(), target: was.clone() })
+            }
+        })
+        .collect();
+    let sources: Vec<KeptDir> = parts.created.iter().chain(&parts.merge_parents).cloned().collect();
+    let (moved_report, moves) = transfer::move_items(&items, env, trash, &sources, &targets);
+    report.absorb(moved_report);
+    inverse.pairs = moves.moved.into_iter().map(|i| (i.source, i.target)).collect();
+    inverse.removed = moves.removed;
+    left.pairs.extend(moves.pending.into_iter().map(|i| (i.target, i.source)));
+
+    let mut cleanup: Vec<(KeptDir, bool)> = parts
+        .created
+        .iter()
+        .cloned()
+        .map(|p| (p, true))
+        .chain(parts.merge_parents.iter().chain(&moves.merge_parents).cloned().map(|p| (p, false)))
+        .collect();
+    cleanup.sort_by_key(|(dir, _)| (std::cmp::Reverse(dir.path.components().count()), dir.path.clone()));
+    cleanup.dedup_by(|a, b| a.0 == b.0);
+    for (dir, created) in cleanup {
+        let path = &dir.path;
+        let pending = left.pairs.iter().any(|(_, source)| source.starts_with(path))
+            || left.created.iter().chain(&left.merge_parents).any(|d| d.path.starts_with(path));
+        if pending || env.control.is_cancelled() {
+            if created {
+                left.created.push(dir);
+            } else {
+                left.merge_parents.push(dir);
+            }
+            continue;
+        }
+        let meta = match fs::symlink_metadata(path) {
+            Ok(meta) if dir.matches(&meta) => meta,
+            Ok(_) => continue,
+            Err(e) if e.kind() == io::ErrorKind::NotFound => continue,
+            Err(e) => {
+                report.problems.push((path.clone(), super::describe(&e)));
+                if created {
+                    left.created.push(dir);
+                }
+                continue;
+            }
+        };
+        match fs::remove_dir(path) {
+            Ok(()) => inverse.removed.push(RemovedDir { path: path.clone(), mode: meta.mode() & 0o7777 }),
+            Err(e) if matches!(e.kind(), io::ErrorKind::NotFound | io::ErrorKind::DirectoryNotEmpty) => {}
+            Err(e) => {
+                report
+                    .problems
+                    .push((path.clone(), format!("the empty original folder is kept: {}", super::describe(&e))));
+                if created {
+                    left.created.push(dir);
+                }
+            }
+        }
+    }
+    for (dir, handle) in restored.into_iter().rev() {
+        if let Err(e) = handle.set_permissions(fs::Permissions::from_mode(dir.mode)) {
+            report.problems.push((dir.path, format!("its permissions couldn't be restored: {}", super::describe(&e))));
+        }
+    }
+    (report, inverse.record(), left.record(), moves.skipped)
 }
 
 #[cfg(test)]
@@ -722,6 +885,257 @@ mod tests {
         assert_eq!((h.undo_label(), h.redo_label()), (Some("Move of 2 Items"), Some("Move of 2 Items")));
         let inversion = h.begin_undo().unwrap();
         assert_eq!(inversion.record, Record::Move { pairs: vec![(b.clone(), to.join("b.txt"))] }, "what's left");
+    }
+
+    struct MergeAnswer(Resolution);
+
+    impl super::super::Asker for MergeAnswer {
+        fn conflict(&mut self, c: &super::super::Conflict) -> Resolution {
+            if c.can_merge() { Resolution::Merge } else { self.0 }
+        }
+
+        fn error(&mut self, _: &super::super::Failure) -> ErrorChoice {
+            ErrorChoice::Skip
+        }
+    }
+
+    fn invert_merging(h: &mut History, tr: &Trash, redo: bool, answer: Resolution) -> Report {
+        let inversion = if redo { h.begin_redo() } else { h.begin_undo() }.expect("a step");
+        let control = Control::new();
+        let mut asker = MergeAnswer(answer);
+        let mut quiet = ();
+        let mut env = Env::new(&control, &mut asker, &mut quiet);
+        let (report, inverted) = invert(inversion, tr, &mut env);
+        h.finished(inverted, |note| panic!("a choice isn't a failed step: {note}"));
+        report
+    }
+
+    #[test]
+    fn a_partial_move_merge_retries_and_redoes_only_its_children() {
+        let t = TempDir::new("undo-partial-move-merge");
+        let tr = trash(&t);
+        let old = t.dir("from/folder");
+        let now = t.dir("to/folder");
+        t.file("to/folder/nested/a", "original a");
+        t.file("to/folder/nested/b", "original b");
+        t.file("from/folder/nested/b", "unrelated b");
+        t.file("from/folder/only-here", "unrelated child");
+        let previous = t.file("previous", "previous step");
+        let mut h = History::default();
+        h.push(step(Record::Made { paths: vec![previous.clone()] }, "Previous"));
+        h.push(step(Record::Move { pairs: vec![(old.clone(), now.clone())] }, "Move folder"));
+
+        invert_merging(&mut h, &tr, false, Resolution::Skip);
+        assert_eq!(h.undo_label(), Some("Move folder"), "the skipped child stays to undo");
+        assert_eq!(read(old.join("nested/a")), "original a");
+        assert_eq!(read(now.join("nested/b")), "original b");
+        // Repeatedly skipping the remaining child must not discard it, nor
+        // accidentally include new source children in the retry.
+        t.file("to/folder/later", "not part of the move");
+        for _ in 0..2 {
+            invert_merging(&mut h, &tr, false, Resolution::Skip);
+            assert_eq!(h.undo_label(), Some("Move folder"));
+            assert!(now.join("later").exists());
+            assert!(previous.exists());
+        }
+        invert_merging(&mut h, &tr, true, Resolution::Skip);
+        assert_eq!(read(now.join("nested/a")), "original a");
+        assert_eq!(read(old.join("nested/b")), "unrelated b");
+        assert_eq!(read(old.join("only-here")), "unrelated child");
+        invert_merging(&mut h, &tr, false, Resolution::Skip);
+        std::fs::remove_file(old.join("nested/b")).unwrap();
+        invert_merging(&mut h, &tr, false, Resolution::Skip);
+        assert_eq!(h.undo_label(), Some("Previous"));
+        assert_eq!(read(old.join("nested/b")), "original b");
+        assert_eq!(read(now.join("later")), "not part of the move");
+        invert_merging(&mut h, &tr, true, Resolution::Skip);
+        assert_eq!(read(now.join("nested/b")), "original b");
+        assert_eq!(read(old.join("only-here")), "unrelated child");
+    }
+
+    #[test]
+    fn a_cancelled_move_merge_keeps_completed_and_unvisited_children() {
+        let t = TempDir::new("undo-cancelled-move-merge");
+        let tr = trash(&t);
+        let old = t.dir("from/folder");
+        let now = t.dir("to/folder");
+        for name in ["a", "b", "c"] {
+            t.file(&format!("to/folder/{name}"), name);
+        }
+        t.file("from/folder/b", "unrelated b");
+        let mut h = History::default();
+        h.push(step(Record::Move { pairs: vec![(old.clone(), now.clone())] }, "Move folder"));
+        let r = invert_merging(&mut h, &tr, false, Resolution::Cancel);
+        assert!(r.cancelled);
+        assert_eq!(h.undo_label(), Some("Move folder"));
+        assert_eq!(h.redo_label(), Some("Move folder"), "the completed child is still redoable");
+        assert_eq!(read(old.join("a")), "a");
+        assert_eq!(read(now.join("c")), "c");
+        invert_merging(&mut h, &tr, true, Resolution::Skip);
+        assert_eq!(read(now.join("a")), "a");
+        assert_eq!(read(old.join("b")), "unrelated b");
+        invert_merging(&mut h, &tr, false, Resolution::Skip);
+        std::fs::remove_file(old.join("b")).unwrap();
+        invert_merging(&mut h, &tr, false, Resolution::Skip);
+        assert_eq!(h.undo_label(), None);
+        assert_eq!(read(old.join("b")), "b");
+        assert_eq!(read(old.join("c")), "c");
+    }
+
+    #[test]
+    fn a_completed_move_merge_redoes_into_its_removed_parent_folders() {
+        let t = TempDir::new("undo-complete-move-merge");
+        let tr = trash(&t);
+        let old = t.dir("from/folder");
+        let now = t.dir("to/folder");
+        t.file("to/folder/nested/a", "original a");
+        t.dir("to/folder/empty");
+        t.file("from/folder/nested/a", "unrelated a");
+        t.file("from/folder/nested/only-here", "unrelated child");
+        let mut h = History::default();
+        h.push(step(Record::Move { pairs: vec![(old.clone(), now.clone())] }, "Move folder"));
+        assert!(invert_merging(&mut h, &tr, false, Resolution::KeepBoth).is_clean());
+        assert!(!now.exists(), "the completed merge removed its empty source parents");
+        assert_eq!(read(old.join("nested/a")), "unrelated a");
+        assert!(invert_merging(&mut h, &tr, true, Resolution::Skip).is_clean());
+        assert_eq!(read(now.join("nested/a")), "original a", "Keep Both's renamed child goes back");
+        assert!(now.join("empty").is_dir());
+        assert_eq!(read(old.join("nested/a")), "unrelated a");
+        assert_eq!(read(old.join("nested/only-here")), "unrelated child");
+        assert!(invert_merging(&mut h, &tr, false, Resolution::KeepBoth).is_clean());
+        assert!(!now.exists(), "undo also removes only the parents it recreated");
+        assert_eq!(read(old.join("nested/only-here")), "unrelated child");
+    }
+
+    #[test]
+    fn move_merge_cleanup_keeps_a_replacement_directory() {
+        let t = TempDir::new("undo-move-merge-replaced-dir");
+        let tr = trash(&t);
+        let old = t.dir("from/folder");
+        let now = t.dir("to/folder");
+        t.file("to/folder/a", "a");
+        t.file("to/folder/b", "b");
+        t.file("from/folder/b", "unrelated b");
+        let mut h = History::default();
+        h.push(step(Record::Move { pairs: vec![(old.clone(), now.clone())] }, "Move"));
+        invert_merging(&mut h, &tr, false, Resolution::Skip);
+        std::fs::rename(&now, t.join("set-aside")).unwrap();
+        std::fs::create_dir(&now).unwrap();
+        invert_merging(&mut h, &tr, false, Resolution::Skip);
+        assert!(now.is_dir(), "a replacement at the recorded name isn't our empty container");
+        assert_eq!(read(t.join("set-aside/b")), "b");
+        assert_eq!(read(old.join("b")), "unrelated b");
+    }
+
+    #[test]
+    fn move_merge_redo_does_not_follow_a_replaced_parent() {
+        let t = TempDir::new("redo-move-merge-symlink");
+        let tr = trash(&t);
+        let old = t.dir("from/folder");
+        let now = t.dir("to/folder");
+        t.file("to/folder/nested/a", "a");
+        t.file("from/folder/nested/only-here", "unrelated child");
+        let unrelated = t.dir("unrelated");
+        let mut h = History::default();
+        h.push(step(Record::Move { pairs: vec![(old.clone(), now.clone())] }, "Move"));
+        invert_merging(&mut h, &tr, false, Resolution::Skip);
+        assert!(!now.exists());
+        std::os::unix::fs::symlink(&unrelated, &now).unwrap();
+        let report = invert_merging(&mut h, &tr, true, Resolution::Skip);
+        assert!(!report.failed.is_empty());
+        assert_eq!(h.redo_label(), Some("Move"));
+        assert_eq!(std::fs::read_dir(&unrelated).unwrap().count(), 0);
+        assert_eq!(read(old.join("nested/a")), "a");
+        std::fs::remove_file(&now).unwrap();
+        assert!(invert_merging(&mut h, &tr, true, Resolution::Skip).is_clean());
+        assert_eq!(read(now.join("nested/a")), "a");
+        assert_eq!(read(old.join("nested/only-here")), "unrelated child");
+    }
+
+    #[test]
+    fn move_merge_redo_checks_the_parent_again_after_recreating_it() {
+        use std::os::unix::fs::{MetadataExt, PermissionsExt};
+        let t = TempDir::new("redo-move-merge-parent-changed");
+        let tr = trash(&t);
+        let old = t.dir("from/folder");
+        let now = t.dir("to/folder");
+        t.file("to/folder/a", "a");
+        t.file("from/folder/only-here", "unrelated child");
+        std::fs::set_permissions(&now, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let unrelated = t.dir("unrelated");
+        std::fs::set_permissions(&unrelated, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let mut h = History::default();
+        h.push(step(Record::Move { pairs: vec![(old.clone(), now.clone())] }, "Move"));
+        invert_merging(&mut h, &tr, false, Resolution::Skip);
+        let control = Control::new();
+        let mut asker = MergeAnswer(Resolution::Skip);
+        let mut swapped = false;
+        let mut reporter = |p: &super::super::Progress| {
+            if !swapped && p.current.is_some() {
+                std::fs::rename(&now, t.join("recreated")).unwrap();
+                std::os::unix::fs::symlink(&unrelated, &now).unwrap();
+                swapped = true;
+            }
+        };
+        let mut env = Env::new(&control, &mut asker, &mut reporter);
+        let (report, result) = invert(h.begin_redo().unwrap(), &tr, &mut env);
+        h.finished(result, |_| ());
+        assert!(swapped);
+        assert!(!report.failed.is_empty());
+        assert_eq!(std::fs::read_dir(&unrelated).unwrap().count(), 0);
+        assert_eq!(std::fs::metadata(&unrelated).unwrap().mode() & 0o777, 0o700, "chmod uses the recreated handle");
+        assert_eq!(read(old.join("a")), "a");
+    }
+
+    #[test]
+    fn move_merge_redo_keeps_unrelated_children_when_an_empty_source_stays() {
+        use std::os::unix::fs::PermissionsExt;
+        if crate::fsops::testing::is_root() {
+            return;
+        }
+        let t = TempDir::new("undo-move-merge-remove-failed");
+        let tr = trash(&t);
+        let old = t.dir("from/folder");
+        let now = t.dir("to/folder");
+        t.file("to/folder/a", "a");
+        t.file("from/folder/only-here", "unrelated child");
+        std::fs::set_permissions(t.join("to"), std::fs::Permissions::from_mode(0o500)).unwrap();
+        let mut h = History::default();
+        h.push(step(Record::Move { pairs: vec![(old.clone(), now.clone())] }, "Move"));
+        let report = invert_merging(&mut h, &tr, false, Resolution::Skip);
+        assert!(!report.problems.is_empty(), "the empty source couldn't be removed");
+        assert!(now.is_dir());
+        assert!(invert_merging(&mut h, &tr, true, Resolution::Skip).is_clean());
+        assert_eq!(read(now.join("a")), "a");
+        assert_eq!(read(old.join("only-here")), "unrelated child");
+    }
+
+    #[test]
+    fn a_partly_copied_move_keeps_its_source_pending_without_claiming_the_whole_copy() {
+        use std::os::unix::fs::PermissionsExt;
+        if crate::fsops::testing::is_root() {
+            return;
+        }
+        let t = TempDir::new("undo-partial-copy");
+        let Some(other) = TempDir::elsewhere("undo-partial-copy") else { return };
+        let tr = trash(&t);
+        let old = other.join("folder");
+        let now = t.dir("folder");
+        t.file("folder/a", "a");
+        let unreadable = t.file("folder/b", "b");
+        std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(0o000)).unwrap();
+        let mut h = History::default();
+        h.push(step(Record::Move { pairs: vec![(old.clone(), now.clone())] }, "Move"));
+        let report = invert_merging(&mut h, &tr, false, Resolution::Skip);
+        std::fs::set_permissions(&unreadable, std::fs::Permissions::from_mode(0o600)).unwrap();
+        assert!(!report.problems.is_empty());
+        assert_eq!(h.undo_label(), Some("Move"));
+        assert_eq!(h.redo_label(), None, "a source-retaining copy is not a whole-subtree move");
+        assert_eq!(read(old.join("a")), "a");
+        assert_eq!(read(now.join("b")), "b");
+        invert_merging(&mut h, &tr, false, Resolution::Skip);
+        assert_eq!(h.undo_label(), None);
+        assert_eq!(read(old.join("b")), "b");
     }
 
     #[test]
