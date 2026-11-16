@@ -2808,6 +2808,20 @@ restored folder keeps its unchanged receipt for retry. A bus test passes where
 `dbus-daemon` is missing, by skipping, so the phase requires it first. None of
 these touches a real block device.
 
+When undoing or redoing a Move merges folders, Hako records the children
+that actually moved separately from the top-level progress report. Skipped,
+failed and unvisited children stay in the step; Redo names only the children
+that moved, including their Keep Both names. Empty source containers removed
+by the merge are recreated as needed, and later cleanup checks directory
+identity and removes only empty directories. Tests cover nested merges,
+cancellation, retries, changed containers and failed directory cleanup.
+For a copy across filesystems that leaves some sources behind, Hako keeps the
+remaining source operation pending and does not offer a whole-folder Redo.
+Copies already made by that partial operation remain at the destination;
+their individual inverse actions are not yet recorded. This does not change
+the older top-level records made by initial forward Copy, Move or Put Back
+jobs when those jobs merge folders.
+
 ### Utsushi diagnostics
 
 Utsushi sends FFmpeg's nonfatal library diagnostics to the
