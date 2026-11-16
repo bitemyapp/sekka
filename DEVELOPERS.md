@@ -1455,6 +1455,10 @@ index and no checkout or hooks. It applies the requested migration/branch
 and input changes there, and evaluates a Nix dry
 run with import-from-derivation disabled. Evaluation failures stop the update
 and display Nix's diagnostic without writing the installed configuration.
+Snapshot, migration and update fetches stream Nix's structured activities and
+Git's carriage-return progress to the GUI while the commands run. The helper
+also retains stderr for diagnostics; only the dry-run command uses plain logs,
+whose build-plan headings the check reads before classifying derivations.
 Uncached package builds are named in a separate confirmation: they are
 unverified, not necessarily incompatible. This would flag an uncached
 cargo-geiger before attempting its build, but cannot predict its compiler or

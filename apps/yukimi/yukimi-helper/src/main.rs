@@ -178,7 +178,13 @@ fn settle() {
 
 /// Start a command, remembering it so it can be stopped, and wait for it.
 fn wait(c: &mut Command) -> Result<std::process::Output> {
-    let child = {
+    wait_with_progress(c, false)
+}
+
+/// Optionally tee stderr to the GUI while retaining it for diagnostics and
+/// the preflight build plan. Drain it alongside stdout so neither pipe fills.
+fn wait_with_progress(c: &mut Command, stream_stderr: bool) -> Result<std::process::Output> {
+    let mut child = {
         let mut state = state();
         if state.0 == Phase::Stopping {
             return Err(Failure("Stopped".into()));
@@ -187,10 +193,36 @@ fn wait(c: &mut Command) -> Result<std::process::Output> {
         state.1 = Some(child.id());
         child
     };
+    let errors = if stream_stderr {
+        child.stderr.take().map(|mut pipe| {
+            std::thread::spawn(move || -> std::io::Result<Vec<u8>> {
+                let mut captured = Vec::new();
+                let mut buffer = [0; 8192];
+                loop {
+                    let n = match pipe.read(&mut buffer) {
+                        Ok(0) => return Ok(captured),
+                        Ok(n) => n,
+                        Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+                        Err(error) => return Err(error),
+                    };
+                    captured.extend_from_slice(&buffer[..n]);
+                    // A closed GUI must not prevent draining and reaping Nix.
+                    let _ = std::io::stderr().write_all(&buffer[..n]);
+                }
+            })
+        })
+    } else {
+        None
+    };
     let out = child.wait_with_output();
     state().1 = None;
+    let errors = errors.map(|reader| reader.join());
     check_stopped()?;
-    Ok(out?)
+    let mut out = out?;
+    if let Some(errors) = errors {
+        out.stderr = errors.map_err(|_| Failure("The command's error reader stopped unexpectedly".into()))??;
+    }
+    Ok(out)
 }
 
 /// A failure, in words for the person who asked.
@@ -1485,10 +1517,7 @@ fn preflight_request(change: &Change) -> preflight::Request {
 
 fn preflight_command(mut c: Command) -> std::result::Result<std::process::Output, String> {
     c.env("PATH", PATH);
-    let out = wait(c.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped())).map_err(|e| e.0)?;
-    // Plain Nix diagnostics are understood by the GUI's progress reader.
-    let _ = std::io::stderr().write_all(&out.stderr);
-    Ok(out)
+    wait_with_progress(c.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()), true).map_err(|e| e.0)
 }
 
 fn check_update(args: &[String]) -> Result<preflight::Report> {
