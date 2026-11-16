@@ -586,6 +586,7 @@ pub struct Win {
     text_input: bool,
     /// What it takes, for input methods.
     text_purpose: TextPurpose,
+    text_input_generation: crate::protocol::TextInputGeneration,
     /// Where its caret is, in points from the top left of the content.
     caret: Option<Rect>,
     /// Where the content takes pointer input, if not everywhere.
@@ -1199,10 +1200,10 @@ impl State {
             }
             ToRender::DndFinish { drag, performed } => dnd::finish(self, drag, performed),
             ToRender::PublishOutputs => outputs::requested(self),
-            ToRender::TextInput { window, wanted, purpose, caret } => {
-                textinput::set_wanted(self, window, wanted, purpose, caret)
+            ToRender::TextInput { window, wanted, purpose, caret, generation } => {
+                textinput::set_wanted(self, window, wanted, purpose, caret, generation)
             }
-            ToRender::ResetTextInput { window } => textinput::reset(self, window),
+            ToRender::ResetTextInput { window, generation } => textinput::reset(self, window, generation),
             ToRender::SetInputRegion { window, rects } => {
                 if let Some(win) = self.windows.get_mut(&window) {
                     win.input_region = rects;
@@ -1376,6 +1377,7 @@ impl State {
                 scale_given: false,
                 text_input: false,
                 text_purpose: TextPurpose::Normal,
+                text_input_generation: crate::protocol::TextInputGeneration::default(),
                 caret: None,
                 raster_time: std::time::Duration::ZERO,
                 raster_pixels: 0.0,

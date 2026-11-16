@@ -81,7 +81,7 @@ pkgs.rustPlatform.buildRustPackage {
     cargo test "''${flags[@]}" -p sidestep-engine --lib
     cargo test "''${flags[@]}" -p sidestep-ui --lib \
       --test headless --test offscreen --test desktop --test scrolling --test drag_out \
-      --test repro_uiw_27
+      --test repro_uiw_27 --test ime_generations
     # The doctests of every crate with one that must not compile, their
     # error codes checked. Only the listed crates are tested, so a crate
     # that gains or loses such a doctest, or a source tree where none is

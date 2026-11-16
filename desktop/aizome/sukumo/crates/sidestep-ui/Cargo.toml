@@ -34,6 +34,10 @@ sidestep-ui = { path = ".", features = ["testing"] }
 name = "headless"
 harness = false
 
+[[test]]
+name = "ime_generations"
+harness = false
+
 # Input, the clipboard, outputs and popups under the headless sway, with
 # other clients (see the file).
 [[test]]

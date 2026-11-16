@@ -532,7 +532,9 @@ impl<'c, M: Mode> Composer<'c, '_, '_, M> {
     }
 
     /// If the widget dropped a composition, it's idle again and the input
-    /// method starts over: what the input method sends next is its own.
+    /// method starts over. The window advances its input generation when
+    /// applying the reset, rejecting queued events from the old context;
+    /// the render thread also rejects Wayland batches from before it.
     /// Whether it did.
     fn start_over_if_dropped(&mut self) -> Started {
         let started = match &mut self.slot::<M>().0 {
