@@ -1505,6 +1505,9 @@ native-library errors. Generated configuration derivations marked
 `preferLocalBuild` and fixed-output downloads do not trigger that warning.
 The check uses the user's configured caches; a cache introduced by the update
 may therefore cause a conservative warning until the root build reads it.
+Its unprivileged commands inherit the user's environment, including SSH-agent
+access, proxy settings and Nix configuration, while using the helper's program
+search path. Root's validation keeps the helper's sanitized environment.
 
 Proceeding uses the exact checked lock stored in Nix, with root independently
 validating the permitted input changes and rejecting a configuration changed
