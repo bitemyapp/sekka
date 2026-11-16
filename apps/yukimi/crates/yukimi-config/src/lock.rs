@@ -388,6 +388,46 @@ pub fn check_update(current: &str, proposed: &str, updated: &[String]) -> Result
     Ok(())
 }
 
+/// `current` with each input in `updated` described as `checked` describes
+/// it, where the two give it different addresses. This is for the helper's
+/// own copy of a flake whose address for an input has just changed (another
+/// branch, or Sekka's move from a tarball to Git), given the lock Yukimi
+/// checked for that change.
+///
+/// Nix keeps a lock entry only for the address the flake names. Left with
+/// the old entry, it fetches the input to lock the new address, and the
+/// helper uses nothing that fetch finds: [`check_update`] asks only that an
+/// updated input comes from the address the helper's own lock gives it.
+/// Given the checked entry, Nix keeps it when it is for the flake's address,
+/// and has nothing to fetch. When it is for another, Nix locks the input
+/// itself as before, and `check_update` then refuses the checked lock.
+///
+/// Only an entry's `original` and `locked` are taken: never what the input
+/// brings with it, and nothing of an input that isn't in `updated`. `None`
+/// when no address differs, or a lock can't be read.
+pub fn with_checked_sources(current: &str, checked: &str, updated: &[String]) -> Option<String> {
+    let mut lock: serde_json::Value = serde_json::from_str(current).ok()?;
+    let (checked_nodes, checked_inputs) = raw_parts(checked).ok()?;
+    let root = lock.get("root")?.as_str()?.to_owned();
+    let mut changed = false;
+    for name in updated {
+        let entry = |inputs: &serde_json::Value| inputs.get(name)?.as_str().map(str::to_owned);
+        let Some(id) = lock.get("nodes").and_then(|nodes| entry(nodes.get(&root)?.get("inputs")?)) else { continue };
+        let Some(theirs) = entry(&checked_inputs).and_then(|id| checked_nodes.get(&id)) else { continue };
+        let (Some(original), Some(locked)) = (theirs.get("original"), theirs.get("locked")) else { continue };
+        let Some(node) = lock.get_mut("nodes").and_then(|nodes| nodes.get_mut(&id)?.as_object_mut()) else { continue };
+        if node.get("original") != Some(original) {
+            node.insert("original".into(), original.clone());
+            node.insert("locked".into(), locked.clone());
+            changed = true;
+        }
+    }
+    if !changed {
+        return None;
+    }
+    serde_json::to_string_pretty(&lock).ok().map(|text| text + "\n")
+}
+
 impl Locked {
     /// For a FlakeHub source, the address that redirects to its newest
     /// release matching the version asked for: `https://api.flakehub.com/f/NixOS/nixpkgs/0.1`.
@@ -629,5 +669,48 @@ mod tests {
             .replace("\"tatami\": {\n          \"inputs\"", "\"tatami_2\": {\n          \"inputs\"");
         assert_eq!(check_update(LOCK, &renamed, &only(&[])), Ok(()));
         assert!(check_update(LOCK, "{}", &only(&[])).is_err());
+    }
+
+    #[test]
+    fn checked_sources_replace_only_updated_inputs_at_another_address() {
+        let only = |names: &[&str]| names.iter().map(|n| n.to_string()).collect::<Vec<_>>();
+        let value = |text: &str| serde_json::from_str::<serde_json::Value>(text).unwrap();
+        // The check followed tatami's main, and found it at another commit
+        // bringing something else. It moved nixpkgs too.
+        let mut checked = value(LOCK);
+        checked["nodes"]["tatami"]["original"]["ref"] = "main".into();
+        checked["nodes"]["tatami"]["locked"]["rev"] = "c0ffee".into();
+        checked["nodes"]["tatami"]["inputs"]["nixpkgs"] = serde_json::json!(["calamares", "nixpkgs"]);
+        checked["nodes"]["nixpkgs"]["locked"]["narHash"] = "sha256-z".into();
+        let checked = checked.to_string();
+
+        let ours = with_checked_sources(LOCK, &checked, &only(&["tatami"])).unwrap();
+        let (before, after) = (value(LOCK), value(&ours));
+        assert_eq!(after["nodes"]["tatami"]["original"]["ref"], "main");
+        assert_eq!(after["nodes"]["tatami"]["locked"]["rev"], "c0ffee");
+        // Not what it brings, and not the input that wasn't to move.
+        assert_eq!(after["nodes"]["tatami"]["inputs"], before["nodes"]["tatami"]["inputs"]);
+        let mut rest = after.clone();
+        rest["nodes"]["tatami"] = before["nodes"]["tatami"].clone();
+        assert_eq!(rest, before);
+        // The checked lock is then judged as it always was.
+        assert!(check_update(LOCK, &checked, &only(&["tatami"])).is_err());
+        assert!(check_update(&ours, &checked, &only(&["tatami"])).is_err(), "nixpkgs moved too");
+        let nixpkgs_back = checked.replace("sha256-z", "sha256-y");
+        assert_eq!(check_update(&ours, &nixpkgs_back, &only(&["tatami"])), Ok(()));
+
+        // Nothing to take: the same address, an input that follows another
+        // or isn't there, no inputs to update, or a lock that can't be read.
+        let moved = LOCK.replace("\"rev\": \"b925d7a9c9\"", "\"rev\": \"c0ffee\"");
+        assert_ne!(moved, LOCK);
+        for (current, checked, updated) in [
+            (LOCK, moved.as_str(), only(&["tatami"])),
+            (LOCK, checked.as_str(), only(&["pkgs", "absent"])),
+            (LOCK, checked.as_str(), only(&[])),
+            (LOCK, "{}", only(&["tatami"])),
+            ("{ broken", checked.as_str(), only(&["tatami"])),
+        ] {
+            assert_eq!(with_checked_sources(current, checked, &updated), None, "{updated:?}");
+        }
     }
 }

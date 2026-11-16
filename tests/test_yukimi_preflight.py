@@ -8,6 +8,7 @@ Usage: python3 tests/test_yukimi_preflight.py /nix/store/...-yukimi-helper/bin
 import json
 import os
 from pathlib import Path
+import re
 import selectors
 import shutil
 import subprocess
@@ -259,8 +260,7 @@ class Preflight(unittest.TestCase):
         self.run_cmd(str(NIX), 'flake', 'archive', '--json', '/etc/nixos')
         if migrate:
             # Reuse the identical cached source as an installed github: lock.
-            # Migration moves the address and its lock entry to Git together,
-            # so the first Git fetch is the update's.
+            # Migration fetches Git during flake lock, before flake update.
             lock = json.loads((self.config / 'flake.lock').read_text())
             source = lock['nodes']['sekka']
             source['locked'] = {k: v for k, v in source['locked'].items()
@@ -361,12 +361,13 @@ exec {GIT} "$@"
     def test_cancel_during_streamed_fetch_leaves_configuration_unchanged(self):
         self.check_live_fetch(cancel=True)
 
-    def test_moving_sekka_to_git_fetches_it_once(self):
-        # Yukimi checks an update as the person at the desktop, and root
-        # repeats the check before applying it. Each account has a Git cache
-        # of its own, so a fetch only to lock the new address would be a
-        # whole clone, and root's a second one.
-        self.prepare_git_source(migrate=True)
+    # Yukimi checks an update as the person at the desktop, and root repeats
+    # the check before applying it. Nix keeps Git clones in the home of
+    # whoever fetches, so each fetch root makes of Sekka is a whole clone the
+    # first time. The check has to ask where a branch is; root doesn't.
+
+    def record_fetches(self):
+        """Record each Git fetch: the home it ran under, and what it asked for."""
         (self.root / 'home/user').mkdir(parents=True)
         shutil.copy(self.root / 'root/.gitconfig', self.root / 'home/user/.gitconfig')
         wrapper = self.root / 'run/current-system/sw/bin/git'
@@ -374,7 +375,8 @@ exec {GIT} "$@"
         wrapper.write_text(f'''#!{SHELL}
 for arg in "$@"; do
     if [ "$arg" = fetch ]; then
-        echo "$HOME" >> /state/fetches
+        for asked in "$@"; do :; done
+        echo "$HOME $asked" >> /state/fetches
     fi
 done
 exec {GIT} "$@"
@@ -383,19 +385,61 @@ exec {GIT} "$@"
 
         def fetches():
             log = self.root / 'state/fetches'
-            return log.read_text().split() if log.exists() else []
+            return [tuple(line.split()) for line in log.read_text().splitlines()] if log.exists() else []
+        return fetches
 
-        check = self.run_cmd('/bin/yukimi-helper', 'preflight', '--update', 'sekka', '--sekka', home='/home/user')
+    def assert_only_the_check_asked_for_a_branch(self, fetches, applied):
+        # Nix asks for a branch as `refs/heads/x:refs/heads/x`, and for a
+        # commit it already knows of by its ID.
+        commit = re.compile('[0-9a-f]{40}').fullmatch
+        self.assertEqual({home for home, asked in fetches() if not commit(asked)}, {'/home/user'}, applied.stderr)
+        # Root may still fetch the checked commit when it builds: the check
+        # leaves its source in the store only when Nix copies fetched sources
+        # there, which it doesn't with lazy trees or in nixpkgs' Nix.
+
+    def check_as_the_user(self, *update):
+        check = self.run_cmd('/bin/yukimi-helper', 'preflight', *update, home='/home/user')
         report = json.loads(check.stdout)
-        proposed = json.loads((self.root / report['lock'].lstrip('/')).read_text())
+        return report, json.loads((self.root / report['lock'].lstrip('/')).read_text())
+
+    def apply_as_root(self, report, *update, lock=None, **expected):
+        return self.run_cmd('/bin/yukimi-helper', '__worker', '/var/lib/yukimi/operations/test', 'change', *update,
+                            '--lock', lock or report['lock'], '--checked-source', report['source'], **expected)
+
+    def test_moving_sekka_to_git_asks_for_its_branch_in_the_check_only(self):
+        self.prepare_git_source(migrate=True)
+        fetches = self.record_fetches()
+        update = ['--update', 'sekka', '--sekka']
+        report, proposed = self.check_as_the_user(*update)
         self.assertEqual(proposed['nodes']['sekka']['locked']['type'], 'git')
-        self.assertEqual(fetches(), ['/home/user'], 'only the update itself fetches')
         # Root accepts the checked lock and builds from it; the fixture's
         # builder then fails, as every build here does.
-        applied = self.run_cmd('/bin/yukimi-helper', '__worker', '/var/lib/yukimi/operations/test',
-                               'change', '--sekka', '--update', 'sekka', '--lock', report['lock'],
-                               '--checked-source', report['source'], ok=False, builds=True)
-        self.assertEqual(fetches(), ['/home/user'], f'root fetched Sekka again: {applied.stderr}')
+        applied = self.apply_as_root(report, *update, ok=False, builds=True)
+        self.assert_only_the_check_asked_for_a_branch(fetches, applied)
+
+    def test_switching_sekka_branch_asks_for_it_in_the_check_only(self):
+        self.prepare_git_source(migrate=False)
+        self.git('branch', 'main', directory='/remote')
+        fetches = self.record_fetches()
+        update = ['--update', 'sekka', '--sekka', '--follow', 'sekka=main']
+        report, proposed = self.check_as_the_user(*update)
+        self.assertEqual(proposed['nodes']['sekka']['original']['ref'], 'main')
+        applied = self.apply_as_root(report, *update, ok=False, builds=True)
+        self.assert_only_the_check_asked_for_a_branch(fetches, applied)
+
+    def test_checked_lock_from_another_address_is_refused(self):
+        self.prepare_git_source(migrate=False)
+        fetches = self.record_fetches()
+        update = ['--update', 'sekka', '--sekka']
+        report, proposed = self.check_as_the_user(*update)
+        for part in ['original', 'locked']:
+            proposed['nodes']['sekka'][part]['url'] = 'https://github.com/someone/sekka'
+        (self.root / 'state/elsewhere.lock').write_text(json.dumps(proposed))
+        refused = self.apply_as_root(report, *update, lock='/state/elsewhere.lock', ok=False)
+        self.assertIn('comes from somewhere else', refused.stderr)
+        self.assertEqual(self.configuration(), self.before)
+        # Nix didn't keep the entry: root asked where its own flake's branch is.
+        self.assertTrue(any(home == '/root' and 'nightly' in asked for home, asked in fetches()), refused.stderr)
 
     def test_single_configuration_may_differ_from_the_hostname(self):
         (self.config / 'flake.nix').write_text(FLAKE.replace('nixosConfigurations.preflight-host', 'nixosConfigurations.custom'))

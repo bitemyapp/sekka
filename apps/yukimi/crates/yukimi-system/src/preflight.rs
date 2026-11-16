@@ -9,7 +9,7 @@ use std::process::{Command, Output};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde::{Deserialize, Serialize};
-use yukimi_config::{branch, edit, sekka};
+use yukimi_config::{branch, edit, lock, sekka};
 
 use crate::{
     nix,
@@ -160,9 +160,35 @@ impl Drop for Candidate {
 }
 
 impl Candidate {
+    /// For checking an update: Nix locks whatever address the request changes.
     pub fn prepare(
         setup: &Setup,
         request: &Request,
+        run: &mut impl FnMut(Command) -> Result<Output, String>,
+    ) -> Result<Self, String> {
+        Self::prepared(setup, request, None, run)
+    }
+
+    /// For judging the lock a check proposed (`checked`), as root does before
+    /// accepting it. The updated inputs start from the checked lock's entries
+    /// (`lock::with_checked_sources`), and Nix still decides: it keeps an
+    /// entry that is for the address this copy's flake names, and locks the
+    /// input itself when it is for another. So root fetches nothing the check
+    /// already resolved, in a Git cache of its own that has no clone yet,
+    /// and a checked lock from another address is refused as before.
+    pub fn prepare_to_judge(
+        setup: &Setup,
+        request: &Request,
+        checked: &str,
+        run: &mut impl FnMut(Command) -> Result<Output, String>,
+    ) -> Result<Self, String> {
+        Self::prepared(setup, request, Some(checked), run)
+    }
+
+    fn prepared(
+        setup: &Setup,
+        request: &Request,
+        checked: Option<&str>,
         run: &mut impl FnMut(Command) -> Result<Output, String>,
     ) -> Result<Self, String> {
         if setup.kind != Kind::Flake {
@@ -223,17 +249,6 @@ impl Candidate {
         let file = candidate.dir.join("flake.nix");
         let text = prepare_flake(&std::fs::read_to_string(&file).map_err(|e| e.to_string())?, request)?;
         std::fs::write(file, &text).map_err(|e| e.to_string())?;
-        // Sekka's address moving from GitHub's tarball to Git names the same
-        // commit, so its lock entry moves with it. Nix then has nothing to
-        // fetch to lock the new spelling, here or when root repeats this
-        // with a Git cache of its own; the update's fetch is the only one.
-        if let Ok(Some(url)) = edit::string_value(&text, &["inputs", "sekka", "url"]) {
-            let file = candidate.dir.join("flake.lock");
-            let lock = std::fs::read_to_string(&file).map_err(|e| e.to_string())?;
-            if let Some(lock) = sekka::lock_fetched_with_git(&lock, &url) {
-                std::fs::write(file, lock).map_err(|e| e.to_string())?;
-            }
-        }
         if request.sekka {
             let following = sekka::following(&text);
             candidate.inputs.retain(|input| !following.contains(&input.as_str()));
@@ -248,6 +263,13 @@ impl Candidate {
         }
         if candidate.inputs.is_empty() {
             return Err("No update inputs were selected".into());
+        }
+        if let Some(checked) = checked {
+            let file = candidate.dir.join("flake.lock");
+            let ours = std::fs::read_to_string(&file).map_err(|e| e.to_string())?;
+            if let Some(ours) = lock::with_checked_sources(&ours, checked, &candidate.inputs) {
+                std::fs::write(file, ours).map_err(|e| e.to_string())?;
+            }
         }
         // Normalize migration/branch changes without refreshing unrelated
         // inputs. Root repeats this independently before accepting a lock.

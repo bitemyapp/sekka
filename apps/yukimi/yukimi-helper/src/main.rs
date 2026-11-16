@@ -1535,16 +1535,20 @@ fn check_update(args: &[String]) -> Result<preflight::Report> {
 fn validate_preflight(change: &Change, setup: &Setup) -> Result<Option<String>> {
     let Some(expected) = &change.checked_source else { return Ok(None) };
     stage(1, "Verifying the checked configuration");
+    let proposed =
+        std::fs::read_to_string(change.lock.as_ref().ok_or_else(|| Failure("Missing checked lock".into()))?)?;
+    // Root's own copy, with its own migration and branch change. It starts
+    // from what the check found for the updated inputs, so that Nix has
+    // nothing to fetch for an address the check already resolved.
     let candidate =
-        preflight::Candidate::prepare(setup, &preflight_request(change), &mut preflight_command).map_err(Failure)?;
+        preflight::Candidate::prepare_to_judge(setup, &preflight_request(change), &proposed, &mut preflight_command)
+            .map_err(Failure)?;
     if &candidate.source != expected {
         return Err(Failure(
             "Your configuration changed after the compatibility check. Check the update again; nothing was changed."
                 .into(),
         ));
     }
-    let proposed =
-        std::fs::read_to_string(change.lock.as_ref().ok_or_else(|| Failure("Missing checked lock".into()))?)?;
     let baseline = std::fs::read_to_string(candidate.dir.join("flake.lock"))?;
     lock::check_update(&baseline, &proposed, &candidate.inputs)
         .map_err(|e| Failure(format!("The checked update was refused: {e}")))?;
