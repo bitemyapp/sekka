@@ -67,12 +67,10 @@ impl Conflict {
     }
 }
 
-/// What to do about a [`Conflict`].
+/// What to do about a [`Conflict`], short of replacing what's there, which
+/// takes the person's [`Consent`] ([`Choice::Replace`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Resolution {
-    /// The new item takes the name; the old one goes (only once the new
-    /// one is in place).
-    Replace,
     /// Leave both as they are; the new one doesn't come.
     Skip,
     /// The new one comes under a name of its own ("name 2.txt").
@@ -82,6 +80,180 @@ pub enum Resolution {
     Merge,
     /// Stop the whole operation.
     Cancel,
+}
+
+/// An [`Asker`]'s answer to a [`Conflict`].
+#[derive(Debug)]
+pub enum Choice {
+    /// The new item takes the name; the old one goes (only once the new
+    /// one is in place, and to the Trash), with the person's consent.
+    Replace(Consent),
+    /// Anything else.
+    Other(Resolution),
+}
+
+impl From<Resolution> for Choice {
+    fn from(r: Resolution) -> Choice {
+        Choice::Other(r)
+    }
+}
+
+/// What the conflict sheet's Replace button agrees to: for operation (job)
+/// `job`, the item there now, at `target`, and with `all`, every item a
+/// later conflict of that operation finds (the sheet's "Apply to all").
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Replacing {
+    pub job: u64,
+    pub target: PathBuf,
+    pub all: bool,
+}
+
+/// The person's consent to replace the item at one conflict's target. Only
+/// their press of the conflict sheet's Replace button makes one: the kit's
+/// agreement to a [`Replacing`], spent by [`Consent::to`] for its conflict,
+/// or kept by its operation's asker as a [`ReplaceAll`]. So an [`Asker`]
+/// that answers for itself can't replace anything, as [`Always`] once could:
+///
+/// ```compile_fail,E0599
+/// use hako::fsops::{Always, ErrorChoice, Resolution};
+/// let _ = Always(Resolution::Replace, ErrorChoice::Skip);
+/// ```
+///
+/// ```
+/// use hako::fsops::{Always, ErrorChoice, Resolution};
+/// let _ = Always(Resolution::KeepBoth, ErrorChoice::Skip);
+/// ```
+///
+/// Nor can one be written:
+///
+/// ```compile_fail,E0451
+/// let _ = hako::fsops::Consent { target: "/home/me/notes.txt".into() };
+/// ```
+///
+/// It names the conflict's target, and a replacement goes ahead only for
+/// that conflict: an asker answering one conflict with another's consent
+/// replaces nothing (`ask` skips it).
+#[derive(Debug)]
+pub struct Consent {
+    target: PathBuf,
+}
+
+impl Consent {
+    /// What it consents to replace.
+    pub fn target(&self) -> &Path {
+        &self.target
+    }
+
+    /// The consent the person's press gave for `conflict`, of the operation
+    /// whose key is `job`: the agreement is spent here. It's given back for a
+    /// conflict it isn't for (another job's, another item), or an "Apply to
+    /// all" one, which is a [`ReplaceAll`]'s.
+    ///
+    /// ```
+    /// use aizome_kit::agree::Agreed;
+    /// use hako::fsops::{Choice, Conflict, Consent, JobKey, Replacing};
+    /// fn answer(agreed: Agreed<Replacing>, job: &JobKey, conflict: &Conflict) -> Option<Choice> {
+    ///     Consent::to(agreed, job, conflict).ok().map(Choice::Replace)
+    /// }
+    /// ```
+    ///
+    /// A press consents once: kept, it can't consent again (for another
+    /// job's conflict at the same path, say).
+    ///
+    /// ```compile_fail,E0382
+    /// use aizome_kit::agree::Agreed;
+    /// use hako::fsops::{Conflict, Consent, JobKey, Replacing};
+    /// fn twice(agreed: Agreed<Replacing>, one: &JobKey, another: &JobKey, conflict: &Conflict) {
+    ///     let _ = Consent::to(agreed, one, conflict);
+    ///     let _ = Consent::to(agreed, another, conflict);
+    /// }
+    /// ```
+    #[cfg(feature = "gui")]
+    pub fn to(
+        agreed: aizome_kit::agree::Agreed<Replacing>,
+        job: &JobKey,
+        conflict: &Conflict,
+    ) -> Result<Consent, aizome_kit::agree::Agreed<Replacing>> {
+        let r = agreed.target();
+        if r.all || r.job != job.0 || r.target != conflict.target {
+            return Err(agreed);
+        }
+        Ok(Consent { target: conflict.target.clone() })
+    }
+
+    /// A consent for this crate's tests, as if the person had agreed to
+    /// replace what's at `conflict`.
+    #[cfg(test)]
+    pub(crate) fn for_tests(conflict: &Conflict) -> Consent {
+        Consent { target: conflict.target.clone() }
+    }
+}
+
+/// One operation's key: the window's job runner makes it for the job it
+/// starts and gives it to that job's asker alone. Consents to replace are
+/// made with it ([`Consent::to`], [`ReplaceAll::new`]), so the person's
+/// agreement to one job's conflicts consents for no other's, and code
+/// outside the crate can't make one:
+///
+/// ```compile_fail,E0603
+/// let _ = hako::fsops::JobKey(1);
+/// ```
+#[derive(Debug)]
+pub struct JobKey(u64);
+
+impl JobKey {
+    /// For the window's job runner (`ui::jobs::start`), as it starts job
+    /// `id`.
+    #[cfg_attr(not(feature = "gui"), allow(dead_code))]
+    pub(crate) fn new(id: u64) -> JobKey {
+        JobKey(id)
+    }
+
+    /// The job's number.
+    pub fn id(&self) -> u64 {
+        self.0
+    }
+
+    /// A key for tests of operations outside the window: only with the
+    /// `test-util` feature, which only the package's dev-dependency on itself
+    /// turns on.
+    #[cfg(feature = "test-util")]
+    pub fn for_tests(id: u64) -> JobKey {
+        JobKey(id)
+    }
+}
+
+/// "Apply to all" with Replace: the person's agreement for one operation's
+/// conflicts, which its asker alone holds, and which consents for each of
+/// them as it comes (and dies with the operation). Only that asker, with
+/// the job's [`JobKey`], makes one.
+#[cfg(feature = "gui")]
+#[derive(Debug)]
+pub struct ReplaceAll {
+    agreed: aizome_kit::agree::Agreed<Replacing>,
+}
+
+#[cfg(feature = "gui")]
+impl ReplaceAll {
+    /// The person's "Apply to all" Replace for the operation whose key is
+    /// `job`; the agreement is given back if it isn't one.
+    pub fn new(
+        agreed: aizome_kit::agree::Agreed<Replacing>,
+        job: &JobKey,
+    ) -> Result<ReplaceAll, aizome_kit::agree::Agreed<Replacing>> {
+        let r = agreed.target();
+        if r.all && r.job == job.0 { Ok(ReplaceAll { agreed }) } else { Err(agreed) }
+    }
+
+    /// The operation it's for.
+    pub fn job(&self) -> u64 {
+        self.agreed.target().job
+    }
+
+    /// The consent for `conflict`, one of its operation's.
+    pub fn consent(&self, conflict: &Conflict) -> Consent {
+        Consent { target: conflict.target.clone() }
+    }
 }
 
 /// What to do about an error on one item.
@@ -129,17 +301,20 @@ pub fn describe(error: &std::io::Error) -> String {
 /// the worker until they answer, and remembering "apply to all");
 /// tests' answer at once.
 pub trait Asker {
-    fn conflict(&mut self, conflict: &Conflict) -> Resolution;
+    /// What to do about `conflict`: replacing what's there takes the
+    /// person's [`Consent`].
+    fn conflict(&mut self, conflict: &Conflict) -> Choice;
     fn error(&mut self, failure: &Failure) -> ErrorChoice;
 }
 
-/// An [`Asker`] that always gives the same answers.
+/// An [`Asker`] that always gives the same answers: never Replace, which
+/// takes a person's consent.
 #[derive(Clone, Copy, Debug)]
 pub struct Always(pub Resolution, pub ErrorChoice);
 
 impl Asker for Always {
-    fn conflict(&mut self, c: &Conflict) -> Resolution {
-        if self.0 == Resolution::Merge && !c.can_merge() { Resolution::KeepBoth } else { self.0 }
+    fn conflict(&mut self, c: &Conflict) -> Choice {
+        Choice::Other(if self.0 == Resolution::Merge && !c.can_merge() { Resolution::KeepBoth } else { self.0 })
     }
 
     fn error(&mut self, _: &Failure) -> ErrorChoice {

@@ -2,7 +2,8 @@
 //! a kachi scrim, the time in IBM Plex Mono and the date, the picture,
 //! the name and the password field with its focus rail, the mark), with
 //! what logging in adds: the computer's name and the power menu at the
-//! top, the people to pick from, and the session under the field.
+//! top, the people to pick from, and the session under the field. What it
+//! shows is the login's [`Screen`]: it picks no stage of its own.
 
 use aizome_face::look::{self, Hue};
 use aizome_face::widgets::drawn::{around, drawn};
@@ -17,8 +18,9 @@ use aizome_kit::widget::SemanticRole;
 use aizome_kit::{Icon, Image};
 use aizome_theme::{NIGHT, Rgba, typeface};
 
-use crate::app::{Greeter, Msg, Stage};
-use crate::login::{Step, Tone};
+use crate::app::{Greeter, Msg};
+use crate::login::{EscapeTo, Person, Progress, Screen, Tone};
+use crate::users::User;
 
 const FIELD_W: f64 = 260.0;
 /// A person in the row: their picture and name.
@@ -31,17 +33,17 @@ const LINE_H: f64 = 30.0;
 
 pub fn view(g: &Greeter, _window: WindowKey, output: Option<u32>) -> Element<Msg> {
     let Some(output) = output else { return aizome_kit::column(Vec::new()).into() };
-    let size = g.frames.get(&output).copied().unwrap_or(Size::new(1440.0, 900.0));
-    let main = Some(output) == g.main_output;
+    let size = g.frame(output).unwrap_or(Size::new(1440.0, 900.0));
+    let main = g.is_main(output);
     let mut layers: Vec<Element<Msg>> = vec![ground(size, g.wallpaper(output))];
-    let mut column: Vec<Element<Msg>> = vec![clock(size, &g.now.time(), &g.now.date())];
+    let mut column: Vec<Element<Msg>> = vec![clock(size, &g.now().time(), &g.now().date())];
     let mut block_h = CLOCK_H;
     if main {
-        let (content, h) = match g.stage {
-            Stage::People => people(g, size),
-            Stage::Password => password(g, size, false),
-            Stage::Name if g.login.user.is_none() || g.login.step == Step::Nobody => name(g, size),
-            Stage::Name => password(g, size, true),
+        let (content, h) = match g.login().screen() {
+            Screen::Unstarted => (aizome_kit::column(Vec::new()).into(), 0.0),
+            Screen::People { people: list, selected } => people(g, size, list, selected),
+            Screen::Name { typed } => name(g, size, typed),
+            Screen::Login { person, progress, .. } => password(g, size, person, progress).into_parts(),
         };
         column.push(content);
         block_h += h;
@@ -97,14 +99,14 @@ fn clock(size: Size, time: &str, date: &str) -> Element<Msg> {
 /// The computer's name at the top left; the power menu's button at the
 /// top right.
 fn top_bar(g: &Greeter, size: Size) -> Element<Msg> {
-    let host = g.hostname.clone();
+    let host = g.hostname().to_owned();
     let name = drawn(size.width / 2.0, 44.0, host.clone(), move |cx| {
         let s = look::ui(13.0, typeface::WEIGHT_SEMIBOLD, color(NIGHT.text2));
         cx.draw_text_in(&host, &s, Rect::new(24.0, 0.0, cx.bounds().x1, 44.0), Align::Start);
     })
-    .text(g.hostname.clone(), SemanticRole::Label);
+    .text(g.hostname().to_owned(), SemanticRole::Label);
     let mut items: Vec<(f64, Element<Msg>)> = vec![(0.0, name.into())];
-    if g.cfg.power {
+    if g.offers_power() {
         let button = drawn(32.0, 28.0, "power", |cx| {
             let b = cx.bounds();
             if cx.is_hovered() {
@@ -153,16 +155,15 @@ fn picture(cx: &mut aizome_kit::widget::PaintCx, tile: Rect, picture: Option<&Im
 
 /// The people to pick from, in a row; the selection has the focus rail
 /// under its picture. ← → choose, Return picks, a click picks.
-fn people(g: &Greeter, size: Size) -> (Element<Msg>, f64) {
-    let n = g.users.len().max(1) as f64;
+fn people(g: &Greeter, size: Size, list: &[User], selected: usize) -> (Element<Msg>, f64) {
+    let n = list.len().max(1) as f64;
     let left = ((size.width - n * TILE_W) / 2.0).max(0.0);
-    let tiles: Vec<Element<Msg>> = g
-        .users
+    let tiles: Vec<Element<Msg>> = list
         .iter()
         .enumerate()
         .map(|(i, u)| {
-            let selected = i == g.selected;
-            let pic = g.avatars.get(&u.name).cloned();
+            let selected = i == selected;
+            let pic = g.avatar(&u.name);
             let (initial, real) = (u.initial(), u.real_name.clone());
             drawn(TILE_W, WHO_H, (real.clone(), selected, pic.is_some()), move |cx| {
                 let b = cx.bounds();
@@ -191,11 +192,11 @@ fn people(g: &Greeter, size: Size) -> (Element<Msg>, f64) {
     });
     let mut parts: Vec<Element<Msg>> = vec![row.into(), hint.into()];
     parts.push(message(g, size));
-    let power = g.cfg.power;
+    let power = g.offers_power();
     let body = focus_keys(aizome_kit::column(parts), move |k| match named(k) {
         Some(NamedKey::ArrowLeft) => Some(Msg::Previous),
         Some(NamedKey::ArrowRight) => Some(Msg::Next),
-        Some(NamedKey::Enter) => Some(Msg::Pick(usize::MAX)),
+        Some(NamedKey::Enter) => Some(Msg::Submit),
         Some(NamedKey::F(3)) if power => Some(Msg::PowerMenu),
         _ => None,
     })
@@ -210,16 +211,17 @@ fn named(k: &KeyEvent) -> Option<NamedKey> {
     }
 }
 
-/// The person logging in, the field, their session, and what's to say.
-fn password(g: &Greeter, size: Size, typed: bool) -> (Element<Msg>, f64) {
-    let (real, initial, pic) = match (typed, g.user()) {
-        (false, Some(u)) => (u.real_name.clone(), u.initial(), g.avatars.get(&u.name).cloned()),
-        _ => {
-            let n = g.login.user.clone().unwrap_or_default();
+/// The person logging in, the field, their session, what's to say, and
+/// its way back.
+fn password(g: &Greeter, size: Size, person: Person<'_>, progress: Progress<'_>) -> block::LoginBlock {
+    let (real, initial, pic) = match person {
+        Person::Listed(u) => (u.real_name.clone(), u.initial(), g.avatar(&u.name)),
+        Person::Typed(n) => {
             let i = n.chars().next().map(|c| c.to_uppercase().collect()).unwrap_or_default();
-            (n, i, None)
+            (n.to_owned(), i, None)
         }
     };
+    let label = real.clone();
     let who = drawn(size.width, WHO_H, (real.clone(), pic.is_some()), move |cx| {
         let b = cx.bounds();
         let tile = Rect::new(((b.width() - PICTURE) / 2.0).round(), 8.0, ((b.width() + PICTURE) / 2.0).round(), 80.0);
@@ -227,28 +229,26 @@ fn password(g: &Greeter, size: Size, typed: bool) -> (Element<Msg>, f64) {
         let s = look::ui(16.0, typeface::WEIGHT_TAB, color(NIGHT.text));
         cx.draw_text_in(&real, &s, Rect::new(0.0, 88.0, b.x1, 112.0), Align::Center);
     })
-    .text(g.user().map(|u| u.real_name.clone()).or(g.login.user.clone()).unwrap_or_default(), SemanticRole::Label);
+    .text(label, SemanticRole::Label);
     let session = g.session().map(|s| s.name.clone()).unwrap_or_default();
-    let (secret, placeholder) = match &g.login.step {
-        Step::Ask { secret, prompt } => (*secret, prompt.clone()),
-        Step::Starting | Step::Done => (true, format!("Starting {session}…")),
-        Step::Failed => (true, "Press Return to try again".to_owned()),
-        Step::Waiting | Step::Nobody => (true, "Checking…".to_owned()),
+    let (secret, placeholder) = match progress {
+        Progress::Asking { secret, prompt } => (secret, prompt.to_owned()),
+        Progress::Starting | Progress::Done => (true, format!("Starting {session}…")),
+        Progress::Failed => (true, "Press Return to try again".to_owned()),
+        Progress::Checking => (true, "Checking…".to_owned()),
     };
-    let mut f = field(&g.password, |_| look::ui(15.0, typeface::WEIGHT_REGULAR, color(NIGHT.text)))
+    let f = field(&g.password, |_| look::ui(15.0, typeface::WEIGHT_REGULAR, color(NIGHT.text)))
         .placeholder(placeholder)
         .height(32.0)
         .on_change(Msg::Password)
         .on_submit(Msg::Submit)
         .on_caps(Msg::Caps);
-    if secret {
-        f = f.secure();
-    }
-    let boxed = boxed_field(Element::from(f).id("greeter-password"), g.login.failed);
-    let off = crate::app::shake_offset(g.shake);
+    let f = f.secure_when(secret);
+    let boxed = boxed_field(Element::from(f).id("greeter-password"), g.login().failed());
+    let off = crate::app::shake_offset(g.shake());
     let field_row =
         aizome_kit::container(boxed).padding([0.0, 0.0, 0.0, ((size.width - FIELD_W) / 2.0 + off).max(0.0)]);
-    let several = g.sessions.len() > 1;
+    let several = g.several_sessions();
     // As wide as the name (and its chevron), centred: the menu hangs from it.
     let label = session.clone();
     let chooser = drawn(0.0, LINE_H, (session.clone(), several), move |cx| {
@@ -274,11 +274,100 @@ fn password(g: &Greeter, size: Size, typed: bool) -> (Element<Msg>, f64) {
         .width(size.width)
         .align_x(Align::Center)
         .padding([4.0, 0.0, 0.0, 0.0]);
-    let mut parts: Vec<Element<Msg>> = vec![who.into(), field_row.into(), chooser.into(), message(g, size)];
-    let mut h = WHO_H + FIELD_H + 4.0 + LINE_H + LINE_H;
-    let others = g.cfg.user_list && g.users.len() > 1 && !typed;
-    if others {
-        let link = drawn(size.width, LINE_H, "others", |cx| {
+    let parts: Vec<Element<Msg>> = vec![who.into(), field_row.into(), chooser.into(), message(g, size)];
+    let h = WHO_H + FIELD_H + 4.0 + LINE_H + LINE_H;
+    let power = g.offers_power();
+    block::with_way_back(g, parts, h, size.width, move |k| match named(k) {
+        Some(NamedKey::F(2)) if several => Some(Msg::SessionMenu),
+        Some(NamedKey::F(3)) if power => Some(Msg::PowerMenu),
+        _ => None,
+    })
+}
+
+/// What the login screen shows of a login, with its way back. Only
+/// [`with_way_back`](block::with_way_back) makes one, and it reads the way
+/// back from the greeter's own login: the view can't show a login without
+/// the way back the model decided on, or with another login's. It once
+/// decided that itself, from the configuration, the number of people and
+/// its own idea of the stage, and left a typed name with neither the link
+/// nor Escape (SVC-05):
+///
+/// ```compile_fail,E0451
+/// use aizome_greeter::app::Msg;
+/// use aizome_greeter::view::block::LoginBlock;
+/// use aizome_kit::element::Element;
+/// fn login_block(body: Element<Msg>, height: f64) -> LoginBlock {
+///     LoginBlock { element: body, height }
+/// }
+/// ```
+///
+/// A way back taken from some other login (a throwaway one, started for
+/// the only person listed, has none) doesn't do either:
+///
+/// ```compile_fail,E0308
+/// use aizome_greeter::app::Msg;
+/// use aizome_greeter::login::WayBack;
+/// use aizome_greeter::view::block::{LoginBlock, with_way_back};
+/// use aizome_kit::element::Element;
+/// fn login_block(other: WayBack, body: Vec<Element<Msg>>, height: f64) -> LoginBlock {
+///     with_way_back(other, body, height, 1440.0, |_| None)
+/// }
+/// ```
+///
+/// ```
+/// use aizome_greeter::app::{Greeter, Msg};
+/// use aizome_greeter::view::block::{LoginBlock, with_way_back};
+/// use aizome_kit::element::Element;
+/// fn login_block(g: &Greeter, body: Vec<Element<Msg>>, height: f64) -> LoginBlock {
+///     with_way_back(g, body, height, 1440.0, |_| None)
+/// }
+/// ```
+pub mod block {
+    use super::*;
+
+    /// A login's part of the screen, and its height.
+    pub struct LoginBlock {
+        element: Element<Msg>,
+        height: f64,
+    }
+
+    impl LoginBlock {
+        pub(super) fn into_parts(self) -> (Element<Msg>, f64) {
+            (self.element, self.height)
+        }
+    }
+
+    /// The login's `body` (`height` tall, `width` wide) with the way back
+    /// of `g`'s login: "Log in as someone else" where the model offers one,
+    /// and Escape always, which the model makes do nothing where there's
+    /// none. Other keys go to `keys_of`.
+    pub fn with_way_back(
+        g: &Greeter,
+        mut body: Vec<Element<Msg>>,
+        mut height: f64,
+        width: f64,
+        keys_of: impl Fn(&KeyEvent) -> Option<Msg> + 'static,
+    ) -> LoginBlock {
+        let escape = match g.login().screen() {
+            Screen::Login { way_back, .. } => way_back.to(),
+            Screen::Unstarted | Screen::People { .. } | Screen::Name { .. } => EscapeTo::Nowhere,
+        };
+        match escape {
+            EscapeTo::People | EscapeTo::Name => {
+                body.push(someone_else(width));
+                height += LINE_H;
+            }
+            EscapeTo::Nowhere => {}
+        }
+        let element = keys(aizome_kit::column(body), move |k| match named(k) {
+            Some(NamedKey::Escape) => Some(Msg::Back),
+            _ => keys_of(k),
+        });
+        LoginBlock { element, height }
+    }
+
+    fn someone_else(width: f64) -> Element<Msg> {
+        drawn(width, LINE_H, "others", |cx| {
             let s = look::ui(
                 12.5,
                 typeface::WEIGHT_REGULAR,
@@ -287,23 +376,14 @@ fn password(g: &Greeter, size: Size, typed: bool) -> (Element<Msg>, f64) {
             cx.draw_text_in("Log in as someone else", &s, Rect::new(0.0, 4.0, cx.bounds().x1, 24.0), Align::Center);
         })
         .hoverable()
-        .on_click(Msg::People)
-        .text("Log in as someone else", SemanticRole::Button);
-        parts.push(link.into());
-        h += LINE_H;
+        .on_click(Msg::Back)
+        .text("Log in as someone else", SemanticRole::Button)
+        .into()
     }
-    let power = g.cfg.power;
-    let body = keys(aizome_kit::column(parts), move |k| match named(k) {
-        Some(NamedKey::Escape) if others => Some(Msg::People),
-        Some(NamedKey::F(2)) if several => Some(Msg::SessionMenu),
-        Some(NamedKey::F(3)) if power => Some(Msg::PowerMenu),
-        _ => None,
-    });
-    (body, h)
 }
 
 /// The user name to log in as (no list, or no one on it).
-fn name(g: &Greeter, size: Size) -> (Element<Msg>, f64) {
+fn name(g: &Greeter, size: Size, typed: &str) -> (Element<Msg>, f64) {
     let who = drawn(size.width, WHO_H, "name", |cx| {
         let b = cx.bounds();
         let tile = Rect::new(((b.width() - PICTURE) / 2.0).round(), 8.0, ((b.width() + PICTURE) / 2.0).round(), 80.0);
@@ -313,11 +393,11 @@ fn name(g: &Greeter, size: Size) -> (Element<Msg>, f64) {
         let s = look::ui(16.0, typeface::WEIGHT_TAB, color(NIGHT.text));
         cx.draw_text_in("Log In", &s, Rect::new(0.0, 88.0, b.x1, 112.0), Align::Center);
     });
-    let f = field(&g.name, |_| look::ui(15.0, typeface::WEIGHT_REGULAR, color(NIGHT.text)))
+    let f = field(typed, |_| look::ui(15.0, typeface::WEIGHT_REGULAR, color(NIGHT.text)))
         .placeholder("User name")
         .height(32.0)
         .on_change(Msg::Name)
-        .on_submit(Msg::SubmitName);
+        .on_submit(Msg::Submit);
     let boxed = boxed_field(Element::from(f).id("greeter-name"), 0);
     let row = aizome_kit::container(boxed).padding([0.0, 0.0, 0.0, ((size.width - FIELD_W) / 2.0).max(0.0)]);
     let parts: Vec<Element<Msg>> = vec![who.into(), row.into(), message(g, size)];
@@ -339,11 +419,11 @@ fn boxed_field(f: Element<Msg>, failed: u32) -> Element<Msg> {
 /// What's to say under the field: why the last try failed, what PAM says,
 /// Caps Lock, or why the power menu didn't do it.
 fn message(g: &Greeter, size: Size) -> Element<Msg> {
-    let msg = if let Some((m, tone)) = &g.login.message {
-        Some((m.clone(), if *tone == Tone::Error { Hue::Red } else { Hue::Text2 }))
-    } else if let Some(e) = &g.power_error {
-        Some((e.clone(), Hue::Red))
-    } else if g.caps {
+    let msg = if let Some((m, tone)) = g.login().message() {
+        Some((m.to_owned(), if tone == Tone::Error { Hue::Red } else { Hue::Text2 }))
+    } else if let Some(e) = g.power_error() {
+        Some((e.to_owned(), Hue::Red))
+    } else if g.caps() {
         Some(("Caps Lock is on".to_owned(), Hue::Amber))
     } else {
         None

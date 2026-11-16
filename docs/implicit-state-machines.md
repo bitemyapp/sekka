@@ -315,7 +315,7 @@ Every in-scope file was audited.
 | --- | --- | --- | --- | --- | --- |
 | SHB-01 | App connection registry (hello, menus, goodbye) | Low |  | implicit | `desktop/aizome/crates/aizome-shell/src/apps/registry.rs:27` |
 | SHB-02 | Shell socket ownership and per-connection threads | Medium |  | implicit | `desktop/aizome/crates/aizome-shell/src/apps/server.rs:25` |
-| [SHB-03](implicit-state-machines/shell-b.md#shb-03) | Polkit authentication dialog | High | [confirmed](implicit-state-machines/reproductions.md#shb-03) | implicit | `desktop/aizome/crates/aizome-shell/src/auth.rs:58` |
+| [SHB-03](implicit-state-machines/shell-b.md#shb-03) | Polkit authentication dialog | High | [confirmed](implicit-state-machines/reproductions.md#shb-03) | reified ([#298](https://github.com/bitemyapp/sekka/pull/298)) | `desktop/aizome/crates/aizome-shell/src/auth.rs:58` |
 | SHB-04 | Keep Awake status (request, watcher, indicator) | Low |  | implicit | `desktop/aizome/crates/aizome-shell/src/awake.rs:80` |
 | SHB-05 | Timed overlay surfaces (bell flash, OSD) | Low |  | implicit | `desktop/aizome/crates/aizome-shell/src/bell.rs:40` |
 | [SHB-06](implicit-state-machines/shell-b.md#shb-06) | Session confirmation countdown (Restart, Shut Down, Log Out, power key) | High | [confirmed](implicit-state-machines/reproductions.md#shb-06) | implicit | `desktop/aizome/crates/aizome-shell/src/confirm.rs:36` |
@@ -324,7 +324,7 @@ Every in-scope file was audited.
 | [SHB-09](implicit-state-machines/shell-b.md#shb-09) | Compositor event follower (connect, snapshot, subscribe, reconnect) | High | [confirmed](implicit-state-machines/reproductions.md#shb-09) | implicit | `desktop/aizome/crates/aizome-shell/src/ipc.rs:122` |
 | SHB-10 | Compositor request sender (lazy connection, one retry) | Medium |  | implicit | `desktop/aizome/crates/aizome-shell/src/ipc.rs:41` |
 | SHB-11 | GeoClue location lookup | Low |  | implicit | `desktop/aizome/crates/aizome-shell/src/location.rs:48` |
-| [SHB-12](implicit-state-machines/shell-b.md#shb-12) | Lock screen lifecycle (partially explicit) | High | [confirmed](implicit-state-machines/reproductions.md#shb-12) | implicit | `desktop/aizome/crates/aizome-shell/src/lock.rs:47` |
+| [SHB-12](implicit-state-machines/shell-b.md#shb-12) | Lock screen lifecycle (partially explicit) | High | [confirmed](implicit-state-machines/reproductions.md#shb-12) | reified ([#298](https://github.com/bitemyapp/sekka/pull/298)) | `desktop/aizome/crates/aizome-shell/src/lock.rs:47` |
 | SHB-13 | Lock field shake animation | Low |  | implicit | `desktop/aizome/crates/aizome-shell/src/lock.rs:56` |
 | [SHB-14](implicit-state-machines/shell-b.md#shb-14) | Critical notification cards surface | High | [confirmed](implicit-state-machines/reproductions.md#shb-14) | implicit | `desktop/aizome/crates/aizome-shell/src/notifications/cards.rs:105` |
 | [SHB-15](implicit-state-machines/shell-b.md#shb-15) | Bar notification line (banner) | High | [confirmed](implicit-state-machines/reproductions.md#shb-15) | implicit | `desktop/aizome/crates/aizome-shell/src/notifications/glue.rs:184` |
@@ -352,7 +352,7 @@ Every in-scope file was audited.
 | SVC-02 | Application index freshness (signature versus scan) | Medium |  | implicit | `desktop/aizome/crates/aizome-apps/src/index.rs:91` |
 | SVC-03 | Index watcher thread lifecycle | Low |  | implicit | `desktop/aizome/crates/aizome-apps/src/index.rs:635` |
 | SVC-04 | Default terminal moved from foot to Hotaru (one-shot migration) | Low |  | implicit | `desktop/aizome/crates/aizome-apps/src/mime.rs:590` |
-| [SVC-05](implicit-state-machines/kit-services.md#svc-05) | Greeter screen stage (people, password, typed name) | High | [confirmed](implicit-state-machines/reproductions.md#svc-05) | implicit | `desktop/aizome/crates/aizome-greeter/src/app.rs:108` |
+| [SVC-05](implicit-state-machines/kit-services.md#svc-05) | Greeter screen stage (people, password, typed name) | High | [confirmed](implicit-state-machines/reproductions.md#svc-05) | reified ([#298](https://github.com/bitemyapp/sekka/pull/298)) | `desktop/aizome/crates/aizome-greeter/src/app.rs:108` |
 | SVC-06 | greetd link thread | Low |  | implicit | `desktop/aizome/crates/aizome-greeter/src/app.rs:130` |
 | SVC-07 | Greeter surfaces per display and the main display | Low |  | implicit | `desktop/aizome/crates/aizome-greeter/src/app.rs:123` |
 | SVC-08 | Greeter wallpaper loads and the day/night tick | Low |  | implicit | `desktop/aizome/crates/aizome-greeter/src/app.rs:128` |
@@ -460,10 +460,10 @@ Every in-scope file was audited.
 | SYB-06 | Open notification and its pausable expiry timer | Medium |  | implicit | `desktop/aizome/crates/aizome-sys/src/notifications/server.rs:120` |
 | SYB-07 | Notification server lifecycle and bus-name ownership | Medium |  | implicit | `desktop/aizome/crates/aizome-sys/src/notifications/server.rs:406` |
 | SYB-08 | One-value async channel | Low |  | implicit | `desktop/aizome/crates/aizome-sys/src/oneshot.rs:11` |
-| [SYB-09](implicit-state-machines/sys-b.md#syb-09) | polkit authentication session and helper conversation | High | [confirmed](implicit-state-machines/reproductions.md#syb-09) | implicit | `desktop/aizome/crates/aizome-sys/src/polkit.rs:195` |
+| [SYB-09](implicit-state-machines/sys-b.md#syb-09) | polkit authentication session and helper conversation | High | [confirmed](implicit-state-machines/reproductions.md#syb-09) | reified ([#298](https://github.com/bitemyapp/sekka/pull/298)) | `desktop/aizome/crates/aizome-sys/src/polkit.rs:195` |
 | [SYB-10](implicit-state-machines/sys-b.md#syb-10) | polkit agent registration and reconnect loop | High |  | implicit | `desktop/aizome/crates/aizome-sys/src/polkit.rs:781-785` |
 | SYB-11 | Backlight brightness shown before logind sets it, and the sysfs watcher | Medium |  | implicit | `desktop/aizome/crates/aizome-sys/src/power/backlight.rs:123` |
-| [SYB-12](implicit-state-machines/sys-b.md#syb-12) | logind sleep-delay inhibitor and lock-before-sleep handshake | High | [confirmed](implicit-state-machines/reproductions.md#syb-12) | implicit | `desktop/aizome/crates/aizome-sys/src/power/logind.rs:143` |
+| [SYB-12](implicit-state-machines/sys-b.md#syb-12) | logind sleep-delay inhibitor and lock-before-sleep handshake | High | [confirmed](implicit-state-machines/reproductions.md#syb-12) | reified ([#298](https://github.com/bitemyapp/sekka/pull/298)) | `desktop/aizome/crates/aizome-sys/src/power/logind.rs:143` |
 | SYB-13 | Background Task result slot | Low |  | implicit | `desktop/aizome/crates/aizome-sys/src/service.rs:45` |
 | SYB-14 | Service model generation and the Stop latch | Medium |  | implicit | `desktop/aizome/crates/aizome-sys/src/service.rs:176` |
 | SYB-15 | StatusNotifierWatcher service lifecycle and name ownership | Medium |  | implicit | `desktop/aizome/crates/aizome-sys/src/statusnotifier/mod.rs:162` |
@@ -479,7 +479,7 @@ Every in-scope file was audited.
 | SYC-04 | Settings file watcher thread | Low |  | implicit | `desktop/aizome/crates/aizome-config/src/lib.rs:813` |
 | SYC-05 | Persisted GeoClue location and its time-zone validity | Low |  | implicit | `desktop/aizome/crates/aizome-config/src/location.rs:25` |
 | [SYC-06](implicit-state-machines/sys-c-config.md#syc-06) | Drawn element press, drag, drag-out and hover gesture | High | [partly](implicit-state-machines/reproductions.md#syc-06) | implicit | `desktop/aizome/crates/aizome-face/src/widgets/drawn.rs:268` |
-| [SYC-07](implicit-state-machines/sys-c-config.md#syc-07) | Text field caret, selection, IME preedit, blink and Caps Lock state | High | [confirmed](implicit-state-machines/reproductions.md#syc-07) | implicit | `desktop/aizome/crates/aizome-face/src/widgets/field.rs:99` |
+| [SYC-07](implicit-state-machines/sys-c-config.md#syc-07) | Text field caret, selection, IME preedit, blink and Caps Lock state | High | [confirmed](implicit-state-machines/reproductions.md#syc-07) | reified ([#298](https://github.com/bitemyapp/sekka/pull/298)) | `desktop/aizome/crates/aizome-face/src/widgets/field.rs:99` |
 | SYC-08 | (test harness) MPRIS test player playback state and pw-play child | Low |  | implicit | `desktop/aizome/crates/aizome-sys/examples/test_player.rs:127` |
 | SYC-09 | CUPS tool subprocess lifecycle in `run` | Medium |  | implicit | `desktop/aizome/crates/aizome-sys/src/printers/cli.rs:239` |
 | SYC-10 | User's default printer in `~/.cups/lpoptions` | Low |  | implicit | `desktop/aizome/crates/aizome-sys/src/printers/cli.rs:724` |
@@ -570,7 +570,7 @@ Every in-scope file was audited.
 | UIW-24 | Text field undo history, typing groups and optimistic caret | Medium |  | implicit | `desktop/aizome/crates/aizome-kit/src/widgets/text_field.rs:196` |
 | UIW-25 | Video above or below the window's drawing | Low |  | implicit | `desktop/aizome/crates/aizome-kit/src/widgets/video.rs:38` |
 | UIW-26 | Application run lifecycle and loop wake-up | Low |  | implicit | `desktop/aizome/sukumo/crates/sidestep-ui/src/app.rs:650` |
-| [UIW-27](implicit-state-machines/sukumo-ui-kit-widgets.md#uiw-27) | Session lock | High | [confirmed](implicit-state-machines/reproductions.md#uiw-27) | implicit | `desktop/aizome/sukumo/crates/sidestep-ui/src/app.rs:548` |
+| [UIW-27](implicit-state-machines/sukumo-ui-kit-widgets.md#uiw-27) | Session lock | High | [confirmed](implicit-state-machines/reproductions.md#uiw-27) | reified ([#298](https://github.com/bitemyapp/sekka/pull/298)) | `desktop/aizome/sukumo/crates/sidestep-ui/src/app.rs:548` |
 | UIW-28 | Touchpad coasting | Medium |  | implicit | `desktop/aizome/sukumo/crates/sidestep-ui/src/app.rs:787` |
 | UIW-29 | Drag-and-drop offers over windows | Medium |  | implicit | `desktop/aizome/sukumo/crates/sidestep-ui/src/app.rs:794` |
 | UIW-30 | Clipboard and primary-selection ownership | Low |  | implicit | `desktop/aizome/sukumo/crates/sidestep-ui/src/app.rs:791` |

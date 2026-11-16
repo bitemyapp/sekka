@@ -150,10 +150,13 @@ let
   # Tansu's unit and integration tests run on their own as well, on what
   # the dependency build compiles for it as one of these.
   doctested = [
+    "aizome-face"
+    "aizome-greeter"
     "aizome-hako"
     "aizome-hotaru"
     "aizome-kit"
     "aizome-media"
+    "aizome-shell"
     "aizome-sys"
     "aizome-tansu"
     "aizome-typestate"
@@ -298,7 +301,15 @@ rustPlatform.buildRustPackage (
 
     preBuild = workspace.sameEnvironment + workspace.restoreTarget dependencies;
     # Only Aizome's own crates may compile here (workspace.nix).
-    postBuild = workspace.onlyFirstParty;
+    postBuild = workspace.onlyFirstParty + ''
+      # What installPhase installs: the executables as this build made them.
+      # checkPhase's `cargo test` unifies dev-dependency features (the kit's
+      # `testing`, aizome-apps' `test-util`) and relinks into release-lto the
+      # binaries it builds for integration tests (aizome-hako), over these.
+      mkdir -p "$NIX_BUILD_TOP/release-lto-bin"
+      find target/${target}/release-lto -maxdepth 1 -type f -executable ! -name '*.so' \
+        -exec cp -t "$NIX_BUILD_TOP/release-lto-bin" {} +
+    '';
     postCheck = workspace.onlyFirstParty;
 
     checkPhase = ''
@@ -352,7 +363,9 @@ rustPlatform.buildRustPackage (
     installPhase = ''
       runHook preInstall
       rel=target/${target}/release
-      lto=target/${target}/release-lto
+      # The release-lto executables as buildPhase made them, not as
+      # checkPhase's tests relinked them.
+      lto=$NIX_BUILD_TOP/release-lto-bin
       mkdir -p $out/bin $out/lib/aizome $out/share/aizome
       install -Dm644 etc/org.aizome.DisplayScales.xml $out/share/dbus-1/interfaces/org.aizome.DisplayScales.xml
       mkdir -p $out/share/accountsservice/interfaces

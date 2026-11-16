@@ -14,6 +14,8 @@ use kurbo::{Point, Vec2};
 use sidestep_engine::backend::null;
 use sidestep_engine::keys::modifier;
 use sidestep_engine::protocol::{self, Button, FromRender, ScrollPhase};
+#[cfg(feature = "testing")]
+use sidestep_engine::protocol::{LockFinished, LockRequest};
 
 pub use sidestep_engine::backend::null::{PaintedText, Seen};
 /// A layer surface's placement as the render thread was given it (in
@@ -198,12 +200,29 @@ pub fn inject_close_request(cx: &mut Cx, window: WindowId) {
 
 /// An input method committing `text`, then composing `preedit`.
 pub fn inject_ime(cx: &mut Cx, window: WindowId, commit: Option<&str>, preedit: &str) {
+    pending_ime(cx, window, commit, preedit).deliver(cx);
+}
+
+/// An input batch captured now but delivered later, across a prompt
+/// change or reset. It retains the context in which the input was made.
+pub struct PendingIme(FromRender);
+
+impl PendingIme {
+    pub fn deliver(self, cx: &mut Cx) {
+        cx.inject(self.0);
+    }
+}
+
+/// Capture a batch in the window's current input context without yet
+/// queuing it. Use [`PendingIme::deliver`] after advancing the application.
+pub fn pending_ime(cx: &Cx, window: WindowId, commit: Option<&str>, preedit: &str) -> PendingIme {
     let end = preedit.len() as i32;
-    cx.inject(FromRender::TextInput {
+    PendingIme(FromRender::TextInput {
         window: showing(cx, window),
         commit: commit.map(str::to_owned),
         preedit: (preedit.to_owned(), end, end),
-    });
+        generation: cx.text_input_generation(window),
+    })
 }
 
 /// Drag `drag` entering the window at `at`, offering `mimes` and, as
@@ -296,10 +315,33 @@ pub fn inject_outputs(cx: &mut Cx, outputs: &[crate::Output]) {
     cx.inject(FromRender::ScreensChanged);
 }
 
-/// The compositor ending the session lock (or refusing it) without the
-/// program unlocking.
+/// The compositor ending the session lock the null render thread holds
+/// (or refusing it) without the program unlocking. Nothing without one.
+/// It forges the render thread's answer, so only tests have it (the
+/// `testing` feature).
+#[cfg(feature = "testing")]
 pub fn inject_session_lock_finished(cx: &mut Cx) {
-    cx.inject(FromRender::SessionLockFinished);
+    let held = null::LOCK.lock().unwrap_or_else(|e| e.into_inner()).take();
+    if let Some(lock) = held {
+        cx.inject(FromRender::SessionLockFinished { lock: LockFinished::forged(lock) });
+    }
+}
+
+/// The session lock request the null render thread holds now, as it was
+/// asked for it (`ToRender::LockSession`), to name in
+/// [`inject_session_lock_finished_for`] later (the `testing` feature).
+#[cfg(feature = "testing")]
+pub fn session_lock_held() -> Option<LockRequest> {
+    *null::LOCK.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// The compositor ending (or refusing) the lock asked for under `lock`,
+/// which may be a request the program has withdrawn since: its `finished`
+/// was already on its way. It forges the render thread's answer, so only
+/// tests have it (the `testing` feature).
+#[cfg(feature = "testing")]
+pub fn inject_session_lock_finished_for(cx: &mut Cx, lock: LockRequest) {
+    cx.inject(FromRender::SessionLockFinished { lock: LockFinished::forged(lock) });
 }
 
 /// A destination asking for the data drag `drag` (out of one of the

@@ -25,6 +25,7 @@
 // Every stage and answer is matched by name: a new one forces a decision.
 #![deny(clippy::wildcard_enum_match_arm)]
 use crate::app::{Helper, Review};
+use aizome_kit::agree::Agreed;
 use aizome_typestate::{Answer, Fresh, Generation, Ticket};
 use calamares_nixos::{
     install::{Event, Summary},
@@ -220,6 +221,33 @@ impl<'s> Checking<'s> {
     }
 }
 
+/// What the Review page's Erase Disk and Install button agrees to: the
+/// review the page shows (its ticket) and the phrase typed for it. The
+/// person's press of that button makes the [`Agreed`] the confirmation takes
+/// ([`Ready::confirm`], [`Preparing::confirm`]); the page builds one for each
+/// view, so it names the review as drawn.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Erasing {
+    review: Ticket<ReviewRequest>,
+    typed: String,
+}
+
+impl Erasing {
+    pub fn new(review: Ticket<ReviewRequest>, typed: impl Into<String>) -> Self {
+        Self {
+            review,
+            typed: typed.into(),
+        }
+    }
+
+    /// Whether it's an agreement to `review`, the latest one, with its
+    /// phrase typed: one kept from an earlier review, or typed for another
+    /// disk, isn't.
+    fn to(&self, reviews: &Generation<ReviewRequest>, review: &Review) -> bool {
+        reviews.is_current(self.review) && self.typed == review.phrase()
+    }
+}
+
 /// The review worker's answer: the plan's display copy and its running
 /// helper, or why there's no review. It names the review it answers.
 pub struct ReviewAnswer {
@@ -342,27 +370,63 @@ impl<'s> Preparing<'s> {
     }
 
     /// Confirmed before preparation finished: the confirmation waits for
-    /// it, and nothing is sent yet. Refused unless `typed` is the review's
-    /// phrase. Confirming early isn't installing:
+    /// it, and nothing is sent yet. It takes the person's agreement, which
+    /// only their press of the Review page's Erase Disk and Install button
+    /// makes, and is refused unless that agreement is to this review, with
+    /// its phrase typed. Confirming early isn't installing:
     ///
     /// ```compile_fail,E0308
-    /// use genkan::flow::{Installing, Preparing};
-    /// fn confirm_early<'s>(preparing: Preparing<'s>, typed: &str) -> Installing<'s> {
-    ///     preparing.confirm(typed).ok().unwrap()
+    /// use aizome_kit::agree::Agreed;
+    /// use genkan::flow::{Erasing, Installing, Preparing};
+    /// fn confirm_early<'s>(preparing: Preparing<'s>, agreed: Agreed<Erasing>) -> Installing<'s> {
+    ///     preparing.confirm(agreed).ok().unwrap()
     /// }
     /// ```
     ///
     /// ```
-    /// use genkan::flow::{Preparing, Queued};
-    /// fn confirm_early<'s>(preparing: Preparing<'s>, typed: &str) -> Queued<'s> {
-    ///     preparing.confirm(typed).ok().unwrap()
+    /// use aizome_kit::agree::Agreed;
+    /// use genkan::flow::{Erasing, Preparing, Queued};
+    /// fn confirm_early<'s>(preparing: Preparing<'s>, agreed: Agreed<Erasing>) -> Queued<'s> {
+    ///     preparing.confirm(agreed).ok().unwrap()
     /// }
     /// ```
-    pub fn confirm(self, typed: &str) -> Result<Queued<'s>, Preparing<'s>> {
-        if typed == self.data.review.phrase() {
+    ///
+    /// The phrase typed is no confirmation by itself, as it once was: code
+    /// that has it can't confirm for the person.
+    ///
+    /// ```compile_fail,E0308
+    /// use genkan::flow::{Preparing, Queued};
+    /// fn confirm_unasked<'s>(preparing: Preparing<'s>, typed: &str) -> Option<Queued<'s>> {
+    ///     preparing.confirm(typed).ok()
+    /// }
+    /// ```
+    ///
+    /// A refused agreement is spent: trying again takes another press.
+    ///
+    /// ```compile_fail,E0382
+    /// use aizome_kit::agree::Agreed;
+    /// use genkan::flow::{Erasing, Preparing, Queued};
+    /// fn confirm_twice<'s>(preparing: Preparing<'s>, agreed: Agreed<Erasing>) -> Option<Queued<'s>> {
+    ///     match preparing.confirm(agreed) {
+    ///         Ok(queued) => Some(queued),
+    ///         Err(preparing) => preparing.confirm(agreed).ok(),
+    ///     }
+    /// }
+    /// ```
+    pub fn confirm(self, agreed: Agreed<Erasing>) -> Result<Queued<'s>, Preparing<'s>> {
+        if agreed.target().to(self.ctx, &self.data.review) {
             Ok(Queued::enter(self.ctx, self.data))
         } else {
             Err(self)
+        }
+    }
+
+    /// A preview's sample review confirmed without a press: it has no helper
+    /// to send a confirmation to. Refused for a running helper's review.
+    pub(crate) fn confirm_sample(self) -> Result<Queued<'s>, Preparing<'s>> {
+        match self.data.link {
+            Link::Sample => Ok(Queued::enter(self.ctx, self.data)),
+            Link::Running(_) => Err(self),
         }
     }
 
@@ -379,12 +443,53 @@ impl<'s> Ready<'s> {
         &self.data.summary
     }
 
-    /// Sends the confirmation, if `typed` is the review's phrase: from now
-    /// on the helper erases the disk. Refused, staying ready, when it isn't
-    /// or the helper is gone.
-    pub fn confirm(self, typed: &str) -> Result<Installing<'s>, Ready<'s>> {
-        let phrase = self.data.review.phrase();
-        if typed != phrase || self.data.sender.send(&phrase).is_err() {
+    /// Sends the confirmation, if the person agreed to this review, with
+    /// its phrase typed ([`Erasing`]): from now on the helper erases the
+    /// disk. Refused, staying ready, when they didn't or the helper is gone.
+    /// The agreement names the review; nothing beside it can:
+    ///
+    /// ```compile_fail,E0061
+    /// use aizome_kit::agree::Agreed;
+    /// use genkan::flow::{Erasing, Installing, Ready};
+    /// fn confirm_other<'s>(ready: Ready<'s>, agreed: Agreed<Erasing>, phrase: &str) -> Option<Installing<'s>> {
+    ///     ready.confirm(agreed, phrase).ok()
+    /// }
+    /// ```
+    ///
+    /// ```
+    /// use aizome_kit::agree::Agreed;
+    /// use genkan::flow::{Erasing, Installing, Ready};
+    /// fn confirm<'s>(ready: Ready<'s>, agreed: Agreed<Erasing>) -> Option<Installing<'s>> {
+    ///     ready.confirm(agreed).ok()
+    /// }
+    /// ```
+    ///
+    /// The preview's way past the press is the crate's alone:
+    ///
+    /// ```compile_fail,E0624
+    /// use genkan::flow::{Installing, Ready};
+    /// fn confirm_unasked<'s>(ready: Ready<'s>) -> Option<Installing<'s>> {
+    ///     ready.confirm_sample().ok()
+    /// }
+    /// ```
+    pub fn confirm(self, agreed: Agreed<Erasing>) -> Result<Installing<'s>, Ready<'s>> {
+        if !agreed.target().to(self.ctx, &self.data.review) {
+            return Err(self);
+        }
+        self.send()
+    }
+
+    /// A preview's sample review confirmed without a press: it has no helper
+    /// to send a confirmation to. Refused for a running helper's review.
+    pub(crate) fn confirm_sample(self) -> Result<Installing<'s>, Ready<'s>> {
+        match self.data.sender {
+            Sender::Sample => self.send(),
+            Sender::Helper(..) => Err(self),
+        }
+    }
+
+    fn send(self) -> Result<Installing<'s>, Ready<'s>> {
+        if self.data.sender.send(&self.data.review.phrase()).is_err() {
             return Err(self);
         }
         let running = Running {

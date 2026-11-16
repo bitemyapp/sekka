@@ -2,9 +2,10 @@
 //! wallpaper under a `kachi` scrim, the time in IBM Plex Mono 64pt and the
 //! date, and on every output the user's picture or initial, their
 //! name, the password field (a focus rail while focused) and the mark.
-//! PAM runs on a thread; a failure shakes the field and says so.
+//! PAM runs on a thread; a failure shakes the field and says what PAM
+//! said. The states are types ([`screen`]); the handlers here route the
+//! shell's events to their transitions.
 
-use std::sync::Arc;
 use std::time::Duration;
 
 use aizome_kit::element::Element;
@@ -12,13 +13,18 @@ use aizome_kit::layout::{Align, Point, Rect, Size};
 use aizome_kit::prelude::*;
 use aizome_kit::widget::SemanticRole;
 use aizome_kit::{Icon, Image};
+use aizome_sys::power::SleepCycle;
 use aizome_theme::typeface;
 
 use crate::look::{self, Hue};
-use crate::pam::Authenticator;
 use crate::shell::{Msg, Shell, Surface};
 use crate::widgets::drawn::{around, drawn};
 use crate::widgets::field::field;
+
+pub mod screen;
+
+pub use screen::LockState;
+use screen::{Io, Stage};
 
 /// Where locking is.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -28,6 +34,8 @@ pub enum Phase {
     /// Asked the compositor; its surfaces are open.
     Locking,
     Locked,
+    /// Locked, and PAM is checking a password.
+    Checking,
 }
 
 /// What the lock screen's elements say.
@@ -36,28 +44,11 @@ pub enum LockMsg {
     Password(String),
     Submit,
     Caps(bool),
-    /// PAM's answer.
-    Result(Result<(), String>),
+    /// PAM's answer to a check.
+    Checked(screen::Checked),
     /// A step of the shake.
     Shake(u32),
     Escape,
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct LockState {
-    pub phase: Phase,
-    /// Each output's lock surface.
-    pub surfaces: Vec<(WindowKey, u32)>,
-    pub password: String,
-    pub busy: bool,
-    pub error: Option<String>,
-    pub caps: bool,
-    /// The shake's step (0: still).
-    pub shake: u32,
-    /// When it locked, seconds since the epoch (notifications since show).
-    pub since: u64,
-    /// Holding logind's sleep until locked.
-    pub sleep_pending: bool,
 }
 
 /// The field's sideways offset at a step of the shake.
@@ -76,7 +67,8 @@ pub struct LockView {
     pub picture: Option<Image>,
     pub password: String,
     pub busy: bool,
-    pub error: Option<String>,
+    /// What the last check said: only the lock screen's machine makes one.
+    pub error: Option<screen::Note>,
     pub caps: bool,
     pub shake: f64,
     pub wallpaper: Option<Image>,
@@ -261,7 +253,7 @@ pub fn view(v: &LockView) -> Element<LockMsg> {
         let row = aizome_kit::container(boxed).padding([0.0, 0.0, 0.0, ((size.width - FIELD_W) / 2.0 + off).max(0.0)]);
         column.push(row.into());
         let msg = if let Some(e) = &v.error {
-            Some((e.clone(), Hue::Red))
+            Some((e.text().to_owned(), Hue::Red))
         } else if v.caps {
             Some(("Caps Lock is on".to_owned(), Hue::Amber))
         } else {
@@ -304,13 +296,14 @@ pub fn view(v: &LockView) -> Element<LockMsg> {
 }
 
 impl Shell {
-    /// Lock with a complete, keyboard-ready prompt on every enabled output.
-    pub fn lock(&mut self, cx: &mut Cx<Msg>) {
-        if self.lock.phase != Phase::Unlocked {
-            return;
-        }
-        // Menus, panels and the palette go, and a drag of the Deskbar's
-        // edge or grip ends where it began.
+    /// The lock's state, and what its transitions act through.
+    fn lock_parts<'a, 'c>(&'a mut self, cx: &'a mut Cx<'c, Msg>) -> (&'a mut LockState, Io<'a, 'c>) {
+        (&mut self.lock, Io::new(cx, self.sys.logind.as_ref(), &mut self.surfaces))
+    }
+
+    /// Menus, panels and the palette go, and a drag of the Deskbar's edge
+    /// or grip ends where it began: nothing but the lock shows.
+    fn put_away_for_lock(&mut self, cx: &mut Cx<Msg>) {
         self.close_palette(cx);
         self.close_panel(cx);
         self.end_deskbar_drags(cx);
@@ -319,23 +312,79 @@ impl Shell {
                 cx.close_menus(b);
             }
         }
-        cx.lock_session();
-        self.lock.phase = Phase::Locking;
-        self.lock.password.clear();
-        self.lock.error = None;
-        self.lock.since =
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    }
+
+    /// Lock with a complete, keyboard-ready prompt on every enabled output.
+    pub fn lock(&mut self, cx: &mut Cx<Msg>) {
+        if self.lock.phase() != Phase::Unlocked {
+            return;
+        }
+        self.put_away_for_lock(cx);
+        let (lock, mut io) = self.lock_parts(cx);
+        lock.with_typed(|state| {
+            let next = match state {
+                Stage::Unlocked(unlocked) => unlocked.lock(&mut io).into(),
+                state @ (Stage::Locking(_) | Stage::Locked(_) | Stage::Checking(_)) => state,
+            };
+            (next, ())
+        });
         self.sync_lock_surfaces(cx);
+    }
+
+    /// logind announced a sleep: lock first, if `[lock] before_sleep`
+    /// says so, and let it sleep once the lock is confirmed.
+    ///
+    /// Every sleep goes here: the lock decides when it may go (at once
+    /// when already locked or not locking for sleep, else at the lock's
+    /// confirmation or end). Code that routes logind's events must not
+    /// give a sleep back itself (`Logind::sleep_ready`): while the lock
+    /// isn't confirmed yet, that lets the machine sleep unlocked.
+    pub(crate) fn lock_for_sleep(&mut self, sleep: SleepCycle, cx: &mut Cx<Msg>) {
+        let before_sleep = self.lock_cfg.before_sleep;
+        if before_sleep && self.lock.phase() == Phase::Unlocked {
+            self.put_away_for_lock(cx);
+        }
+        let (lock, mut io) = self.lock_parts(cx);
+        lock.with_typed(|state| {
+            let next = match state {
+                Stage::Unlocked(unlocked) if before_sleep => unlocked.lock_for_sleep(sleep, &mut io).into(),
+                Stage::Unlocked(unlocked) => {
+                    unlocked.let_sleep(sleep, &io);
+                    unlocked.into()
+                }
+                // Not confirmed yet: the sleep waits for it.
+                Stage::Locking(locking) => locking.sleep(sleep).into(),
+                Stage::Locked(locked) => {
+                    locked.let_sleep(sleep, &io);
+                    locked.into()
+                }
+                Stage::Checking(checking) => {
+                    checking.let_sleep(sleep, &io);
+                    checking.into()
+                }
+            };
+            (next, ())
+        });
+        self.sync_lock_surfaces(cx);
+    }
+
+    /// The machine woke: a sleep that waited for the lock is over.
+    pub(crate) fn lock_resumed(&mut self) {
+        self.lock.with_typed(|state| {
+            let next = match state {
+                Stage::Locking(locking) => locking.resumed().into(),
+                state @ (Stage::Unlocked(_) | Stage::Locked(_) | Stage::Checking(_)) => state,
+            };
+            (next, ())
+        });
     }
 
     /// Follow Wayland's advertised outputs, including changes while asleep
     /// or still waiting for lock confirmation. Disabled outputs aren't
     /// advertised, and mirrors display their source's lock surface.
     pub fn sync_lock_surfaces(&mut self, cx: &mut Cx<Msg>) {
-        if self.lock.phase == Phase::Unlocked {
-            return;
-        }
-        self.lock.surfaces.retain(|(key, output)| {
+        let Some(lock_surfaces) = self.lock.surfaces_mut() else { return };
+        lock_surfaces.retain(|(key, output)| {
             if self.screens.iter().any(|s| s.output.id == *output) {
                 true
             } else {
@@ -346,101 +395,117 @@ impl Shell {
         });
         for screen in &self.screens {
             let output = screen.output.id;
-            if self.lock.surfaces.iter().any(|(_, id)| *id == output) {
+            if lock_surfaces.iter().any(|(_, id)| *id == output) {
                 continue;
             }
             let key = cx.open_window(WindowSpec::lock(output));
             self.surfaces.insert(key, Surface::Lock { output });
-            self.lock.surfaces.push((key, output));
+            lock_surfaces.push((key, output));
             // Focus each new window immediately: a single focus after the
             // loop only prepares the last one, which may not get the keys.
             cx.focus("lock-password");
         }
     }
 
+    /// The compositor locked the session.
     pub fn lock_confirmed(&mut self, cx: &mut Cx<Msg>) {
-        self.lock.phase = Phase::Locked;
-        if let Some(l) = &self.sys.logind {
-            let _ = l.set_locked_hint(true);
-            if self.lock.sleep_pending {
-                self.lock.sleep_pending = false;
-                l.sleep_ready();
-            }
-        }
-        cx.focus("lock-password");
+        let (lock, mut io) = self.lock_parts(cx);
+        lock.with_typed(|state| {
+            let next = match state {
+                Stage::Locking(locking) => locking.confirmed(&mut io).into(),
+                state @ (Stage::Unlocked(_) | Stage::Locked(_) | Stage::Checking(_)) => state,
+            };
+            (next, ())
+        });
     }
 
-    /// The lock ended (unlocked, or the compositor refused it).
-    pub fn lock_ended(&mut self) {
-        for (k, _) in std::mem::take(&mut self.lock.surfaces) {
-            self.surfaces.remove(&k);
-        }
-        self.lock.phase = Phase::Unlocked;
-        self.lock.password.clear();
-        self.lock.busy = false;
-        self.lock.error = None;
-        if let Some(l) = &self.sys.logind {
-            let _ = l.set_locked_hint(false);
-            if self.lock.sleep_pending {
-                self.lock.sleep_pending = false;
-                l.sleep_ready();
-            }
-        }
+    /// The lock ended without the shell unlocking (the compositor refused
+    /// or ended it).
+    pub fn lock_ended(&mut self, cx: &mut Cx<Msg>) {
+        let (lock, mut io) = self.lock_parts(cx);
+        lock.with_typed(|state| {
+            let next = match state {
+                Stage::Unlocked(unlocked) => unlocked,
+                Stage::Locking(locking) => locking.ended(&mut io),
+                Stage::Locked(locked) => locked.ended(&mut io),
+                Stage::Checking(checking) => checking.ended(&mut io),
+            };
+            (next.into(), ())
+        });
     }
 
+    /// Unlock (logind asked), or withdraw a lock not confirmed yet.
     pub fn unlock(&mut self, cx: &mut Cx<Msg>) {
-        if self.lock.phase == Phase::Unlocked {
-            return;
-        }
-        cx.unlock_session();
-        self.lock_ended();
+        let (lock, mut io) = self.lock_parts(cx);
+        lock.with_typed(|state| {
+            let next = match state {
+                Stage::Unlocked(unlocked) => unlocked,
+                Stage::Locking(locking) => locking.unlock(&mut io),
+                Stage::Locked(locked) => locked.unlock(&mut io),
+                Stage::Checking(checking) => checking.unlock(&mut io),
+            };
+            (next.into(), ())
+        });
     }
 
     pub fn lock_msg(&mut self, m: LockMsg, cx: &mut Cx<Msg>) {
         match m {
-            LockMsg::Password(p) => {
-                if !self.lock.busy {
-                    self.lock.password = p;
-                    self.lock.error = None;
-                }
-            }
-            LockMsg::Caps(on) => self.lock.caps = on,
-            LockMsg::Escape => {
-                self.lock.password.clear();
-                self.lock.error = None;
-            }
+            // Typing is ignored while PAM checks.
+            LockMsg::Password(p) => self.lock_typed(p),
+            LockMsg::Escape => self.lock_typed(String::new()),
+            LockMsg::Caps(on) => self.lock.set_caps(on),
             LockMsg::Submit => {
-                if self.lock.busy || self.lock.password.is_empty() {
-                    return;
-                }
-                self.lock.busy = true;
                 let user = self.user.0.clone();
-                let password = std::mem::take(&mut self.lock.password);
-                let auth: Arc<dyn Authenticator> = self.authenticator.clone();
-                cx.spawn(move || Msg::Lock(LockMsg::Result(auth.authenticate(&user, &password))));
+                let auth = self.authenticator.clone();
+                let (lock, mut io) = self.lock_parts(cx);
+                lock.with_typed(|state| {
+                    let next = match state {
+                        Stage::Locked(locked) => locked.submit(&user, auth, &mut io).into(),
+                        state @ (Stage::Unlocked(_) | Stage::Locking(_) | Stage::Checking(_)) => state,
+                    };
+                    (next, ())
+                });
             }
-            LockMsg::Result(r) => {
-                self.lock.busy = false;
-                match r {
-                    Ok(()) => self.unlock(cx),
-                    Err(e) => {
-                        log::info!("unlocking: {e}");
-                        self.lock.error = Some("That password didn't work. Try again.".into());
-                        if self.motion() {
-                            self.lock.shake = 1;
-                            cx.after(Duration::from_millis(30), Msg::Lock(LockMsg::Shake(2)));
-                        }
-                        cx.focus("lock-password");
+            LockMsg::Checked(heard) => {
+                let heard = match self.lock.check(heard) {
+                    Ok(heard) => heard,
+                    Err(stale) => {
+                        log::debug!("unlocking: dropped an answer to an earlier check, {stale:?}");
+                        return;
                     }
-                }
+                };
+                let motion = self.motion();
+                let (lock, mut io) = self.lock_parts(cx);
+                lock.with_typed(|state| {
+                    let next = match state {
+                        Stage::Checking(checking) => match checking.pam_done(heard, motion, &mut io) {
+                            Ok(answered) => answered.into(),
+                            Err(checking) => checking.into(),
+                        },
+                        state @ (Stage::Unlocked(_) | Stage::Locking(_) | Stage::Locked(_)) => state,
+                    };
+                    (next, ())
+                });
             }
             LockMsg::Shake(step) => {
-                self.lock.shake = if step >= 9 { 0 } else { step };
+                self.lock.set_shake(if step >= 9 { 0 } else { step });
                 if step < 9 {
                     cx.after(Duration::from_millis(30), Msg::Lock(LockMsg::Shake(step + 1)));
                 }
             }
         }
+    }
+
+    /// The field's text changed (or Escape cleared it).
+    fn lock_typed(&mut self, password: String) {
+        self.lock.with_typed(|state| {
+            let next = match state {
+                Stage::Locking(locking) => locking.typed(password).into(),
+                Stage::Locked(locked) => locked.typed(password).into(),
+                state @ (Stage::Unlocked(_) | Stage::Checking(_)) => state,
+            };
+            (next, ())
+        });
     }
 
     /// Whether things may move: not in Austere, not with reduced motion.
@@ -454,7 +519,7 @@ impl Shell {
     pub fn lock_notes(&self) -> Vec<LockNote> {
         let notes: Vec<(String, Icon, String, String)> = self
             .notes
-            .unread_since(self.lock.since)
+            .unread_since(self.lock.since())
             .into_iter()
             .map(|n| {
                 let (name, glyph, _) = self.app_look(&n.filed_under);
@@ -474,11 +539,11 @@ impl Shell {
             initial: name.chars().next().map(|c| c.to_uppercase().collect()).unwrap_or_default(),
             name,
             picture,
-            password: self.lock.password.clone(),
-            busy: self.lock.busy,
-            error: self.lock.error.clone(),
-            caps: self.lock.caps,
-            shake: shake_offset(self.lock.shake),
+            password: self.lock.password().to_owned(),
+            busy: self.lock.phase() == Phase::Checking,
+            error: self.lock.note().cloned(),
+            caps: self.lock.caps(),
+            shake: shake_offset(self.lock.shake()),
             wallpaper: self.wallpaper_for(output).map(|(i, _)| i),
             size: screen.output.frame.size(),
             show_clock: self.lock_cfg.show_clock,

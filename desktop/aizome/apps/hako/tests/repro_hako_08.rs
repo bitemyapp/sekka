@@ -10,7 +10,7 @@ use std::path::PathBuf;
 
 use hako::fsops::transfer::{restore, trash_items};
 use hako::fsops::trash::Trash;
-use hako::fsops::{Asker, Conflict, Control, Env, ErrorChoice, Failure, Resolution};
+use hako::fsops::{Asker, Choice, Conflict, Control, Env, ErrorChoice, Failure, Resolution};
 
 struct Tmp(PathBuf);
 
@@ -39,9 +39,9 @@ impl Drop for Tmp {
 struct Script(VecDeque<Resolution>, Vec<String>);
 
 impl Asker for Script {
-    fn conflict(&mut self, c: &Conflict) -> Resolution {
+    fn conflict(&mut self, c: &Conflict) -> Choice {
         self.1.push(c.target.file_name().unwrap().to_string_lossy().into_owned());
-        self.0.pop_front().expect("an answer")
+        self.0.pop_front().expect("an answer").into()
     }
     fn error(&mut self, _: &Failure) -> ErrorChoice {
         ErrorChoice::Skip

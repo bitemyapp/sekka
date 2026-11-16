@@ -7,6 +7,12 @@ use tansu::mock::Mock;
 use tansu::plan::Plan;
 use tansu::run::{Outcome, Run, Status};
 
+/// The run of `plan`, as if the person pressed Apply on the sheet listing it
+/// (the kit's test agreement stands for their press).
+fn agree(plan: &Plan, state: &aizome_sys::disks::DisksState) -> Run {
+    Run::agree(aizome_kit::agree::testing::agreed(plan.shown(state)), plan, state).expect("the plan as shown")
+}
+
 const GIB: u64 = 1 << 30;
 const MIB: u64 = 1 << 20;
 const DISK: &str = "/org/freedesktop/UDisks2/block_devices/sda";
@@ -36,7 +42,7 @@ fn fixture_with_plan(fs: &str, to: u64) -> (Mock, Plan, Run) {
     let state = mock.snapshot();
     let chosen = layout.choose(&state, &Sel::of(&layout.segs[index]), &Opening::for_tests()).unwrap();
     plan.resize(layout.locate(&state, &chosen).unwrap(), to).unwrap();
-    let run = Run::agree(&plan, &mock.snapshot());
+    let run = agree(&plan, &mock.snapshot());
     (mock, plan, run)
 }
 
@@ -133,7 +139,7 @@ fn a_grow_that_stopped_part_way_can_be_applied_again() {
     assert!(plan.prune(&state).is_empty(), "it isn't dropped");
     assert!(plan.problems(&state).is_empty(), "nor refused at Apply");
     // Applying it again finishes it, rather than failing its check each time.
-    let mut again = Run::agree(&plan, &state);
+    let mut again = agree(&plan, &state);
     assert_eq!(finish(&mock, &mut again), Outcome::Done);
     let state = mock.snapshot();
     let block = state.block(PART).unwrap();

@@ -249,7 +249,8 @@ pub fn show(app: &mut Genkan, cx: &mut Cx<Msg>, page: &str) {
     if step == Step::Review {
         return;
     }
-    app.update(Msg::Next, cx);
+    // The sample has no helper: it's confirmed without a press.
+    app.confirm_sample(cx);
     app.elapsed = 23;
     for (step, message) in [
         (

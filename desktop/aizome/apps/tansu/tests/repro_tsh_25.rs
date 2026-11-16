@@ -21,7 +21,10 @@ use tansu::plan::Action;
 
 fn start(state: DisksState) -> (Harness<Tansu>, Rc<Mock>) {
     let mock = Rc::new(Mock::new(state));
-    (Harness::new(Tansu::new(mock.clone())), mock)
+    let mut h = Harness::new(Tansu::new(mock.clone()));
+    // Apply is pressed as a person would.
+    h.allow_agreements();
+    (h, mock)
 }
 
 /// The sample with the SD card listed first, so the drive Tansu falls back
@@ -217,9 +220,8 @@ fn pending_operations_do_not_follow_a_swapped_stick() {
     swap_for_another_stick(&mock);
     h.send(Msg::Changed);
     h.send(Msg::Apply);
-    if h.program().sheet.is_some() {
-        h.send(Msg::Sheet(SheetMsg::Submit));
-    }
+    // The swap dropped both operations, so Apply has nothing to open.
+    assert!(h.program().plan.is_empty() && h.program().sheet.is_none(), "an Apply sheet opened for the second stick");
     for _ in 0..4 {
         h.send(Msg::Tick);
     }
@@ -236,7 +238,8 @@ fn pending_operations_do_not_follow_a_swapped_stick() {
 /// is unplugged, so the plan is pruned to nothing under the sheet. Apply
 /// then has nothing to agree to: it must start no run (a run of no
 /// operations looked for its first one and panicked), and the sheet must
-/// say that nothing is left.
+/// say that nothing is left. Neither Return, a press of the button, nor an
+/// agreement to the empty list starts one.
 #[test]
 fn applying_a_plan_emptied_under_the_sheet_runs_nothing() {
     let (mut h, mock) = start(sd_card_first());
@@ -258,6 +261,13 @@ fn applying_a_plan_emptied_under_the_sheet_runs_nothing() {
     assert!(texts.iter().any(|t| t == tansu::ui::sheets::NOTHING_TO_APPLY), "the sheet doesn't say so: {texts:?}");
 
     h.send(Msg::Sheet(SheetMsg::Submit));
+    let w = h.window();
+    if let Some(at) = h.find_id(w, "apply").map(|r| r.center()) {
+        h.click(w, at);
+    }
+    assert!(h.program().run.is_none(), "the Apply button started a run of no operations");
+    let nothing = h.program().plan.shown(&h.program().state);
+    h.send(Msg::Sheet(SheetMsg::Apply(aizome_kit::agree::testing::pressed(nothing))));
     for _ in 0..4 {
         h.send(Msg::Tick);
     }
@@ -273,7 +283,10 @@ fn applying_a_plan_emptied_under_the_sheet_runs_nothing() {
 #[test]
 fn a_run_of_no_operations_is_done_at_once() {
     let mock = Mock::new(mock::sample());
-    let mut run = tansu::run::Run::agree(&tansu::plan::Plan::default(), &mock.snapshot());
+    let state = mock.snapshot();
+    let plan = tansu::plan::Plan::default();
+    let nothing = aizome_kit::agree::testing::agreed(plan.shown(&state));
+    let mut run = tansu::run::Run::agree(nothing, &plan, &state).expect("the plan as shown");
     assert!(run.advance(&mock), "the run didn't move");
     assert!(!run.is_running());
     assert!(run.done_ids().is_empty());

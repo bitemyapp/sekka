@@ -150,14 +150,14 @@ fn the_monitors_going_off_locks_unless_told_not_to() {
         s.set_shell_section("lock", &l);
     });
     idle(&mut h);
-    assert_eq!(h.program().lock.phase, Phase::Unlocked);
+    assert_eq!(h.program().lock.phase(), Phase::Unlocked);
     settings(&mut h, |s| {
         let mut l = s.lock_settings();
         l.after_monitors_off = true;
         s.set_shell_section("lock", &l);
     });
     idle(&mut h);
-    assert_ne!(h.program().lock.phase, Phase::Unlocked);
+    assert_ne!(h.program().lock.phase(), Phase::Unlocked);
 }
 
 #[test]
@@ -185,7 +185,7 @@ fn the_power_key_does_what_it_is_told() {
     set(&mut h, Some(PowerKey::Lock));
     h.program_mut().logind_power_key = Some("poweroff".into());
     binding(&mut h, "power-key");
-    assert_ne!(h.program().lock.phase, Phase::Unlocked);
+    assert_ne!(h.program().lock.phase(), Phase::Unlocked);
     let mut h = scene(false);
     set(&mut h, Some(PowerKey::Nothing));
     binding(&mut h, "power-key");

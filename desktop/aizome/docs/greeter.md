@@ -25,9 +25,17 @@ with the same pieces (`aizome-face`).
   press F2, for the menu of every session. Type to filter, and Return picks.
   Each person's last session is picked for them next time, and the default
   (`defaultSession`) for someone new.
-- *Log in as someone else*, or Escape, goes back to the people.
+- *Log in as someone else*, or Escape, goes back to where the person was
+  chosen: the people, or the user name as it was typed, to correct it.
+  With only one person listed there's nobody else to choose, and once the
+  session is starting there's no going back.
 - Without a list (`user_list = false`), or with nobody on it, the user name
-  is typed.
+  is typed. PAM doesn't say whether a name or its password was wrong, so a
+  wrong one asks for the password again; Escape goes back to the name.
+- If greetd can't begin a login at all (an unknown user), the field says
+  *Press Return to try again*, and Return does.
+- What's typed while the field says *Checking…* stays there: Return
+  leaves it until greetd asks its question.
 
 Whoever logged in last starts at their password. Other displays show the
 wallpaper and the time.
@@ -60,10 +68,18 @@ of the greeter class. The greeter then:
    (`XDG_SESSION_TYPE`, `XDG_SESSION_DESKTOP`, `XDG_CURRENT_DESKTOP`). Then
    it quits, and greetd starts the session.
 
-The conversation is `login.rs`: pure logic, tested without greetd. Every
-request carries its login's generation. An answer that comes for someone no
-longer picked is let go, so picking someone else mid-check can never start
-the first person's session.
+The login is `login.rs`: pure logic, tested without greetd. Its stages and
+the conversation's steps are types, as in
+[Sekka's typestate machines](../../../docs/typestate-tier1.md). A login
+carries its own person, so trying again is always for them, and each
+login's way back is part of its type. The view reads the stage as a
+`Screen` and picks none of its own; it draws a login only with the way
+back the model gave it. greetd answers each request in turn, and the
+greeter remembers which login each request it sent belongs to, in the
+order sent. An answer that comes for someone no longer picked is let go,
+so picking someone else mid-check can never start the first person's
+session. If the link to greetd breaks, the greeter quits, and greetd
+starts it again.
 
 ## Security
 
@@ -80,7 +96,8 @@ the first person's session.
   `UID_MIN`–`UID_MAX` with a login shell), AccountsService's pictures and
   public display scales, and
   its own state, `/var/lib/aizome-greeter/state.toml` (mode 0700, the
-  greeter's). The state holds who logged in last and each person's
+  greeter's), written whole and synced to the disk before the session
+  starts. The state holds who logged in last and each person's
   session, nothing secret. Nothing in people's homes is read.
 - **What it can do.** Power actions go to logind through `systemctl`, and
   polkit lets the person at the login screen take them.

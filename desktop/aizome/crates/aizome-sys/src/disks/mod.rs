@@ -519,7 +519,24 @@ impl Disks {
     /// names (`offset` and `size` in bytes, inside one of
     /// [`DisksState::free_space`]), of `type_id` (a GUID or MBR type; by
     /// default one fitting `format`'s filesystem), named `name` (GPT only),
-    /// and format it as `format`. The result is the new partition.
+    /// format it as `format`, and give it `flags` (none if 0). The result is
+    /// the new partition.
+    ///
+    /// The flags go on the partition UDisks reports it made: nobody saw it
+    /// before it was made, so its entry is changed here, as part of the
+    /// confirmed create, rather than by a confirmation of a partition the
+    /// caller names afterwards (which could name one that was there before):
+    ///
+    /// ```compile_fail,E0599
+    /// use aizome_kit::agree::Agreed;
+    /// use aizome_sys::disks::{Confirm, DisksState, Identity, PartitionEntry};
+    /// fn flags_on_any(disk: &Agreed<Identity>, state: &DisksState) -> Option<Confirm<PartitionEntry, ()>> {
+    ///     Confirm::made_on(disk, state.identity("/org/freedesktop/UDisks2/block_devices/sdb1")?, ())
+    /// }
+    /// ```
+    // UDisks's CreatePartition's arguments, the format it can make with it,
+    // and the flags set on the partition it makes.
+    #[allow(clippy::too_many_arguments)]
     pub fn create_partition<B: Send + 'static>(
         &self,
         confirm: Confirm<CreatePartition, B>,
@@ -528,6 +545,7 @@ impl Disks {
         type_id: Option<&str>,
         name: &str,
         format: Option<FormatSpec>,
+        flags: u64,
     ) -> Task<String> {
         let type_id = type_id.map(str::to_owned);
         let name = name.to_owned();
@@ -567,6 +585,16 @@ impl Disks {
                     &(offset, size, type_id.as_str(), name.as_str(), empty()),
                 )?,
             };
+            if flags != 0 {
+                let () = bus.call_with(
+                    Opts::ACTION,
+                    UDISKS,
+                    created.as_str(),
+                    IFACE_PARTITION,
+                    "SetFlags",
+                    &(flags, empty()),
+                )?;
+            }
             Ok(created.to_string())
         })
     }

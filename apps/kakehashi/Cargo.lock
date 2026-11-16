@@ -3654,6 +3654,7 @@ dependencies = [
  "anyhow",
  "dirs 6.0.0",
  "gpui-kit",
+ "kakehashi",
  "kakehashi-core",
  "libc",
  "serde_json",

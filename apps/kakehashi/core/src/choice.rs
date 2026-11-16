@@ -103,7 +103,7 @@ pub struct ImageId {
 
 /// What the confirmation dialog describes: a drive, and the image to write
 /// onto it.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Target {
     drive: Drive,
     image: ImageId,
@@ -120,6 +120,15 @@ impl Target {
 
     pub(crate) fn into_parts(self) -> (Drive, ImageId) {
         (self.drive, self.image)
+    }
+}
+
+/// A press of the dialog's OK shows the target the dialog described (the
+/// window's press type, `kakehashi_window::dialog::Pressed`); in this crate's
+/// tests the target stands for its own press.
+impl AsRef<Target> for Target {
+    fn as_ref(&self) -> &Target {
+        self
     }
 }
 
@@ -146,8 +155,11 @@ pub type ReviewTicket = Ticket<Review>;
 /// found again when its OK was pressed: the drive by identity in the list
 /// the dialog was opened from, the image by file and checksum. Only
 /// [`DriveList::confirm`] makes one, and [`Plan::new`](crate::write::Plan::new)
-/// takes it. It doesn't prove that a person saw the dialog: code can run a
-/// list of its own through the same steps. Nothing else makes a review:
+/// takes it, with the press of OK. By itself it doesn't prove that a person
+/// saw the dialog: code can run a list of its own through the same steps.
+/// The press does: only the window's dialog makes its press type, and the
+/// helper starts only for a plan holding one (`kakehashi_window::elevate`).
+/// Nothing else makes a review:
 ///
 /// ```compile_fail,E0423
 /// use aizome_typestate::Reviewed;

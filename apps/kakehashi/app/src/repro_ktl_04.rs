@@ -93,6 +93,7 @@ fn repro_ktl_04_ok_writes_the_drive_the_dialog_named() {
     // The dialog opens: confirm describes the reviewed drive and image.
     let image = k.image_id().expect("the image is checked");
     let (review, target) = k.drives.open_review(None, image).expect("the stick is offered");
+    let shown = target.clone();
     let named = target.drive().clone();
 
     // Under the modal the 2 s refresh goes on: the stick was swapped for
@@ -110,8 +111,8 @@ fn repro_ktl_04_ok_writes_the_drive_the_dialog_named() {
     listed(&mut k, t0 + DriveList::REFRESH, vec![second.clone()]);
     let still_chosen = k.drives.chosen(None).map(|d| d.name.clone());
 
-    // OK in the dialog.
-    k.start_write(review);
+    // OK, as the person presses it: their press of this dialog.
+    k.start_write(Pressed::for_tests(review, shown));
     let started = k.job.as_ref().map(|j| j.ctx().drive().clone());
     if started.is_some() {
         run_to_end(&mut k);

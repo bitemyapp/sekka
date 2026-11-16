@@ -8,6 +8,11 @@ license.workspace = true
 repository.workspace = true
 build = "build.rs"
 
+[features]
+# Agreements for tests (src/agree.rs): `agree::testing`, and harness
+# presses that make them. Only tests' dev-dependencies turn it on.
+testing = []
+
 [dependencies]
 aizome-theme.workspace = true
 sidestep-ui.workspace = true

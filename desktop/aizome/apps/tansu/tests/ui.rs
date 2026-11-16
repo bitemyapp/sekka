@@ -6,7 +6,7 @@
 
 use std::rc::Rc;
 
-use aizome_kit::sidestep_ui::{Modifiers, NamedKey};
+use aizome_kit::sidestep_ui::{Key, Modifiers, NamedKey};
 use aizome_kit::testing::Harness;
 use tansu::app::{Msg, SheetKind, SheetMsg, Tansu};
 use tansu::layout::{Mark, Target};
@@ -93,7 +93,18 @@ fn size_slider_and_unit_selection_recover_invalid_text_without_rounding_the_size
 
 fn start() -> (Harness<Tansu>, Rc<Mock>) {
     let mock = Rc::new(Mock::default());
-    (Harness::new(Tansu::new(mock.clone())), mock)
+    let mut h = Harness::new(Tansu::new(mock.clone()));
+    // The tests press the Apply sheet's button as a person would.
+    h.allow_agreements();
+    (h, mock)
+}
+
+/// A press of the Apply sheet's button: the person's agreement to the
+/// operations it lists, which only such a press makes.
+fn press_apply(h: &mut Harness<Tansu>) {
+    let w = h.window();
+    let at = h.find_id(w, "apply").expect("the Apply sheet's button").center();
+    h.click(w, at);
 }
 
 fn drive(h: &mut Harness<Tansu>, name: &str) {
@@ -202,7 +213,7 @@ fn formatting_a_usb_stick_runs_without_typing_its_name() {
     assert!(texts.iter().any(|t| t.contains("Format /dev/sdc1 as Ext4 labelled “PHOTOS”")), "{texts:?}");
     assert!(texts.iter().any(|t| t.contains("Everything on /dev/sdc1 (FAT “STICK”) will be erased.")));
     assert!(!texts.iter().any(|t| t.contains("type its name")), "a USB stick needs no typing");
-    sheet(&mut h, SheetMsg::Submit);
+    press_apply(&mut h);
     assert_eq!(mock.calls(), ["Format(ext4) on /dev/sdc1"]);
     assert_eq!(sheet_kind(&h), Some("running"));
     assert!(h.program().plan.is_empty());
@@ -236,10 +247,56 @@ fn a_built_in_disk_needs_its_name_typed() {
     h.type_text(w, "sdb");
     sheet(&mut h, SheetMsg::Submit);
     assert!(mock.calls().is_empty(), "the wrong disk's name");
+    // Even the press of a disabled Apply button agrees to nothing.
+    press_apply(&mut h);
+    assert!(mock.calls().is_empty(), "Apply is off until the name is typed");
     sheet(&mut h, SheetMsg::Typed(0, String::new()));
     h.type_text(w, "sda");
+    // Return in the field goes on to Apply, which only a press of its own
+    // agrees with: Return there.
+    h.named(w, NamedKey::Enter, Modifiers::NONE);
+    assert!(mock.calls().is_empty(), "Return in the name field applies nothing");
+    assert_eq!(h.focused_name(w).as_deref(), Some("apply"));
     h.named(w, NamedKey::Enter, Modifiers::NONE);
     assert_eq!(mock.calls(), ["Delete /dev/sda2"]);
+}
+
+/// One Return, held in the name field: it moves to Apply, and its repeats
+/// there are no press of the button, whether the platform marks them as
+/// repeats or sends presses with no release between. Let go and pressed
+/// again, it's the person's press.
+#[test]
+fn a_return_held_in_the_name_field_applies_nothing() {
+    for marked in [true, false] {
+        let (mut h, mock) = start();
+        let w = h.window();
+        drive(&mut h, "Crucial");
+        seg(&mut h, "sda2");
+        h.send(Msg::Do(Action::Delete));
+        h.send(Msg::Apply);
+        assert_eq!(h.focused_name(w).as_deref(), Some("type-0"));
+        h.type_text(w, "sda");
+        let enter = Key::Named(NamedKey::Enter);
+        h.key_down(w, enter.clone(), Modifiers::NONE);
+        assert_eq!(h.focused_name(w).as_deref(), Some("apply"));
+        for _ in 0..40 {
+            if marked {
+                h.key_repeat(w, enter.clone(), Modifiers::NONE);
+            } else {
+                h.key_down(w, enter.clone(), Modifiers::NONE);
+            }
+        }
+        assert!(
+            mock.calls().is_empty(),
+            "a held Return applied the plan (repeats marked: {marked}): {:?}",
+            mock.calls()
+        );
+        assert_eq!(sheet_kind(&h), Some("apply"));
+        h.key_up(w, enter, Modifiers::NONE);
+        assert!(mock.calls().is_empty());
+        h.named(w, NamedKey::Enter, Modifiers::NONE);
+        assert_eq!(mock.calls(), ["Delete /dev/sda2"]);
+    }
 }
 
 #[test]
@@ -267,7 +324,7 @@ fn a_new_partition_is_made_in_free_space_with_its_flags() {
     assert_eq!(h.program().plan.len(), 1);
     h.send(Msg::Apply);
     h.type_text(h.window(), "sda");
-    sheet(&mut h, SheetMsg::Submit);
+    press_apply(&mut h);
     let calls = mock.calls();
     assert!(calls[0].starts_with("CreatePartition(") && calls[0].ends_with("vfat) on /dev/sda"), "{calls:?}");
     let state = h.program().state.clone();
@@ -298,7 +355,7 @@ fn shrinking_checks_then_shrinks_the_filesystem_then_the_partition() {
     assert!(to < from);
     h.send(Msg::Apply);
     h.type_text(w, "sda");
-    sheet(&mut h, SheetMsg::Submit);
+    press_apply(&mut h);
     let calls = mock.calls();
     assert_eq!(calls[1], "Repair /dev/sda3");
     assert_eq!(calls[2], format!("ResizeFilesystem({}) /dev/sda3", to - (1 << 20)));
@@ -325,7 +382,7 @@ fn a_failure_stops_the_run_and_keeps_the_rest_pending() {
     assert_eq!(h.program().plan.len(), 3);
     mock.fail_next("Format", "mkfs.btrfs: device is busy");
     h.send(Msg::Apply);
-    sheet(&mut h, SheetMsg::Submit);
+    press_apply(&mut h);
     assert_eq!(mock.calls(), ["SetLabel(BOOT) /dev/mmcblk0p1", "Format(btrfs) on /dev/mmcblk0p2"]);
     let w = h.window();
     assert!(h.texts(w).iter().any(|t| t.contains("mkfs.btrfs: device is busy")));
@@ -370,7 +427,7 @@ fn a_new_partition_table_on_a_stick() {
     assert!(h.program().layout.new_table);
     assert!(h.program().layout.segs.iter().all(|s| s.is_free()));
     h.send(Msg::Apply);
-    sheet(&mut h, SheetMsg::Submit);
+    press_apply(&mut h);
     assert_eq!(mock.calls(), ["Unmount /dev/sdc2", "Format(gpt) on /dev/sdc"]);
     assert_eq!(h.program().layout.table, "gpt");
 }

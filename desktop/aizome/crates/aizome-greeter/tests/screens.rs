@@ -4,10 +4,10 @@
 
 use std::path::{Path, PathBuf};
 
-use aizome_greeter::app::{Greeter, Msg, Stage};
+use aizome_greeter::app::{Greeter, Msg};
 use aizome_greeter::config::{Config, State};
 use aizome_greeter::greetd::{AuthMessageType, ErrorType, Response};
-use aizome_greeter::login::Step;
+use aizome_greeter::login::{Progress, Screen};
 use aizome_greeter::sessions::{Kind, Session};
 use aizome_greeter::users::User;
 use aizome_kit::prelude::*;
@@ -118,11 +118,19 @@ fn asks_password(h: &mut Harness<Greeter>) {
     }));
 }
 
+/// How far the login has got, if one is under way.
+fn progress(h: &Harness<Greeter>) -> Option<Progress<'_>> {
+    match h.program().login().screen() {
+        Screen::Login { progress, .. } => Some(progress),
+        Screen::Unstarted | Screen::People { .. } | Screen::Name { .. } => None,
+    }
+}
+
 #[test]
 fn several_people_choose_then_type_their_password() {
     let mut h = greeter(State::default(), people());
     let w = main_window(&h);
-    assert_eq!(h.program().stage, Stage::People);
+    assert!(matches!(h.program().login().screen(), Screen::People { .. }));
     let texts = h.texts(w);
     for want in ["Chris Allen", "Alice Kimura", "Bob Tanaka", "ganymede"] {
         assert!(texts.iter().any(|t| t == want), "{want} in {texts:?}");
@@ -130,19 +138,19 @@ fn several_people_choose_then_type_their_password() {
     h.save_png(w, shots().join("greeter-people.png"), 2.0);
     // → moves the selection; Return picks.
     h.named(w, NamedKey::ArrowRight, Modifiers::NONE);
-    assert_eq!(h.program().selected, 1);
+    assert!(matches!(h.program().login().screen(), Screen::People { selected: 1, .. }));
     h.named(w, NamedKey::Enter, Modifiers::NONE);
-    assert_eq!(h.program().stage, Stage::Password);
-    assert_eq!(h.program().login.user.as_deref(), Some("alice"));
+    assert!(matches!(h.program().login().screen(), Screen::Login { .. }));
+    assert_eq!(h.program().login().user(), Some("alice"));
     asks_password(&mut h);
-    assert_eq!(h.program().login.step, Step::Ask { secret: true, prompt: "Password".into() });
+    assert_eq!(progress(&h), Some(Progress::Asking { secret: true, prompt: "Password" }));
     assert_eq!(h.focused_name(w).as_deref(), Some("greeter-password"));
     assert!(h.texts(w).iter().any(|t| t == "Session: Aizome"), "{:?}", h.texts(w));
     h.save_png(w, shots().join("greeter-password.png"), 2.0);
     // Escape: back to the people, and greetd lets Alice's login go.
     h.named(w, NamedKey::Escape, Modifiers::NONE);
-    assert_eq!(h.program().stage, Stage::People);
-    assert_eq!(h.program().login.step, Step::Nobody);
+    assert!(matches!(h.program().login().screen(), Screen::People { .. }));
+    assert_eq!(h.program().login().user(), None);
 }
 
 #[test]
@@ -151,17 +159,17 @@ fn the_last_person_starts_at_their_password_with_their_session() {
     state.logged_in("callen", "tatami");
     let mut h = greeter(state, people());
     let w = main_window(&h);
-    assert_eq!(h.program().stage, Stage::Password);
-    assert_eq!(h.program().login.user.as_deref(), Some("callen"));
+    assert!(matches!(h.program().login().screen(), Screen::Login { .. }));
+    assert_eq!(h.program().login().user(), Some("callen"));
     assert_eq!(h.program().session().map(|s| s.id.as_str()), Some("tatami"));
     asks_password(&mut h);
     h.type_text(w, "hunter2");
-    assert_eq!(h.program().password, "hunter2");
+    assert_eq!(h.program().password(), "hunter2");
     assert!(!h.texts(w).iter().any(|t| t.contains("hunter2")), "the password doesn't show");
     h.named(w, NamedKey::Enter, Modifiers::NONE);
     // Sent, and gone from the greeter.
-    assert!(h.program().password.is_empty());
-    assert_eq!(h.program().login.step, Step::Waiting);
+    assert!(h.program().password().is_empty());
+    assert_eq!(progress(&h), Some(Progress::Checking));
     // Wrong: it says so, shakes, and asks again.
     h.send(Msg::Greetd(Response::Error {
         error_type: ErrorType::AuthError,
@@ -169,9 +177,9 @@ fn the_last_person_starts_at_their_password_with_their_session() {
     }));
     asks_password(&mut h);
     assert!(h.texts(w).iter().any(|t| t == "That password didn't work. Try again."));
-    assert!(h.program().shake > 0);
+    assert!(h.program().shake() > 0);
     h.advance(std::time::Duration::from_millis(400));
-    assert_eq!(h.program().shake, 0);
+    assert_eq!(h.program().shake(), 0);
     h.save_png(w, shots().join("greeter-wrong.png"), 2.0);
 }
 
@@ -180,7 +188,7 @@ fn the_session_menu_lists_every_session_and_the_pick_is_kept() {
     let mut h = greeter(State::default(), vec![user("callen", "Chris Allen", 1000)]);
     let w = main_window(&h);
     // One person: straight to the password.
-    assert_eq!(h.program().stage, Stage::Password);
+    assert!(matches!(h.program().login().screen(), Screen::Login { .. }));
     asks_password(&mut h);
     h.send(Msg::SessionMenu);
     let popups = h.popups(w);
@@ -195,24 +203,31 @@ fn the_session_menu_lists_every_session_and_the_pick_is_kept() {
     h.type_text(w, "pw");
     h.named(w, NamedKey::Enter, Modifiers::NONE);
     h.send(Msg::Greetd(Response::Success));
-    assert_eq!(h.program().login.step, Step::Starting);
+    assert_eq!(progress(&h), Some(Progress::Starting));
     h.send(Msg::Greetd(Response::Success));
-    assert_eq!(h.program().login.step, Step::Done);
-    assert_eq!(h.program().state.sessions.get("callen").map(String::as_str), Some("tatami"));
-    assert_eq!(h.program().state.last_user.as_deref(), Some("callen"));
+    assert_eq!(progress(&h), Some(Progress::Done));
+    assert_eq!(h.program().state().sessions.get("callen").map(String::as_str), Some("tatami"));
+    assert_eq!(h.program().state().last_user.as_deref(), Some("callen"));
 }
 
 #[test]
 fn without_a_list_the_user_name_is_typed() {
     let mut h = greeter(State::default(), Vec::new());
     let w = main_window(&h);
-    assert_eq!(h.program().stage, Stage::Name);
+    assert!(matches!(h.program().login().screen(), Screen::Name { .. }));
     h.save_png(w, shots().join("greeter-name.png"), 2.0);
     h.type_text(w, "alice");
     h.named(w, NamedKey::Enter, Modifiers::NONE);
-    assert_eq!(h.program().login.user.as_deref(), Some("alice"));
+    assert_eq!(h.program().login().user(), Some("alice"));
     asks_password(&mut h);
     assert!(h.texts(w).iter().any(|t| t == "alice"), "{:?}", h.texts(w));
+    // The way back to the name, to correct it.
+    assert_eq!(h.focused_name(w).as_deref(), Some("greeter-password"));
+    assert!(h.texts(w).iter().any(|t| t == "Log in as someone else"), "{:?}", h.texts(w));
+    h.save_png(w, shots().join("greeter-typed.png"), 2.0);
+    h.named(w, NamedKey::Escape, Modifiers::NONE);
+    assert!(matches!(h.program().login().screen(), Screen::Name { typed: "alice" }));
+    assert_eq!(h.focused_name(w).as_deref(), Some("greeter-name"));
 }
 
 #[test]
@@ -231,4 +246,48 @@ fn every_display_shows_the_time_and_only_one_the_login() {
     let texts = h.texts(other);
     assert!(!texts.iter().any(|t| t == "Chris Allen"), "{texts:?}");
     assert!(texts.iter().any(|t| t.contains(':')), "the time: {texts:?}");
+}
+
+#[test]
+fn a_listed_persons_failed_login_tries_again_on_an_empty_return() {
+    let mut state = State::default();
+    state.logged_in("alice", "aizome");
+    let mut h = greeter(state, people());
+    let w = main_window(&h);
+    assert_eq!(h.program().login().user(), Some("alice"));
+    // greetd can't begin it (PAM refuses the account).
+    h.send(Msg::Greetd(Response::Error { error_type: ErrorType::Error, description: "account expired".into() }));
+    assert_eq!(progress(&h), Some(Progress::Failed));
+    assert!(h.texts(w).iter().any(|t| t == "Account expired"), "{:?}", h.texts(w));
+    // "Press Return to try again", with nothing typed: it does.
+    assert_eq!(h.program().password(), "");
+    h.named(w, NamedKey::Enter, Modifiers::NONE);
+    assert_eq!(progress(&h), Some(Progress::Checking));
+    assert_eq!(h.program().login().user(), Some("alice"));
+    // And it fails again; Escape goes back to the row, Alice selected.
+    h.send(Msg::Greetd(Response::Success));
+    h.send(Msg::Greetd(Response::Error { error_type: ErrorType::Error, description: "account expired".into() }));
+    assert_eq!(progress(&h), Some(Progress::Failed));
+    h.named(w, NamedKey::Escape, Modifiers::NONE);
+    assert!(matches!(h.program().login().screen(), Screen::People { selected: 1, .. }));
+}
+
+#[test]
+fn what_is_typed_ahead_stays_when_return_and_escape_do_nothing() {
+    let mut h = greeter(State::default(), vec![user("callen", "Chris Allen", 1000)]);
+    let w = main_window(&h);
+    // greetd hasn't asked yet ("Checking…").
+    assert_eq!(progress(&h), Some(Progress::Checking));
+    h.type_text(w, "abc");
+    h.named(w, NamedKey::Enter, Modifiers::NONE);
+    assert_eq!(h.program().password(), "abc");
+    // The only person has no way back: Escape leaves it too.
+    h.named(w, NamedKey::Escape, Modifiers::NONE);
+    assert_eq!(h.program().password(), "abc");
+    assert!(!h.texts(w).iter().any(|t| t == "Log in as someone else"), "{:?}", h.texts(w));
+    // Once greetd asks, Return answers with it.
+    asks_password(&mut h);
+    h.named(w, NamedKey::Enter, Modifiers::NONE);
+    assert_eq!(h.program().password(), "");
+    assert_eq!(progress(&h), Some(Progress::Checking));
 }

@@ -66,8 +66,10 @@ fn repro_ktl_03_killed_mid_write_is_reported_as_partly_written() {
     let mut k = window();
     list_and_choose(&mut k, stick("4C530001230529115034"));
     let image = ImageId { path: "sekka.iso".into(), sha256: "0".repeat(64) };
-    let (review, _) = k.drives.open_review(None, image.clone()).expect("the stick is chosen");
-    let plan = Plan::new(k.drives.confirm(review, None, Some(image)).unwrap());
+    let (review, shown) =
+        k.drives.open_review(None, image.clone()).map(|(r, t)| (r, t.clone())).expect("the stick is chosen");
+    let plan =
+        Plan::new(k.drives.confirm(review, None, Some(image)).unwrap(), Pressed::for_tests(review, shown)).unwrap();
     // As start_write leaves it, and the lines the helper wrote before it
     // was killed, as the worker reads them.
     let dir = JobDir::new().unwrap();
@@ -143,8 +145,8 @@ fn repro_ktl_03_killed_helper_through_start_write_and_elevate() {
     let mut k = window();
     ready(&mut k, stick("KTL03-KILLED"), dir.path());
     let image = k.image_id().expect("the image is checked");
-    let (review, _) = k.drives.open_review(None, image).expect("the stick is chosen");
-    k.start_write(review);
+    let (review, shown) = k.drives.open_review(None, image).map(|(r, t)| (r, t.clone())).expect("the stick is chosen");
+    k.start_write(Pressed::for_tests(review, shown));
     assert!(k.job.is_some(), "start_write did not start a job: {:?}", k.error);
     let seen = run_to_end(&mut k);
     // The Writing line comes as a report, or with the exit.

@@ -30,6 +30,11 @@ anyhow = "=1.0.100"
 jiff = "=0.2.38"
 zeroize = "=1.8.2"
 
+[dev-dependencies]
+# Presses of the Review page's button that agree, as a person's do (the
+# kit's `testing`, which the window's own build never has).
+aizome-kit = { path = "../../../desktop/aizome/crates/aizome-kit", features = ["testing"] }
+
 # tiny-skia's portable SIMD wraps 16-bit lanes on purpose (Aizome's and
 # Sukumo's workspace manifests turn the same checks off).
 [profile.dev.package.tiny-skia]

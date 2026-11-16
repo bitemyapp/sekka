@@ -28,7 +28,7 @@ use aizome_typestate::{Confirmed, Reviewed, SameTarget, Unsettled};
 
 use super::place::InPlace;
 use super::trash::Trash;
-use super::{Asker, Conflict, Resolution, describe, names, sys};
+use super::{Asker, Choice, Conflict, Consent, Resolution, describe, names, sys};
 
 /// An item, by what stays with it (its device and inode), and where it
 /// was found.
@@ -53,15 +53,19 @@ impl SameTarget for Found {
 }
 
 /// The brand of a replacement's review: the person was shown the item at
-/// the target and answered Replace. Only [`ask`] makes one, from that
-/// answer, so nothing else can claim the person chose to replace an item:
+/// the target and pressed Replace. Only [`ask`] makes one, from their
+/// [`Consent`], which only their press makes, so nothing else can claim the
+/// person chose to replace an item:
 ///
 /// ```compile_fail,E0423
 /// use hako::fsops::replace::Asked;
 /// let _ = Asked(());
 /// ```
 #[derive(Debug)]
-pub struct Asked(());
+pub struct Asked(
+    // Held, not read: the consent is what makes the brand.
+    #[allow(dead_code)] Consent,
+);
 
 /// The item at a replacement's target, as the person saw it when they
 /// answered Replace.
@@ -82,16 +86,21 @@ pub(super) enum Answer {
 
 /// Ask about `conflict`, `tmeta` being what's at its target (not
 /// followed). Merge is an answer only for folders: for anything else it
-/// replaces.
+/// keeps both (replacing takes the person's consent, which Merge isn't). A
+/// consent for another target than this conflict's skips it.
 pub(super) fn ask(asker: &mut dyn Asker, conflict: &Conflict, tmeta: &fs::Metadata) -> Answer {
     match asker.conflict(conflict) {
-        Resolution::Skip => Answer::Skip,
-        Resolution::Cancel => Answer::Cancel,
-        Resolution::KeepBoth => Answer::KeepBoth,
-        Resolution::Merge if conflict.can_merge() => Answer::Merge,
-        Resolution::Replace | Resolution::Merge => {
-            Answer::Replace(Occupant { seen: Reviewed::new(Found::at(&conflict.target, tmeta), Asked(())) })
+        Choice::Other(Resolution::Skip) => Answer::Skip,
+        Choice::Other(Resolution::Cancel) => Answer::Cancel,
+        Choice::Other(Resolution::KeepBoth) => Answer::KeepBoth,
+        Choice::Other(Resolution::Merge) if conflict.can_merge() => Answer::Merge,
+        Choice::Other(Resolution::Merge) => Answer::KeepBoth,
+        Choice::Replace(consent) if consent.target() == conflict.target => {
+            Answer::Replace(Occupant { seen: Reviewed::new(Found::at(&conflict.target, tmeta), Asked(consent)) })
         }
+        // Consent to replace another item (another conflict's) replaces
+        // nothing here.
+        Choice::Replace(_) => Answer::Skip,
     }
 }
 

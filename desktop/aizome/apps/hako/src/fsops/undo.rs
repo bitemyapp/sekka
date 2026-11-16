@@ -587,7 +587,7 @@ fn carry_out(record: &Record, trash: &Trash, env: &mut Env) -> (Report, Record, 
 mod tests {
     use super::*;
     use crate::fsops::testing::{TempDir, read};
-    use crate::fsops::{Always, Control, ErrorChoice, Resolution};
+    use crate::fsops::{Always, Choice, Consent, Control, ErrorChoice, Resolution};
 
     fn trash(t: &TempDir) -> Trash {
         Trash { home: t.join("Trash"), home_dir: Some(t.join("home")), uid: sys::uid(), topdirs: Some(Vec::new()) }
@@ -741,6 +741,17 @@ mod tests {
 
     #[test]
     fn restoring_same_named_items_does_not_keep_a_displaced_items_receipt() {
+        /// Replaces at every conflict, as if the person had pressed Replace
+        /// with "Apply to all".
+        struct AlwaysReplace;
+        impl super::super::Asker for AlwaysReplace {
+            fn conflict(&mut self, conflict: &super::super::Conflict) -> Choice {
+                Choice::Replace(Consent::for_tests(conflict))
+            }
+            fn error(&mut self, _: &super::super::Failure) -> ErrorChoice {
+                ErrorChoice::Cancel
+            }
+        }
         let t = TempDir::new("undo-reused-trash-name");
         let tr = trash(&t);
         let a = t.file("one/a.txt", "original a");
@@ -751,7 +762,7 @@ mod tests {
         let mut h = History::default();
         h.push(step(Record::Trash { items }, "Trash two files"));
         let control = Control::new();
-        let mut asker = Always(Resolution::Replace, ErrorChoice::Cancel);
+        let mut asker = AlwaysReplace;
         let mut reporter = ();
         let mut env = Env::new(&control, &mut asker, &mut reporter);
         let (report, result) = invert(h.begin_undo().unwrap(), &tr, &mut env);
@@ -774,8 +785,8 @@ mod tests {
     fn a_partial_trash_restore_keeps_only_its_own_receipt_for_retry() {
         struct MergeThenSkip;
         impl super::super::Asker for MergeThenSkip {
-            fn conflict(&mut self, conflict: &super::super::Conflict) -> Resolution {
-                if conflict.can_merge() { Resolution::Merge } else { Resolution::Skip }
+            fn conflict(&mut self, conflict: &super::super::Conflict) -> Choice {
+                if conflict.can_merge() { Resolution::Merge.into() } else { Resolution::Skip.into() }
             }
             fn error(&mut self, _: &super::super::Failure) -> ErrorChoice {
                 ErrorChoice::Cancel
