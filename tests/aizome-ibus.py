@@ -175,6 +175,18 @@ def daemon_count():
     )
 
 
+def one_daemon():
+    # ibus-daemon --daemonize forks the daemon, and the process that was
+    # started exits. pgrep lists the processes and then reads each one, so a
+    # count taken across that moment can be none while a daemon is running.
+    # Look until there is exactly one: a second daemon that stays, or none at
+    # all, still fails here.
+    machine.wait_until_succeeds(
+        "test \"$(pgrep -u alice -f '^/nix/store/[^ ]+/bin/ibus-daemon ' | wc -l)\" -eq 1",
+        timeout=60,
+    )
+
+
 def logged_out():
     machine.wait_until_fails("pgrep -u alice -x aizome-shell", timeout=60)
     until(
@@ -263,10 +275,7 @@ with subtest("Xfce keeps the legacy IBus frontend and composition"):
         "pgrep -u alice -f '(^|/)[.]?xfce4-session(-wrapped)?($| )'",
         timeout=120,
     )
-    machine.wait_until_succeeds(
-        "pgrep -u alice -f '^/nix/store/[^ ]+/bin/ibus-daemon '", timeout=60
-    )
-    assert daemon_count() == 1
+    one_daemon()
     assert (
         user("systemctl --user show -p ActiveState --value aizome-ibus.service").strip()
         == "inactive"
