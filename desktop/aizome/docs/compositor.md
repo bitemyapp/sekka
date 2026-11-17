@@ -231,8 +231,10 @@ Notes for client authors:
   a blur through it and its hard shadow stays a plain shadow
   (`docs/rendering.md`). Other clients' translucency is blended as drawn.
 - A toplevel's app_id should be set before its first commit; it picks the
-  remembered size and place, the icon, and whether ❖ reaches it untouched
-  (`org.aizome.…` apps) or as Ctrl.
+  remembered size and place and the icon. Kit apps announce native command
+  keys over compositor IPC before opening windows, so ❖ reaches them
+  untouched whatever their app ID. The legacy Aizome and Genkan IDs also
+  keep ❖ for compatibility with older builds.
 - Layer surfaces: `aizome-deskbar` is placed around (new windows open clear
   of it). Exclusive keyboard interactivity on the top and overlay layers
   takes the keyboard while mapped; on-demand takes it on a click; a
