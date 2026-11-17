@@ -232,8 +232,10 @@ Notes for client authors:
   a blur through it and its hard shadow stays a plain shadow
   (`docs/rendering.md`). Other clients' translucency is blended as drawn.
 - A toplevel's app_id should be set before its first commit; it picks the
-  remembered size and place, the icon, and whether ❖ reaches it untouched
-  (`org.aizome.…` apps) or as Ctrl.
+  remembered size and place and the icon. Kit apps announce native command
+  keys over compositor IPC before opening windows, so ❖ reaches them
+  untouched whatever their app ID. The legacy Aizome and Genkan IDs also
+  keep ❖ for compatibility with older builds.
 - A toplevel tagged `utility` (xdg-toplevel-tag, set before its first
   commit) is one of its app's small windows beside the others, and is kept
   by itself. It opens at the size it asks for, placed as a new window is,

@@ -315,7 +315,7 @@ impl InputExt for State {
                 l.wm.focused()
                     .filter(|w| l.wm.is_shown(*w))
                     .and_then(|w| l.wm.get(w))
-                    .is_some_and(|w| !crate::cmdkey::is_kit_app(&w.app_id));
+                    .is_some_and(|w| !crate::cmdkey::is_kit_app(&w.app_id, w.pid, &self.az.ipc));
             let terminal_command = matches!(action, Action::TerminalClose | Action::TerminalQuit);
             let keep_for_app = (f10 && other_app && matches!(&action, Action::Shell(a) if a == "menu-bar"))
                 || (terminal_command && !terminal_commands(self));
@@ -718,6 +718,7 @@ fn terminal_commands(st: &State) -> bool {
         &st.az.settings.keys.terminals,
         st.az.settings.keys.command_key_for_all_apps,
         client_has_focus,
+        crate::cmdkey::is_kit_app(&w.app_id, w.pid, &st.az.ipc),
     )
 }
 
@@ -732,7 +733,7 @@ fn translation(st: &State, mods: &ModifiersState) -> Option<ModifiersState> {
     let w = l.wm.get(id)?;
     let focused_is_window =
         st.az.seat.get_keyboard()?.current_focus().is_some_and(|f| st.az.window_for_root(&f.0) == Some(id));
-    if !focused_is_window || crate::cmdkey::is_kit_app(&w.app_id) {
+    if !focused_is_window || crate::cmdkey::is_kit_app(&w.app_id, w.pid, &st.az.ipc) {
         return None;
     }
     let terminal = st.az.settings.keys.terminals.iter().any(|t| t == &w.app_id);

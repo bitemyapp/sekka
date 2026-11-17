@@ -622,7 +622,7 @@ impl Actions for State {
             geometry: IpcRect::new(w.rect.x, w.rect.y, w.rect.w, w.rect.h),
             output,
             client_side_decorations: !w.ssd,
-            kit_app: crate::cmdkey::is_kit_app(&w.app_id),
+            kit_app: crate::cmdkey::is_kit_app(&w.app_id, w.pid, &self.az.ipc),
             parent: w.parent,
         })
     }
@@ -833,6 +833,12 @@ impl Logic {
 
 /// Sends change events for windows marked dirty.
 pub fn flush_ipc_events(st: &mut State) {
+    let changed = st.az.ipc.take_native_command_keys_changed();
+    if !changed.is_empty() {
+        let l = st.lg.m();
+        l.dirty_windows
+            .extend(l.wm.windows().filter(|w| w.pid.is_some_and(|pid| changed.contains(&pid))).map(|w| w.id));
+    }
     let dirty: Vec<WinId> = st.lg.m().dirty_windows.drain().collect();
     for id in dirty {
         if let Some(info) = st.window_info(id) {

@@ -2,7 +2,7 @@
 //! `$XDG_RUNTIME_DIR/aizome.$WAYLAND_DISPLAY.sock`, one response per
 //! request, and a stream of events after `subscribe`.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::{self, Read, Write};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::PathBuf;
@@ -25,6 +25,9 @@ struct Conn {
     /// It asked to hold idleness off as Keep Awake (`keep-awake`), which
     /// it does until it closes.
     keep_awake: Option<KeepAwake>,
+    /// The socket's authenticated process keeps native command keys for
+    /// as long as this connection stays open.
+    native_command_keys: Option<i32>,
 }
 
 /// A connection's hold as Keep Awake.
@@ -51,6 +54,9 @@ pub struct IpcServer {
     /// A connection holding as Keep Awake closed, and idleness hasn't
     /// heard yet.
     keep_awake_changed: bool,
+    /// Processes whose native-command-key policy changed; their window
+    /// descriptions need to be sent to IPC subscribers again.
+    native_command_keys_changed: HashSet<i32>,
 }
 
 impl IpcServer {
@@ -83,12 +89,40 @@ impl IpcServer {
         std::mem::take(&mut self.keep_awake_changed)
     }
 
+    /// Whether this process has a live connection asking to receive
+    /// native command keys. An unknown PID cannot inherit another app's
+    /// registration, even when their desktop IDs are the same.
+    pub fn uses_native_command_keys(&self, pid: Option<i32>) -> bool {
+        pid.is_some_and(|pid| self.conns.values().any(|c| c.native_command_keys == Some(pid)))
+    }
+
+    /// Processes whose window metadata changed since the last event flush.
+    pub fn take_native_command_keys_changed(&mut self) -> HashSet<i32> {
+        std::mem::take(&mut self.native_command_keys_changed)
+    }
+
+    fn register_native_command_keys(&mut self, id: u64) -> Result<(), &'static str> {
+        let conn = self.conns.get(&id).ok_or("the native-command-key connection is closed")?;
+        let pid = peer_pid(&conn.stream).ok_or("the socket did not identify the calling process")?;
+        let changed = !self.uses_native_command_keys(Some(pid));
+        self.conns.get_mut(&id).unwrap().native_command_keys = Some(pid);
+        if changed {
+            self.native_command_keys_changed.insert(pid);
+        }
+        Ok(())
+    }
+
     /// Forgets connection `id`, and what it held.
     fn close(&mut self, id: u64) -> Option<Conn> {
         let conn = self.conns.remove(&id)?;
         if let Some(hold) = conn.keep_awake {
             info!("the keep-awake connection of {} closed: its hold on idleness goes with it", hold.who());
             self.keep_awake_changed = true;
+        }
+        if let Some(pid) = conn.native_command_keys
+            && !self.uses_native_command_keys(Some(pid))
+        {
+            self.native_command_keys_changed.insert(pid);
         }
         Some(conn)
     }
@@ -220,7 +254,14 @@ impl State {
         let Ok(reader) = stream.try_clone() else { return };
         let id = self.az.ipc.next;
         self.az.ipc.next += 1;
-        let conn = Conn { stream, inbuf: Vec::new(), outbuf: Vec::new(), subscribed: false, keep_awake: None };
+        let conn = Conn {
+            stream,
+            inbuf: Vec::new(),
+            outbuf: Vec::new(),
+            subscribed: false,
+            keep_awake: None,
+            native_command_keys: None,
+        };
         self.az.ipc.conns.insert(id, conn);
         let res = self.az.lh.insert_source(
             Generic::new(reader, Interest::READ, Mode::Level),
@@ -336,6 +377,10 @@ impl State {
                         }
                     }
                 }
+                Ok(Request::NativeCommandKeys) => match self.az.ipc.register_native_command_keys(id) {
+                    Ok(()) => Response::Ok,
+                    Err(message) => Response::error(message),
+                },
                 Ok(req) => {
                     debug!("IPC {req:?}");
                     self.handle_request(req)
@@ -351,5 +396,55 @@ impl State {
         }
         self.az.ipc.flush();
         if self.az.ipc.conns.contains_key(&id) { PostAction::Continue } else { PostAction::Remove }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn connection(server: &mut IpcServer, id: u64) -> UnixStream {
+        let (stream, peer) = UnixStream::pair().unwrap();
+        server.conns.insert(
+            id,
+            Conn {
+                stream,
+                inbuf: Vec::new(),
+                outbuf: Vec::new(),
+                subscribed: false,
+                keep_awake: None,
+                native_command_keys: None,
+            },
+        );
+        peer
+    }
+
+    #[test]
+    fn native_command_keys_follow_the_authenticated_connections() {
+        let mut server = IpcServer::default();
+        let _first = connection(&mut server, 1);
+        let _second = connection(&mut server, 2);
+        let pid = std::process::id() as i32;
+        assert!(!server.uses_native_command_keys(Some(pid)));
+
+        server.register_native_command_keys(1).unwrap();
+        assert!(server.uses_native_command_keys(Some(pid)));
+        assert!(!server.uses_native_command_keys(None));
+        assert!(!server.uses_native_command_keys(Some(-1)));
+        assert_eq!(server.take_native_command_keys_changed(), HashSet::from([pid]));
+
+        // Repeated announcements and another connection from the same
+        // process do not toggle its policy or publish a redundant change.
+        server.register_native_command_keys(1).unwrap();
+        server.register_native_command_keys(2).unwrap();
+        assert!(server.take_native_command_keys_changed().is_empty());
+        server.close(1);
+        assert!(server.uses_native_command_keys(Some(pid)));
+        assert!(server.take_native_command_keys_changed().is_empty());
+
+        server.close(2);
+        assert!(!server.uses_native_command_keys(Some(pid)));
+        assert_eq!(server.take_native_command_keys_changed(), HashSet::from([pid]));
+        assert!(server.register_native_command_keys(2).is_err());
     }
 }
