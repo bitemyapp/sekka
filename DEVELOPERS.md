@@ -724,6 +724,19 @@ the doctests of every crate with a `compile_fail` one; the other packages'
 `docs/typestate-tier1.md` lists the machines done so far and what their types
 still can't rule out.
 
+The settings watcher (`aizome-config`'s `watch`) is written the same way for
+another reason: its mistakes are races with other programs, which show only
+as a test that fails once in hundreds of runs. Placing its file notifications
+is a chain of steps in `watch::placing`, over what the kernel answered in
+`watch::kernel`, whose types can only be made by asking. A placing stops above
+the settings folder only on an absence seen through the watch above it; a
+watch is kept only once it has been asked for twice, after every watch is
+placed; and the watcher polls only on a refusal from the kernel that isn't a
+missing folder. What no type knows is whether the kernel's second answer means
+what it is taken to mean, and how long sixteen placings are enough: the unit
+tests in `watch::placing` change the folders at each of those moments, and
+`tests/watching.rs` has the test that used to fail by chance.
+
 The package checks also run Clippy over the state-machine modules in Hako,
 Tansu, aizome-sys, Kakehashi, and Genkan's backend and window. Their local
 `deny(clippy::wildcard_enum_match_arm)` attributes remain active under

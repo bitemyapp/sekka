@@ -9,6 +9,8 @@ repository.workspace = true
 
 [dependencies]
 aizome-theme.workspace = true
+# What a placing of the settings watch must show before it is kept.
+aizome-typestate.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 toml.workspace = true

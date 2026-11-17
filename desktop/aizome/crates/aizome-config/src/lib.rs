@@ -20,7 +20,7 @@ pub mod compositor;
 pub mod greeter;
 pub mod location;
 pub mod shell;
-mod watch;
+pub mod watch;
 pub use compositor::{NightLight, NightSchedule, RendererChoice, Sun, TabDoubleClick, sun_times, temperature_rgb};
 pub use location::{LocalNow, Location, Place, PlaceSource, Span, daylight, hm, system_timezone};
 use serde::{Deserialize, Serialize};
