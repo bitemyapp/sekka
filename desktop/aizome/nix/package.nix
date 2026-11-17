@@ -150,6 +150,7 @@ let
   # Tansu's unit and integration tests run on their own as well, on what
   # the dependency build compiles for it as one of these.
   doctested = [
+    "aizome-config"
     "aizome-hako"
     "aizome-hotaru"
     "aizome-kit"

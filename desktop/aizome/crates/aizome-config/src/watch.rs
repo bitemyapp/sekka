@@ -1,13 +1,28 @@
 //! Settings changes wake the reader; unchanged settings need no timer.
+//!
+//! The watcher follows the settings file by the kernel's file notifications
+//! ([`Notified`]) or, where those can't be had, by looking at it every
+//! interval ([`Polling`]). Placing the notifications is where it can go
+//! wrong, because another program can change the folders meanwhile; the
+//! steps of a placing, and what their types rule out, are in [`placing`],
+//! over the answers the kernel gave, in [`kernel`].
+//!
+//! These modules are public so that their doctests can show what doesn't
+//! compile. Nothing outside this crate can start a placing: the rest of
+//! Aizome uses [`Watcher`] alone.
 
-use std::collections::HashSet;
-use std::ffi::{CString, OsString};
 use std::io;
-use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
-use std::os::unix::{ffi::OsStrExt, fs::MetadataExt, net::UnixStream};
+use std::os::fd::AsRawFd;
+use std::os::unix::{fs::MetadataExt, net::UnixStream};
 use std::path::{Path, PathBuf};
 use std::thread::JoinHandle;
 use std::time::Duration;
+
+pub mod kernel;
+pub mod placing;
+
+use kernel::Unavailable;
+use placing::Notifications;
 
 /// Watches the settings file and calls back when it changes.
 ///
@@ -28,45 +43,21 @@ impl Watcher {
 
     /// Watch `path`. `interval` is used only if file notifications fail;
     /// it adds no delay or periodic wakeups while notifications work.
-    pub fn spawn_for(path: PathBuf, interval: Duration, mut on_change: impl FnMut() + Send + 'static) -> Watcher {
+    pub fn spawn_for(path: PathBuf, interval: Duration, on_change: impl FnMut() + Send + 'static) -> Watcher {
         // Resolve relative paths before handing them to another thread.
         let path = std::path::absolute(path).expect("resolve the settings path");
         let (read, write) = UnixStream::pair().expect("settings watcher stop socket");
-        // Install before returning, so an immediate save cannot be missed.
-        let mut watch = notified(&path, true);
-        let mut last = stamp(&path);
+        let interval = interval.max(Duration::from_millis(1));
+        let mut following =
+            Following::new(Watched { path, interval, stop: read, last: None, on_change: Box::new(on_change) });
+        // Place before returning, so an immediate save cannot be missed.
+        following.with_typed(|state| match state {
+            FollowingAny::Unplaced(unplaced) => (unplaced.place().into(), ()),
+            placed @ (FollowingAny::Notified(_) | FollowingAny::Polling(_)) => (placed, ()),
+        });
         let thread = std::thread::Builder::new()
             .name("aizome-config-watch".into())
-            .spawn(move || {
-                loop {
-                    let timeout = watch.is_none().then_some(interval.max(Duration::from_millis(1)));
-                    match wait(&read, watch.as_ref(), timeout) {
-                        Ok(Ready::Stop) => break,
-                        Ok(Ready::Change) => {
-                            if let Some(w) = &watch {
-                                match w.changed() {
-                                    Ok(false) => continue,
-                                    Ok(true) => {}
-                                    Err(error) => log::warn!("settings notifications: {error}"),
-                                }
-                            }
-                            // Re-arm before inspecting the file. A rename
-                            // may have replaced its inode or its directory;
-                            // a newly created ancestor lets us watch closer.
-                            watch = notified(&path, watch.is_some());
-                            let now = stamp(&path);
-                            if now != last {
-                                last = now;
-                                on_change();
-                            }
-                        }
-                        Err(error) => {
-                            log::warn!("settings watcher stopped: {error}");
-                            break;
-                        }
-                    }
-                }
-            })
+            .spawn(move || while let Woken::GoOn = following.with_typed(woken) {})
             .expect("spawn the settings watcher");
         Watcher { stop: Some(write), thread: Some(thread) }
     }
@@ -81,9 +72,171 @@ impl Drop for Watcher {
     }
 }
 
-// Inode identity detects atomic replacements even when size and mtime
-// are preserved. ctime also detects an in-place write with restored mtime.
-fn stamp(path: &Path) -> Option<(u64, u64, u64, i64, i64, i64, i64)> {
+/// What the watcher's thread works on, whichever way it follows the file.
+struct Watched {
+    path: PathBuf,
+    /// How often the file is looked at while it is polled.
+    interval: Duration,
+    /// Readable once the watcher is dropped.
+    stop: UnixStream,
+    /// The file as it was when last looked at.
+    last: Option<Stamp>,
+    on_change: Box<dyn FnMut() + Send>,
+}
+
+aizome_typestate::machine! {
+    /// How the settings file is followed.
+    pub struct Following over Watched {
+        stored FollowingState;
+        /// The way it is followed now, typed.
+        typed FollowingAny;
+        states {
+            /// Before the first placing.
+            Unplaced,
+            /// By file notifications: every watch in them was asked for
+            /// twice ([`placing::Kept`]).
+            Notified(Notifications),
+            /// By looking every interval, and trying to place notifications
+            /// again each time. It takes the reason they can't be had, which
+            /// a folder that merely went is not:
+            ///
+            /// ```compile_fail,E0308
+            /// use aizome_config::watch::kernel::Placed;
+            /// use aizome_config::watch::{Notified, Polling};
+            /// // The settings folder went: a change, to place again for.
+            /// fn give_up<'s>(notified: Notified<'s>, answer: Placed<'_>) -> Polling<'s> {
+            ///     notified.poll(answer)
+            /// }
+            /// ```
+            ///
+            /// ```
+            /// use aizome_config::watch::kernel::Unavailable;
+            /// use aizome_config::watch::{Notified, Polling};
+            /// fn give_up<'s>(notified: Notified<'s>, why: Unavailable) -> Polling<'s> {
+            ///     notified.poll(why)
+            /// }
+            /// ```
+            Polling(Unavailable),
+        }
+        branches {
+            Followed = Notified | Polling;
+        }
+        // The watcher's thread is the only user: `Watcher` is the way in.
+        access(private);
+        new(private);
+    }
+}
+
+/// Whether the watcher's thread goes on.
+enum Woken {
+    GoOn,
+    Stop,
+}
+
+/// One turn of the watcher's thread: waits as the way the file is followed
+/// says, and follows it from then as that turn left it.
+fn woken<'s>(state: FollowingAny<'s>) -> (FollowingAny<'s>, Woken) {
+    match state {
+        FollowingAny::Unplaced(unplaced) => (unplaced.place().into(), Woken::GoOn),
+        FollowingAny::Notified(notified) => notified.wake(),
+        FollowingAny::Polling(polling) => polling.wake(),
+    }
+}
+
+impl Watched {
+    /// Places notifications again, then looks at the file. In that order:
+    /// a rename may have replaced its inode or its folder, and what changes
+    /// once the watch is placed is reported, so nothing falls between the
+    /// placing and the look.
+    fn place_again(&mut self) -> Result<Notifications, Unavailable> {
+        let placed = Notifications::place(&self.path);
+        let now = stamp(&self.path);
+        if now != self.last {
+            self.last = now;
+            (self.on_change)();
+        }
+        placed
+    }
+
+    fn polling(&self, why: &Unavailable) {
+        log::warn!("settings: polling {} because file notifications failed: {why}", self.path.display());
+    }
+}
+
+impl<'s> Unplaced<'s> {
+    /// The first placing. What the file looks like is noted after it, so a
+    /// save made between the two is seen by one of them.
+    fn place(self) -> Followed<'s> {
+        let placed = Notifications::place(&self.ctx.path);
+        self.ctx.last = stamp(&self.ctx.path);
+        match placed {
+            Ok(notifications) => Followed::Notified(Notified::enter(self.ctx, notifications)),
+            Err(why) => {
+                self.ctx.polling(&why);
+                Followed::Polling(Polling::enter(self.ctx, why))
+            }
+        }
+    }
+}
+
+impl<'s> Notified<'s> {
+    /// Waits for a report or for the watcher to be dropped. A report about
+    /// a watched path places the notifications again: a newly made folder
+    /// lets the watch sit closer, and a moved one has taken its watch away.
+    fn wake(self) -> (FollowingAny<'s>, Woken) {
+        match wait(&self.ctx.stop, Some(&self.data), None) {
+            Ok(Ready::Stop) => (self.into(), Woken::Stop),
+            Ok(Ready::Change) => {
+                match self.data.changed() {
+                    Ok(false) => return (self.into(), Woken::GoOn),
+                    Ok(true) => {}
+                    Err(error) => log::warn!("settings notifications: {error}"),
+                }
+                match self.ctx.place_again() {
+                    Ok(notifications) => (Notified::enter(self.ctx, notifications).into(), Woken::GoOn),
+                    Err(why) => {
+                        self.ctx.polling(&why);
+                        (self.poll(why).into(), Woken::GoOn)
+                    }
+                }
+            }
+            Err(error) => {
+                log::warn!("settings watcher stopped: {error}");
+                (self.into(), Woken::Stop)
+            }
+        }
+    }
+
+    /// Notifications can't be had any more: the file is polled from now.
+    pub fn poll(self, why: Unavailable) -> Polling<'s> {
+        Polling::enter(self.ctx, why)
+    }
+}
+
+impl<'s> Polling<'s> {
+    /// Waits an interval, or for the watcher to be dropped, then looks at
+    /// the file and tries notifications again.
+    fn wake(self) -> (FollowingAny<'s>, Woken) {
+        match wait(&self.ctx.stop, None, Some(self.ctx.interval)) {
+            Ok(Ready::Stop) => (self.into(), Woken::Stop),
+            Ok(Ready::Change) => match self.ctx.place_again() {
+                Ok(notifications) => (Notified::enter(self.ctx, notifications).into(), Woken::GoOn),
+                // Still unavailable: said once, when polling began.
+                Err(why) => (Polling::enter(self.ctx, why).into(), Woken::GoOn),
+            },
+            Err(error) => {
+                log::warn!("settings watcher stopped: {error}");
+                (self.into(), Woken::Stop)
+            }
+        }
+    }
+}
+
+/// Inode identity detects atomic replacements even when size and mtime
+/// are preserved. ctime also detects an in-place write with restored mtime.
+type Stamp = (u64, u64, u64, i64, i64, i64, i64);
+
+fn stamp(path: &Path) -> Option<Stamp> {
     let m = std::fs::metadata(path).ok()?;
     Some((m.dev(), m.ino(), m.len(), m.mtime(), m.mtime_nsec(), m.ctime(), m.ctime_nsec()))
 }
@@ -93,10 +246,12 @@ enum Ready {
     Change,
 }
 
+/// Waits for the stop socket, for `watch` to have something to read, or for
+/// `timeout`: the last two both mean it is time to look.
 fn wait(stop: &UnixStream, watch: Option<&Notifications>, timeout: Option<Duration>) -> io::Result<Ready> {
     let mut fds = [
         libc::pollfd { fd: stop.as_raw_fd(), events: libc::POLLIN, revents: 0 },
-        libc::pollfd { fd: watch.map_or(-1, |w| w.fd.as_raw_fd()), events: libc::POLLIN, revents: 0 },
+        libc::pollfd { fd: watch.map_or(-1, |w| w.as_raw_fd()), events: libc::POLLIN, revents: 0 },
     ];
     let timeout = timeout.map_or(-1, |d| d.as_millis().min(i32::MAX as u128) as i32);
     loop {
@@ -107,133 +262,6 @@ fn wait(stop: &UnixStream, watch: Option<&Notifications>, timeout: Option<Durati
         let error = io::Error::last_os_error();
         if error.kind() != io::ErrorKind::Interrupted {
             return Err(error);
-        }
-    }
-}
-
-struct Notifications {
-    fd: OwnedFd,
-    // A name filters child events; every entry observes its inode's own
-    // events too. Ancestors need only self events, not sibling writes.
-    entries: Vec<(i32, Option<OsString>)>,
-}
-
-fn notified(path: &Path, report_failure: bool) -> Option<Notifications> {
-    match Notifications::new(path) {
-        Ok(watch) => Some(watch),
-        Err(error) => {
-            if report_failure {
-                log::warn!("settings: polling {} because file notifications failed: {error}", path.display());
-            }
-            None
-        }
-    }
-}
-
-impl Notifications {
-    fn new(path: &Path) -> io::Result<Self> {
-        // SAFETY: plain system call; a successful descriptor is owned below.
-        let fd = unsafe { libc::inotify_init1(libc::IN_NONBLOCK | libc::IN_CLOEXEC) };
-        if fd < 0 {
-            return Err(io::Error::last_os_error());
-        }
-        // SAFETY: inotify_init1 returned a fresh descriptor.
-        let fd = unsafe { OwnedFd::from_raw_fd(fd) };
-        let add = |path: &Path, mask| -> io::Result<i32> {
-            let path = CString::new(path.as_os_str().as_bytes())?;
-            // SAFETY: fd is open and path is a valid, NUL-terminated string.
-            let wd = unsafe { libc::inotify_add_watch(fd.as_raw_fd(), path.as_ptr(), mask | libc::IN_MASK_ADD) };
-            if wd < 0 { Err(io::Error::last_os_error()) } else { Ok(wd) }
-        };
-        let changes = libc::IN_CLOSE_WRITE | libc::IN_ATTRIB | libc::IN_DELETE_SELF | libc::IN_MOVE_SELF;
-        let mask = changes | libc::IN_CREATE | libc::IN_DELETE | libc::IN_MOVED_FROM | libc::IN_MOVED_TO;
-        let mut entries = Vec::new();
-        let mut pending = vec![path.to_owned()];
-        let mut visited = HashSet::new();
-        while let Some(path) = pending.pop() {
-            if !visited.insert(path.clone()) {
-                continue;
-            }
-            if visited.len() > 40 {
-                return Err(io::Error::other("too many settings symlinks"));
-            }
-            let mut child = path.as_path();
-            let parent = loop {
-                let parent = child.parent().ok_or_else(|| io::Error::other("settings path has no directory"))?;
-                match add(parent, mask | libc::IN_ONLYDIR) {
-                    Ok(wd) => {
-                        entries.push((wd, Some(child.file_name().unwrap().to_owned())));
-                        break parent;
-                    }
-                    Err(error) if error.kind() == io::ErrorKind::NotFound => child = parent,
-                    Err(error) => return Err(error),
-                }
-            };
-            // Renaming any ancestor can disconnect the watched inode from
-            // the configured path. These watches do not observe children.
-            for ancestor in parent.ancestors().skip(1) {
-                let wd = add(ancestor, libc::IN_MOVE_SELF | libc::IN_DELETE_SELF | libc::IN_ONLYDIR)?;
-                entries.push((wd, None));
-            }
-            // Watch both sides of symlinks, including directory symlinks:
-            // the link can be retargeted and its target deleted/recreated.
-            for component in path.ancestors() {
-                if let Ok(target) = std::fs::read_link(component) {
-                    pending.push(component.to_owned());
-                    let mut resolved = component.parent().unwrap().join(target);
-                    let suffix = path.strip_prefix(component).unwrap();
-                    if !suffix.as_os_str().is_empty() {
-                        resolved.push(suffix);
-                    }
-                    pending.push(resolved);
-                }
-            }
-            // Also observe writes made through a different hard link.
-            let file_changes = if path.is_dir() { libc::IN_MOVE_SELF | libc::IN_DELETE_SELF } else { changes };
-            match add(&path, file_changes) {
-                Ok(wd) => entries.push((wd, None)),
-                Err(error) if error.kind() == io::ErrorKind::NotFound => {}
-                Err(error) => return Err(error),
-            }
-        }
-        Ok(Self { fd, entries })
-    }
-
-    fn changed(&self) -> io::Result<bool> {
-        let mut changed = false;
-        let mut bytes = [0u8; 8192];
-        loop {
-            // SAFETY: bytes is writable for its full length.
-            let n = unsafe { libc::read(self.fd.as_raw_fd(), bytes.as_mut_ptr().cast(), bytes.len()) };
-            if n < 0 {
-                let error = io::Error::last_os_error();
-                match error.kind() {
-                    io::ErrorKind::WouldBlock => return Ok(changed),
-                    io::ErrorKind::Interrupted => continue,
-                    _ => return Err(error),
-                }
-            }
-            if n == 0 {
-                return Ok(changed);
-            }
-            let mut offset = 0;
-            let header = std::mem::size_of::<libc::inotify_event>();
-            while offset + header <= n as usize {
-                // SAFETY: the header is within the initialized bytes; the
-                // byte array need not have inotify_event's alignment.
-                let event = unsafe { bytes.as_ptr().add(offset).cast::<libc::inotify_event>().read_unaligned() };
-                let end = offset + header + event.len as usize;
-                if end > n as usize {
-                    return Err(io::Error::other("incomplete settings notification"));
-                }
-                let name = &bytes[offset + header..end];
-                let name = &name[..name.iter().position(|b| *b == 0).unwrap_or(name.len())];
-                changed |= event.mask & libc::IN_Q_OVERFLOW != 0
-                    || self.entries.iter().any(|(wd, child)| {
-                        event.wd == *wd && (name.is_empty() || child.as_ref().is_some_and(|c| name == c.as_bytes()))
-                    });
-                offset = end;
-            }
         }
     }
 }
