@@ -3,6 +3,17 @@
 These are review notes on PR 281 at `0e0069a2`, for whoever addresses
 them. Remove this file before the PR is merged.
 
+Update, 2026-11-18: an independent review of the rebased PR confirmed the
+two error paths in findings 3 and 4. They are now fixed: an unsuccessful
+copy wait retains its fence and prevents drawing; an interrupted scan-out
+wait prevents submission and retains the new copy fence. A timer retries
+the output after one refresh, without depending on input or a vblank from
+the frame that was never submitted. Five component regressions in the udev
+backend exercise these paths with actual Smithay `SyncPoint`s backed by
+scripted fences, plus the calloop retry timer. They do not exercise physical
+multi-GPU rendering. The notes below describe the original revision;
+their other concerns are not newly reproduced regressions.
+
 The review was a reading of the code. Nothing was built or run. The change
 was checked against the smithay 0.7.0 source that `Cargo.lock` pins.
 Findings 3 and 4 were checked against the code directly. The others come

@@ -32,7 +32,7 @@ use smithay::backend::renderer::gles::{GlesRenderbuffer, GlesRenderer};
 use smithay::backend::renderer::multigpu::gbm::GbmGlesBackend;
 use smithay::backend::renderer::multigpu::{GpuManager, MultiRenderer};
 use smithay::backend::renderer::pixman::PixmanRenderer;
-use smithay::backend::renderer::sync::SyncPoint;
+use smithay::backend::renderer::sync::{Interrupted, SyncPoint};
 use smithay::backend::renderer::{ImportDma, ImportMemWl, Renderer};
 use smithay::backend::session::libseat::LibSeatSession;
 use smithay::backend::session::{Event as SessionEvent, Session};
@@ -40,7 +40,8 @@ use smithay::backend::udev::{UdevBackend, UdevEvent, all_gpus, primary_gpu};
 use smithay::desktop::utils::OutputPresentationFeedback;
 use smithay::input::keyboard::LedState;
 use smithay::output::{Mode as WlMode, Output, PhysicalProperties, Subpixel};
-use smithay::reexports::calloop::{EventLoop, RegistrationToken};
+use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
+use smithay::reexports::calloop::{EventLoop, LoopHandle, RegistrationToken};
 use smithay::reexports::drm::control::{Device as _, ModeTypeFlags, connector, crtc};
 use smithay::reexports::input::{self as libinput, DeviceCapability, Libinput};
 use smithay::reexports::rustix::fs::OFlags;
@@ -98,6 +99,34 @@ enum Redraw {
     Idle,
     /// A frame is queued; the next waits for its vblank.
     WaitingForVBlank,
+    /// A failed synchronization submitted no frame, so a timer replaces
+    /// its missing vblank. Other events must not retry it in a tight loop.
+    RetryAt(Instant),
+}
+
+impl Redraw {
+    fn due(self, now: Instant) -> bool {
+        match self {
+            Self::Idle => true,
+            Self::WaitingForVBlank => false,
+            Self::RetryAt(at) => now >= at,
+        }
+    }
+
+    fn retry<D: 'static>(
+        &mut self,
+        queued: &mut bool,
+        handle: &LoopHandle<'static, D>,
+        delay: Duration,
+    ) -> Result<(), String> {
+        let at = Instant::now() + delay.max(Duration::from_millis(1));
+        *self = Self::RetryAt(at);
+        *queued = true;
+        // Only wake the loop. A stale timer must not change the state of
+        // an output since powered off, removed, or successfully redrawn.
+        handle.insert_source(Timer::from_deadline(at), |_, _, _| TimeoutAction::Drop).map_err(|e| e.to_string())?;
+        Ok(())
+    }
 }
 
 struct Surface {
@@ -133,9 +162,9 @@ struct Device {
     /// Coalesces output configuration changes until the whole batch ends.
     tiles_pending: bool,
     /// Off the primary GPU: when the last frame's copy onto this GPU is
-    /// done. smithay draws all this GPU's outputs on the primary into one
-    /// shared buffer and copies each from there, so the next frame mustn't
-    /// draw into it before the copy has read it (#277).
+    /// done. smithay reuses one intermediate for this pair of GPUs while
+    /// size and format match, so the next frame mustn't draw into it
+    /// before the copy has read it (#277).
     copied: Option<SyncPoint>,
 }
 
@@ -445,7 +474,7 @@ impl Udev {
         let Some(id) = output.user_data().get::<UdevOutputId>().copied() else { return false };
         let Some(device) = self.devices.get(&id.node) else { return false };
         let Some(surface) = device.surfaces.get(&id.crtc) else { return false };
-        surface.redraw != Redraw::WaitingForVBlank
+        surface.redraw.due(Instant::now())
     }
 
     /// Draws an output's scene and queues it for the next vblank.
@@ -462,9 +491,10 @@ impl Udev {
         let Some(device) = self.devices.get_mut(&id.node) else { return };
         let render_node = device.render_node.unwrap_or(primary);
         let Some(surface) = device.surfaces.get_mut(&id.crtc) else { return };
-        if surface.redraw == Redraw::WaitingForVBlank {
+        if !surface.redraw.due(Instant::now()) {
             return;
         }
+        surface.redraw = Redraw::Idle;
         if let Some(o) = az.out.get_mut(output) {
             o.redraw_queued = false;
         }
@@ -480,34 +510,53 @@ impl Udev {
                     Ok(mut r) => {
                         let (mut elements, clear) = scene_for::<_, GlesRenderbuffer>(&mut r, az, output, &scene, clear);
                         crate::blur::prepare(&mut surface.blur_probe, output, &mut elements, Some(render_node));
+                        let flags = frame_flags(az);
                         // Off the primary, this frame draws into the buffer
                         // the last copy read: the primary GPU waits for that
                         // copy (this thread does, if it can't take the fence).
-                        if let Some(copied) = device.copied.take()
-                            && let Err(e) = r.wait(&copied)
-                        {
-                            warn!("waiting for {render_node}'s last copy: {e:?}");
-                        }
-                        match drm.render_frame(&mut r, &elements, clear, frame_flags(az)) {
+                        let rendered = draw_after_copy(
+                            &mut device.copied,
+                            &mut r,
+                            |r, copied| {
+                                r.wait(copied).map_err(|e| {
+                                    retry_sync(az, output, &mut surface.redraw);
+                                    format!("waiting for {render_node}'s last copy: {e:?}")
+                                })
+                            },
+                            |r| drm.render_frame(r, &elements, clear, flags).map_err(|e| format!("{e:?}")),
+                        );
+                        match rendered {
                             Ok(res) => {
-                                if let PrimaryPlaneElement::Swapchain(e) = &res.primary_element {
-                                    // A plane that takes no fence shows the
-                                    // buffer as it is when queued: finish it.
-                                    if !res.is_empty && res.needs_sync() {
-                                        let _ = e.sync.wait();
-                                    }
-                                    if render_node != primary {
-                                        device.copied = Some(e.sync.clone());
+                                let damaged = !res.is_empty;
+                                let needs_sync = damaged && res.needs_sync();
+                                let sync = match &res.primary_element {
+                                    PrimaryPlaneElement::Swapchain(e) => Some(&e.sync),
+                                    _ => None,
+                                };
+                                let states = res.states;
+                                match submit_after_sync(
+                                    &mut device.copied,
+                                    render_node != primary,
+                                    sync,
+                                    needs_sync,
+                                    || {
+                                        queue(az, output, damaged, &states, |fb| {
+                                            drm.queue_frame(fb).map_err(|e| format!("{e:?}"))
+                                        })
+                                        .map(|q| (q, states))
+                                    },
+                                ) {
+                                    Ok(result) => result,
+                                    Err(e) => {
+                                        // Leave the prepared frame unsubmitted. smithay
+                                        // drops it at the next render; repaint in full.
+                                        drm.reset_buffers();
+                                        retry_sync(az, output, &mut surface.redraw);
+                                        Err(format!("waiting before scan-out: {e}"))
                                     }
                                 }
-                                let damaged = !res.is_empty;
-                                let states = res.states;
-                                queue(az, output, damaged, &states, |fb| {
-                                    drm.queue_frame(fb).map_err(|e| format!("{e:?}"))
-                                })
-                                .map(|q| (q, states))
                             }
-                            Err(e) => Err(format!("{e:?}")),
+                            Err(e) => Err(e),
                         }
                     }
                     Err(e) => Err(format!("renderer: {e:?}")),
@@ -733,6 +782,49 @@ impl Udev {
             }
         }
         crate::outputs::apply_logical(az, change)
+    }
+}
+
+/// Do not draw into the shared intermediate until its last copy is ordered
+/// before this renderer's work. Keep the fence on error for the next attempt.
+fn draw_after_copy<R, T, E>(
+    copied: &mut Option<SyncPoint>,
+    renderer: &mut R,
+    wait: impl FnOnce(&mut R, &SyncPoint) -> Result<(), E>,
+    draw: impl FnOnce(&mut R) -> Result<T, E>,
+) -> Result<T, E> {
+    if let Some(sync) = copied.as_ref() {
+        wait(renderer, sync)?;
+    }
+    *copied = None;
+    draw(renderer)
+}
+
+/// Keep the copy fence even if the CPU wait needed for scan-out fails.
+/// Submission (including taking presentation feedback) happens only on success.
+fn submit_after_sync<T>(
+    copied: &mut Option<SyncPoint>,
+    cross_gpu: bool,
+    sync: Option<&SyncPoint>,
+    needs_sync: bool,
+    submit: impl FnOnce() -> T,
+) -> Result<T, Interrupted> {
+    if let Some(sync) = sync {
+        if cross_gpu {
+            *copied = Some(sync.clone());
+        }
+        if needs_sync {
+            sync.wait()?;
+        }
+    }
+    Ok(submit())
+}
+
+fn retry_sync(az: &mut Aizome, output: &Output, redraw: &mut Redraw) {
+    if let Some(o) = az.out.get_mut(output)
+        && let Err(e) = redraw.retry(&mut o.redraw_queued, &az.lh, o.refresh)
+    {
+        warn!("arming redraw after synchronization failed on {}: {e}", output.name());
     }
 }
 
@@ -1411,6 +1503,244 @@ fn frame_flags(az: &Aizome) -> FrameFlags {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use smithay::backend::renderer::sync::Fence;
+    use std::collections::VecDeque;
+    use std::os::fd::OwnedFd;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::{Arc, Mutex};
+
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    enum SyncEvent {
+        Wait(u8),
+        Draw,
+        Submit,
+    }
+
+    /// A real Smithay SyncPoint whose underlying fence can be interrupted,
+    /// without EGL, DRM or a physical GPU. Unscripted waits fail the test.
+    #[derive(Debug)]
+    struct ScriptedFence {
+        id: u8,
+        waits: Mutex<VecDeque<bool>>,
+        reached: AtomicBool,
+        events: Arc<Mutex<Vec<SyncEvent>>>,
+    }
+
+    impl Fence for ScriptedFence {
+        fn is_signaled(&self) -> bool {
+            self.reached.load(Ordering::SeqCst)
+        }
+
+        fn wait(&self) -> Result<(), Interrupted> {
+            self.events.lock().unwrap().push(SyncEvent::Wait(self.id));
+            if self.waits.lock().unwrap().pop_front().expect("unexpected fence wait") {
+                self.reached.store(true, Ordering::SeqCst);
+                Ok(())
+            } else {
+                Err(Interrupted)
+            }
+        }
+
+        fn is_exportable(&self) -> bool {
+            false
+        }
+
+        fn export(&self) -> Option<OwnedFd> {
+            None
+        }
+    }
+
+    fn scripted_fence(id: u8, waits: &[bool], events: &Arc<Mutex<Vec<SyncEvent>>>) -> SyncPoint {
+        ScriptedFence {
+            id,
+            waits: Mutex::new(waits.iter().copied().collect()),
+            reached: AtomicBool::new(false),
+            events: events.clone(),
+        }
+        .into()
+    }
+
+    fn assert_same_fence(pending: &Option<SyncPoint>, expected: &SyncPoint) {
+        assert!(std::ptr::eq(
+            pending.as_ref().expect("copy fence was lost").get::<ScriptedFence>().unwrap(),
+            expected.get::<ScriptedFence>().unwrap(),
+        ));
+    }
+
+    #[test]
+    fn failed_copy_wait_keeps_fence_and_skips_drawing_until_retry() {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let fence = scripted_fence(1, &[false, true], &events);
+        let mut copied = Some(fence.clone());
+        let mut draw = || {
+            draw_after_copy(
+                &mut copied,
+                &mut (),
+                |_, sync| sync.wait(),
+                |_| {
+                    events.lock().unwrap().push(SyncEvent::Draw);
+                    Ok(())
+                },
+            )
+        };
+        assert!(draw().is_err());
+        assert_eq!(*events.lock().unwrap(), [SyncEvent::Wait(1)]);
+        // End the closure's borrow to inspect what the failed attempt kept.
+        assert_same_fence(&copied, &fence);
+        assert!(
+            draw_after_copy(
+                &mut copied,
+                &mut (),
+                |_, sync| sync.wait(),
+                |_| {
+                    events.lock().unwrap().push(SyncEvent::Draw);
+                    Ok(())
+                }
+            )
+            .is_ok()
+        );
+        assert!(copied.is_none());
+        assert_eq!(*events.lock().unwrap(), [SyncEvent::Wait(1), SyncEvent::Wait(1), SyncEvent::Draw]);
+
+        // Once the copy is ordered, a frame with no new copy needs no wait.
+        draw_after_copy(
+            &mut copied,
+            &mut (),
+            |_, _| -> Result<(), Interrupted> { panic!("waited without a pending copy") },
+            |_| Ok(()),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn interrupted_scanout_keeps_new_copy_and_blocks_the_next_output() {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let fence = scripted_fence(2, &[false, false, true], &events);
+        let mut copied = None;
+        assert!(
+            submit_after_sync(&mut copied, true, Some(&fence), true, || {
+                events.lock().unwrap().push(SyncEvent::Submit);
+            })
+            .is_err()
+        );
+        assert_same_fence(&copied, &fence);
+        assert_eq!(*events.lock().unwrap(), [SyncEvent::Wait(2)]);
+
+        // Another output on this GPU must still wait for the unpresented
+        // frame's copy; an interrupted wait cannot let it overwrite it.
+        assert!(
+            draw_after_copy(
+                &mut copied,
+                &mut (),
+                |_, sync| sync.wait(),
+                |_| {
+                    events.lock().unwrap().push(SyncEvent::Draw);
+                    Ok(())
+                }
+            )
+            .is_err()
+        );
+        assert_same_fence(&copied, &fence);
+        assert_eq!(*events.lock().unwrap(), [SyncEvent::Wait(2), SyncEvent::Wait(2)]);
+
+        draw_after_copy(
+            &mut copied,
+            &mut (),
+            |_, sync| sync.wait(),
+            |_| {
+                events.lock().unwrap().push(SyncEvent::Draw);
+                Ok(())
+            },
+        )
+        .unwrap();
+        submit_after_sync(&mut copied, true, Some(&SyncPoint::signaled()), true, || {
+            events.lock().unwrap().push(SyncEvent::Submit);
+        })
+        .unwrap();
+        assert_eq!(
+            *events.lock().unwrap(),
+            [SyncEvent::Wait(2), SyncEvent::Wait(2), SyncEvent::Wait(2), SyncEvent::Draw, SyncEvent::Submit,]
+        );
+    }
+
+    #[test]
+    fn single_gpu_scanout_waits_without_recording_a_cross_gpu_copy() {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let fence = scripted_fence(3, &[false, true], &events);
+        let mut copied = None;
+        assert!(
+            submit_after_sync(&mut copied, false, Some(&fence), true, || {
+                events.lock().unwrap().push(SyncEvent::Submit);
+            })
+            .is_err()
+        );
+        assert!(copied.is_none());
+        assert_eq!(*events.lock().unwrap(), [SyncEvent::Wait(3)]);
+        submit_after_sync(&mut copied, false, Some(&fence), true, || {
+            events.lock().unwrap().push(SyncEvent::Submit);
+        })
+        .unwrap();
+        assert!(copied.is_none());
+        assert_eq!(*events.lock().unwrap(), [SyncEvent::Wait(3), SyncEvent::Wait(3), SyncEvent::Submit]);
+    }
+
+    #[test]
+    fn empty_direct_scanout_and_kms_fenced_frames_need_no_cpu_wait() {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let fence = scripted_fence(4, &[], &events);
+        // No script: any CPU wait here fails. Empty frames still remember
+        // their copy fence, but the existing queue helper submits no frame.
+        for (sync, damaged) in [(Some(&fence), false), (None, true), (Some(&fence), true)] {
+            let mut copied = None;
+            let queued = submit_after_sync(&mut copied, true, sync, false, || {
+                if damaged {
+                    events.lock().unwrap().push(SyncEvent::Submit);
+                }
+                damaged
+            })
+            .unwrap();
+            assert_eq!(queued, damaged);
+            if sync.is_some() {
+                assert_same_fence(&copied, &fence);
+            } else {
+                assert!(copied.is_none());
+            }
+        }
+        assert_eq!(*events.lock().unwrap(), [SyncEvent::Submit, SyncEvent::Submit]);
+    }
+
+    #[test]
+    fn synchronization_retry_wakes_without_input_and_does_not_spin() {
+        let mut event_loop = EventLoop::<bool>::try_new().unwrap();
+        let mut timed_out = false;
+        event_loop
+            .handle()
+            .insert_source(Timer::from_duration(Duration::from_secs(1)), |_, _, timed_out| {
+                *timed_out = true;
+                TimeoutAction::Drop
+            })
+            .unwrap();
+        let mut redraw = Redraw::Idle;
+        let mut queued = false;
+        redraw.retry(&mut queued, &event_loop.handle(), Duration::from_millis(20)).unwrap();
+        let Redraw::RetryAt(at) = redraw else { panic!("no retry deadline") };
+        assert!(queued, "no vblank will requeue an unsubmitted frame");
+        assert!(!redraw.due(at - Duration::from_nanos(1)), "unrelated events must not retry early");
+        assert!(redraw.due(at));
+        event_loop.dispatch(None, &mut timed_out).unwrap();
+        assert!(!timed_out, "the retry did not wake the loop before the safety timer");
+        assert!(redraw.due(Instant::now()), "the timer must wake the loop without input or vblank");
+        assert!(queued);
+
+        // A reset or successful redraw can supersede a retry before its
+        // timer fires. The old timer must not make another frame eligible.
+        redraw.retry(&mut queued, &event_loop.handle(), Duration::from_millis(1)).unwrap();
+        redraw = Redraw::WaitingForVBlank;
+        event_loop.dispatch(None, &mut timed_out).unwrap();
+        assert!(!timed_out);
+        assert!(!redraw.due(Instant::now()));
+        assert_eq!(redraw, Redraw::WaitingForVBlank);
+    }
 
     #[test]
     fn libinput_never_turns_scrolling_round_itself() {
