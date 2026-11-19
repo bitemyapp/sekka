@@ -500,66 +500,63 @@ impl Udev {
         }
         let result = match (&mut self.renderers, &mut surface.drm) {
             (Renderers::Gles(gpus), SurfaceOutput::Gles(drm)) => {
-                let renderer = if render_node == primary {
-                    gpus.single_renderer(&render_node)
-                } else {
+                let cross_gpu = render_node != primary;
+                let renderer = if cross_gpu {
                     let format = drm.format();
                     gpus.renderer(&primary, &render_node, format)
+                } else {
+                    gpus.single_renderer(&render_node)
                 };
+                // Off the primary, what this renderer draws (the frame, and
+                // before it a mirror's picture of its source) goes through
+                // the buffer the last copy read: the primary GPU waits for
+                // that copy first (this thread does, if it can't take the
+                // fence).
+                let renderer = renderer.map_err(|e| format!("renderer: {e:?}")).and_then(|mut r| {
+                    match wait_for_copy(&mut device.copied, |copied| r.wait(copied)) {
+                        Ok(()) => Ok(r),
+                        Err(e) => {
+                            retry_sync(az, output, &mut surface.redraw);
+                            Err(format!("waiting for {render_node}'s last copy: {e:?}"))
+                        }
+                    }
+                });
                 match renderer {
                     Ok(mut r) => {
                         let (mut elements, clear) = scene_for::<_, GlesRenderbuffer>(&mut r, az, output, &scene, clear);
                         crate::blur::prepare(&mut surface.blur_probe, output, &mut elements, Some(render_node));
-                        let flags = frame_flags(az);
-                        // Off the primary, this frame draws into the buffer
-                        // the last copy read: the primary GPU waits for that
-                        // copy (this thread does, if it can't take the fence).
-                        let rendered = draw_after_copy(
-                            &mut device.copied,
-                            &mut r,
-                            |r, copied| {
-                                r.wait(copied).map_err(|e| {
-                                    retry_sync(az, output, &mut surface.redraw);
-                                    format!("waiting for {render_node}'s last copy: {e:?}")
-                                })
-                            },
-                            |r| drm.render_frame(r, &elements, clear, flags).map_err(|e| format!("{e:?}")),
-                        );
-                        match rendered {
+                        match drm.render_frame(&mut r, &elements, clear, frame_flags(az)) {
                             Ok(res) => {
                                 let damaged = !res.is_empty;
                                 let needs_sync = damaged && res.needs_sync();
+                                // An empty frame drew nothing: its plane still
+                                // names the previous frame's fence.
                                 let sync = match &res.primary_element {
-                                    PrimaryPlaneElement::Swapchain(e) => Some(&e.sync),
+                                    PrimaryPlaneElement::Swapchain(e) if damaged => Some(&e.sync),
                                     _ => None,
                                 };
                                 let states = res.states;
-                                match submit_after_sync(
-                                    &mut device.copied,
-                                    render_node != primary,
-                                    sync,
-                                    needs_sync,
-                                    || {
-                                        queue(az, output, damaged, &states, |fb| {
-                                            drm.queue_frame(fb).map_err(|e| format!("{e:?}"))
-                                        })
-                                        .map(|q| (q, states))
-                                    },
-                                ) {
+                                match submit_after_sync(&mut device.copied, cross_gpu, sync, needs_sync, || {
+                                    queue(az, output, damaged, &states, |fb| {
+                                        drm.queue_frame(fb).map_err(|e| format!("{e:?}"))
+                                    })
+                                    .map(|q| (q, states))
+                                }) {
                                     Ok(result) => result,
                                     Err(e) => {
                                         // Leave the prepared frame unsubmitted. smithay
-                                        // drops it at the next render; repaint in full.
-                                        drm.reset_buffers();
+                                        // drops it at the next render; every buffer
+                                        // repaints in full.
+                                        drm.with_compositor(|c| c.reset_buffer_ages());
                                         retry_sync(az, output, &mut surface.redraw);
                                         Err(format!("waiting before scan-out: {e}"))
                                     }
                                 }
                             }
-                            Err(e) => Err(e),
+                            Err(e) => Err(format!("{e:?}")),
                         }
                     }
-                    Err(e) => Err(format!("renderer: {e:?}")),
+                    Err(e) => Err(e),
                 }
             }
             (Renderers::Pixman(r), SurfaceOutput::Pixman(drm)) => {
@@ -785,19 +782,17 @@ impl Udev {
     }
 }
 
-/// Do not draw into the shared intermediate until its last copy is ordered
-/// before this renderer's work. Keep the fence on error for the next attempt.
-fn draw_after_copy<R, T, E>(
-    copied: &mut Option<SyncPoint>,
-    renderer: &mut R,
-    wait: impl FnOnce(&mut R, &SyncPoint) -> Result<(), E>,
-    draw: impl FnOnce(&mut R) -> Result<T, E>,
-) -> Result<T, E> {
-    if let Some(sync) = copied.as_ref() {
-        wait(renderer, sync)?;
+/// Before anything draws into the shared intermediate: order its last copy
+/// before the renderer's work, unless that copy is already done. Keep the
+/// fence on error for the next attempt.
+fn wait_for_copy<E>(copied: &mut Option<SyncPoint>, wait: impl FnOnce(&SyncPoint) -> Result<(), E>) -> Result<(), E> {
+    if let Some(sync) = copied.as_ref()
+        && !sync.is_reached()
+    {
+        wait(sync)?;
     }
     *copied = None;
-    draw(renderer)
+    Ok(())
 }
 
 /// Keep the copy fence even if the CPU wait needed for scan-out fails.
@@ -1512,7 +1507,6 @@ mod tests {
     #[derive(Clone, Debug, PartialEq, Eq)]
     enum SyncEvent {
         Wait(u8),
-        Draw,
         Submit,
     }
 
@@ -1568,48 +1562,35 @@ mod tests {
     }
 
     #[test]
-    fn failed_copy_wait_keeps_fence_and_skips_drawing_until_retry() {
+    fn failed_copy_wait_keeps_fence_until_a_retry_succeeds() {
         let events = Arc::new(Mutex::new(Vec::new()));
         let fence = scripted_fence(1, &[false, true], &events);
         let mut copied = Some(fence.clone());
-        let mut draw = || {
-            draw_after_copy(
-                &mut copied,
-                &mut (),
-                |_, sync| sync.wait(),
-                |_| {
-                    events.lock().unwrap().push(SyncEvent::Draw);
-                    Ok(())
-                },
-            )
-        };
-        assert!(draw().is_err());
-        assert_eq!(*events.lock().unwrap(), [SyncEvent::Wait(1)]);
-        // End the closure's borrow to inspect what the failed attempt kept.
+        // The caller draws nothing after an error.
+        assert!(wait_for_copy(&mut copied, |sync| sync.wait()).is_err());
         assert_same_fence(&copied, &fence);
-        assert!(
-            draw_after_copy(
-                &mut copied,
-                &mut (),
-                |_, sync| sync.wait(),
-                |_| {
-                    events.lock().unwrap().push(SyncEvent::Draw);
-                    Ok(())
-                }
-            )
-            .is_ok()
-        );
+        assert_eq!(*events.lock().unwrap(), [SyncEvent::Wait(1)]);
+        wait_for_copy(&mut copied, |sync| sync.wait()).unwrap();
         assert!(copied.is_none());
-        assert_eq!(*events.lock().unwrap(), [SyncEvent::Wait(1), SyncEvent::Wait(1), SyncEvent::Draw]);
+        assert_eq!(*events.lock().unwrap(), [SyncEvent::Wait(1), SyncEvent::Wait(1)]);
 
         // Once the copy is ordered, a frame with no new copy needs no wait.
-        draw_after_copy(
-            &mut copied,
-            &mut (),
-            |_, _| -> Result<(), Interrupted> { panic!("waited without a pending copy") },
-            |_| Ok(()),
-        )
-        .unwrap();
+        wait_for_copy(&mut copied, |_| -> Result<(), Interrupted> { panic!("waited without a pending copy") }).unwrap();
+    }
+
+    #[test]
+    fn finished_copy_is_not_waited_for_again() {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let fence = scripted_fence(5, &[true], &events);
+        let mut copied = None;
+        // The scan-out wait sees the copy through,
+        submit_after_sync(&mut copied, true, Some(&fence), true, || ()).unwrap();
+        assert_same_fence(&copied, &fence);
+        // so the next frame has nothing left to wait for: the fence has no
+        // second wait scripted, and one would fail the test.
+        wait_for_copy(&mut copied, |sync| sync.wait()).unwrap();
+        assert!(copied.is_none());
+        assert_eq!(*events.lock().unwrap(), [SyncEvent::Wait(5)]);
     }
 
     #[test]
@@ -1628,38 +1609,19 @@ mod tests {
 
         // Another output on this GPU must still wait for the unpresented
         // frame's copy; an interrupted wait cannot let it overwrite it.
-        assert!(
-            draw_after_copy(
-                &mut copied,
-                &mut (),
-                |_, sync| sync.wait(),
-                |_| {
-                    events.lock().unwrap().push(SyncEvent::Draw);
-                    Ok(())
-                }
-            )
-            .is_err()
-        );
+        assert!(wait_for_copy(&mut copied, |sync| sync.wait()).is_err());
         assert_same_fence(&copied, &fence);
         assert_eq!(*events.lock().unwrap(), [SyncEvent::Wait(2), SyncEvent::Wait(2)]);
 
-        draw_after_copy(
-            &mut copied,
-            &mut (),
-            |_, sync| sync.wait(),
-            |_| {
-                events.lock().unwrap().push(SyncEvent::Draw);
-                Ok(())
-            },
-        )
-        .unwrap();
+        wait_for_copy(&mut copied, |sync| sync.wait()).unwrap();
+        assert!(copied.is_none());
         submit_after_sync(&mut copied, true, Some(&SyncPoint::signaled()), true, || {
             events.lock().unwrap().push(SyncEvent::Submit);
         })
         .unwrap();
         assert_eq!(
             *events.lock().unwrap(),
-            [SyncEvent::Wait(2), SyncEvent::Wait(2), SyncEvent::Wait(2), SyncEvent::Draw, SyncEvent::Submit,]
+            [SyncEvent::Wait(2), SyncEvent::Wait(2), SyncEvent::Wait(2), SyncEvent::Submit]
         );
     }
 
@@ -1688,9 +1650,10 @@ mod tests {
     fn empty_direct_scanout_and_kms_fenced_frames_need_no_cpu_wait() {
         let events = Arc::new(Mutex::new(Vec::new()));
         let fence = scripted_fence(4, &[], &events);
-        // No script: any CPU wait here fails. Empty frames still remember
-        // their copy fence, but the existing queue helper submits no frame.
-        for (sync, damaged) in [(Some(&fence), false), (None, true), (Some(&fence), true)] {
+        // No script: any CPU wait here fails. An empty frame and direct
+        // scan-out bring no fence; a frame KMS takes with its fence has it
+        // remembered, not waited for.
+        for (sync, damaged) in [(None, false), (None, true), (Some(&fence), true)] {
             let mut copied = None;
             let queued = submit_after_sync(&mut copied, true, sync, false, || {
                 if damaged {
