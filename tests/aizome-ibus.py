@@ -176,11 +176,9 @@ def daemon_count():
 
 
 def one_daemon():
-    # ibus-daemon --daemonize forks the daemon, and the process that was
-    # started exits. pgrep lists the processes and then reads each one, so a
-    # count taken across that moment can be none while a daemon is running.
-    # Look until there is exactly one: a second daemon that stays, or none at
-    # all, still fails here.
+    # When ibus-daemon --daemonize forks, pgrep can miss both the exiting
+    # parent and its child. Retry the startup count. A single match can
+    # still be the parent, so Xfce checks the count again after composition.
     machine.wait_until_succeeds(
         "test \"$(pgrep -u alice -f '^/nix/store/[^ ]+/bin/ibus-daemon ' | wc -l)\" -eq 1",
         timeout=60,
@@ -287,6 +285,7 @@ with subtest("Xfce keeps the legacy IBus frontend and composition"):
         != "true"
     )
     gtk_composition("xfce")
+    assert daemon_count() == 1
     user(
         "busctl --user call org.xfce.SessionManager /org/xfce/SessionManager org.xfce.Session.Manager Logout bb false false"
     )
