@@ -38,6 +38,9 @@ let
 in
 {
   imports = [
+    (import ./airplay.nix {
+      airplay = inputs.aizome.packages.${pkgs.stdenv.hostPlatform.system}.airplay;
+    })
     ./cargo-geiger-fix.nix
     ./portal-fixes.nix
     ./avahi-fixes.nix
@@ -76,6 +79,7 @@ in
     };
   };
   config = {
+    programs.sekka-airplay.enable = lib.mkDefault true;
     # Upstream copies after removing the original mount and has no RAM check.
     # A large Sekka ISO can otherwise OOM the initrd or leave .ro-store without
     # its backing image. Preserve media until a complete RAM copy is available.

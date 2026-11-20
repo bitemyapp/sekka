@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=AirPlay
+GenericName=Screen Mirroring
+Comment=Mirror a screen and laptop audio to an AirPlay TV
+Exec=sekka-airplay
+Icon=video-display
+Type=Application
+Categories=AudioVideo;Network;
+Keywords=AirPlay;TV;Cast;Mirror;Screen;Kagami;
+StartupNotify=true
+Terminal=false

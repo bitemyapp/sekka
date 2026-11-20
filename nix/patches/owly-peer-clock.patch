@@ -1,0 +1,200 @@
+diff --git a/src/driver.rs b/src/driver.rs
+index e4639ac..45b8fd3 100644
+--- a/src/driver.rs
++++ b/src/driver.rs
+@@ -399,6 +399,20 @@ impl<A: Air, N: Netif> Driver<A, N> {
+             l.total.checked_div(l.count).unwrap_or(0),
+             l.max,
+         );
++        let now = self.now();
++        for peer in self.node.peers().filter(|p| p.valid).take(64) {
++            if let (Some(clock), Some(sequence)) = (peer.clock, peer.sequence) {
++                tracing::debug!(
++                    "AWDL schedule peer {} own_slot {} peer_slot {} next_tu {} offset_us {:?} channels {:?}",
++                    peer.mac,
++                    self.node.clock().slot(now),
++                    clock.slot(now),
++                    clock.next_slot_tu(now),
++                    peer.sync_offset_us,
++                    sequence.channels(),
++                );
++            }
++        }
+         self.lateness = Lateness::default();
+     }
+ }
+diff --git a/src/node.rs b/src/node.rs
+index 7af678e..1889afc 100644
+--- a/src/node.rs
++++ b/src/node.rs
+@@ -435,6 +435,9 @@ impl Node {
+         }
+         let up = peer.absorb(&advert, subtype == frame::subtype::MIF);
+         if let Some(s) = advert.sync {
++            let mut clock = Clock::new(now);
++            clock.update(now, s.next_tu, s.aw_counter);
++            peer.clock = Some(clock);
+             peer.sync_offset_us =
+                 Some(self.clock.error_tu(now, s.next_tu, s.aw_counter) * TU as i64);
+             // AWDL-7: follow the master's schedule.
+@@ -717,8 +720,22 @@ impl Node {
+         }
+     }
+ 
++    fn unicast_clock<'a>(&'a self, peer: &'a Peer) -> &'a Clock {
++        // A fixed radio can meet independent clusters without hopping.
++        // Follow the destination's announced phase and counter, rather than
++        // treating every peer as already synchronized to our elected master.
++        if self.fixed() {
++            peer.clock.as_ref().unwrap_or(&self.clock)
++        } else {
++            &self.clock
++        }
++    }
++
+     fn same_channel(&self, peer: &Peer, t: Time) -> bool {
+-        let slot = self.clock.slot(t);
++        self.same_channel_in_slot(peer, self.unicast_clock(peer).slot(t))
++    }
++
++    fn same_channel_in_slot(&self, peer: &Peer, slot: usize) -> bool {
+         let own = self.own_channel(slot);
+         let theirs = peer.sequence.map_or(0, |s| s.channel(slot));
+         own != 0 && own == theirs
+@@ -728,19 +745,21 @@ impl Node {
+     /// slot both are on the same channel, clear of the 3 TU guard at its
+     /// edges unless the neighbouring slot is shared too.
+     fn unicast_wait(&self, peer: &Peer, now: Time) -> u64 {
+-        let next = self.clock.next_slot_us(now);
++        let clock = self.unicast_clock(peer);
++        let next = clock.next_slot_us(now);
++        let slot = clock.slot(now);
+         if !self.same_channel(peer, now) {
+             return next;
+         }
+         let g = UNICAST_GUARD_US;
+         if next < g {
+-            if self.same_channel(peer, now.plus(SLOT_US)) {
++            if self.same_channel_in_slot(peer, slot + 1) {
+                 0
+             } else {
+                 next + g
+             }
+         } else if SLOT_US - next < g {
+-            if self.same_channel(peer, now.minus(SLOT_US)) {
++            if self.same_channel_in_slot(peer, slot + crate::channel::SLOTS - 1) {
+                 0
+             } else {
+                 g - (SLOT_US - next)
+@@ -882,3 +901,67 @@ impl Node {
+         t.max(now)
+     }
+ }
++
++#[cfg(test)]
++mod independent_peer_clock_tests {
++    use super::*;
++
++    fn node_and_peer(channel_slot: usize) -> (Node, Peer) {
++        let local = MacAddr([2, 0, 0, 0, 0, 1]);
++        let remote = MacAddr([2, 0, 0, 0, 0, 2]);
++        let node = Node::new(
++            Config::new(
++                local,
++                "test",
++                RadioConstraints {
++                    channel: Channel(6),
++                    presence: Presence::Fixed,
++                },
++            ),
++            Time(0),
++        );
++        let mut peer = Peer::new(remote, Time(0));
++        let mut sequence = Sequence::empty(crate::channel::Encoding::OpClass);
++        sequence.slots[channel_slot] = Channel(6).slot();
++        peer.sequence = Some(sequence);
++        let mut clock = Clock::new(Time(0));
++        clock.update(Time(0), 64, 4);
++        peer.clock = Some(clock);
++        (node, peer)
++    }
++
++    // spec: AWDL-16
++    #[test]
++    fn sends_in_destinations_slot_even_when_another_cluster_is_master() {
++        let (mut node, peer) = node_and_peer(1);
++        let now = Time(SLOT_US / 2);
++        assert_eq!(node.clock.slot(now), 0);
++        assert_eq!(node.unicast_wait(&peer, now), 0);
++        // Electing a different master must not move the destination's slot.
++        node.clock.update(now, 13, 400);
++        assert_eq!(node.unicast_wait(&peer, now), 0);
++    }
++
++    // spec: AWDL-16
++    #[test]
++    fn does_not_send_while_destination_is_away() {
++        let (node, peer) = node_and_peer(0);
++        let now = Time(SLOT_US / 2);
++        assert!(!node.same_channel(&peer, now));
++        assert_eq!(node.unicast_wait(&peer, now), SLOT_US / 2);
++    }
++
++    // spec: AWDL-16
++    #[test]
++    fn guards_destination_boundaries_in_its_own_phase() {
++        let (node, mut peer) = node_and_peer(1);
++        let now = Time(SLOT_US * 3);
++        let mut clock = Clock::new(now);
++        clock.update(now, 2, 4); // its channel-6 slot ends in 2 TU
++        peer.clock = Some(clock);
++        assert_eq!(node.unicast_wait(&peer, now), 2 * TU + UNICAST_GUARD_US);
++        clock.update(now, 63, 4); // its channel-6 slot started 1 TU ago
++        peer.clock = Some(clock);
++        assert_eq!(node.unicast_wait(&peer, now), UNICAST_GUARD_US - TU);
++    }
++}
+diff --git a/src/peer.rs b/src/peer.rs
+index 7447ca7..b172cd2 100644
+--- a/src/peer.rs
++++ b/src/peer.rs
+@@ -4,6 +4,7 @@ use alloc::string::String;
+ 
+ use crate::channel::Sequence;
+ use crate::election::Election;
++use crate::sync::Clock;
+ use crate::tlv::{Advert, HtCapabilities};
+ use crate::{MacAddr, Time};
+ 
+@@ -23,6 +24,8 @@ pub struct Peer {
+     pub sequence: Option<Sequence>,
+     /// How far its AW schedule is ahead of ours, in µs.
+     pub sync_offset_us: Option<i64>,
++    /// This peer's schedule, independent of the elected cluster clock.
++    pub clock: Option<Clock>,
+     pub ht: Option<HtCapabilities>,
+     /// Its station address on its infrastructure network.
+     pub infra: Option<MacAddr>,
+@@ -57,6 +60,7 @@ impl Peer {
+             election: Election::own(mac),
+             sequence: None,
+             sync_offset_us: None,
++            clock: None,
+             ht: None,
+             infra: None,
+             mif: false,
+diff --git a/tests/node.rs b/tests/node.rs
+index 5c58b4b..0f80045 100644
+--- a/tests/node.rs
++++ b/tests/node.rs
+@@ -368,7 +368,9 @@ fn a_fixed_radio_sends_unicast_in_every_slot_its_peer_is_on_its_channel_without_
+                 .cloned();
+             if let Some(f) = ours {
+                 assert!(f.no_ack, "patch owl-05: sent once, without an ACK");
+-                slots.insert(n.clock().slot(t));
++                // The destination announced the schedule. Our cluster clock may
++                // not have adopted it yet, or may follow another peer.
++                slots.insert(n.peer(PHONE).unwrap().clock.unwrap().slot(t));
+                 sent = true;
+                 break;
+             }
