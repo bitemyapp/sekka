@@ -1,0 +1,233 @@
+{
+  "schema_version": 1,
+  "date": "2026-11-03",
+  "source_commit": "41fdd11dd5b457b29649d0f5a5e0cf80c06fc2ce",
+  "host_alias": "wx-workstation",
+  "fixture": "Real aizome-theme crate plus a synthetic dependent library, build.rs, data file and application; serde with proc macro dependencies. Cache mechanics and correctness probe, not full Sekka benchmark.",
+  "tools": {
+    "bazel": "9.3.1",
+    "rules_rust": "0.75.0",
+    "rustc": "1.99.0",
+    "rules_nixpkgs_commit": "58151f3745a1abe09277a6a8d0c58449018d2baa"
+  },
+  "nixpkgs_source": "/nix/store/x85g4cmcjva68vjxn3wr5j3mabvx0jk4-source",
+  "trial_policy": "Single observations on a concurrently used host; not statistical throughput results.",
+  "comparability": "Cargo dev, Bazel defaults and Nix per-crate defaults differ. Bazel cold includes bootstrap tools; setup/download time is not uniformly included.",
+  "scope": "Cache mechanics and behavior checks, not full Aizome, ISO, RBE, output-service or physical laptop deduplication qualification.",
+  "cargo": [
+    {
+      "name": "cargo-cold-a",
+      "seconds": 11.162663423456252,
+      "returncode": 0,
+      "actual": "127 original",
+      "correct": true
+    },
+    {
+      "name": "cargo-noop-a",
+      "seconds": 0.021788530983030796,
+      "returncode": 0,
+      "actual": "127 original",
+      "correct": true
+    },
+    {
+      "name": "cargo-identical-b",
+      "seconds": 10.802363432943821,
+      "returncode": 0,
+      "actual": "127 original",
+      "correct": true
+    }
+  ],
+  "bazel": [
+    {
+      "name": "bazel-disk-cold-a",
+      "seconds": 43.275415468961,
+      "returncode": 0,
+      "allocated_output_bytes": 98525184,
+      "rust_outputs": 63,
+      "execution": [
+        "INFO: 965 processes: 858 internal, 107 linux-sandbox."
+      ],
+      "correct": true
+    },
+    {
+      "name": "bazel-disk-noop-a",
+      "seconds": 0.5726861907169223,
+      "returncode": 0,
+      "allocated_output_bytes": 98504704,
+      "rust_outputs": 63,
+      "execution": [],
+      "correct": true
+    },
+    {
+      "name": "bazel-disk-identical-b",
+      "seconds": 6.627251285128295,
+      "returncode": 0,
+      "allocated_output_bytes": 98086912,
+      "rust_outputs": 63,
+      "execution": [
+        "INFO: 965 processes: 107 disk cache hit, 858 internal."
+      ],
+      "correct": true
+    },
+    {
+      "name": "bazel-disk-leaf-edit-b",
+      "seconds": 0.6964551219716668,
+      "returncode": 0,
+      "allocated_output_bytes": 98074624,
+      "rust_outputs": 63,
+      "execution": [
+        "INFO: 3 processes: 2 internal, 1 linux-sandbox."
+      ],
+      "correct": true
+    },
+    {
+      "name": "bazel-disk-shared-edit-c",
+      "seconds": 6.835493707098067,
+      "returncode": 0,
+      "allocated_output_bytes": 98099200,
+      "rust_outputs": 63,
+      "execution": [
+        "INFO: 965 processes: 104 disk cache hit, 858 internal, 3 linux-sandbox."
+      ],
+      "correct": true
+    },
+    {
+      "name": "bazel-http-prime-d",
+      "seconds": 42.17519852798432,
+      "returncode": 0,
+      "allocated_output_bytes": 98525184,
+      "rust_outputs": 63,
+      "execution": [
+        "INFO: 965 processes: 858 internal, 107 linux-sandbox."
+      ],
+      "correct": true
+    },
+    {
+      "name": "bazel-http-all-e",
+      "seconds": 9.152519066818058,
+      "returncode": 0,
+      "allocated_output_bytes": 98086912,
+      "rust_outputs": 63,
+      "execution": [
+        "INFO: 965 processes: 107 remote cache hit, 858 internal."
+      ],
+      "correct": true
+    },
+    {
+      "name": "bazel-http-top-f",
+      "seconds": 8.386486034840345,
+      "returncode": 0,
+      "allocated_output_bytes": 741376,
+      "rust_outputs": 1,
+      "execution": [
+        "INFO: 965 processes: 107 remote cache hit, 858 internal."
+      ],
+      "correct": true
+    },
+    {
+      "name": "bazel-http-minimal-g",
+      "seconds": 8.502238044515252,
+      "returncode": 0,
+      "allocated_output_bytes": 167936,
+      "rust_outputs": 0,
+      "execution": [
+        "INFO: 965 processes: 107 remote cache hit, 858 internal."
+      ],
+      "correct": null,
+      "correctness_note": "Minimal-download trial: binary intentionally not materialized or executed; cache/build completion only."
+    },
+    {
+      "name": "bazel-http-top-h",
+      "seconds": 8.681347618810833,
+      "returncode": 0,
+      "allocated_output_bytes": 741376,
+      "rust_outputs": 1,
+      "execution": [
+        "INFO: 965 processes: 107 remote cache hit, 858 internal."
+      ],
+      "correct": true
+    },
+    {
+      "name": "bazel-http-top-edit-h",
+      "seconds": 0.728014905937016,
+      "returncode": 0,
+      "allocated_output_bytes": 10817536,
+      "rust_outputs": 5,
+      "execution": [
+        "INFO: 3 processes: 2 internal, 1 linux-sandbox."
+      ],
+      "correct": true
+    },
+    {
+      "name": "bazel-http-buildscript-input-h",
+      "seconds": 2.0660748491063714,
+      "returncode": 0,
+      "allocated_output_bytes": 12431360,
+      "rust_outputs": 5,
+      "execution": [
+        "INFO: 5 processes: 943 action cache hit, 2 internal, 3 linux-sandbox."
+      ],
+      "correct": true
+    }
+  ],
+  "excluded_trials": [
+    {
+      "name": "bazel-http-top-edit-f",
+      "reason": "Ran outside the pinned shell, invalidating all 107 executable actions. Controlled h trial repeats the intended edit in the original environment."
+    }
+  ],
+  "output_storage_scope": "Allocated bazel-out bytes only. Repository downloads/extractions, other output-base state, Nix closures and cache-service storage are additional. Later h build-script storage also includes dylib-smoke outputs.",
+  "cache_storage": {
+    "disk": {
+      "files": 447,
+      "bytes": 99373829,
+      "allocated_bytes": 100806656,
+      "rust_outputs": {}
+    },
+    "http": {
+      "files": 435,
+      "bytes": 97878687,
+      "allocated_bytes": 99270656,
+      "rust_outputs": {}
+    }
+  },
+  "inode_comparison": {
+    "identical_content_files": 63,
+    "different_inodes": 63,
+    "duplicated_logical_bytes": 66678462
+  },
+  "cross_machine": {
+    "cache_hits": 107,
+    "executed_actions": 0,
+    "bazel_elapsed_seconds": 33.404,
+    "includes_first_start_and_repository_setup": true,
+    "actual": "127 original",
+    "correct": true,
+    "output_download_mode": "toplevel"
+  },
+  "dylib_smoke": {
+    "returncode": 0,
+    "stdout": "dlopen shared Rust core: 42\n",
+    "stderr": ""
+  },
+  "cleanup": {
+    "experiment_services_stopped": true,
+    "reclaimed_allocated_bytes": 4325281792,
+    "note": "Private generated targets/caches and temporary GC roots removed. No existing user targets or global Nix GC."
+  },
+  "raw_evidence": "wx-workstation:~/sekka-work/bazel-nix-eval-20261103/evidence",
+  "earlier_full_aizome_benchmark": {
+    "date": "2026-11-02",
+    "source_commit": "b13988e986628502d7b80136b2ab6dac233934e9",
+    "path": "wx-workstation:~/sekka-work/aizome-build-bench-20261102/report/REPORT.md",
+    "scope": "Existing Cargo/Nix full-workspace comparison, not a Bazel measurement."
+  },
+  "raw_evidence_sha256": {
+    "methodology.json": "40c9d2e606e588e92f97504fc3bdc60cbb4d9c98eb813650114b0e57ac310d27",
+    "bazel-summary.json": "ad750bf259d4312c9fb2469167fa0c37d954df6b92db3b1a5aa089d5fca1f462",
+    "cargo-results.json": "6e01bc3d93d3be05195dc6fc660910e47aec36073290a8085de4f8c4be6b20b4",
+    "bazel-inode-comparison.json": "6c42e8bbc2c54dea062eaacfe2d9daca1d2ef122c5fdd7390f524b045d9eb45c",
+    "bazel-cache-storage.json": "31cde2b0ef1398c4fd462b6846585cc92a2db02ce12b199458ac626bc9c8d27a",
+    "bazel-dylib-runtime.json": "bbce228651055c53f752d99ed44bfed955a046ccbebd8d502556ba891621ec91"
+  }
+}
