@@ -83,12 +83,10 @@ fn deletion(app: &Yukimi, generation: &Generation) -> Option<Element<Msg>> {
     }
     let freeable = app.model.freeable.as_deref();
     let explanation = match freeable.and_then(|f| f.generation(generation.number)) {
-        Some(0) => "It leaves the boot menu. All it has is shared with other generations or kept by something \
-                    else, so deleting it frees nothing by itself."
+        Some(0) => "It leaves the boot menu. No additional disk space is estimated to be freed by deleting it alone."
             .to_owned(),
         Some(bytes) => format!(
-            "It leaves the boot menu. What only it has, about {} on disk, comes back once garbage is collected; \
-             what it shares stays.",
+            "It leaves the boot menu. Estimated space freed after garbage collection: {}. What it shares stays.",
             human_size(bytes)
         ),
         None if app.measuring => "It leaves the boot menu. Working out what it would free…".to_owned(),
@@ -162,6 +160,9 @@ fn opened(app: &Yukimi, generation: &Generation) -> Vec<Element<Msg>> {
     if diff.changes.len() > SHOWN {
         rows.push(super::empty(&format!("The first {SHOWN} of {} changes.", diff.changes.len())));
     }
+    if !diff.changes.is_empty() {
+        rows.push(super::empty("Package size changes below are NAR sizes, before compression and disk sharing."));
+    }
     rows.extend(diff.changes.iter().take(SHOWN).map(change_row));
     rows
 }
@@ -172,8 +173,8 @@ pub fn page(app: &Yukimi) -> Element<Msg> {
         "Every version of your system",
         "Each time the system changes, NixOS keeps the version before as a generation. Any of them can be started \
          from the boot menu, or returned to here, until it is deleted here or cleaned up in Storage. Beside each is \
-         the disk space deleting it alone gives back. Generations next to each other share most of what they have, \
-         so select several to see what deleting them together frees.",
+         estimated space freed by deleting it alone, alongside its full NAR closure. Select several to estimate \
+         what deleting them together frees; these amounts do not simply add up.",
     );
     let gens = &model.generations;
     let mut rows: Vec<Element<Msg>> = Vec::new();
@@ -181,6 +182,7 @@ pub fn page(app: &Yukimi) -> Element<Msg> {
         rows.push(super::empty(if app.loading { "Looking around…" } else { "No generations found." }));
     }
     let freeable = model.freeable.as_deref();
+    let sizes = model.store.as_ref().map(|s| &s.generation_nar_sizes);
     for generation in gens.iter().rev() {
         let open = app.opened.contains(&generation.number);
         let mut facts = vec![human_age(generation.created, app.now())];
@@ -214,7 +216,21 @@ pub fn page(app: &Yukimi) -> Element<Msg> {
         // What deleting it gives back, not everything it needs: most of that
         // is shared with the others.
         if let Some(bytes) = freeable.and_then(|f| f.generation(generation.number)) {
-            head = head.push(mono(human_size(bytes)).role(Role::Text3).width(64.0));
+            head = head.push(
+                column![
+                    text("Estimated freed").size(11.0).role(Role::Text3),
+                    mono(human_size(bytes)).role(Role::Text2)
+                ]
+                .spacing(2.0)
+                .width(110.0),
+            );
+        }
+        if let Some((_, bytes)) = sizes.and_then(|s| s.iter().find(|(n, _)| *n == generation.number)) {
+            head = head.push(
+                column![text("NAR closure").size(11.0).role(Role::Text3), mono(human_size(*bytes)).role(Role::Text2)]
+                    .spacing(2.0)
+                    .width(92.0),
+            );
         }
         let label = format!("Generation {}", generation.number);
         rows.push(
@@ -228,7 +244,20 @@ pub fn page(app: &Yukimi) -> Element<Msg> {
             rows.extend(opened(app, generation));
         }
     }
-    column![intro, super::list(rows)].spacing(18.0).width(Fill).into()
+    column![
+        intro,
+        text(
+            "NAR closure includes shared packages before compression. Estimated freed uses file allocation and hardlinks; \
+             compression, reflinks, snapshots, incomplete measurements and other activity can change what comes back."
+        )
+        .size(12.0)
+        .role(Role::Text3)
+        .wrap(),
+        super::list(rows),
+    ]
+    .spacing(18.0)
+    .width(Fill)
+    .into()
 }
 
 /// Selecting generations, and deleting those selected, at the toolbar's
@@ -269,7 +298,7 @@ pub fn ticked_line(app: &Yukimi) -> Option<String> {
     };
     let they = if app.ticked.numbers.len() == 1 { "it frees" } else { "they free" };
     Some(match app.ticked.priced() {
-        Some(bytes) => format!("{selected} · frees about {}", human_size(bytes)),
+        Some(bytes) => format!("{selected} · estimated freed: {}", human_size(bytes)),
         None if app.measuring || app.model.freeable.is_some() => format!("{selected} · working out what {they}…"),
         None => selected,
     })

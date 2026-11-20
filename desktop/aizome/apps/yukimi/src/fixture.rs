@@ -371,7 +371,7 @@ pub fn store(generations: &[Generation], graph: Graph) -> Store {
         heaviest_apps: heaviest.clone(),
         heaviest,
         latest,
-        generation_sizes: generations.iter().zip(sizes).map(|(g, s)| (g.number, (s * GB as f64) as u64)).collect(),
+        generation_nar_sizes: generations.iter().zip(sizes).map(|(g, s)| (g.number, (s * GB as f64) as u64)).collect(),
     }
 }
 

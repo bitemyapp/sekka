@@ -181,12 +181,12 @@ fn tiles(app: &Yukimi) -> Element<Msg> {
             let c = &store.composition;
             let line = if c.garbage + c.old_generations > 0 {
                 format!(
-                    "in the store. {} is garbage, and older generations keep {}.",
+                    "NAR size in the store. {} may be garbage; older generations keep {}. Disk usage differs.",
                     human_size(c.garbage),
                     human_size(c.old_generations)
                 )
             } else {
-                "in the store.".to_owned()
+                "NAR size in the store. Disk usage differs.".to_owned()
             };
             (human_size(c.total), line)
         }
@@ -230,12 +230,16 @@ fn store_panel(app: &Yukimi) -> Element<Msg> {
             column![
                 row![
                     text(human_size(c.total)).mono().tabular().size(20.0).weight(600.0),
-                    text("in the Nix store").role(Role::Text3)
+                    text("NAR size in the Nix store").role(Role::Text3)
                 ]
                 .spacing(8.0)
                 .align(Align::End),
                 widgets::bar(super::storage::segments(c), 14.0).width(Fill),
                 grid(legend, 200.0, 4.0),
+                text("Uncompressed archive sizes. See Storage for cleanup estimates.")
+                    .size(11.0)
+                    .role(Role::Text3)
+                    .wrap(),
             ]
             .spacing(10.0)
             .width(Fill)
@@ -254,7 +258,7 @@ fn store_panel(app: &Yukimi) -> Element<Msg> {
 /// Each generation by its size, the running one in the focus colour.
 fn generations_panel(app: &Yukimi) -> Element<Msg> {
     let model = &app.model;
-    let sizes: Vec<(u32, u64)> = model.store.as_ref().map(|s| s.generation_sizes.clone()).unwrap_or_default();
+    let sizes: Vec<(u32, u64)> = model.store.as_ref().map(|s| s.generation_nar_sizes.clone()).unwrap_or_default();
     let body: Element<Msg> = if sizes.is_empty() {
         if model.store.is_none() {
             super::pending("Reading the store…")
@@ -278,7 +282,7 @@ fn generations_panel(app: &Yukimi) -> Element<Msg> {
         let highlight = shown.iter().position(|(n, _)| Some(*n) == running);
         column![
             columns(bars, highlight, 118.0).width(Fill),
-            text("Each generation's size in GB: everything that version of the system needs.")
+            text("Full NAR closures in GB, including shared packages. These are not the disk space freed by deletion.")
                 .size(11.0)
                 .role(Role::Text3)
                 .wrap(),
