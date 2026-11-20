@@ -1,0 +1,33 @@
+{
+  "argv": [
+    "vlc",
+    "--no-one-instance",
+    "--fullscreen",
+    "--no-video-title-show",
+    "--no-qt-privacy-ask",
+    "--no-qt-recentplay",
+    "--extraintf=dbus",
+    "/home/callen/Videos/player-battery-benchmark/NightOfTheLivingDead_PS3.mp4"
+  ],
+  "window": {
+    "id": 90,
+    "app_id": "vlc",
+    "pid": 369506,
+    "fullscreen": true,
+    "focused": true,
+    "geometry": {
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 900
+    },
+    "output": "eDP-1"
+  },
+  "position_s": 2460.498634,
+  "player": {
+    "PlaybackStatus": "Playing",
+    "Position": 2460498634,
+    "Rate": 1.0,
+    "Volume": 1.0
+  }
+}

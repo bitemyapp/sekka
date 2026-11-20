@@ -1,0 +1,25 @@
+{
+  "manufacturer": "LENOVO",
+  "model": "ThinkPad X1 Carbon Gen 14",
+  "cpu": "Intel Core Ultra 7 365",
+  "graphics_pci_id": "8086:b090",
+  "sink": {
+    "description": "Core Ultra Processors (Series 3) HD Audio Speaker",
+    "profile": "HiFi: Speaker: sink",
+    "node": "alsa_output.pci-0000_00_1f.3-platform-sof_sdw.HiFi__Speaker__sink"
+  },
+  "system_version": {
+    "kernelVersion": "7.3.0",
+    "nixosVersion": "26.11.20261030.1c89083",
+    "nixpkgsRevision": "1c89083e451e891152365b799595cf7790a43325",
+    "specialisations": [
+      "xe-dpt"
+    ]
+  },
+  "awake": {
+    "enabled": true,
+    "protected": true
+  },
+  "harness_sha256": "f25ac6321d92f78a91ae80f9515c32138c7f2d5ba7a206f3fa85e9d651e77f5d",
+  "base_commit": "b9b0aa458d6f263fefb76908f4f714edf5f39fee"
+}

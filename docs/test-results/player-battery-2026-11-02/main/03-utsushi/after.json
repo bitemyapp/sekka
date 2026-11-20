@@ -1,0 +1,23 @@
+{
+  "window": {
+    "id": 81,
+    "app_id": "org.aizome.Utsushi",
+    "pid": 753991,
+    "fullscreen": true,
+    "focused": true,
+    "geometry": {
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 900
+    },
+    "output": "eDP-1"
+  },
+  "position_s": 4383.013058,
+  "player": {
+    "PlaybackStatus": "Playing",
+    "Position": 4383013058,
+    "Rate": 1.0,
+    "Volume": 1.0
+  }
+}
