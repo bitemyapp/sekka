@@ -190,6 +190,56 @@ fn a_purpose_finds_the_terminal_chosen_in_settei() {
 }
 
 #[test]
+fn shipped_native_kinds_respect_defaults_and_desktop_visibility() {
+    use aizome_shell::palette::model::{Ranking, sections};
+
+    let mut fixture = DefaultApps::new("native-kinds");
+    for (app, name) in [("hako", "Hako"), ("soroban", "Soroban"), ("shiori", "Shiori")] {
+        fixture.shipped(app, &format!("org.aizome.{name}.desktop"));
+    }
+    // GNOME's entries are named for their kind and have no GenericName.
+    let files = "[Desktop Entry]\nType=Application\nName=Files\nKeywords=folder;manager;explore;disk;filesystem;nautilus;\nExec=nautilus --new-window %U\nDBusActivatable=true\nCategories=GNOME;GTK;Utility;Core;FileManager;\nMimeType=inode/directory;\n";
+    let calculator = "[Desktop Entry]\nType=Application\nName=Calculator\nKeywords=calculation;arithmetic;scientific;financial;\nExec=gnome-calculator\nCategories=GNOME;GTK;Utility;Calculator;\n";
+    fixture.write("org.gnome.Nautilus.desktop", files);
+    fixture.write("org.gnome.Calculator.desktop", calculator);
+    fixture.write("org.pwmt.zathura.desktop", "[Desktop Entry]\nType=Application\nName=Zathura\nExec=zathura %U\nMimeType=application/pdf;\nKeywords=PDF;document;viewer;\n");
+    let mut index = fixture.load();
+    index.set_role_default(DefaultRole::FileManager, "org.aizome.Hako.desktop").unwrap();
+    index.set_role_default(DefaultRole::PdfViewer, "org.pwmt.zathura.desktop").unwrap();
+    let mut h = scene(false);
+    h.program_mut().apps = Some(std::sync::Arc::new(index));
+    // Feed the real shell rows into ranking without opening or rendering a window.
+    let items = h.program().palette_items();
+    for (query, wanted) in [
+        ("files", "org.aizome.Hako"),
+        ("fi", "org.aizome.Hako"),
+        ("calculator", "org.aizome.Soroban"),
+        ("ca", "org.aizome.Soroban"),
+        ("nautilus", "org.gnome.Nautilus"),
+        ("documents", "org.pwmt.zathura"),
+    ] {
+        let r = Ranking { query, scope: Some(Scope::App), per_section: 1, app_name: None };
+        let s = sections(&r, &items, &[]);
+        assert_eq!(s[0].rows[0].item.action, Action::FocusApp { app_id: wanted.into() }, "{query}");
+    }
+
+    // The metadata used by Tatami's wrappers hides only their launcher
+    // entries in Aizome; the same entries remain visible in Tatami.
+    fixture.write("org.gnome.Nautilus.desktop", &format!("{files}OnlyShowIn=Tatami;\n"));
+    fixture.write("org.gnome.Calculator.desktop", &format!("{calculator}OnlyShowIn=Tatami;\n"));
+    let aizome = fixture.load();
+    for id in ["org.gnome.Nautilus.desktop", "org.gnome.Calculator.desktop"] {
+        assert!(aizome.is_installed(id));
+        assert!(!aizome.is_shown(id));
+    }
+    fixture.dirs.desktops = vec!["Hyprland".into(), "Tatami".into()];
+    let tatami = fixture.load();
+    for id in ["org.gnome.Nautilus.desktop", "org.gnome.Calculator.desktop"] {
+        assert!(tatami.is_shown(id));
+    }
+}
+
+#[test]
 fn all_settei_roles_find_apps_whose_names_and_keywords_do_not_describe_the_role() {
     let fixture = DefaultApps::new("all-roles");
     for (n, role) in DefaultRole::ALL.into_iter().enumerate() {

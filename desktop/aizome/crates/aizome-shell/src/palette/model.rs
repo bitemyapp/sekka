@@ -23,6 +23,10 @@ pub struct Item {
     pub glyph: Icon,
     /// Matched but not shown.
     pub keywords: Vec<String>,
+    /// A native app's generic name, matched as strongly as its title.
+    pub aliases: Vec<String>,
+    /// One of Aizome's own apps; wins otherwise equal app matches.
+    pub aizome: bool,
     /// An app's purposes in Settei's Default Apps ("Terminal", "Text
     /// editor") for which it's the chosen app.
     pub purposes: Vec<&'static str>,
@@ -44,6 +48,8 @@ impl Item {
             shortcut: None,
             glyph,
             keywords: Vec::new(),
+            aliases: Vec::new(),
+            aizome: false,
             purposes: Vec::new(),
             key: None,
             action,
@@ -190,28 +196,42 @@ pub fn sections(r: &Ranking, items: &[Item], files: &[Item]) -> Vec<Section> {
                 .map(|i| Row { item: i.clone(), ranges: name_ranges(i, q), score: i.boost })
                 .collect()
         } else {
-            let pool: Vec<&Item> = items.iter().filter(|i| i.scope == scope).collect();
-            let candidates: Vec<Candidate> = pool
+            let mut pool: Vec<&Item> = items.iter().filter(|i| i.scope == scope).collect();
+            // Stable: usage and match scores still decide; native apps
+            // precede other apps only when those scores are equal.
+            pool.sort_by_key(|i| !i.aizome);
+            let mut candidates: Vec<Candidate> = pool
                 .iter()
                 .map(|i| Candidate {
                     title: i.title.clone(),
                     keywords: keywords_of(i),
                     boost: i.boost + exactness(&i.title, q),
+                    ..Default::default()
                 })
                 .collect();
             let preferred: Vec<bool> = pool.iter().map(|i| matches_purpose(i, &purpose_query)).collect();
             let has_preferred = preferred.iter().any(|p| *p);
-            // Keep the ordinary winner before prioritising or truncating:
-            // Commands versus Apps still follows ordinary matching.
-            let mut ranked = rank(&mut query, &candidates, if has_preferred { pool.len() } else { limit });
             if scope == Scope::App {
-                ordinary_app_score = ranked.first().map(|r| r.score);
+                // Compare Commands with the whole ordinary app pool,
+                // before aliases, default priority, or result limits.
+                ordinary_app_score = rank(&mut query, &candidates, 1).first().map(|r| r.score);
                 prefer_apps = has_preferred;
+                for (candidate, item) in candidates.iter_mut().zip(&pool) {
+                    candidate.aliases = item.aliases.clone();
+                    let exact = std::iter::once(&item.title)
+                        .chain(&item.aliases)
+                        .map(|name| exactness(name, q))
+                        .max()
+                        .unwrap_or(0);
+                    candidate.boost = item.boost + exact;
+                }
             }
+            let mut ranked = rank(&mut query, &candidates, if has_preferred { pool.len() } else { limit });
             if has_preferred {
                 // A role is itself a reason to find its app. Desktop
                 // entries needn't repeat Settei's labels (mpv has neither
-                // "Videos" nor "Music"). Don't add aliases to other queries.
+                // "Videos" nor "Music"). Purpose admission applies only
+                // to queries matching the labels in Settei.
                 for (index, preferred) in preferred.iter().enumerate() {
                     if *preferred && !ranked.iter().any(|r| r.index == index) {
                         ranked.push(Ranked { index, score: 0, ranges: Vec::new() });
@@ -243,13 +263,23 @@ pub fn sections(r: &Ranking, items: &[Item], files: &[Item]) -> Vec<Section> {
         let best = |s: &Section| s.rows.iter().map(|r| r.score).max().unwrap_or(0);
         let commands = out.iter().find(|s| s.scope == Scope::Command).map(best);
         let commands_first = commands.is_some_and(|score| ordinary_app_score.is_none_or(|app| score >= app));
+        // Aliases can help Apps past other sections but cannot displace
+        // Commands that ordinarily led, even for kinds without a default
+        // role (Calculator). A real title match or habit still can.
+        let standing = |s: &Section| match commands {
+            Some(score) if s.scope == Scope::App && commands_first => best(s).min(score),
+            _ => best(s),
+        };
         let priority = |s: &Section| match s.scope {
             Scope::Command if prefer_apps && commands_first => 0,
             Scope::App if prefer_apps => 1,
             _ => 2,
         };
         out[answer..].sort_by(|a, b| {
-            priority(a).cmp(&priority(b)).then(best(b).cmp(&best(a))).then(order_of(a.scope).cmp(&order_of(b.scope)))
+            priority(a)
+                .cmp(&priority(b))
+                .then(standing(b).cmp(&standing(a)))
+                .then(order_of(a.scope).cmp(&order_of(b.scope)))
         });
     }
     out
@@ -467,6 +497,13 @@ mod tests {
         i
     }
 
+    fn native_app(name: &str, generic: &str, keywords: &[&str], purposes: &[&'static str]) -> Item {
+        let mut i = app(name, generic, keywords, purposes);
+        i.aizome = true;
+        i.aliases = vec![generic.into()];
+        i
+    }
+
     /// Apps whose purposes overlap, as their desktop entries describe
     /// them, and the setting that chooses the terminal.
     fn desktop() -> Vec<Item> {
@@ -474,12 +511,17 @@ mod tests {
         // About a hundred picks.
         foot.boost = 110;
         vec![
-            app("Hotaru", "Terminal", &["terminal", "shell", "console", "command line", "hotaru"], &["Terminal"]),
+            native_app(
+                "Hotaru",
+                "Terminal",
+                &["terminal", "shell", "console", "command line", "hotaru"],
+                &["Terminal"],
+            ),
             foot,
             app("Foot Server", "Terminal", &["shell", "prompt", "command", "commandline"], &[]),
             app("kitty", "Terminal", &["shell", "prompt", "terminal"], &[]),
-            app("Hako", "Files", &["files", "file manager", "folders", "browser", "documents"], &["Files"]),
-            app("Sumi", "Text Editor", &["text editor", "editor", "text"], &["Text editor"]),
+            native_app("Hako", "Files", &["files", "file manager", "folders", "browser", "documents"], &["Files"]),
+            native_app("Sumi", "Text Editor", &["text editor", "editor", "text"], &["Text editor"]),
             app("Firefox", "Web Browser", &["internet", "www"], &["Web browser"]),
             setting_item(&SettingEntry {
                 id: "general.default-terminal".into(),
@@ -494,6 +536,55 @@ mod tests {
 
     fn first(s: &[Section]) -> (Scope, &str) {
         (s[0].scope, s[0].rows[0].item.title.as_str())
+    }
+
+    #[test]
+    fn native_kinds_match_titles_but_history_still_breaks_ties() {
+        // The index lists GNOME's entries first, alphabetically. Neither
+        // GNOME entry has a generic name; these kinds aren't defaults here.
+        let mut all = vec![
+            app("Calculator", "", &["arithmetic"], &[]),
+            app("Files", "", &["nautilus", "folder"], &[]),
+            native_app("Hako", "Files", &[], &[]),
+            native_app("Soroban", "Calculator", &[], &[]),
+        ];
+        for scope in [None, Some(Scope::App)] {
+            for (q, wanted) in [("files", "Hako"), ("fi", "Hako"), ("calculator", "Soroban"), ("ca", "Soroban")] {
+                let s = sections(&ranking(q, scope), &all, &[]);
+                assert_eq!(first(&s), (Scope::App, wanted), "{q}, {scope:?}");
+                assert!(s[0].rows[0].ranges.is_empty(), "an alias isn't highlighted in the title");
+            }
+            assert_eq!(first(&sections(&ranking("nautilus", scope), &all, &[])), (Scope::App, "Files"));
+        }
+        // Two recent picks of GNOME's Files; native preference is a tie-break.
+        all[1].boost = 26;
+        assert_eq!(first(&sections(&ranking("fi", None), &all, &[])), (Scope::App, "Files"));
+    }
+
+    #[test]
+    fn the_chosen_pdf_app_precedes_a_native_alias_despite_heavy_usage() {
+        let mut native = native_app("Shiori", "Documents", &["pdf", "document viewer"], &[]);
+        native.boost = 10_000;
+        let chosen = app("Zathura", "", &["PDF", "document", "viewer"], &["PDF documents"]);
+        let all = [native, chosen];
+        for scope in [None, Some(Scope::App)] {
+            for q in ["doc", "documents", "DOCUMENTS", "  PDF  documents  "] {
+                let r = Ranking { per_section: 1, ..ranking(q, scope) };
+                assert_eq!(first(&sections(&r, &all, &[])), (Scope::App, "Zathura"), "{q}, {scope:?}");
+            }
+            // Choosing a role doesn't make it the answer to another app's name.
+            assert_eq!(first(&sections(&ranking("shiori", scope), &all, &[])), (Scope::App, "Shiori"));
+        }
+    }
+
+    #[test]
+    fn aliases_preserve_command_precedence_without_a_default_role() {
+        // Calculator has no Settei role: guarding only purpose queries
+        // would let Soroban's alias carry Apps past this command.
+        let mut all = [native_app("Soroban", "Calculator", &[], &[]), cmd("New", "Calculator")];
+        assert_eq!(first(&sections(&ranking("calculator", None), &all, &[])), (Scope::Command, "New"));
+        all[0].boost = 110;
+        assert_eq!(first(&sections(&ranking("calculator", None), &all, &[])), (Scope::App, "Soroban"));
     }
 
     #[test]
@@ -578,7 +669,7 @@ mod tests {
         for role in aizome_sys::apps::DefaultRole::ALL {
             let label = role.label();
             let chosen = app("選んだアプリ", "", &[], &[label]);
-            let mut rival = app(label, label, &[], &[]);
+            let mut rival = native_app(label, label, &[], &[]);
             rival.boost = 10_000;
             let mut setting = Item::new(Scope::Setting, label, Icon::Settings, Action::None);
             setting.boost = 20_000;
@@ -641,7 +732,7 @@ mod tests {
 
     #[test]
     fn command_precedence_does_not_leave_settings_or_folders_ahead() {
-        let chosen = app("Hako", "Files", &["files"], &["Files"]);
+        let chosen = native_app("Hako", "Files", &["files"], &["Files"]);
         let command = cmd("New", "File");
         let mut setting = Item::new(Scope::Setting, "Files", Icon::Settings, Action::None);
         setting.boost = 10_000;
@@ -663,7 +754,7 @@ mod tests {
     fn command_order_uses_the_best_ordinary_app_even_when_it_will_be_hidden() {
         let mut rival = app("Files", "", &[], &[]);
         rival.boost = 500;
-        let all = [app("Hako", "Files", &[], &["Files"]), rival, cmd("New", "File")];
+        let all = [native_app("Hako", "Files", &[], &["Files"]), rival, cmd("New", "File")];
         for limit in [1, 4] {
             let r = Ranking { per_section: limit, ..ranking("file", None) };
             let s = sections(&r, &all, &[]);

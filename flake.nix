@@ -349,6 +349,13 @@
         aizome-media-defaults = import ./nix/aizome-media-defaults-test.nix {
           inherit pkgs inputs installer;
         };
+        tatami-gnome-apps = import ./nix/tatami-gnome-apps-test.nix {
+          inherit
+            pkgs
+            inputs
+            applicationCatalog
+            ;
+        };
         pipewire-packages = import ./nix/pipewire-packages-test.nix {
           inherit pkgs installer;
           references = referenceSystems;
