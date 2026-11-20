@@ -1,0 +1,60 @@
+{
+  "mode": "regressions",
+  "runs": [
+    {
+      "label": "attribute-macro-private-module-rustc",
+      "engine": "rustc",
+      "command": [
+        "cargo",
+        "test",
+        "--offline",
+        "--release",
+        "-p",
+        "apm-app",
+        "--lib"
+      ],
+      "exit_code": 0,
+      "seconds": 0.365,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "test_summaries": [
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ],
+      "log": "attribute-macro-private-module-rustc.log.gz"
+    },
+    {
+      "label": "attribute-macro-private-module-relax",
+      "engine": "relax",
+      "command": [
+        "$EXPERIMENT/relax/target/release/relax",
+        "test",
+        "--no-live",
+        "apm-app",
+        "--lib"
+      ],
+      "exit_code": 0,
+      "seconds": 0.716,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "test_summaries": [
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s"
+      ],
+      "log": "attribute-macro-private-module-relax.log.gz"
+    }
+  ],
+  "inputs": {
+    "sekka": {
+      "commit": "7dcf88e3b7f3391ec498a53a28555d02ba8fb14a",
+      "status": " M flake.nix\n"
+    },
+    "relax": {
+      "commit": "119e6136319c25d2191ae7627f402979d801a792",
+      "status": ""
+    },
+    "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13) (built from a source tarball)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.3\n",
+    "runner_sha256": "5ad528af507785d02a3cb8e5f0313431d3c329df267819d2d0ce312464fa4e1c",
+    "cpu_budget": "8"
+  }
+}

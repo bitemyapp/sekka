@@ -1,0 +1,1922 @@
+{
+  "method": "Use final test summary per Cargo target header; exclude nested isolated-test summaries.",
+  "groups": [
+    {
+      "target": "Running unittests src/lib.rs (target/release/deps/makepad_alloc_phase-a57601d0b4a7f730)",
+      "summaries": [
+        {
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/release/deps/makepad_apple_sys-db80fee917ed40f2)",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/release/deps/makepad_core_util-fb4827e99895f90a)",
+      "summaries": [
+        {
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/release/deps/makepad_cpu_budget-c6707a2fcfc8fd54)",
+      "summaries": [
+        {
+          "passed": 26,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/release/deps/makepad_derive_widget_impl-bb5d5dd8387db5c8)",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/release/deps/makepad_error_log-f9bb3cb0d8519441)",
+      "summaries": [
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/release/deps/makepad_gpu_trace-6092025a7451b7d4)",
+      "summaries": [
+        {
+          "passed": 10,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/release/deps/makepad_live_id-56c51655cb7e015e)",
+      "summaries": [
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/release/deps/makepad_live_id_macros-7ba5d4059d89de71)",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/release/deps/makepad_live_id_macros_impl-6b4692e8c9ff0112)",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/release/deps/makepad_micro_proc_macro-1947788032478ebc)",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/release/deps/makepad_micro_serde-f47ae3e11c7cd920)",
+      "summaries": [
+        {
+          "passed": 19,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/release/deps/makepad_micro_serde_derive-f982a1b673490b92)",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/release/deps/makepad_micro_serde_derive_impl-f0f87a791693bcc7)",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/release/deps/makepad_network-b640db9afa636a45)",
+      "summaries": [
+        {
+          "passed": 74,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running unittests src/bin/fleet_id.rs (target/release/deps/fleet_id-8c7f09c97970985d)",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/blocking_http.rs (target/release/deps/blocking_http-c8fe0cab39ecfbcb)",
+      "summaries": [
+        {
+          "passed": 30,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/network_integration.rs (target/release/deps/network_integration-dcb1f5e2c669ae0b)",
+      "summaries": [
+        {
+          "passed": 12,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/release/deps/makepad_objc_sys-e834bd0b6a204235)",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/release/deps/makepad_prof_stream-0c9185a9dbf0a21f)",
+      "summaries": [
+        {
+          "passed": 14,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/flight.rs (target/release/deps/flight-2c066af460b6221d)",
+      "summaries": [
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/release/deps/makepad_relax_api-08556e1a996601ca)",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/release/deps/makepad_relax_api_macro-3ab68efe8f7f28f4)",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/release/deps/makepad_relax_api_macro_impl-0ac38c4bb1b2fdac)",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/release/deps/makepad_remote-1a18fad64ebc5073)",
+      "summaries": [
+        {
+          "passed": 67,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running unittests src/main.rs (target/release/deps/makepad_remote-5ce0fd77a6196ba9)",
+      "summaries": [
+        {
+          "passed": 7,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running unittests src/bin/mapfleet.rs (target/release/deps/mapfleet-12c8fa4d04d04553)",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/release/deps/makepad_script_derive_impl-0a8683a588b7182d)",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/release/deps/makepad_strict_json-69689462b667ed71)",
+      "summaries": [
+        {
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/release/deps/makepad_toml_parser-df4d93246d7fad53)",
+      "summaries": [
+        {
+          "passed": 16,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/conformance.rs (target/release/deps/conformance-283c28b4cfa6e665)",
+      "summaries": [
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/release/deps/relax_backend-b1fc21e30556f1f1)",
+      "summaries": [
+        {
+          "passed": 35,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/addr_modes_shared.rs (target/release/deps/addr_modes_shared-fb68ab3285582264)",
+      "summaries": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/branch_link.rs (target/release/deps/branch_link-1426772df389c5c4)",
+      "summaries": [
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/branch_not_compare.rs (target/release/deps/branch_not_compare-9fb745f3ad09f4fc)",
+      "summaries": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/bzhi.rs (target/release/deps/bzhi-80c5dd6bf82c6f32)",
+      "summaries": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/compact_param_ints.rs (target/release/deps/compact_param_ints-9d4a94f0572706e3)",
+      "summaries": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/crc32_clmul.rs (target/release/deps/crc32_clmul-5f580ff9d87046eb)",
+      "summaries": [
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/cse_loop_join.rs (target/release/deps/cse_loop_join-1218f93d20011c67)",
+      "summaries": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/cse_result_class.rs (target/release/deps/cse_result_class-e155447793abd345)",
+      "summaries": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/div_rem_pairs.rs (target/release/deps/div_rem_pairs-5a4fe2a83a7d1cbd)",
+      "summaries": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/dom_base_table.rs (target/release/deps/dom_base_table-39bd01564d143655)",
+      "summaries": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/flags_merge.rs (target/release/deps/flags_merge-4cb1ec7c13c88f7a)",
+      "summaries": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/fload_cmp.rs (target/release/deps/fload_cmp-2d4adfaff7060d0c)",
+      "summaries": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/float_select.rs (target/release/deps/float_select-0a439d266281e69c)",
+      "summaries": [
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/float_to_small_int.rs (target/release/deps/float_to_small_int-f12e2a870dd658b6)",
+      "summaries": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/fma_forms.rs (target/release/deps/fma_forms-7d64560a2fb7c399)",
+      "summaries": [
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/fma_nan.rs (target/release/deps/fma_nan-1f65d1f3cf0a8ea0)",
+      "summaries": [
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/fma_negated_operands.rs (target/release/deps/fma_negated_operands-0c9d3bbbbfd0f7e6)",
+      "summaries": [
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/fminmax_nan.rs (target/release/deps/fminmax_nan-5bd5cea45883578d)",
+      "summaries": [
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/gvn_pure.rs (target/release/deps/gvn_pure-56d652c6bdab27a0)",
+      "summaries": [
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/if_convert_join_branch.rs (target/release/deps/if_convert_join_branch-953c3b16460576a2)",
+      "summaries": [
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/lane_splat.rs (target/release/deps/lane_splat-22ccc53acc2c6e09)",
+      "summaries": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/licm_noalias.rs (target/release/deps/licm_noalias-22a0494bd71f4a7d)",
+      "summaries": [
+        {
+          "passed": 12,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/licm_slot.rs (target/release/deps/licm_slot-470357562bf876a7)",
+      "summaries": [
+        {
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/load_cmp.rs (target/release/deps/load_cmp-9bb3b5433a045345)",
+      "summaries": [
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/low_bits.rs (target/release/deps/low_bits-406584f42c1e6202)",
+      "summaries": [
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/mul_const.rs (target/release/deps/mul_const-55b081aeb24d3762)",
+      "summaries": [
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/narrow_bswap.rs (target/release/deps/narrow_bswap-099d01ba1764dbd5)",
+      "summaries": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/ordering_select_fold.rs (target/release/deps/ordering_select_fold-4b90ac8a898e8ab3)",
+      "summaries": [
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/pair256.rs (target/release/deps/pair256-6a7384d28813208d)",
+      "summaries": [
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/pair_access.rs (target/release/deps/pair_access-6cb208093e52aa62)",
+      "summaries": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/rax_alloc.rs (target/release/deps/rax_alloc-c985aab61d0781e1)",
+      "summaries": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/reassoc.rs (target/release/deps/reassoc-e79d7f99ca08f4a5)",
+      "summaries": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/recip_div.rs (target/release/deps/recip_div-220474154499e473)",
+      "summaries": [
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/region_exit_stores.rs (target/release/deps/region_exit_stores-087a0c3269465138)",
+      "summaries": [
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/region_hot_loop.rs (target/release/deps/region_hot_loop-137e665f66e742c1)",
+      "summaries": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/region_loop_exit_load.rs (target/release/deps/region_loop_exit_load-0f2a9c057a5c248f)",
+      "summaries": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/remat_cost.rs (target/release/deps/remat_cost-bbc4f1e98d047b51)",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/remat_multi_def.rs (target/release/deps/remat_multi_def-5104432f710ab61d)",
+      "summaries": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/remat_offset_chain.rs (target/release/deps/remat_offset_chain-269807a64eb5917d)",
+      "summaries": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/sel_chain_flags.rs (target/release/deps/sel_chain_flags-f3f5be671279f347)",
+      "summaries": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/sel_flags_span.rs (target/release/deps/sel_flags_span-e5dbb429f60eff52)",
+      "summaries": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/select_pair_flags.rs (target/release/deps/select_pair_flags-800b4d5ce5568fe6)",
+      "summaries": [
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/share_index_bases.rs (target/release/deps/share_index_bases-a65ad7c4a91afaf4)",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/shuffle_fold.rs (target/release/deps/shuffle_fold-199372e9834ceaa5)",
+      "summaries": [
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/sink_cold_consts.rs (target/release/deps/sink_cold_consts-07c2f5295c3b3fa3)",
+      "summaries": [
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/sink_steps.rs (target/release/deps/sink_steps-6ad007fcb3e69dd5)",
+      "summaries": [
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/spill_regions.rs (target/release/deps/spill_regions-5a1818352a187ed0)",
+      "summaries": [
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/spill_windows.rs (target/release/deps/spill_windows-8cbb1d9e41d67fb0)",
+      "summaries": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/spilled_base_reuse.rs (target/release/deps/spilled_base_reuse-fd41f99e7ebe5758)",
+      "summaries": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/sroa_guard_calls.rs (target/release/deps/sroa_guard_calls-33a0acba5f521f81)",
+      "summaries": [
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/sroa_lanes.rs (target/release/deps/sroa_lanes-03efbe702910ee53)",
+      "summaries": [
+        {
+          "passed": 7,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/sroa_sub_cells.rs (target/release/deps/sroa_sub_cells-c3ea44245f236ec0)",
+      "summaries": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/sub_of_offset.rs (target/release/deps/sub_of_offset-b28657661048ee59)",
+      "summaries": [
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/switch_lowering.rs (target/release/deps/switch_lowering-ba3d516e9caf9e21)",
+      "summaries": [
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/tail_calls.rs (target/release/deps/tail_calls-7b1bea72699217a2)",
+      "summaries": [
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/u32_imm.rs (target/release/deps/u32_imm-712c450874f056f1)",
+      "summaries": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/vec_index_addr.rs (target/release/deps/vec_index_addr-e375336ec50e173f)",
+      "summaries": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/vec_ops.rs (target/release/deps/vec_ops-b6188d8cc802069b)",
+      "summaries": [
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/vec_tbl.rs (target/release/deps/vec_tbl-0e1535f6f8a4993e)",
+      "summaries": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/verify_after.rs (target/release/deps/verify_after-4c685e2de38ad48f)",
+      "summaries": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/wasm_backend.rs (target/release/deps/wasm_backend-3316b440802bebae)",
+      "summaries": [
+        {
+          "passed": 21,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/x64_cabi.rs (target/release/deps/x64_cabi-8368cf00160bfb12)",
+      "summaries": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/xmm_hi.rs (target/release/deps/xmm_hi-c08c4b7611ae7df4)",
+      "summaries": [
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/release/deps/relax_base-87b5b382ffc69644)",
+      "summaries": [
+        {
+          "passed": 185,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/burst_global.rs (target/release/deps/burst_global-d5666fe24af43859)",
+      "summaries": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/burst_survivors.rs (target/release/deps/burst_survivors-27431ba678ff3bc4)",
+      "summaries": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/pm_bridge.rs (target/release/deps/pm_bridge-ed94d3af64bfcf60)",
+      "summaries": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/release/deps/relax_codegen-75914aa44fb3596f)",
+      "summaries": [
+        {
+          "passed": 115,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/const_slots.rs (target/release/deps/const_slots-921eb6d87c7e5368)",
+      "summaries": [
+        {
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/copies_and_dead_slots.rs (target/release/deps/copies_and_dead_slots-c5ae84a4aac4f57b)",
+      "summaries": [
+        {
+          "passed": 10,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/copy_runs.rs (target/release/deps/copy_runs-897ac63c9bca51de)",
+      "summaries": [
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/empty_slice_tests.rs (target/release/deps/empty_slice_tests-46c642b8dbf2e894)",
+      "summaries": [
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/form_bzhi.rs (target/release/deps/form_bzhi-b0d5e2564f05b533)",
+      "summaries": [
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/full_unroll.rs (target/release/deps/full_unroll-ba544b69791c27d2)",
+      "summaries": [
+        {
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/fuzz_tiers.rs (target/release/deps/fuzz_tiers-3053ae1113ff134d)",
+      "summaries": [
+        {
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/merge_const_stores.rs (target/release/deps/merge_const_stores-f73bc668dfe39410)",
+      "summaries": [
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/offset_ranges.rs (target/release/deps/offset_ranges-1e52824151a2d254)",
+      "summaries": [
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/slot_coalesce.rs (target/release/deps/slot_coalesce-dd7a31a1fa45f395)",
+      "summaries": [
+        {
+          "passed": 20,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/slot_load_forwarding.rs (target/release/deps/slot_load_forwarding-a5f8b6837c8aee6f)",
+      "summaries": [
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/small_sets.rs (target/release/deps/small_sets-5f9cc7b42cd1266a)",
+      "summaries": [
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/stores_for_copies.rs (target/release/deps/stores_for_copies-7ecb33deb20450b0)",
+      "summaries": [
+        {
+          "passed": 7,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/thread_ranges.rs (target/release/deps/thread_ranges-17f17161df0bbcbe)",
+      "summaries": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/version_loops.rs (target/release/deps/version_loops-79f5ea714a88e057)",
+      "summaries": [
+        {
+          "passed": 19,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/volatile.rs (target/release/deps/volatile-cfbf1e93258e43db)",
+      "summaries": [
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/release/deps/relax_compiler-61af3baa6130ef49)",
+      "summaries": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 375
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 375
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 375
+        },
+        {
+          "passed": 376,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/release/deps/relax_front-e4e99fc4c3edf831)",
+      "summaries": [
+        {
+          "passed": 102,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/release/deps/relax_lex-262555f807ff3950)",
+      "summaries": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/lexer.rs (target/release/deps/lexer-f026e4b17c7e7a75)",
+      "summaries": [
+        {
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/raw_bodies.rs (target/release/deps/raw_bodies-bfb60d736430fc2f)",
+      "summaries": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/tokens.rs (target/release/deps/tokens-675851b47dc176b9)",
+      "summaries": [
+        {
+          "passed": 7,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running tests/validate.rs (target/release/deps/validate-f2e7d16545857daa)",
+      "summaries": [
+        {
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/release/deps/relax_light_http-8c58a0b879722f73)",
+      "summaries": [
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/release/deps/relax_native_macros-89a8e693b417153b)",
+      "summaries": [
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/release/deps/relax_runner-94d96a69c76bfbfb)",
+      "summaries": [
+        {
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running unittests src/bin/relax.rs (target/release/deps/relax-f94d1741ecdeb8fc)",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/release/deps/relax_session-9415c7274709d8b7)",
+      "summaries": [
+        {
+          "passed": 7,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/release/deps/relax_types-0ac453312e704b43)",
+      "summaries": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 814
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 814
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 814
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 814
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 814
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 814
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 814
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 814
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 814
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 814
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 814
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 814
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 814
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 814
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 814
+        },
+        {
+          "passed": 815,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Doc-tests makepad_alloc_phase",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Doc-tests makepad_apple_sys",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Doc-tests makepad_core_util",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Doc-tests makepad_cpu_budget",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Doc-tests makepad_derive_widget_impl",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Doc-tests makepad_error_log",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 1,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Doc-tests makepad_gpu_trace",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Doc-tests makepad_live_id",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Doc-tests makepad_live_id_macros",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Doc-tests makepad_live_id_macros_impl",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Doc-tests makepad_micro_proc_macro",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Doc-tests makepad_micro_serde",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Doc-tests makepad_micro_serde_derive",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Doc-tests makepad_micro_serde_derive_impl",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Doc-tests makepad_network",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Doc-tests makepad_objc_sys",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Doc-tests makepad_prof_stream",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Doc-tests makepad_relax_api",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Doc-tests makepad_relax_api_macro",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Doc-tests makepad_relax_api_macro_impl",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Doc-tests makepad_remote",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Doc-tests makepad_script_derive_impl",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Doc-tests makepad_strict_json",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Doc-tests makepad_toml_parser",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Doc-tests relax_backend",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Doc-tests relax_base",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 1,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Doc-tests relax_codegen",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Doc-tests relax_compiler",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Doc-tests relax_front",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Doc-tests relax_lex",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Doc-tests relax_light_http",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Doc-tests relax_native_macros",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Doc-tests relax_runner",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Doc-tests relax_session",
+      "summaries": [
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0,
+          "filtered": 0
+        }
+      ]
+    },
+    {
+      "target": "Doc-tests relax_types",
+      "summaries": [
+        {
+          "passed": 7,
+          "failed": 0,
+          "ignored": 9,
+          "filtered": 0
+        }
+      ]
+    }
+  ],
+  "totals": {
+    "passed": 2255,
+    "failed": 0,
+    "ignored": 11
+  }
+}

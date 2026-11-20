@@ -1,0 +1,71 @@
+[
+  {
+    "stage": "cold",
+    "exit_code": 0,
+    "cargo_checks": 1,
+    "cargo_calls": [
+      [
+        "metadata",
+        "--format-version",
+        "1",
+        "--no-deps"
+      ],
+      [
+        "check",
+        "--release",
+        "--message-format=json",
+        "-p",
+        "relax-cfg-cache-probe",
+        "--target",
+        "x86_64-unknown-linux-gnu",
+        "--tests"
+      ]
+    ]
+  },
+  {
+    "stage": "warm",
+    "exit_code": 0,
+    "cargo_checks": 1,
+    "cargo_calls": [
+      [
+        "metadata",
+        "--format-version",
+        "1",
+        "--no-deps"
+      ],
+      [
+        "check",
+        "--release",
+        "--message-format=json",
+        "-p",
+        "relax-cfg-cache-probe",
+        "--target",
+        "x86_64-unknown-linux-gnu",
+        "--tests"
+      ]
+    ]
+  },
+  {
+    "stage": "missing-output",
+    "exit_code": 101,
+    "cargo_checks": 1,
+    "cargo_calls": [
+      [
+        "metadata",
+        "--format-version",
+        "1",
+        "--no-deps"
+      ],
+      [
+        "check",
+        "--release",
+        "--message-format=json",
+        "-p",
+        "relax-cfg-cache-probe",
+        "--target",
+        "x86_64-unknown-linux-gnu",
+        "--tests"
+      ]
+    ]
+  }
+]

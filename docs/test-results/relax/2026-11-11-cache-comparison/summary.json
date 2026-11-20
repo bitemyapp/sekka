@@ -1,0 +1,1714 @@
+{
+  "runs": [
+    {
+      "stage": "cold",
+      "engine": "relax",
+      "repeat": 0,
+      "seconds": 22.44843467999999,
+      "settled_seconds": 22.448726462000195,
+      "packages": [
+        {
+          "package": "aizome-kit",
+          "seconds": 15.122030435999932,
+          "passed": 40,
+          "lazy_code_hits": 0,
+          "lazy_code_misses": 0,
+          "prelinked_startup_slots": 0
+        },
+        {
+          "package": "aizome-soroban",
+          "seconds": 7.326404244000059,
+          "passed": 11,
+          "lazy_code_hits": 843,
+          "lazy_code_misses": 454,
+          "prelinked_startup_slots": 0
+        }
+      ]
+    },
+    {
+      "stage": "cold",
+      "engine": "buck2",
+      "repeat": 0,
+      "seconds": 63.50380528999949,
+      "settled_seconds": 63.50411709199989,
+      "packages": [
+        {
+          "package": "aizome-kit",
+          "seconds": 48.44373122299976,
+          "passed": 40,
+          "action_execution_kinds": {
+            "4": 221,
+            "1": 211
+          },
+          "compiler_executions": 185,
+          "local_test_executions": 1,
+          "unique_action_keys": 432,
+          "trace_id": "0ff9d29c-0402-41e1-b9e4-3c43f4000557"
+        },
+        {
+          "package": "aizome-soroban",
+          "seconds": 15.060074066999732,
+          "passed": 11,
+          "action_execution_kinds": {
+            "4": 34,
+            "1": 32
+          },
+          "compiler_executions": 29,
+          "local_test_executions": 1,
+          "unique_action_keys": 66,
+          "trace_id": "645cc962-bba1-4486-9de8-88709e0362af"
+        }
+      ]
+    },
+    {
+      "stage": "warm-a",
+      "engine": "relax",
+      "repeat": 0,
+      "seconds": 1.68908021299967,
+      "settled_seconds": 1.689235197999551,
+      "packages": [
+        {
+          "package": "aizome-kit",
+          "seconds": 0.9083213109997814,
+          "passed": 40,
+          "lazy_code_hits": 8,
+          "lazy_code_misses": 17,
+          "prelinked_startup_slots": 10834
+        },
+        {
+          "package": "aizome-soroban",
+          "seconds": 0.7807589019998886,
+          "passed": 11,
+          "lazy_code_hits": 12,
+          "lazy_code_misses": 0,
+          "prelinked_startup_slots": 1294
+        }
+      ]
+    },
+    {
+      "stage": "warm-a",
+      "engine": "buck2",
+      "repeat": 0,
+      "seconds": 0.7177572320001673,
+      "settled_seconds": 0.7180224530002306,
+      "packages": [
+        {
+          "package": "aizome-kit",
+          "seconds": 0.38280583599998863,
+          "passed": 40,
+          "action_execution_kinds": {},
+          "compiler_executions": 0,
+          "local_test_executions": 1,
+          "unique_action_keys": 0,
+          "trace_id": "56ee3347-8d5a-4849-8e88-f8804e872d28"
+        },
+        {
+          "package": "aizome-soroban",
+          "seconds": 0.33495139600017865,
+          "passed": 11,
+          "action_execution_kinds": {},
+          "compiler_executions": 0,
+          "local_test_executions": 1,
+          "unique_action_keys": 0,
+          "trace_id": "fffd7237-72d3-46fa-8dbc-73f6faa57f92"
+        }
+      ]
+    },
+    {
+      "stage": "warm-a",
+      "engine": "buck2",
+      "repeat": 1,
+      "seconds": 0.7132389060002424,
+      "settled_seconds": 0.7137092080001821,
+      "packages": [
+        {
+          "package": "aizome-kit",
+          "seconds": 0.381337041000279,
+          "passed": 40,
+          "action_execution_kinds": {},
+          "compiler_executions": 0,
+          "local_test_executions": 1,
+          "unique_action_keys": 0,
+          "trace_id": "4c0c4a9e-bdcb-4849-86b1-3c3181b7bfe2"
+        },
+        {
+          "package": "aizome-soroban",
+          "seconds": 0.33190186499996344,
+          "passed": 11,
+          "action_execution_kinds": {},
+          "compiler_executions": 0,
+          "local_test_executions": 1,
+          "unique_action_keys": 0,
+          "trace_id": "46650bd6-f4b9-4cf2-b6e3-1263f7f15cb2"
+        }
+      ]
+    },
+    {
+      "stage": "warm-a",
+      "engine": "relax",
+      "repeat": 1,
+      "seconds": 1.6306486890002816,
+      "settled_seconds": 1.6309398100002,
+      "packages": [
+        {
+          "package": "aizome-kit",
+          "seconds": 0.9057281280001916,
+          "passed": 40,
+          "lazy_code_hits": 24,
+          "lazy_code_misses": 15,
+          "prelinked_startup_slots": 10834
+        },
+        {
+          "package": "aizome-soroban",
+          "seconds": 0.72492056100009,
+          "passed": 11,
+          "lazy_code_hits": 12,
+          "lazy_code_misses": 0,
+          "prelinked_startup_slots": 1294
+        }
+      ]
+    },
+    {
+      "stage": "warm-a",
+      "engine": "relax",
+      "repeat": 2,
+      "seconds": 1.626464825000312,
+      "settled_seconds": 1.6267304369998783,
+      "packages": [
+        {
+          "package": "aizome-kit",
+          "seconds": 0.9219348780002292,
+          "passed": 40,
+          "lazy_code_hits": 38,
+          "lazy_code_misses": 13,
+          "prelinked_startup_slots": 10834
+        },
+        {
+          "package": "aizome-soroban",
+          "seconds": 0.7045299470000828,
+          "passed": 11,
+          "lazy_code_hits": 12,
+          "lazy_code_misses": 0,
+          "prelinked_startup_slots": 1294
+        }
+      ]
+    },
+    {
+      "stage": "warm-a",
+      "engine": "buck2",
+      "repeat": 2,
+      "seconds": 0.7084683930002029,
+      "settled_seconds": 0.7087462940003206,
+      "packages": [
+        {
+          "package": "aizome-kit",
+          "seconds": 0.38333385300029477,
+          "passed": 40,
+          "action_execution_kinds": {},
+          "compiler_executions": 0,
+          "local_test_executions": 1,
+          "unique_action_keys": 0,
+          "trace_id": "c630bbb5-b9cc-47d8-adf3-83a54e9f89e6"
+        },
+        {
+          "package": "aizome-soroban",
+          "seconds": 0.32513453999990816,
+          "passed": 11,
+          "action_execution_kinds": {},
+          "compiler_executions": 0,
+          "local_test_executions": 1,
+          "unique_action_keys": 0,
+          "trace_id": "f86acd80-c082-4646-9fd8-1321272ce290"
+        }
+      ]
+    },
+    {
+      "stage": "identical-b",
+      "engine": "relax",
+      "repeat": 0,
+      "seconds": 16.51629767500026,
+      "settled_seconds": 16.51666610300026,
+      "packages": [
+        {
+          "package": "aizome-kit",
+          "seconds": 8.802133392000087,
+          "passed": 40,
+          "lazy_code_hits": 8440,
+          "lazy_code_misses": 2186,
+          "prelinked_startup_slots": 0
+        },
+        {
+          "package": "aizome-soroban",
+          "seconds": 7.714164283000173,
+          "passed": 11,
+          "lazy_code_hits": 993,
+          "lazy_code_misses": 304,
+          "prelinked_startup_slots": 0
+        }
+      ]
+    },
+    {
+      "stage": "identical-b",
+      "engine": "buck2",
+      "repeat": 0,
+      "seconds": 4.85616912200021,
+      "settled_seconds": 4.856389926000702,
+      "packages": [
+        {
+          "package": "aizome-kit",
+          "seconds": 3.2551885620000576,
+          "passed": 40,
+          "action_execution_kinds": {
+            "4": 221,
+            "3": 211
+          },
+          "compiler_executions": 0,
+          "local_test_executions": 1,
+          "unique_action_keys": 432,
+          "trace_id": "9cc6006c-6897-48a0-88fb-8b63df66424f"
+        },
+        {
+          "package": "aizome-soroban",
+          "seconds": 1.6009805600001528,
+          "passed": 11,
+          "action_execution_kinds": {
+            "4": 34,
+            "3": 32
+          },
+          "compiler_executions": 0,
+          "local_test_executions": 1,
+          "unique_action_keys": 66,
+          "trace_id": "77439c98-e470-40ef-8f2f-312037047ca3"
+        }
+      ]
+    },
+    {
+      "stage": "warm-b",
+      "engine": "relax",
+      "repeat": 0,
+      "seconds": 1.609986243000094,
+      "settled_seconds": 1.6103521579998414,
+      "packages": [
+        {
+          "package": "aizome-kit",
+          "seconds": 0.8301458969999658,
+          "passed": 40,
+          "lazy_code_hits": 19,
+          "lazy_code_misses": 3,
+          "prelinked_startup_slots": 10625
+        },
+        {
+          "package": "aizome-soroban",
+          "seconds": 0.7798403460001282,
+          "passed": 11,
+          "lazy_code_hits": 4,
+          "lazy_code_misses": 0,
+          "prelinked_startup_slots": 1294
+        }
+      ]
+    },
+    {
+      "stage": "warm-b",
+      "engine": "buck2",
+      "repeat": 0,
+      "seconds": 0.6875542149996363,
+      "settled_seconds": 0.6877491800000826,
+      "packages": [
+        {
+          "package": "aizome-kit",
+          "seconds": 0.3661106619997554,
+          "passed": 40,
+          "action_execution_kinds": {},
+          "compiler_executions": 0,
+          "local_test_executions": 1,
+          "unique_action_keys": 0,
+          "trace_id": "c3ad5731-a6b4-4449-9aad-8dceff58868b"
+        },
+        {
+          "package": "aizome-soroban",
+          "seconds": 0.3214435529998809,
+          "passed": 11,
+          "action_execution_kinds": {},
+          "compiler_executions": 0,
+          "local_test_executions": 1,
+          "unique_action_keys": 0,
+          "trace_id": "9fa60d22-93ef-48f0-bd39-9e6e34589ce6"
+        }
+      ]
+    },
+    {
+      "stage": "warm-b",
+      "engine": "buck2",
+      "repeat": 1,
+      "seconds": 0.6853494550000505,
+      "settled_seconds": 0.6855835389997083,
+      "packages": [
+        {
+          "package": "aizome-kit",
+          "seconds": 0.3642390370000612,
+          "passed": 40,
+          "action_execution_kinds": {},
+          "compiler_executions": 0,
+          "local_test_executions": 1,
+          "unique_action_keys": 0,
+          "trace_id": "e16c3091-4dfa-4dc5-bb79-ccf4e4c25820"
+        },
+        {
+          "package": "aizome-soroban",
+          "seconds": 0.3211104179999893,
+          "passed": 11,
+          "action_execution_kinds": {},
+          "compiler_executions": 0,
+          "local_test_executions": 1,
+          "unique_action_keys": 0,
+          "trace_id": "98cecc4b-219d-40ac-ab87-dc561cfad757"
+        }
+      ]
+    },
+    {
+      "stage": "warm-b",
+      "engine": "relax",
+      "repeat": 1,
+      "seconds": 1.6689554489998955,
+      "settled_seconds": 1.6692989999996826,
+      "packages": [
+        {
+          "package": "aizome-kit",
+          "seconds": 0.9496038960000988,
+          "passed": 40,
+          "lazy_code_hits": 21,
+          "lazy_code_misses": 3,
+          "prelinked_startup_slots": 10625
+        },
+        {
+          "package": "aizome-soroban",
+          "seconds": 0.7193515529997967,
+          "passed": 11,
+          "lazy_code_hits": 12,
+          "lazy_code_misses": 0,
+          "prelinked_startup_slots": 1294
+        }
+      ]
+    },
+    {
+      "stage": "warm-b",
+      "engine": "relax",
+      "repeat": 2,
+      "seconds": 1.6828214100000878,
+      "settled_seconds": 1.6830752050004776,
+      "packages": [
+        {
+          "package": "aizome-kit",
+          "seconds": 0.9459194710002521,
+          "passed": 40,
+          "lazy_code_hits": 27,
+          "lazy_code_misses": 5,
+          "prelinked_startup_slots": 10625
+        },
+        {
+          "package": "aizome-soroban",
+          "seconds": 0.7369019389998357,
+          "passed": 11,
+          "lazy_code_hits": 4,
+          "lazy_code_misses": 0,
+          "prelinked_startup_slots": 1294
+        }
+      ]
+    },
+    {
+      "stage": "warm-b",
+      "engine": "buck2",
+      "repeat": 2,
+      "seconds": 0.701757426000313,
+      "settled_seconds": 0.7019399720002184,
+      "packages": [
+        {
+          "package": "aizome-kit",
+          "seconds": 0.3852857980000408,
+          "passed": 40,
+          "action_execution_kinds": {},
+          "compiler_executions": 0,
+          "local_test_executions": 1,
+          "unique_action_keys": 0,
+          "trace_id": "be165281-b9be-4940-9647-18e7344b57b5"
+        },
+        {
+          "package": "aizome-soroban",
+          "seconds": 0.3164716280002722,
+          "passed": 11,
+          "action_execution_kinds": {},
+          "compiler_executions": 0,
+          "local_test_executions": 1,
+          "unique_action_keys": 0,
+          "trace_id": "07b8a8d5-eac7-4b4b-892e-e0b94589d82a"
+        }
+      ]
+    },
+    {
+      "stage": "unrelated-c",
+      "engine": "relax",
+      "repeat": 0,
+      "seconds": 15.732400228000188,
+      "settled_seconds": 15.732622704999812,
+      "packages": [
+        {
+          "package": "aizome-kit",
+          "seconds": 8.354830376000336,
+          "passed": 40,
+          "lazy_code_hits": 8434,
+          "lazy_code_misses": 2179,
+          "prelinked_startup_slots": 0
+        },
+        {
+          "package": "aizome-soroban",
+          "seconds": 7.377569851999851,
+          "passed": 11,
+          "lazy_code_hits": 1002,
+          "lazy_code_misses": 304,
+          "prelinked_startup_slots": 0
+        }
+      ]
+    },
+    {
+      "stage": "unrelated-c",
+      "engine": "buck2",
+      "repeat": 0,
+      "seconds": 6.034606160999829,
+      "settled_seconds": 6.034777340000346,
+      "packages": [
+        {
+          "package": "aizome-kit",
+          "seconds": 4.243002420999801,
+          "passed": 40,
+          "action_execution_kinds": {
+            "4": 221,
+            "3": 211
+          },
+          "compiler_executions": 0,
+          "local_test_executions": 1,
+          "unique_action_keys": 432,
+          "trace_id": "03555581-1a0f-46cb-ac62-b81b0c621094"
+        },
+        {
+          "package": "aizome-soroban",
+          "seconds": 1.7916037400000278,
+          "passed": 11,
+          "action_execution_kinds": {
+            "4": 254,
+            "10": 210,
+            "3": 32
+          },
+          "compiler_executions": 0,
+          "local_test_executions": 1,
+          "unique_action_keys": 496,
+          "trace_id": "f1c0e159-cd29-4356-99bd-1c4ac9d4166a"
+        }
+      ]
+    },
+    {
+      "stage": "warm-c",
+      "engine": "relax",
+      "repeat": 0,
+      "seconds": 1.6481095770000138,
+      "settled_seconds": 1.6483372020002207,
+      "packages": [
+        {
+          "package": "aizome-kit",
+          "seconds": 0.9497150970000803,
+          "passed": 40,
+          "lazy_code_hits": 22,
+          "lazy_code_misses": 3,
+          "prelinked_startup_slots": 10613
+        },
+        {
+          "package": "aizome-soroban",
+          "seconds": 0.6983944799999335,
+          "passed": 11,
+          "lazy_code_hits": 4,
+          "lazy_code_misses": 0,
+          "prelinked_startup_slots": 1303
+        }
+      ]
+    },
+    {
+      "stage": "warm-c",
+      "engine": "buck2",
+      "repeat": 0,
+      "seconds": 0.7326629029998912,
+      "settled_seconds": 0.7330170899999757,
+      "packages": [
+        {
+          "package": "aizome-kit",
+          "seconds": 0.3858999809999659,
+          "passed": 40,
+          "action_execution_kinds": {
+            "4": 1,
+            "10": 1
+          },
+          "compiler_executions": 0,
+          "local_test_executions": 1,
+          "unique_action_keys": 2,
+          "trace_id": "ed67d435-9f99-4fe6-b7a8-02d7e883c60a"
+        },
+        {
+          "package": "aizome-soroban",
+          "seconds": 0.3467629219999253,
+          "passed": 11,
+          "action_execution_kinds": {},
+          "compiler_executions": 0,
+          "local_test_executions": 1,
+          "unique_action_keys": 0,
+          "trace_id": "fb3c0bdd-4edc-43b6-9667-32ed1679cc7c"
+        }
+      ]
+    },
+    {
+      "stage": "warm-c",
+      "engine": "buck2",
+      "repeat": 1,
+      "seconds": 0.7066892129996631,
+      "settled_seconds": 0.7069395419998727,
+      "packages": [
+        {
+          "package": "aizome-kit",
+          "seconds": 0.3658050579997507,
+          "passed": 40,
+          "action_execution_kinds": {},
+          "compiler_executions": 0,
+          "local_test_executions": 1,
+          "unique_action_keys": 0,
+          "trace_id": "fb20cbc6-ad41-487e-94ec-2206364684d6"
+        },
+        {
+          "package": "aizome-soroban",
+          "seconds": 0.3408841549999124,
+          "passed": 11,
+          "action_execution_kinds": {},
+          "compiler_executions": 0,
+          "local_test_executions": 1,
+          "unique_action_keys": 0,
+          "trace_id": "f9beda30-d82e-4b3e-8137-afca2c530f34"
+        }
+      ]
+    },
+    {
+      "stage": "warm-c",
+      "engine": "relax",
+      "repeat": 1,
+      "seconds": 1.4777450339997813,
+      "settled_seconds": 1.4780358739999429,
+      "packages": [
+        {
+          "package": "aizome-kit",
+          "seconds": 0.804554688999815,
+          "passed": 40,
+          "lazy_code_hits": 43,
+          "lazy_code_misses": 12,
+          "prelinked_startup_slots": 10613
+        },
+        {
+          "package": "aizome-soroban",
+          "seconds": 0.6731903449999663,
+          "passed": 11,
+          "lazy_code_hits": 4,
+          "lazy_code_misses": 0,
+          "prelinked_startup_slots": 1303
+        }
+      ]
+    },
+    {
+      "stage": "warm-c",
+      "engine": "relax",
+      "repeat": 2,
+      "seconds": 1.6560394670000278,
+      "settled_seconds": 1.6564642999996977,
+      "packages": [
+        {
+          "package": "aizome-kit",
+          "seconds": 0.9617209580001145,
+          "passed": 40,
+          "lazy_code_hits": 48,
+          "lazy_code_misses": 3,
+          "prelinked_startup_slots": 10613
+        },
+        {
+          "package": "aizome-soroban",
+          "seconds": 0.6943185089999133,
+          "passed": 11,
+          "lazy_code_hits": 4,
+          "lazy_code_misses": 0,
+          "prelinked_startup_slots": 1303
+        }
+      ]
+    },
+    {
+      "stage": "warm-c",
+      "engine": "buck2",
+      "repeat": 2,
+      "seconds": 0.7268246119997457,
+      "settled_seconds": 0.7270232630003193,
+      "packages": [
+        {
+          "package": "aizome-kit",
+          "seconds": 0.39008065100006206,
+          "passed": 40,
+          "action_execution_kinds": {},
+          "compiler_executions": 0,
+          "local_test_executions": 1,
+          "unique_action_keys": 0,
+          "trace_id": "cb3463ee-b620-434a-bacf-04b236038e64"
+        },
+        {
+          "package": "aizome-soroban",
+          "seconds": 0.3367439609996836,
+          "passed": 11,
+          "action_execution_kinds": {},
+          "compiler_executions": 0,
+          "local_test_executions": 1,
+          "unique_action_keys": 0,
+          "trace_id": "c753f3db-821c-45df-ab39-a11bca62fb3b"
+        }
+      ]
+    },
+    {
+      "stage": "leaf-edit-c",
+      "engine": "relax",
+      "repeat": 0,
+      "seconds": 1.9461311869999918,
+      "settled_seconds": 1.946446294999987,
+      "packages": [
+        {
+          "package": "aizome-kit",
+          "seconds": 0.971584976000031,
+          "passed": 40,
+          "lazy_code_hits": 53,
+          "lazy_code_misses": 3,
+          "prelinked_startup_slots": 10613
+        },
+        {
+          "package": "aizome-soroban",
+          "seconds": 0.9745462109999607,
+          "passed": 12,
+          "lazy_code_hits": 15,
+          "lazy_code_misses": 1,
+          "prelinked_startup_slots": 1292
+        }
+      ]
+    },
+    {
+      "stage": "leaf-edit-c",
+      "engine": "buck2",
+      "repeat": 0,
+      "seconds": 2.7812929560000157,
+      "settled_seconds": 2.7815397800004575,
+      "packages": [
+        {
+          "package": "aizome-kit",
+          "seconds": 0.376456920000237,
+          "passed": 40,
+          "action_execution_kinds": {},
+          "compiler_executions": 0,
+          "local_test_executions": 1,
+          "unique_action_keys": 0,
+          "trace_id": "c016274a-bb3a-43e6-b090-3a75b249c173"
+        },
+        {
+          "package": "aizome-soroban",
+          "seconds": 2.4048360359997787,
+          "passed": 12,
+          "action_execution_kinds": {
+            "4": 2,
+            "1": 1
+          },
+          "compiler_executions": 1,
+          "local_test_executions": 1,
+          "unique_action_keys": 3,
+          "trace_id": "151f2877-3586-4217-b4ac-58ca15c098da"
+        }
+      ]
+    },
+    {
+      "stage": "leaf-warm-c",
+      "engine": "relax",
+      "repeat": 0,
+      "seconds": 1.7412611419999848,
+      "settled_seconds": 1.741586355000436,
+      "packages": [
+        {
+          "package": "aizome-kit",
+          "seconds": 0.925976903999981,
+          "passed": 40,
+          "lazy_code_hits": 53,
+          "lazy_code_misses": 2,
+          "prelinked_startup_slots": 10613
+        },
+        {
+          "package": "aizome-soroban",
+          "seconds": 0.8152842380000038,
+          "passed": 12,
+          "lazy_code_hits": 5,
+          "lazy_code_misses": 0,
+          "prelinked_startup_slots": 1303
+        }
+      ]
+    },
+    {
+      "stage": "leaf-warm-c",
+      "engine": "buck2",
+      "repeat": 0,
+      "seconds": 0.7152032759995564,
+      "settled_seconds": 0.7154597349999676,
+      "packages": [
+        {
+          "package": "aizome-kit",
+          "seconds": 0.38197701799981587,
+          "passed": 40,
+          "action_execution_kinds": {},
+          "compiler_executions": 0,
+          "local_test_executions": 1,
+          "unique_action_keys": 0,
+          "trace_id": "5c046474-e745-49a4-99c5-c53f22b121a8"
+        },
+        {
+          "package": "aizome-soroban",
+          "seconds": 0.3332262579997405,
+          "passed": 12,
+          "action_execution_kinds": {},
+          "compiler_executions": 0,
+          "local_test_executions": 1,
+          "unique_action_keys": 0,
+          "trace_id": "7d6c5e66-ccb1-4997-8c2b-40d6efe29d42"
+        }
+      ]
+    },
+    {
+      "stage": "leaf-warm-c",
+      "engine": "buck2",
+      "repeat": 1,
+      "seconds": 0.697321385000123,
+      "settled_seconds": 0.6975340469998628,
+      "packages": [
+        {
+          "package": "aizome-kit",
+          "seconds": 0.3736300730001858,
+          "passed": 40,
+          "action_execution_kinds": {},
+          "compiler_executions": 0,
+          "local_test_executions": 1,
+          "unique_action_keys": 0,
+          "trace_id": "e79fd822-dd77-44e2-a6ac-347f2844cb7a"
+        },
+        {
+          "package": "aizome-soroban",
+          "seconds": 0.32369131199993717,
+          "passed": 12,
+          "action_execution_kinds": {},
+          "compiler_executions": 0,
+          "local_test_executions": 1,
+          "unique_action_keys": 0,
+          "trace_id": "369e68bb-f441-4c2a-ad26-6e3de70ac576"
+        }
+      ]
+    },
+    {
+      "stage": "leaf-warm-c",
+      "engine": "relax",
+      "repeat": 1,
+      "seconds": 1.7286927019999894,
+      "settled_seconds": 1.729006988999572,
+      "packages": [
+        {
+          "package": "aizome-kit",
+          "seconds": 0.9688744529998985,
+          "passed": 40,
+          "lazy_code_hits": 54,
+          "lazy_code_misses": 2,
+          "prelinked_startup_slots": 10613
+        },
+        {
+          "package": "aizome-soroban",
+          "seconds": 0.7598182490000909,
+          "passed": 12,
+          "lazy_code_hits": 5,
+          "lazy_code_misses": 0,
+          "prelinked_startup_slots": 1303
+        }
+      ]
+    },
+    {
+      "stage": "leaf-warm-c",
+      "engine": "relax",
+      "repeat": 2,
+      "seconds": 1.7557581800001572,
+      "settled_seconds": 1.7560138270000607,
+      "packages": [
+        {
+          "package": "aizome-kit",
+          "seconds": 0.9667679110002609,
+          "passed": 40,
+          "lazy_code_hits": 56,
+          "lazy_code_misses": 2,
+          "prelinked_startup_slots": 10613
+        },
+        {
+          "package": "aizome-soroban",
+          "seconds": 0.7889902689998962,
+          "passed": 12,
+          "lazy_code_hits": 5,
+          "lazy_code_misses": 0,
+          "prelinked_startup_slots": 1303
+        }
+      ]
+    },
+    {
+      "stage": "leaf-warm-c",
+      "engine": "buck2",
+      "repeat": 2,
+      "seconds": 0.7300850130000072,
+      "settled_seconds": 0.7302946509998947,
+      "packages": [
+        {
+          "package": "aizome-kit",
+          "seconds": 0.39363324299984015,
+          "passed": 40,
+          "action_execution_kinds": {},
+          "compiler_executions": 0,
+          "local_test_executions": 1,
+          "unique_action_keys": 0,
+          "trace_id": "edced357-f7c0-4115-a7fe-ce6aab28388a"
+        },
+        {
+          "package": "aizome-soroban",
+          "seconds": 0.336451770000167,
+          "passed": 12,
+          "action_execution_kinds": {},
+          "compiler_executions": 0,
+          "local_test_executions": 1,
+          "unique_action_keys": 0,
+          "trace_id": "42225a53-6119-4b32-ada1-1ec7dcad0ca1"
+        }
+      ]
+    },
+    {
+      "stage": "shared-edit-c",
+      "engine": "relax",
+      "repeat": 0,
+      "seconds": 2.800513724999746,
+      "settled_seconds": 2.8007988569997906,
+      "packages": [
+        {
+          "package": "aizome-kit",
+          "seconds": 1.3957587599998078,
+          "passed": 40,
+          "lazy_code_hits": 63,
+          "lazy_code_misses": 25,
+          "prelinked_startup_slots": 10600
+        },
+        {
+          "package": "aizome-soroban",
+          "seconds": 1.4047549649999382,
+          "passed": 12,
+          "lazy_code_hits": 15,
+          "lazy_code_misses": 2,
+          "prelinked_startup_slots": 1292
+        }
+      ]
+    },
+    {
+      "stage": "shared-edit-c",
+      "engine": "buck2",
+      "repeat": 0,
+      "seconds": 7.849561560999973,
+      "settled_seconds": 7.850341361999654,
+      "packages": [
+        {
+          "package": "aizome-kit",
+          "seconds": 3.7459658889997627,
+          "passed": 40,
+          "action_execution_kinds": {
+            "4": 4,
+            "7": 1,
+            "1": 2
+          },
+          "compiler_executions": 1,
+          "local_test_executions": 1,
+          "unique_action_keys": 7,
+          "trace_id": "8e2c5ae2-1af7-4fa6-8a36-6b3bd1f505fd"
+        },
+        {
+          "package": "aizome-soroban",
+          "seconds": 4.1035956720002105,
+          "passed": 12,
+          "action_execution_kinds": {
+            "4": 3,
+            "1": 2
+          },
+          "compiler_executions": 2,
+          "local_test_executions": 1,
+          "unique_action_keys": 5,
+          "trace_id": "b1f0c4c6-6c85-43ec-a658-b6cfdb14f95f"
+        }
+      ]
+    },
+    {
+      "stage": "shared-warm-c",
+      "engine": "relax",
+      "repeat": 0,
+      "seconds": 1.7497213999999985,
+      "settled_seconds": 1.7499256300002344,
+      "packages": [
+        {
+          "package": "aizome-kit",
+          "seconds": 0.957103916000051,
+          "passed": 40,
+          "lazy_code_hits": 76,
+          "lazy_code_misses": 2,
+          "prelinked_startup_slots": 10605
+        },
+        {
+          "package": "aizome-soroban",
+          "seconds": 0.7926174839999476,
+          "passed": 12,
+          "lazy_code_hits": 6,
+          "lazy_code_misses": 0,
+          "prelinked_startup_slots": 1303
+        }
+      ]
+    },
+    {
+      "stage": "shared-warm-c",
+      "engine": "buck2",
+      "repeat": 0,
+      "seconds": 0.6608873619998121,
+      "settled_seconds": 0.6611576519994742,
+      "packages": [
+        {
+          "package": "aizome-kit",
+          "seconds": 0.3595072079997408,
+          "passed": 40,
+          "action_execution_kinds": {},
+          "compiler_executions": 0,
+          "local_test_executions": 1,
+          "unique_action_keys": 0,
+          "trace_id": "3130a147-3d4b-4469-a126-9457619d1009"
+        },
+        {
+          "package": "aizome-soroban",
+          "seconds": 0.30138015400007134,
+          "passed": 12,
+          "action_execution_kinds": {},
+          "compiler_executions": 0,
+          "local_test_executions": 1,
+          "unique_action_keys": 0,
+          "trace_id": "30dd4f85-94cd-4959-8746-c81f0c7d303f"
+        }
+      ]
+    },
+    {
+      "stage": "shared-warm-c",
+      "engine": "buck2",
+      "repeat": 1,
+      "seconds": 0.6567699730003369,
+      "settled_seconds": 0.6569662500005506,
+      "packages": [
+        {
+          "package": "aizome-kit",
+          "seconds": 0.3496620230002918,
+          "passed": 40,
+          "action_execution_kinds": {},
+          "compiler_executions": 0,
+          "local_test_executions": 1,
+          "unique_action_keys": 0,
+          "trace_id": "ace8598b-faba-4bd3-8515-172305288169"
+        },
+        {
+          "package": "aizome-soroban",
+          "seconds": 0.3071079500000451,
+          "passed": 12,
+          "action_execution_kinds": {},
+          "compiler_executions": 0,
+          "local_test_executions": 1,
+          "unique_action_keys": 0,
+          "trace_id": "19a5e1a4-8403-4b7a-b722-2bd8f2ead5f8"
+        }
+      ]
+    },
+    {
+      "stage": "shared-warm-c",
+      "engine": "relax",
+      "repeat": 1,
+      "seconds": 1.5444590509996488,
+      "settled_seconds": 1.5447633319995475,
+      "packages": [
+        {
+          "package": "aizome-kit",
+          "seconds": 0.8185969749997639,
+          "passed": 40,
+          "lazy_code_hits": 80,
+          "lazy_code_misses": 6,
+          "prelinked_startup_slots": 10605
+        },
+        {
+          "package": "aizome-soroban",
+          "seconds": 0.7258620759998848,
+          "passed": 12,
+          "lazy_code_hits": 6,
+          "lazy_code_misses": 0,
+          "prelinked_startup_slots": 1303
+        }
+      ]
+    },
+    {
+      "stage": "shared-warm-c",
+      "engine": "relax",
+      "repeat": 2,
+      "seconds": 1.6929325609999069,
+      "settled_seconds": 1.6932323650003127,
+      "packages": [
+        {
+          "package": "aizome-kit",
+          "seconds": 0.9472588160001578,
+          "passed": 40,
+          "lazy_code_hits": 30,
+          "lazy_code_misses": 4,
+          "prelinked_startup_slots": 10605
+        },
+        {
+          "package": "aizome-soroban",
+          "seconds": 0.745673744999749,
+          "passed": 12,
+          "lazy_code_hits": 6,
+          "lazy_code_misses": 0,
+          "prelinked_startup_slots": 1303
+        }
+      ]
+    },
+    {
+      "stage": "shared-warm-c",
+      "engine": "buck2",
+      "repeat": 2,
+      "seconds": 0.7370654349992947,
+      "settled_seconds": 0.7373560139994879,
+      "packages": [
+        {
+          "package": "aizome-kit",
+          "seconds": 0.37775197299970387,
+          "passed": 40,
+          "action_execution_kinds": {},
+          "compiler_executions": 0,
+          "local_test_executions": 1,
+          "unique_action_keys": 0,
+          "trace_id": "94757527-0ac7-478c-8949-ad56f12989c1"
+        },
+        {
+          "package": "aizome-soroban",
+          "seconds": 0.3593134619995908,
+          "passed": 12,
+          "action_execution_kinds": {},
+          "compiler_executions": 0,
+          "local_test_executions": 1,
+          "unique_action_keys": 0,
+          "trace_id": "e327c892-1c79-495a-bedb-43eff1afe9e9"
+        }
+      ]
+    },
+    {
+      "stage": "fresh-leaf-edit-d",
+      "engine": "relax",
+      "repeat": 0,
+      "seconds": 14.804183990999718,
+      "settled_seconds": 14.80444898199994,
+      "packages": [
+        {
+          "package": "aizome-kit",
+          "seconds": 7.804397942999913,
+          "passed": 40,
+          "lazy_code_hits": 8432,
+          "lazy_code_misses": 2179,
+          "prelinked_startup_slots": 0
+        },
+        {
+          "package": "aizome-soroban",
+          "seconds": 6.999786047999805,
+          "passed": 12,
+          "lazy_code_hits": 998,
+          "lazy_code_misses": 317,
+          "prelinked_startup_slots": 0
+        }
+      ]
+    },
+    {
+      "stage": "fresh-leaf-edit-d",
+      "engine": "buck2",
+      "repeat": 0,
+      "seconds": 7.78991787699988,
+      "settled_seconds": 7.790368358999785,
+      "packages": [
+        {
+          "package": "aizome-kit",
+          "seconds": 3.9994409569999334,
+          "passed": 40,
+          "action_execution_kinds": {
+            "4": 221,
+            "3": 211
+          },
+          "compiler_executions": 0,
+          "local_test_executions": 1,
+          "unique_action_keys": 432,
+          "trace_id": "9cdbb7d0-dad5-4089-9d1d-3bf8dee5ff6b"
+        },
+        {
+          "package": "aizome-soroban",
+          "seconds": 3.7904769199999464,
+          "passed": 12,
+          "action_execution_kinds": {
+            "4": 254,
+            "10": 210,
+            "3": 31,
+            "1": 1
+          },
+          "compiler_executions": 1,
+          "local_test_executions": 1,
+          "unique_action_keys": 496,
+          "trace_id": "0c35bcc5-e0e6-49fa-bab2-25adcddcd836"
+        }
+      ]
+    },
+    {
+      "stage": "fresh-leaf-warm-d",
+      "engine": "relax",
+      "repeat": 0,
+      "seconds": 1.744836304999808,
+      "settled_seconds": 1.7451776130001235,
+      "packages": [
+        {
+          "package": "aizome-kit",
+          "seconds": 0.9619537529997615,
+          "passed": 40,
+          "lazy_code_hits": 17,
+          "lazy_code_misses": 3,
+          "prelinked_startup_slots": 10614
+        },
+        {
+          "package": "aizome-soroban",
+          "seconds": 0.7828825520000464,
+          "passed": 12,
+          "lazy_code_hits": 4,
+          "lazy_code_misses": 0,
+          "prelinked_startup_slots": 1309
+        }
+      ]
+    },
+    {
+      "stage": "fresh-leaf-warm-d",
+      "engine": "buck2",
+      "repeat": 0,
+      "seconds": 0.7331468179995682,
+      "settled_seconds": 0.7333879729994806,
+      "packages": [
+        {
+          "package": "aizome-kit",
+          "seconds": 0.39051805299959597,
+          "passed": 40,
+          "action_execution_kinds": {
+            "4": 1,
+            "10": 1
+          },
+          "compiler_executions": 0,
+          "local_test_executions": 1,
+          "unique_action_keys": 2,
+          "trace_id": "e187bf44-0e0e-4e88-948e-60a14b2e484f"
+        },
+        {
+          "package": "aizome-soroban",
+          "seconds": 0.3426287649999722,
+          "passed": 12,
+          "action_execution_kinds": {},
+          "compiler_executions": 0,
+          "local_test_executions": 1,
+          "unique_action_keys": 0,
+          "trace_id": "016506c0-5291-4533-b5ca-88bcfc1c9287"
+        }
+      ]
+    },
+    {
+      "stage": "fresh-leaf-warm-d",
+      "engine": "buck2",
+      "repeat": 1,
+      "seconds": 0.7137747490000947,
+      "settled_seconds": 0.7140051569999741,
+      "packages": [
+        {
+          "package": "aizome-kit",
+          "seconds": 0.379615240000021,
+          "passed": 40,
+          "action_execution_kinds": {},
+          "compiler_executions": 0,
+          "local_test_executions": 1,
+          "unique_action_keys": 0,
+          "trace_id": "ce7877c6-9937-46cc-821d-5c0b3770bd49"
+        },
+        {
+          "package": "aizome-soroban",
+          "seconds": 0.33415950900007374,
+          "passed": 12,
+          "action_execution_kinds": {},
+          "compiler_executions": 0,
+          "local_test_executions": 1,
+          "unique_action_keys": 0,
+          "trace_id": "1a6efc02-0a5d-472a-bef3-e694e8f53b15"
+        }
+      ]
+    },
+    {
+      "stage": "fresh-leaf-warm-d",
+      "engine": "relax",
+      "repeat": 1,
+      "seconds": 1.7166263959998105,
+      "settled_seconds": 1.7169587190001039,
+      "packages": [
+        {
+          "package": "aizome-kit",
+          "seconds": 0.9865684380001767,
+          "passed": 40,
+          "lazy_code_hits": 28,
+          "lazy_code_misses": 5,
+          "prelinked_startup_slots": 10614
+        },
+        {
+          "package": "aizome-soroban",
+          "seconds": 0.7300579579996338,
+          "passed": 12,
+          "lazy_code_hits": 4,
+          "lazy_code_misses": 0,
+          "prelinked_startup_slots": 1309
+        }
+      ]
+    },
+    {
+      "stage": "fresh-leaf-warm-d",
+      "engine": "relax",
+      "repeat": 2,
+      "seconds": 1.7315176759998394,
+      "settled_seconds": 1.7318026680000003,
+      "packages": [
+        {
+          "package": "aizome-kit",
+          "seconds": 0.9321270269997513,
+          "passed": 40,
+          "lazy_code_hits": 32,
+          "lazy_code_misses": 2,
+          "prelinked_startup_slots": 10614
+        },
+        {
+          "package": "aizome-soroban",
+          "seconds": 0.7993906490000882,
+          "passed": 12,
+          "lazy_code_hits": 7,
+          "lazy_code_misses": 1,
+          "prelinked_startup_slots": 1309
+        }
+      ]
+    },
+    {
+      "stage": "fresh-leaf-warm-d",
+      "engine": "buck2",
+      "repeat": 2,
+      "seconds": 0.6991792819999318,
+      "settled_seconds": 0.6992824679996374,
+      "packages": [
+        {
+          "package": "aizome-kit",
+          "seconds": 0.37188681499992526,
+          "passed": 40,
+          "action_execution_kinds": {},
+          "compiler_executions": 0,
+          "local_test_executions": 1,
+          "unique_action_keys": 0,
+          "trace_id": "c2061e6a-bbc8-45d9-8bea-47ebb51af9b3"
+        },
+        {
+          "package": "aizome-soroban",
+          "seconds": 0.3272924670000066,
+          "passed": 12,
+          "action_execution_kinds": {},
+          "compiler_executions": 0,
+          "local_test_executions": 1,
+          "unique_action_keys": 0,
+          "trace_id": "5299e8df-f4e5-40b8-bb8f-1fb4a7cb1bc0"
+        }
+      ]
+    }
+  ],
+  "groups": [
+    {
+      "stage": "cold",
+      "engine": "relax",
+      "n": 1,
+      "median_seconds": 22.44843467999999,
+      "range_seconds": [
+        22.44843467999999,
+        22.44843467999999
+      ]
+    },
+    {
+      "stage": "cold",
+      "engine": "buck2",
+      "n": 1,
+      "median_seconds": 63.50380528999949,
+      "range_seconds": [
+        63.50380528999949,
+        63.50380528999949
+      ]
+    },
+    {
+      "stage": "warm-a",
+      "engine": "relax",
+      "n": 3,
+      "median_seconds": 1.6306486890002816,
+      "range_seconds": [
+        1.626464825000312,
+        1.68908021299967
+      ]
+    },
+    {
+      "stage": "warm-a",
+      "engine": "buck2",
+      "n": 3,
+      "median_seconds": 0.7132389060002424,
+      "range_seconds": [
+        0.7084683930002029,
+        0.7177572320001673
+      ]
+    },
+    {
+      "stage": "identical-b",
+      "engine": "relax",
+      "n": 1,
+      "median_seconds": 16.51629767500026,
+      "range_seconds": [
+        16.51629767500026,
+        16.51629767500026
+      ]
+    },
+    {
+      "stage": "identical-b",
+      "engine": "buck2",
+      "n": 1,
+      "median_seconds": 4.85616912200021,
+      "range_seconds": [
+        4.85616912200021,
+        4.85616912200021
+      ]
+    },
+    {
+      "stage": "warm-b",
+      "engine": "relax",
+      "n": 3,
+      "median_seconds": 1.6689554489998955,
+      "range_seconds": [
+        1.609986243000094,
+        1.6828214100000878
+      ]
+    },
+    {
+      "stage": "warm-b",
+      "engine": "buck2",
+      "n": 3,
+      "median_seconds": 0.6875542149996363,
+      "range_seconds": [
+        0.6853494550000505,
+        0.701757426000313
+      ]
+    },
+    {
+      "stage": "unrelated-c",
+      "engine": "relax",
+      "n": 1,
+      "median_seconds": 15.732400228000188,
+      "range_seconds": [
+        15.732400228000188,
+        15.732400228000188
+      ]
+    },
+    {
+      "stage": "unrelated-c",
+      "engine": "buck2",
+      "n": 1,
+      "median_seconds": 6.034606160999829,
+      "range_seconds": [
+        6.034606160999829,
+        6.034606160999829
+      ]
+    },
+    {
+      "stage": "warm-c",
+      "engine": "relax",
+      "n": 3,
+      "median_seconds": 1.6481095770000138,
+      "range_seconds": [
+        1.4777450339997813,
+        1.6560394670000278
+      ]
+    },
+    {
+      "stage": "warm-c",
+      "engine": "buck2",
+      "n": 3,
+      "median_seconds": 0.7268246119997457,
+      "range_seconds": [
+        0.7066892129996631,
+        0.7326629029998912
+      ]
+    },
+    {
+      "stage": "leaf-edit-c",
+      "engine": "relax",
+      "n": 1,
+      "median_seconds": 1.9461311869999918,
+      "range_seconds": [
+        1.9461311869999918,
+        1.9461311869999918
+      ]
+    },
+    {
+      "stage": "leaf-edit-c",
+      "engine": "buck2",
+      "n": 1,
+      "median_seconds": 2.7812929560000157,
+      "range_seconds": [
+        2.7812929560000157,
+        2.7812929560000157
+      ]
+    },
+    {
+      "stage": "leaf-warm-c",
+      "engine": "relax",
+      "n": 3,
+      "median_seconds": 1.7412611419999848,
+      "range_seconds": [
+        1.7286927019999894,
+        1.7557581800001572
+      ]
+    },
+    {
+      "stage": "leaf-warm-c",
+      "engine": "buck2",
+      "n": 3,
+      "median_seconds": 0.7152032759995564,
+      "range_seconds": [
+        0.697321385000123,
+        0.7300850130000072
+      ]
+    },
+    {
+      "stage": "shared-edit-c",
+      "engine": "relax",
+      "n": 1,
+      "median_seconds": 2.800513724999746,
+      "range_seconds": [
+        2.800513724999746,
+        2.800513724999746
+      ]
+    },
+    {
+      "stage": "shared-edit-c",
+      "engine": "buck2",
+      "n": 1,
+      "median_seconds": 7.849561560999973,
+      "range_seconds": [
+        7.849561560999973,
+        7.849561560999973
+      ]
+    },
+    {
+      "stage": "shared-warm-c",
+      "engine": "relax",
+      "n": 3,
+      "median_seconds": 1.6929325609999069,
+      "range_seconds": [
+        1.5444590509996488,
+        1.7497213999999985
+      ]
+    },
+    {
+      "stage": "shared-warm-c",
+      "engine": "buck2",
+      "n": 3,
+      "median_seconds": 0.6608873619998121,
+      "range_seconds": [
+        0.6567699730003369,
+        0.7370654349992947
+      ]
+    },
+    {
+      "stage": "fresh-leaf-edit-d",
+      "engine": "relax",
+      "n": 1,
+      "median_seconds": 14.804183990999718,
+      "range_seconds": [
+        14.804183990999718,
+        14.804183990999718
+      ]
+    },
+    {
+      "stage": "fresh-leaf-edit-d",
+      "engine": "buck2",
+      "n": 1,
+      "median_seconds": 7.78991787699988,
+      "range_seconds": [
+        7.78991787699988,
+        7.78991787699988
+      ]
+    },
+    {
+      "stage": "fresh-leaf-warm-d",
+      "engine": "relax",
+      "n": 3,
+      "median_seconds": 1.7315176759998394,
+      "range_seconds": [
+        1.7166263959998105,
+        1.744836304999808
+      ]
+    },
+    {
+      "stage": "fresh-leaf-warm-d",
+      "engine": "buck2",
+      "n": 3,
+      "median_seconds": 0.7137747490000947,
+      "range_seconds": [
+        0.6991792819999318,
+        0.7331468179995682
+      ]
+    }
+  ],
+  "storage": [
+    {
+      "stage": "cold",
+      "engine": "relax",
+      "physical_bytes": 626160010,
+      "uncompressed_unique_bytes": 1258646399,
+      "referenced_bytes": 4146854783
+    },
+    {
+      "stage": "cold",
+      "engine": "buck2",
+      "physical_bytes": 721318197,
+      "uncompressed_unique_bytes": 1399014737,
+      "referenced_bytes": 2650694993
+    },
+    {
+      "stage": "identical-b",
+      "engine": "relax",
+      "physical_bytes": 898464106,
+      "uncompressed_unique_bytes": 1762583340,
+      "referenced_bytes": 4650541868
+    },
+    {
+      "stage": "identical-b",
+      "engine": "buck2",
+      "physical_bytes": 722461585,
+      "uncompressed_unique_bytes": 1404684669,
+      "referenced_bytes": 3147217277
+    },
+    {
+      "stage": "unrelated-c",
+      "engine": "relax",
+      "physical_bytes": 1169544030,
+      "uncompressed_unique_bytes": 2264277285,
+      "referenced_bytes": 5152178469
+    },
+    {
+      "stage": "unrelated-c",
+      "engine": "buck2",
+      "physical_bytes": 723748513,
+      "uncompressed_unique_bytes": 1410940816,
+      "referenced_bytes": 3644026768
+    },
+    {
+      "stage": "leaf-edit-c",
+      "engine": "relax",
+      "physical_bytes": 1238709234,
+      "uncompressed_unique_bytes": 2436895393,
+      "referenced_bytes": 5324755617
+    },
+    {
+      "stage": "leaf-edit-c",
+      "engine": "buck2",
+      "physical_bytes": 734772004,
+      "uncompressed_unique_bytes": 1429198005,
+      "referenced_bytes": 3680355509
+    },
+    {
+      "stage": "shared-edit-c",
+      "engine": "relax",
+      "physical_bytes": 1282700320,
+      "uncompressed_unique_bytes": 2492621599,
+      "referenced_bytes": 5380461343
+    },
+    {
+      "stage": "shared-edit-c",
+      "engine": "buck2",
+      "physical_bytes": 850243240,
+      "uncompressed_unique_bytes": 1584729258,
+      "referenced_bytes": 4103425194
+    },
+    {
+      "stage": "before-fresh-edit-d",
+      "engine": "relax",
+      "physical_bytes": 1283064856,
+      "uncompressed_unique_bytes": 2492539653,
+      "referenced_bytes": 5380334341
+    },
+    {
+      "stage": "before-fresh-edit-d",
+      "engine": "buck2",
+      "physical_bytes": 850245530,
+      "uncompressed_unique_bytes": 1585649662,
+      "referenced_bytes": 4104128510
+    },
+    {
+      "stage": "fresh-leaf-edit-d",
+      "engine": "relax",
+      "physical_bytes": 1554111945,
+      "uncompressed_unique_bytes": 2994442170,
+      "referenced_bytes": 5882228666
+    },
+    {
+      "stage": "fresh-leaf-edit-d",
+      "engine": "buck2",
+      "physical_bytes": 862256119,
+      "uncompressed_unique_bytes": 1609476210,
+      "referenced_bytes": 4627445874
+    }
+  ],
+  "plain_warm": [
+    {
+      "engine": "relax",
+      "n": 3,
+      "median_seconds": 1.5770235689997207,
+      "range_seconds": [
+        1.4396481970002242,
+        1.6999835320002603
+      ]
+    },
+    {
+      "engine": "buck2",
+      "n": 3,
+      "median_seconds": 0.7109444369998528,
+      "range_seconds": [
+        0.7080179169997791,
+        0.7280728819996511
+      ]
+    }
+  ],
+  "validation": {
+    "indexed_files_verified": 287,
+    "package_invocations": 96,
+    "plain_warm_package_invocations": 12,
+    "every_test_count_verified": true,
+    "all_native_attempts_successful_without_retries": true,
+    "every_native_test_invocation_executed_locally": true,
+    "all_relax_link_failures_and_certificate_refusals_zero": true
+  }
+}
