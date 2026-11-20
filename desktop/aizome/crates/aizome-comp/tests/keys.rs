@@ -66,6 +66,112 @@ fn kit_apps_keep_super() {
     }
 }
 
+#[test]
+fn third_party_kit_apps_receive_command_shortcuts_without_reserving_their_app_id() {
+    const APP_ID: &str = "org.example.Test";
+    let c = Compositor::start(Options::default());
+    let marker = c.dir.join("command-performed");
+    let exe = std::env::current_exe().unwrap();
+    let mut app = desktop::Program(
+        desktop::command(&c, exe.to_str().unwrap())
+            .args(["--exact", "third_party_kit_client", "--ignored", "--nocapture", "--test-threads=1"])
+            .env("AIZOME_KEYS_TEST_MARKER", &marker)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::fs::File::create(c.dir.join("kit-client.log")).unwrap())
+            .spawn()
+            .unwrap(),
+    );
+    c.wait_windows("the third-party kit window has focus", |ws| ws.iter().any(|w| w.app_id == APP_ID && w.focused));
+    // Exercise the real kit's startup and menu matching, not a client that
+    // announces itself only because the test told it to. There is no shell:
+    // command shortcuts must also work before it starts or while it restarts.
+    chord(&c, "super+z");
+    desktop::wait("the third-party kit's command menu action", || {
+        assert!(app.0.try_wait().unwrap().is_none(), "the kit client exited; see {}", c.dir.display());
+        marker.exists()
+    });
+    assert!(c.window(APP_ID).unwrap().kit_app, "the window snapshot recognizes the kit connection");
+
+    let mut events = aizome_ipc::Client::connect_to(&c.ipc).unwrap().events().unwrap();
+    events.stream().set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+    chord(&c, "f10");
+    let binding = events.find_map(|e| match e.expect("the compositor's F10 binding") {
+        Event::Binding { action, .. } => Some(action),
+        _ => None,
+    });
+    assert_eq!(binding.as_deref(), Some("menu-bar"), "F10 recognizes third-party kit apps too");
+
+    drop(app);
+    c.wait_windows("the kit process's window closed", |ws| ws.is_empty());
+    // A different process using the same ID is still an ordinary client.
+    // Neither its name nor a previous connection grants the kit's policy.
+    let other = c.client(Spec::new(APP_ID, 0x2222cc));
+    let w = c.wait_window(APP_ID);
+    assert!(!w.kit_app, "a disconnected kit app must not reserve its app ID");
+    other.wait_seen("ordinary client keyboard focus", |s| s.keyboard_focus);
+    chord(&c, "super+c");
+    let seen = other.wait_seen("ordinary client's Ctrl+C", |s| s.keys.iter().any(|(key, _)| *key == KEY_C));
+    let (_, mods) = seen.keys.iter().find(|(key, _)| *key == KEY_C).unwrap();
+    assert_eq!(*mods & (CTRL | LOGO | SHIFT), CTRL);
+    other.wait_seen("modifiers released", |s| s.mods & (CTRL | LOGO | SHIFT) == 0);
+}
+
+#[test]
+fn native_command_keys_follow_live_connections_and_override_terminal_fallbacks() {
+    const APP_ID: &str = "org.example.Terminal";
+    const KEY_W: u32 = 17;
+    let c = Compositor::start(Options {
+        settings: "[appearance]\neffects = \"austere\"\n[keys]\nterminals = [\"org.example.Terminal\"]\n",
+        ..Default::default()
+    });
+    let app = c.client(Spec::new(APP_ID, 0x2222cc));
+    let window = c.wait_window(APP_ID);
+    app.wait_seen("terminal keyboard focus", |s| s.keyboard_focus);
+    assert!(!window.kit_app);
+    let mut events = aizome_ipc::Client::connect_to(&c.ipc).unwrap().events().unwrap();
+    events.stream().set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+    let wait_changed = |events: &mut aizome_ipc::Events, native| {
+        events
+            .find_map(|event| match event.expect("native command key metadata changed") {
+                Event::WindowChanged { window: changed } if changed.id == window.id && changed.kit_app == native => {
+                    Some(changed)
+                }
+                _ => None,
+            })
+            .expect("the mapped window's native command key policy changed")
+    };
+
+    // These sockets and the Wayland client belong to this test process.
+    // An app can opt in after mapping and hold more than one connection.
+    let mut first = aizome_ipc::Client::connect_to(&c.ipc).unwrap();
+    first.stream().set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+    assert_eq!(first.request(&Request::NativeCommandKeys).unwrap(), aizome_ipc::Response::Ok);
+    wait_changed(&mut events, true);
+    let mut second = aizome_ipc::Client::connect_to(&c.ipc).unwrap();
+    second.stream().set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+    assert_eq!(second.request(&Request::NativeCommandKeys).unwrap(), aizome_ipc::Response::Ok);
+    drop(first);
+    c.settle();
+    assert!(c.window(APP_ID).unwrap().kit_app, "the remaining connection keeps native commands enabled");
+
+    chord(&c, "super+w");
+    let seen = app.wait_seen("the terminal app's own Super+W", |s| s.keys.iter().any(|(key, _)| *key == KEY_W));
+    let (_, mods) = seen.keys.iter().find(|(key, _)| *key == KEY_W).unwrap();
+    assert_eq!(*mods & (CTRL | LOGO | SHIFT), LOGO);
+    assert!(!seen.close_requested, "the compositor's terminal-close fallback must leave native apps alone");
+    app.wait_seen("native command modifiers released", |s| s.mods & (CTRL | LOGO | SHIFT) == 0);
+
+    drop(second);
+    wait_changed(&mut events, false);
+    assert!(!c.window(APP_ID).unwrap().kit_app, "the last connection's closure revokes native command keys");
+    chord(&c, "super+c");
+    let seen = app.wait_seen("the terminal's Ctrl+Shift+C fallback", |s| s.keys.iter().any(|(key, _)| *key == KEY_C));
+    let (_, mods) = seen.keys.iter().find(|(key, _)| *key == KEY_C).unwrap();
+    assert_eq!(*mods & (CTRL | LOGO | SHIFT), CTRL | SHIFT);
+    app.wait_seen("fallback modifiers released", |s| s.mods & (CTRL | LOGO | SHIFT) == 0);
+}
+
 /// A chord means what it says, and the keymap of the keyboard that typed
 /// last reads it. Koe pastes into Aizome's apps with ❖V, which must reach
 /// them as ❖V whichever key holds ❖ on that keyboard and wherever its
@@ -319,4 +425,41 @@ fn the_system_bell_rings_for_the_shell() {
         _ => None,
     });
     assert_eq!(got, Some(("bell".to_string(), Some("HEADLESS-1".to_string()))));
+}
+
+/// Run by the shortcut regression in a separate process, so the Wayland
+/// connection and its kit announcement belong to a real third-party app.
+#[test]
+#[ignore = "a helper: the third-party shortcut regression runs it in its own process"]
+fn third_party_kit_client() {
+    use aizome_kit::prelude::*;
+
+    let Some(marker) = std::env::var_os("AIZOME_KEYS_TEST_MARKER") else { return };
+    struct ShortcutApp {
+        marker: std::path::PathBuf,
+    }
+    impl Program for ShortcutApp {
+        type Msg = ();
+
+        fn info(&self) -> AppInfo {
+            AppInfo::new("org.example.Test", "Third-party test", "Shortcut regression")
+        }
+
+        fn launched(&mut self, cx: &mut Cx<()>) {
+            cx.open_window(WindowSpec::new("Third-party kit shortcuts").size(360.0, 160.0));
+        }
+
+        fn update(&mut self, (): (), _cx: &mut Cx<()>) {
+            std::fs::write(&self.marker, "command performed\n").unwrap();
+        }
+
+        fn view(&self, _window: WindowKey) -> Element<()> {
+            text("Press the command shortcut").into()
+        }
+
+        fn menus(&self) -> MenuBar<()> {
+            MenuBar::new().with_menu(Menu::new("Edit").item(MenuItem::new("Perform", ()).shortcut(Shortcut::cmd('Z'))))
+        }
+    }
+    aizome_kit::try_run(ShortcutApp { marker: marker.into() }).unwrap();
 }
