@@ -175,6 +175,16 @@ def daemon_count():
     )
 
 
+def one_daemon():
+    # When ibus-daemon --daemonize forks, pgrep can miss both the exiting
+    # parent and its child. Retry the startup count. A single match can
+    # still be the parent, so Xfce checks the count again after composition.
+    machine.wait_until_succeeds(
+        "test \"$(pgrep -u alice -f '^/nix/store/[^ ]+/bin/ibus-daemon ' | wc -l)\" -eq 1",
+        timeout=60,
+    )
+
+
 def logged_out():
     machine.wait_until_fails("pgrep -u alice -x aizome-shell", timeout=60)
     until(
@@ -263,10 +273,7 @@ with subtest("Xfce keeps the legacy IBus frontend and composition"):
         "pgrep -u alice -f '(^|/)[.]?xfce4-session(-wrapped)?($| )'",
         timeout=120,
     )
-    machine.wait_until_succeeds(
-        "pgrep -u alice -f '^/nix/store/[^ ]+/bin/ibus-daemon '", timeout=60
-    )
-    assert daemon_count() == 1
+    one_daemon()
     assert (
         user("systemctl --user show -p ActiveState --value aizome-ibus.service").strip()
         == "inactive"
@@ -278,6 +285,7 @@ with subtest("Xfce keeps the legacy IBus frontend and composition"):
         != "true"
     )
     gtk_composition("xfce")
+    assert daemon_count() == 1
     user(
         "busctl --user call org.xfce.SessionManager /org/xfce/SessionManager org.xfce.Session.Manager Logout bb false false"
     )
