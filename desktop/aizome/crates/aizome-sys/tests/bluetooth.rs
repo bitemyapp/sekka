@@ -5,6 +5,7 @@ mod common;
 use aizome_sys::bluetooth::{Bluetooth, DeviceKind, PairingRequest, PairingResponse};
 use aizome_sys::{Error, Wake};
 use common::{eventually, path};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use zbus::fdo;
 use zbus::object_server::{ObjectServer, SignalEmitter};
@@ -50,11 +51,19 @@ impl AgentManager {
     }
 }
 
+#[derive(Default)]
 struct Adapter {
     powered: bool,
     alias: String,
     discovering: bool,
+    /// The test's `/dev/rfkill`, and what it held each time `Powered` was
+    /// set: what had been written to the radio switches by then.
+    rfkill: PathBuf,
+    powered_with: PoweredWith,
 }
+
+/// Each value `Powered` was set to, with the device's contents then.
+type PoweredWith = Arc<Mutex<Vec<(bool, Vec<u8>)>>>;
 
 #[zbus::interface(name = "org.bluez.Adapter1")]
 impl Adapter {
@@ -68,6 +77,7 @@ impl Adapter {
     }
     #[zbus(property)]
     fn set_powered(&mut self, on: bool) {
+        self.powered_with.lock().unwrap().push((on, std::fs::read(&self.rfkill).unwrap_or_default()));
         self.powered = on;
     }
     #[zbus(property)]
@@ -260,7 +270,7 @@ fn serve(bus: &common::TestBus) -> (zbus::blocking::Connection, Arc<Mutex<Shared
         .unwrap()
         .serve_at("/org/bluez", AgentManager { shared: shared.clone() })
         .unwrap()
-        .serve_at(ADAPTER, Adapter { powered: true, alias: "ganymede".into(), discovering: false })
+        .serve_at(ADAPTER, Adapter { powered: true, alias: "ganymede".into(), ..Adapter::default() })
         .unwrap()
         .serve_at(SPEAKER, speaker)
         .unwrap()
@@ -271,11 +281,74 @@ fn serve(bus: &common::TestBus) -> (zbus::blocking::Connection, Arc<Mutex<Shared
     (conn, shared)
 }
 
+/// Radio switches of the test's own, in place of `/dev/rfkill` and
+/// `/sys/class/rfkill` (switching an adapter writes to them): `hci0`'s
+/// switch, as the kernel shows it, with index 7.
+struct Switches {
+    dir: PathBuf,
+}
+
+impl Switches {
+    fn new(test: &str) -> Switches {
+        let dir = std::env::temp_dir().join(format!("aizome-sys-bt-{test}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let switch = dir.join("sys/rfkill7");
+        std::fs::create_dir_all(&switch).unwrap();
+        for (file, value) in [("index", "7"), ("name", "hci0"), ("type", "bluetooth"), ("soft", "0"), ("hard", "0")] {
+            std::fs::write(switch.join(file), format!("{value}\n")).unwrap();
+        }
+        std::fs::write(dir.join("rfkill"), b"").unwrap();
+        Switches { dir }
+    }
+
+    fn device(&self) -> PathBuf {
+        self.dir.join("rfkill")
+    }
+
+    fn sysfs(&self) -> PathBuf {
+        self.dir.join("sys")
+    }
+
+    /// The event last written to the device.
+    fn written(&self) -> Vec<u8> {
+        std::fs::read(self.device()).unwrap()
+    }
+
+    /// As the kernel does once a block (or an unblock) is written.
+    fn show_blocked(&self, blocked: bool) {
+        std::fs::write(self.dir.join("sys/rfkill7/soft"), if blocked { "1\n" } else { "0\n" }).unwrap();
+    }
+}
+
+impl Drop for Switches {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.dir);
+    }
+}
+
+/// What `log::warn!` said, for the test that asks what was reported.
+struct Warnings(Mutex<Vec<String>>);
+
+static WARNINGS: Warnings = Warnings(Mutex::new(Vec::new()));
+
+impl log::Log for Warnings {
+    fn enabled(&self, metadata: &log::Metadata) -> bool {
+        metadata.level() <= log::Level::Warn
+    }
+    fn log(&self, record: &log::Record) {
+        if self.enabled(record.metadata()) {
+            self.0.lock().unwrap().push(record.args().to_string());
+        }
+    }
+    fn flush(&self) {}
+}
+
 #[test]
 fn follows_adapters_and_devices() {
     let bus = test_bus!();
     let (_fake, _shared) = serve(&bus);
-    let bt = Bluetooth::with_bus(bus.bus(), Wake::none());
+    let switches = Switches::new("follows");
+    let bt = Bluetooth::with_bus(bus.bus(), Wake::none()).with_rfkill(switches.device(), switches.sysfs());
     assert!(eventually(|| bt.snapshot().devices.len() == 1));
     let state = bt.snapshot();
     assert!(state.available && state.powered());
@@ -390,13 +463,14 @@ fn a_blocked_adapter_is_unblocked_before_powering_on() {
         .unwrap()
         .serve_at("/org/bluez", AgentManager { shared })
         .unwrap()
-        .serve_at(ADAPTER, Adapter { powered: false, alias: "blocked".into(), discovering: false })
+        .serve_at(ADAPTER, Adapter { powered: false, alias: "blocked".into(), ..Adapter::default() })
         .unwrap()
         .build()
         .unwrap();
     let rfkill = std::env::temp_dir().join(format!("aizome-sys-bt-rfkill-{}", std::process::id()));
     std::fs::write(&rfkill, b"").unwrap();
-    let bt = Bluetooth::with_bus(bus.bus(), Wake::none()).with_rfkill_device(rfkill.clone());
+    // (No sysfs here: BlueZ alone says the adapter is blocked.)
+    let bt = Bluetooth::with_bus(bus.bus(), Wake::none()).with_rfkill(rfkill.clone(), rfkill.with_extension("sys"));
     assert!(eventually(|| bt.snapshot().default_adapter().is_some_and(|a| a.blocked())));
     bt.set_powered(ADAPTER, true).wait().unwrap();
     let written = std::fs::read(&rfkill).unwrap();
@@ -404,6 +478,80 @@ fn a_blocked_adapter_is_unblocked_before_powering_on() {
     // struct rfkill_event { idx 0, type BLUETOOTH, op CHANGE_ALL, soft 0, hard 0 }
     assert_eq!(written, [0, 0, 0, 0, 2, 3, 0, 0]);
     assert!(eventually(|| bt.snapshot().powered()));
+}
+
+/// BlueZ switches every adapter on when it starts and keeps no record of
+/// `Powered`, so off is kept by the adapter's own radio switch (a blocked
+/// adapter BlueZ leaves off, and systemd-rfkill puts the block back at each
+/// start); on clears the block before asking BlueZ.
+#[test]
+fn switching_off_blocks_the_adapters_radio_switch_and_on_unblocks_it_first() {
+    let bus = test_bus!();
+    let switches = Switches::new("stays-off");
+    let powered_with = PoweredWith::default();
+    let adapter = Adapter {
+        powered: true,
+        alias: "ganymede".into(),
+        rfkill: switches.device(),
+        powered_with: powered_with.clone(),
+        ..Adapter::default()
+    };
+    let _fake = bus
+        .builder()
+        .name("org.bluez")
+        .unwrap()
+        .serve_at("/", zbus::fdo::ObjectManager)
+        .unwrap()
+        .serve_at(ADAPTER, adapter)
+        .unwrap()
+        .build()
+        .unwrap();
+    let bt = Bluetooth::with_bus(bus.bus(), Wake::none()).with_rfkill(switches.device(), switches.sysfs());
+    assert!(eventually(|| bt.snapshot().powered()));
+
+    bt.set_powered(ADAPTER, false).wait().unwrap();
+    // struct rfkill_event { idx 7, type BLUETOOTH, op CHANGE, soft 1, hard 0 }:
+    // hci0's switch alone (every Bluetooth switch would take another
+    // adapter with it, and on some laptops the adapter itself away).
+    assert_eq!(switches.written(), [&7u32.to_ne_bytes()[..], &[2, 2, 1, 0]].concat());
+    // Written once BlueZ had switched the adapter off.
+    assert_eq!(*powered_with.lock().unwrap(), [(false, vec![])]);
+    assert!(eventually(|| !bt.snapshot().powered()));
+
+    // The kernel shows the block at once; BlueZ's `off-blocked` comes a
+    // moment later (never, from this fake).
+    switches.show_blocked(true);
+    assert!(!bt.snapshot().default_adapter().unwrap().blocked());
+    bt.set_powered(ADAPTER, true).wait().unwrap();
+    // struct rfkill_event { idx 0, type BLUETOOTH, op CHANGE_ALL, soft 0, hard 0 },
+    // there by the time BlueZ was asked.
+    let unblock = vec![0, 0, 0, 0, 2, 3, 0, 0];
+    assert_eq!(switches.written(), unblock);
+    assert_eq!(powered_with.lock().unwrap().last(), Some(&(true, unblock)));
+    assert!(eventually(|| bt.snapshot().powered()));
+}
+
+/// Where the radio switch can't be written (no seat's `uaccess`, no rfkill)
+/// the adapter still goes off, and the log says for how long.
+#[test]
+fn switching_off_without_the_radio_switch_still_switches_off_and_says_so() {
+    let _ = log::set_logger(&WARNINGS);
+    log::set_max_level(log::LevelFilter::Warn);
+    let bus = test_bus!();
+    let (_fake, _shared) = serve(&bus);
+    let switches = Switches::new("no-rfkill");
+    std::fs::remove_file(switches.device()).unwrap();
+    let bt = Bluetooth::with_bus(bus.bus(), Wake::none()).with_rfkill(switches.device(), switches.sysfs());
+    assert!(eventually(|| bt.snapshot().powered()));
+
+    bt.set_powered(ADAPTER, false).wait().unwrap();
+    assert!(eventually(|| !bt.snapshot().powered()));
+    assert!(!switches.device().exists(), "something was made in the device's place");
+    let warnings = WARNINGS.0.lock().unwrap();
+    assert!(
+        warnings.iter().any(|w| w.contains(ADAPTER) && w.contains("only until BlueZ next starts")),
+        "nothing said the switch won't last: {warnings:?}"
+    );
 }
 
 /// BlueZ's `Cancel` names no device: the agent says which one it was

@@ -477,7 +477,12 @@ fn serve_with(bus: &common::TestBus, campus: bool) -> (zbus::blocking::Connectio
 
 fn no_radios() -> RadioPaths {
     let missing = std::env::temp_dir().join("aizome-sys-no-rfkill");
-    RadioPaths { device: missing.clone(), sysfs: missing.clone(), fallback: missing.join("airplane") }
+    RadioPaths {
+        device: missing.clone(),
+        sysfs: missing.clone(),
+        fallback: missing.join("airplane"),
+        bluetooth_off: missing.join("bluetooth-off"),
+    }
 }
 
 #[test]
@@ -602,13 +607,84 @@ fn airplane_mode_blocks_every_radio() {
     let network = Network::with_bus(
         bus.bus(),
         Wake::none(),
-        RadioPaths { device: device.clone(), sysfs: dir.join("none"), fallback: dir.join("airplane") },
+        RadioPaths {
+            device: device.clone(),
+            sysfs: dir.join("none"),
+            fallback: dir.join("airplane"),
+            bluetooth_off: dir.join("bluetooth-off"),
+        },
     );
     network.set_airplane_mode(true).wait().unwrap();
     let written = std::fs::read(&device).unwrap();
     std::fs::remove_dir_all(&dir).unwrap();
     // struct rfkill_event { idx 0, type ALL, op CHANGE_ALL, soft 1, hard 0 }
     assert_eq!(written, [0, 0, 0, 0, 0, 3, 1, 0]);
+}
+
+/// BlueZ switches on every adapter that is unblocked, so Bluetooth that was
+/// off before airplane mode (blocked: see `Bluetooth::set_powered`) is
+/// blocked again as airplane mode ends, a restart later too; Bluetooth that
+/// was on comes back.
+#[test]
+fn airplane_mode_leaves_bluetooth_off_that_was_off_before() {
+    let bus = test_bus!();
+    let dir = std::env::temp_dir().join(format!("aizome-sys-airplane-bluetooth-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let device = dir.join("rfkill");
+    let sysfs = dir.join("sys");
+    // The switches as the kernel shows them.
+    let show = |index: u32, name: &str, kind: &str, blocked: bool| {
+        let switch = sysfs.join(format!("rfkill{index}"));
+        std::fs::create_dir_all(&switch).unwrap();
+        let (index, soft) = (index.to_string(), if blocked { "1" } else { "0" });
+        for (file, value) in [("index", index.as_str()), ("name", name), ("type", kind), ("soft", soft)] {
+            std::fs::write(switch.join(file), format!("{value}\n")).unwrap();
+        }
+    };
+    let show_all = |wifi: bool, hci0: bool, hci1: bool| {
+        show(0, "phy0", "wlan", wifi);
+        show(3, "hci0", "bluetooth", hci0);
+        show(4, "hci1", "bluetooth", hci1);
+    };
+    // Wi-Fi on, hci0 switched off, hci1 on.
+    show_all(false, true, false);
+    let paths = RadioPaths {
+        device: device.clone(),
+        sysfs: sysfs.clone(),
+        fallback: dir.join("airplane"),
+        bluetooth_off: dir.join("state/bluetooth-off"),
+    };
+    // What one switch of airplane mode writes to the device.
+    let switched = |network: &Network, on: bool| {
+        std::fs::write(&device, b"").unwrap();
+        network.set_airplane_mode(on).wait().unwrap();
+        std::fs::read(&device).unwrap()
+    };
+    let network = Network::with_bus(bus.bus(), Wake::none(), paths.clone());
+    // struct rfkill_event { idx 0, type ALL, op CHANGE_ALL, soft 1, hard 0 }
+    assert_eq!(switched(&network, true), [0, 0, 0, 0, 0, 3, 1, 0]);
+    assert_eq!(std::fs::read_to_string(&paths.bluetooth_off).unwrap(), "hci0");
+    // Asked for again with every radio off: what was off before is kept.
+    show_all(true, true, true);
+    switched(&network, true);
+    assert_eq!(std::fs::read_to_string(&paths.bluetooth_off).unwrap(), "hci0");
+
+    // The next session's Network, as after a restart in airplane mode.
+    drop(network);
+    std::fs::write(&device, b"").unwrap();
+    let network = Network::with_bus(bus.bus(), Wake::none(), paths.clone());
+    // Every radio unblocked and hci0 (index 3) blocked again at once:
+    // { idx 0, type ALL, op CHANGE_ALL, soft 0 }, { idx 3, type BLUETOOTH, op CHANGE, soft 1 }.
+    let unblock_all = [0, 0, 0, 0, 0, 3, 0, 0];
+    assert_eq!(switched(&network, false), [&unblock_all[..], &3u32.to_ne_bytes()[..], &[2, 2, 1, 0]].concat());
+    assert!(!paths.bluetooth_off.exists());
+
+    // Bluetooth that was on comes back with the rest.
+    show_all(false, false, false);
+    switched(&network, true);
+    assert!(!paths.bluetooth_off.exists());
+    assert_eq!(switched(&network, false), unblock_all);
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -763,7 +839,12 @@ fn airplane_mode_without_rfkill_turns_bluetooth_off_and_back() {
     let network = Network::with_bus(
         bus.bus(),
         Wake::none(),
-        RadioPaths { device, sysfs: dir.join("none"), fallback: fallback.clone() },
+        RadioPaths {
+            device,
+            sysfs: dir.join("none"),
+            fallback: fallback.clone(),
+            bluetooth_off: dir.join("bluetooth-off"),
+        },
     );
     assert!(eventually(|| network.available() && network.snapshot().wifi_enabled));
 
