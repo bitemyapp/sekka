@@ -6,7 +6,7 @@ use std::fs::{self, File};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
-pub(crate) const CHUNK: usize = 8 * 1024 * 1024;
+pub const CHUNK: usize = 8 * 1024 * 1024;
 
 /// Stopped because the person asked.
 #[derive(Debug)]

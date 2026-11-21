@@ -39,6 +39,10 @@ let
       <include>${pkgs.fontconfig.out}/etc/fonts/conf.d</include>
     </fontconfig>
   '';
+  # The crates with a doctest that must not compile, whose error codes the
+  # check verifies (checked-doctests.sh). None yet. The check stops if this
+  # list and the source disagree.
+  doctested = [ ];
 in
 pkgs.rustPlatform.buildRustPackage {
   pname = "sukumo-tests";
@@ -71,6 +75,20 @@ pkgs.rustPlatform.buildRustPackage {
     cargo test "''${flags[@]}" -p sidestep-engine --lib
     cargo test "''${flags[@]}" -p sidestep-ui --lib \
       --test headless --test offscreen --test desktop --test scrolling --test drag_out
+    # The doctests of every crate with one that must not compile, their
+    # error codes checked. Only the listed crates are tested, so a crate
+    # that gains or loses such a doctest, or a source tree where none is
+    # found any more, stops the check until the list says so.
+    source ${./checked-doctests.sh}
+    found=$(compile_fail_packages crates | tr '\n' ' ')
+    if [ "$found" != "${lib.concatMapStrings (name: "${name} ") doctested}" ]; then
+      echo "error: the crates with compile_fail doctests are: $found" >&2
+      echo "       sukumo-test.nix's doctested list says: ${toString doctested}" >&2
+      exit 1
+    fi
+    for package in ${toString doctested}; do
+      cargo test "''${flags[@]}" --doc -p "$package"
+    done
     # The Wayland tests under a headless sway, with a session bus of their
     # own: Nixpkgs' sway starts one itself when there's none, from /etc's
     # configuration, which a sandbox hasn't got. They pass by skipping where

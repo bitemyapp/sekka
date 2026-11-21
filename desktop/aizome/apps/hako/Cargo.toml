@@ -27,6 +27,9 @@ aizome-sys = { workspace = true, optional = true }
 aizome-ipc = { workspace = true, optional = true }
 aizome-search = { workspace = true, optional = true }
 aizome-config = { workspace = true, optional = true }
+# The typestate support Sekka's machines share (the transfer, Trash and
+# undo protocols in src/fsops).
+aizome-typestate = { path = "../../crates/aizome-typestate" }
 # The clipboard in file managers' types (see src/ui/clipboard.rs): the engine
 # under sidestep-ui, by the same path the workspace takes it.
 sidestep-engine = { workspace = true, optional = true }

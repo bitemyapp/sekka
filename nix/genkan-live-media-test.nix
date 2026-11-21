@@ -4,15 +4,20 @@ let
   probe = pkgs.rustPlatform.buildRustPackage {
     pname = "genkan-live-guard-probe";
     version = "0.1.0";
+    # The backend at its place in Sekka, beside the typestate crate it uses.
     src = pkgs.lib.fileset.toSource {
-      root = ../installer/genkan/rust;
+      root = ../.;
       fileset = pkgs.lib.fileset.unions [
         ../installer/genkan/rust/Cargo.toml
         ../installer/genkan/rust/Cargo.lock
         ../installer/genkan/rust/reference.nix
         ../installer/genkan/rust/src
+        ../desktop/aizome/crates/aizome-typestate
       ];
     };
+    postUnpack = ''
+      sourceRoot="$sourceRoot/installer/genkan/rust"
+    '';
     cargoLock.lockFile = ../installer/genkan/rust/Cargo.lock;
     CALAMARES_TOOL_PATH = pkgs.lib.makeBinPath [
       pkgs.util-linux

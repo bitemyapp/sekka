@@ -13,14 +13,15 @@
 //! # Operations
 //!
 //! Mounting, unmounting, ejecting, powering off, unlocking and locking,
-//! swap, loop devices (mounting `.iso` images), labels, checking, SMART,
-//! and creating partitions in free space don't destroy anything. Those that
-//! do — formatting (also erasing and encrypting), new partition tables,
-//! deleting, resizing and repairing — each take a [`Confirm`] token the UI
-//! makes from the device the person agreed to, checked again just before
-//! the operation runs (see [`confirm`]). Operations on a device that is in
-//! use (mounted, or swap) are refused with a clear error rather than left
-//! to fail inside UDisks.
+//! swap, loop devices (mounting `.iso` images), checking and SMART change
+//! nothing on a disk. Those that do each take a [`Confirm`] token the UI
+//! makes from the identity of the device the person agreed to, checked
+//! again just before the operation runs (see [`confirm`]): formatting (also
+//! erasing and encrypting), new partition tables, deleting, resizing and
+//! repairing, which destroy data, and making partitions, labels, partition
+//! types, names and flags, and passphrases. Those that destroy data are
+//! refused on a device that is in use (mounted, or swap) with a clear error
+//! rather than left to fail inside UDisks.
 //!
 //! Long operations (formatting with erasure, checks, repairs, resizes) run
 //! as long as they take: the task finishes when UDisks does, and the job's
@@ -35,7 +36,10 @@ mod model;
 mod smart;
 pub mod types;
 
-pub use confirm::{Confirm, DeletePartition, Destructive, Format, NewPartitionTable, Repair, Resize};
+pub use confirm::{
+    AsSeen, Change, ChangePassphrase, Confirm, CreatePartition, DeletePartition, Format, Holds, Identity,
+    NewPartitionTable, PartitionEntry, Relabel, Repair, Resize,
+};
 pub use model::{
     BlockDevice, DisksState, Drive, Encrypted, Filesystem, FreeSpace, Health, Job, LoopDevice, Partition,
     PartitionTable, Rotation, Smart, Swap, Usage, Volume, VolumeChanges, format_size, short_name,
@@ -323,14 +327,20 @@ impl Disks {
         })
     }
 
-    /// Change an encrypted volume's passphrase.
-    pub fn change_passphrase(&self, block: &str, old: &str, new: &str) -> Task<()> {
+    /// Change an encrypted volume's passphrase, as confirmed.
+    pub fn change_passphrase<B: Send + 'static>(
+        &self,
+        confirm: Confirm<ChangePassphrase, B>,
+        old: &str,
+        new: &str,
+    ) -> Task<()> {
         if new.is_empty() {
             return Task::ready(Err(Error::InvalidArgument("The passphrase is empty".into())));
         }
         let args = (old.to_owned(), new.to_owned(), empty());
-        let block = block.to_owned();
-        self.task(move |bus| bus.call_with(LONG, UDISKS, &block, IFACE_ENCRYPTED, "ChangePassphrase", &args))
+        self.confirmed(confirm, move |bus, block, _| {
+            bus.call_with(LONG, UDISKS, block, IFACE_ENCRYPTED, "ChangePassphrase", &args)
+        })
     }
 
     /// Start or stop using a swap area.
@@ -341,17 +351,17 @@ impl Disks {
         })
     }
 
-    /// Change a filesystem's label.
-    pub fn set_label(&self, block: &str, label: &str) -> Task<()> {
-        let state = self.snapshot();
-        if let Some(limit) = state.block(block).and_then(|b| label_limit(&b.id_type))
-            && label.len() > limit
-        {
-            return Task::ready(Err(Error::InvalidArgument(format!("This label has at most {limit} bytes"))));
-        }
-        let block = block.to_owned();
+    /// Change a filesystem's label, as confirmed.
+    pub fn set_label<B: Send + 'static>(&self, confirm: Confirm<Relabel, B>, label: &str) -> Task<()> {
         let label = label.to_owned();
-        self.task(move |bus| bus.call_with(LONG, UDISKS, &block, IFACE_FILESYSTEM, "SetLabel", &(label, empty())))
+        self.confirmed(confirm, move |bus, block, state| {
+            if let Some(limit) = state.block(block).and_then(|b| label_limit(&b.id_type))
+                && label.len() > limit
+            {
+                return Err(Error::InvalidArgument(format!("This label has at most {limit} bytes")));
+            }
+            bus.call_with(LONG, UDISKS, block, IFACE_FILESYSTEM, "SetLabel", &(label, empty()))
+        })
     }
 
     /// Eject a drive's media, unmounting and locking what is on it first.
@@ -505,50 +515,45 @@ impl Disks {
 
     // --- Partitions --------------------------------------------------------
 
-    /// Make a partition in free space of the table on `table` (`offset`
-    /// and `size` in bytes, inside one of [`DisksState::free_space`]), of
-    /// `type_id` (a GUID or MBR type; by default one fitting `format`'s
-    /// filesystem), named `name` (GPT only), and format it as `format`.
-    /// The result is the new partition.
-    pub fn create_partition(
+    /// Make a partition in free space of the table on the disk `confirm`
+    /// names (`offset` and `size` in bytes, inside one of
+    /// [`DisksState::free_space`]), of `type_id` (a GUID or MBR type; by
+    /// default one fitting `format`'s filesystem), named `name` (GPT only),
+    /// and format it as `format`. The result is the new partition.
+    pub fn create_partition<B: Send + 'static>(
         &self,
-        table: &str,
+        confirm: Confirm<CreatePartition, B>,
         offset: u64,
         size: u64,
         type_id: Option<&str>,
         name: &str,
         format: Option<FormatSpec>,
     ) -> Task<String> {
-        let state = self.snapshot();
-        let Some(disk) = state.block(table) else {
-            return Task::ready(Err(Error::NotFound(table.to_owned())));
-        };
-        let Some(kind) = disk.partition_table.as_ref().map(|t| t.kind.clone()) else {
-            return Task::ready(Err(Error::InvalidArgument(format!("{} has no partition table", disk.device))));
-        };
-        let fits = state.free_space(table).iter().any(|f| offset >= f.offset && offset + size <= f.offset + f.size);
-        if size == 0 || !fits {
-            return Task::ready(Err(Error::InvalidArgument("The new partition must fit in free space".into())));
-        }
-        if let Some(spec) = &format
-            && let Err(error) = spec.check(&state.supported_filesystems)
-        {
-            return Task::ready(Err(error));
-        }
-        if !name.is_empty() && kind != "gpt" {
-            return Task::ready(Err(Error::InvalidArgument("Only GPT partitions have names".into())));
-        }
-        let type_id = type_id.map(str::to_owned).unwrap_or_else(|| {
-            types::type_for_filesystem(&kind, format.as_ref().map_or("ext4", |f| f.fs_type.as_str())).to_owned()
-        });
-        let table = table.to_owned();
+        let type_id = type_id.map(str::to_owned);
         let name = name.to_owned();
-        self.task(move |bus| {
+        self.confirmed(confirm, move |bus, table, state| {
+            let disk = state.block(table).ok_or_else(|| Error::NotFound(table.to_owned()))?;
+            let Some(kind) = disk.partition_table.as_ref().map(|t| t.kind.clone()) else {
+                return Err(Error::InvalidArgument(format!("{} has no partition table", disk.device)));
+            };
+            let fits = state.free_space(table).iter().any(|f| offset >= f.offset && offset + size <= f.offset + f.size);
+            if size == 0 || !fits {
+                return Err(Error::InvalidArgument("The new partition must fit in free space".into()));
+            }
+            if let Some(spec) = &format {
+                spec.check(&state.supported_filesystems)?;
+            }
+            if !name.is_empty() && kind != "gpt" {
+                return Err(Error::InvalidArgument("Only GPT partitions have names".into()));
+            }
+            let type_id = type_id.unwrap_or_else(|| {
+                types::type_for_filesystem(&kind, format.as_ref().map_or("ext4", |f| f.fs_type.as_str())).to_owned()
+            });
             let created: OwnedObjectPath = match &format {
                 Some(spec) => bus.call_with(
                     LONG,
                     UDISKS,
-                    &table,
+                    table,
                     IFACE_TABLE,
                     "CreatePartitionAndFormat",
                     &(offset, size, type_id.as_str(), name.as_str(), empty(), spec.fs_type.as_str(), spec.options()),
@@ -556,7 +561,7 @@ impl Disks {
                 None => bus.call_with(
                     Opts::ACTION,
                     UDISKS,
-                    &table,
+                    table,
                     IFACE_TABLE,
                     "CreatePartition",
                     &(offset, size, type_id.as_str(), name.as_str(), empty()),
@@ -566,85 +571,96 @@ impl Disks {
         })
     }
 
-    /// Change a partition's type (a GUID or MBR type).
-    pub fn set_partition_type(&self, block: &str, type_id: &str) -> Task<()> {
+    /// Change a partition's type (a GUID or MBR type), as confirmed.
+    pub fn set_partition_type<B: Send + 'static>(
+        &self,
+        confirm: Confirm<PartitionEntry, B>,
+        type_id: &str,
+    ) -> Task<()> {
         let args = (type_id.to_owned(), empty());
-        let block = block.to_owned();
-        self.task(move |bus| bus.call_with(Opts::ACTION, UDISKS, &block, IFACE_PARTITION, "SetType", &args))
-    }
-
-    /// Change a GPT partition's name.
-    pub fn set_partition_name(&self, block: &str, name: &str) -> Task<()> {
-        let args = (name.to_owned(), empty());
-        let block = block.to_owned();
-        self.task(move |bus| bus.call_with(Opts::ACTION, UDISKS, &block, IFACE_PARTITION, "SetName", &args))
-    }
-
-    /// Change a partition's flags (see [`types::flags`]).
-    pub fn set_partition_flags(&self, block: &str, flags: u64) -> Task<()> {
-        let block = block.to_owned();
-        self.task(move |bus| {
-            bus.call_with(Opts::ACTION, UDISKS, &block, IFACE_PARTITION, "SetFlags", &(flags, empty()))
+        self.confirmed(confirm, move |bus, block, _| {
+            bus.call_with(Opts::ACTION, UDISKS, block, IFACE_PARTITION, "SetType", &args)
         })
     }
 
-    // --- Destructive --------------------------------------------------------
+    /// Change a GPT partition's name, as confirmed.
+    pub fn set_partition_name<B: Send + 'static>(&self, confirm: Confirm<PartitionEntry, B>, name: &str) -> Task<()> {
+        let args = (name.to_owned(), empty());
+        self.confirmed(confirm, move |bus, block, _| {
+            bus.call_with(Opts::ACTION, UDISKS, block, IFACE_PARTITION, "SetName", &args)
+        })
+    }
 
-    /// Check a confirmation against the device now, and that nothing on it
-    /// is in use; then run `work` on its path.
-    fn destructive<Op: Destructive + 'static, T: Send + 'static>(
+    /// Change a partition's flags (see [`types::flags`]), as confirmed.
+    pub fn set_partition_flags<B: Send + 'static>(&self, confirm: Confirm<PartitionEntry, B>, flags: u64) -> Task<()> {
+        self.confirmed(confirm, move |bus, block, _| {
+            bus.call_with(Opts::ACTION, UDISKS, block, IFACE_PARTITION, "SetFlags", &(flags, empty()))
+        })
+    }
+
+    // --- Confirmed -----------------------------------------------------------
+
+    /// Check a confirmation against the device now (and, for an operation
+    /// that destroys data, that nothing on it is in use); then run `work` on
+    /// the device the check's proof carries.
+    fn confirmed<Op: Change + 'static, B: Send + 'static, T: Send + 'static>(
         &self,
-        confirm: Confirm<Op>,
-        work: impl FnOnce(&Bus, String, &DisksState) -> Result<T> + Send + 'static,
+        confirm: Confirm<Op, B>,
+        work: impl FnOnce(&Bus, &str, &DisksState) -> Result<T> + Send + 'static,
     ) -> Task<T> {
         self.task(move |bus| {
             // Decide on the device as it is now, not the cached snapshot.
             let state = Disks::refreshed(bus);
-            let block = confirm.check(&state)?;
-            if state.in_use(&block.path) {
-                return Err(in_use(&block.device));
+            let target = confirm.check(&state)?;
+            let target = target.target();
+            if Op::REFUSED_IN_USE && state.in_use(target.path()) {
+                return Err(in_use(target.device()));
             }
-            work(bus, block.path.clone(), &state)
+            work(bus, target.path(), &state)
         })
     }
 
     /// Make a new filesystem on a device (or wipe it, with `empty`), as
     /// confirmed: everything on it is lost.
-    pub fn format(&self, confirm: Confirm<Format>, spec: FormatSpec) -> Task<()> {
-        self.destructive(confirm, move |bus, block, state| {
+    pub fn format<B: Send + 'static>(&self, confirm: Confirm<Format, B>, spec: FormatSpec) -> Task<()> {
+        self.confirmed(confirm, move |bus, block, state| {
             spec.check(&state.supported_filesystems)?;
-            bus.call_with(LONG, UDISKS, &block, IFACE_BLOCK, "Format", &(spec.fs_type.as_str(), spec.options()))
+            bus.call_with(LONG, UDISKS, block, IFACE_BLOCK, "Format", &(spec.fs_type.as_str(), spec.options()))
         })
     }
 
     /// Make a new, empty partition table on a disk, as confirmed: every
     /// partition on it is lost.
-    pub fn create_partition_table(&self, confirm: Confirm<NewPartitionTable>, kind: TableKind) -> Task<()> {
-        self.destructive(confirm, move |bus, block, state| {
-            if state.block(&block).is_some_and(|b| b.partition.is_some()) {
+    pub fn create_partition_table<B: Send + 'static>(
+        &self,
+        confirm: Confirm<NewPartitionTable, B>,
+        kind: TableKind,
+    ) -> Task<()> {
+        self.confirmed(confirm, move |bus, block, state| {
+            if state.block(block).is_some_and(|b| b.partition.is_some()) {
                 return Err(Error::InvalidArgument("A partition table goes on a whole disk, not a partition".into()));
             }
-            bus.call_with(LONG, UDISKS, &block, IFACE_BLOCK, "Format", &(kind.id(), empty()))
+            bus.call_with(LONG, UDISKS, block, IFACE_BLOCK, "Format", &(kind.id(), empty()))
         })
     }
 
     /// Delete a partition, as confirmed.
-    pub fn delete_partition(&self, confirm: Confirm<DeletePartition>) -> Task<()> {
-        self.destructive(confirm, move |bus, block, state| {
-            if state.block(&block).is_none_or(|b| b.partition.is_none()) {
+    pub fn delete_partition<B: Send + 'static>(&self, confirm: Confirm<DeletePartition, B>) -> Task<()> {
+        self.confirmed(confirm, move |bus, block, state| {
+            if state.block(block).is_none_or(|b| b.partition.is_none()) {
                 return Err(Error::InvalidArgument("Not a partition".into()));
             }
-            bus.call_with(Opts::ACTION, UDISKS, &block, IFACE_PARTITION, "Delete", &(empty(),))
+            bus.call_with(Opts::ACTION, UDISKS, block, IFACE_PARTITION, "Delete", &(empty(),))
         })
     }
 
     /// Resize a partition to `size` bytes, as confirmed. Growing needs free
     /// space after it; shrinking loses what lies past the new end, so
     /// shrink the filesystem first.
-    pub fn resize_partition(&self, confirm: Confirm<Resize>, size: u64) -> Task<()> {
-        self.destructive(confirm, move |bus, block, state| {
+    pub fn resize_partition<B: Send + 'static>(&self, confirm: Confirm<Resize, B>, size: u64) -> Task<()> {
+        self.confirmed(confirm, move |bus, block, state| {
             let partition = state
-                .block(&block)
+                .block(block)
                 .and_then(|b| b.partition.clone())
                 .ok_or_else(|| Error::InvalidArgument("Not a partition".into()))?;
             if size > partition.size {
@@ -660,23 +676,34 @@ impl Disks {
                     return Err(Error::InvalidArgument("There isn't that much free space after the partition".into()));
                 }
             }
-            bus.call_with(LONG, UDISKS, &block, IFACE_PARTITION, "Resize", &(size, empty()))
+            bus.call_with(LONG, UDISKS, block, IFACE_PARTITION, "Resize", &(size, empty()))
         })
     }
 
     /// Resize a filesystem to `size` bytes (0: to fill its partition), as
     /// confirmed.
-    pub fn resize_filesystem(&self, confirm: Confirm<Resize>, size: u64) -> Task<()> {
-        self.destructive(confirm, move |bus, block, _| {
-            bus.call_with(LONG, UDISKS, &block, IFACE_FILESYSTEM, "Resize", &(size, empty()))
+    pub fn resize_filesystem<B: Send + 'static>(&self, confirm: Confirm<Resize, B>, size: u64) -> Task<()> {
+        self.confirmed(confirm, move |bus, block, _| {
+            bus.call_with(LONG, UDISKS, block, IFACE_FILESYSTEM, "Resize", &(size, empty()))
         })
     }
 
     /// Repair a filesystem, as confirmed; the result is whether it is
     /// consistent afterwards.
-    pub fn repair(&self, confirm: Confirm<Repair>) -> Task<bool> {
-        self.destructive(confirm, move |bus, block, _| {
-            bus.call_with(LONG, UDISKS, &block, IFACE_FILESYSTEM, "Repair", &(empty(),))
+    pub fn repair<B: Send + 'static>(&self, confirm: Confirm<Repair, B>) -> Task<bool> {
+        self.confirmed(confirm, move |bus, block, _| {
+            bus.call_with(LONG, UDISKS, block, IFACE_FILESYSTEM, "Repair", &(empty(),))
+        })
+    }
+
+    /// Check and repair a filesystem as the first step of resizing it (ext
+    /// refuses an offline resize otherwise), as the resize was confirmed:
+    /// held, as the resize is, to the filesystem and to either of the sizes
+    /// it goes between, so a resize that stopped part way can be applied
+    /// again.
+    pub fn repair_before_resize<B: Send + 'static>(&self, confirm: Confirm<Resize, B>) -> Task<bool> {
+        self.confirmed(confirm, move |bus, block, _| {
+            bus.call_with(LONG, UDISKS, block, IFACE_FILESYSTEM, "Repair", &(empty(),))
         })
     }
 }

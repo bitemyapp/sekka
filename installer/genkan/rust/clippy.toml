@@ -1,0 +1,16 @@
+# The installer runs programs only through calamares_nixos::process, with a
+# Program it names (storage.rs): the programs that write to a disk are named
+# only in the modules holding the confirmed disk's proof. Every other way to
+# start a program is denied here; process.rs allows itself the one
+# Command::new, and session.rs the GUI's start of the helper through pkexec.
+disallowed-methods = [
+  { path = "std::process::Command::new", reason = "run programs through calamares_nixos::process with a Program" },
+  { path = "std::os::unix::process::CommandExt::arg0", reason = "a multicall binary is another program under another name" },
+  { path = "libc::system", reason = "run programs through calamares_nixos::process" },
+  { path = "libc::execv", reason = "run programs through calamares_nixos::process" },
+  { path = "libc::execve", reason = "run programs through calamares_nixos::process" },
+  { path = "libc::execvp", reason = "run programs through calamares_nixos::process" },
+  { path = "libc::execvpe", reason = "run programs through calamares_nixos::process" },
+  { path = "libc::posix_spawn", reason = "run programs through calamares_nixos::process" },
+  { path = "libc::posix_spawnp", reason = "run programs through calamares_nixos::process" },
+]

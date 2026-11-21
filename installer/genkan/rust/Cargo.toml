@@ -25,6 +25,9 @@ zeroize = { version = "=1.8.2", features = ["derive"] }
 tempfile = "=3.23.0"
 glib = { version = "=0.21.5", optional = true, features = ["v2_68"] }
 gio = { version = "=0.21.5", optional = true }
+# Sekka's typestate support, for the selected disk's reviewed and confirmed
+# identity. It has no dependencies; the helper builds it from this path.
+aizome-typestate = { path = "../../../desktop/aizome/crates/aizome-typestate" }
 
 [[bin]]
 name = "calamares-nixos-helper"

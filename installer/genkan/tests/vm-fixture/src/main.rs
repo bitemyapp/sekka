@@ -4,7 +4,7 @@
 use anyhow::{Context, Result, ensure};
 use calamares_nixos::{
     Desktop, Filesystem, Firmware, Hostname, Kernel, RawRequest, Settings, SuperKey, config, disk,
-    filesystem::Identities, install::Event, memory, process::output, session::Confirmation,
+    filesystem::Identities, install::Event, memory, session::Confirmation,
 };
 use std::{
     fs,
@@ -14,6 +14,37 @@ use std::{
     process::{Command, Stdio},
     time::Instant,
 };
+
+/// Runs a program in the disposable VM, within `seconds`. The installer's own
+/// runner names only the programs it runs itself, and this fixture also
+/// seeds old filesystems and inspects the installed ones.
+fn output(program: &str, args: &[&str], seconds: u64) -> Result<String> {
+    let mut child = Command::new(program)
+        .args(args)
+        .env("PATH", "/run/current-system/sw/bin:/usr/bin:/bin")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .with_context(|| format!("Starting {program}"))?;
+    let deadline = Instant::now() + std::time::Duration::from_secs(seconds);
+    while child.try_wait()?.is_none() {
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            anyhow::bail!("{program} timed out");
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    let out = child.wait_with_output()?;
+    ensure!(
+        out.status.success(),
+        "{program} failed ({}): {}",
+        out.status,
+        String::from_utf8_lossy(&out.stderr)
+    );
+    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+}
 
 const PASSWORD: &str = "Qemu-Only-Test-123!";
 /// A throwaway public key standing in for one fetched from GitHub.

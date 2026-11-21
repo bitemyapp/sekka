@@ -3,23 +3,109 @@
 use anyhow::{Context, Result, ensure};
 use std::os::unix::process::CommandExt;
 use std::{
+    fmt,
     io::Read,
     process::{Command, Stdio},
-    sync::atomic::{AtomicBool, Ordering},
+    sync::atomic::{AtomicBool, AtomicU8, Ordering},
     thread,
     time::{Duration, Instant},
 };
 
-/// Set only while non-destructive preparation may be abandoned (the GUI
-/// closed its request pipe before confirming). Never set after confirmation.
-pub static CANCEL: AtomicBool = AtomicBool::new(false);
-
-pub fn cancelled() -> bool {
-    CANCEL.load(Ordering::Relaxed)
+/// Whether preparation may still be abandoned. A latch starts open; the
+/// GUI's withdrawal closes it as cancelled, the installation's start as
+/// committed, and whichever comes first wins: a committed installation can't
+/// be cancelled, and a cancelled preparation can't be committed to. A helper
+/// process prepares once, so its latch never reopens.
+pub(crate) struct Latch {
+    state: AtomicU8,
+    /// Set once the latch is cancelled: what subprocesses and cache warming
+    /// poll.
+    cancel: AtomicBool,
 }
 
-pub fn command(program: &str) -> Command {
-    let mut command = Command::new(program);
+const OPEN: u8 = 0;
+const CANCELLED: u8 = 1;
+const COMMITTED: u8 = 2;
+
+impl Latch {
+    pub const fn new() -> Self {
+        Self {
+            state: AtomicU8::new(OPEN),
+            cancel: AtomicBool::new(false),
+        }
+    }
+
+    pub fn cancelled(&self) -> bool {
+        self.cancel.load(Ordering::Relaxed)
+    }
+
+    /// Abandons preparation: running and later subprocesses stop. Refused,
+    /// returning false, once the installation is committed.
+    pub fn cancel(&self) -> bool {
+        let won = self
+            .state
+            .compare_exchange(OPEN, CANCELLED, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok();
+        if won {
+            self.cancel.store(true, Ordering::Relaxed);
+        }
+        won
+    }
+
+    /// Commits to the installation: nothing can cancel it from now on. Fails
+    /// if preparation was cancelled first.
+    pub fn commit(&self) -> Result<()> {
+        match self
+            .state
+            .compare_exchange(OPEN, COMMITTED, Ordering::AcqRel, Ordering::Acquire)
+        {
+            Ok(_) | Err(COMMITTED) => Ok(()),
+            Err(_) => Err(Cancelled.into()),
+        }
+    }
+
+    /// The flag cache warming polls.
+    pub(crate) fn flag(&self) -> &AtomicBool {
+        &self.cancel
+    }
+}
+
+impl Default for Latch {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// This process's preparation.
+pub(crate) static LATCH: Latch = Latch::new();
+
+pub fn cancelled() -> bool {
+    LATCH.cancelled()
+}
+
+/// Preparation stopped because it was cancelled, as opposed to failing.
+#[derive(Debug)]
+pub struct Cancelled;
+impl fmt::Display for Cancelled {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("Preparation was cancelled")
+    }
+}
+impl std::error::Error for Cancelled {}
+
+/// Whether `error` is a cancellation, beneath whatever context it gathered.
+pub fn is_cancellation(error: &anyhow::Error) -> bool {
+    error.chain().any(|cause| cause.is::<Cancelled>())
+}
+
+pub use crate::storage::Program;
+
+/// A command for `program`, with the tool path and nothing else of the
+/// caller's environment.
+// The one place the installer starts a program (clippy.toml).
+#[allow(clippy::disallowed_methods)]
+pub fn command(program: Program) -> Command {
+    let mut command = Command::new(program.name());
     command
         .stdin(Stdio::null())
         .env_clear()
@@ -34,10 +120,20 @@ pub fn command(program: &str) -> Command {
     command
 }
 
-pub fn output(program: &str, args: &[&str], seconds: u64) -> Result<String> {
+/// The installation helper, started from the window through Polkit's pkexec:
+/// the only other program the installer starts, and no disk tool.
+// The window's one start of a program (clippy.toml).
+#[allow(clippy::disallowed_methods)]
+pub(crate) fn pkexec(helper: &std::path::Path) -> Command {
+    let mut command = Command::new(option_env!("CALAMARES_PKEXEC").unwrap_or("pkexec"));
+    command.arg(helper);
+    command
+}
+
+pub fn output(program: Program, args: &[&str], seconds: u64) -> Result<String> {
     run(
         command(program),
-        program,
+        program.name(),
         args,
         seconds,
         None,
@@ -48,36 +144,27 @@ pub fn output(program: &str, args: &[&str], seconds: u64) -> Result<String> {
 /// Secret input is an anonymous memory file, never argv, environment or a path.
 /// The file descriptor is closed when the child exits; callers own zeroizing buffers.
 pub(crate) fn output_secret(
-    program: &str,
+    program: Program,
     args: &[&str],
     secret: &[u8],
     seconds: u64,
 ) -> Result<String> {
-    use std::{
-        fs::File,
-        io::{Seek, Write},
-        os::fd::FromRawFd,
-    };
-    let fd = unsafe { libc::memfd_create(c"genkan-secret".as_ptr(), libc::MFD_CLOEXEC) };
-    ensure!(
-        fd >= 0,
-        "Could not allocate secret input: {}",
-        std::io::Error::last_os_error()
-    );
-    let mut input = unsafe { File::from_raw_fd(fd) };
+    use std::io::{Seek, Write};
+    let mut input = crate::sys::memory_file(c"genkan-secret")
+        .map_err(|error| anyhow::anyhow!("Could not allocate secret input: {error}"))?;
     input.write_all(secret)?;
     input.rewind()?;
     let mut cmd = command(program);
     cmd.stdin(Stdio::from(input));
-    run(cmd, program, args, seconds, None, Capture::Tail)
+    run(cmd, program.name(), args, seconds, None, Capture::Tail)
 }
 
 /// As `output`, but returns all of stdout (up to 256 MiB) instead of its tail.
 /// For machine-readable listings such as a system's closure.
-pub fn output_full(program: &str, args: &[&str], seconds: u64) -> Result<String> {
+pub fn output_full(program: Program, args: &[&str], seconds: u64) -> Result<String> {
     run(
         command(program),
-        program,
+        program.name(),
         args,
         seconds,
         None,
@@ -97,14 +184,14 @@ const FULL_LIMIT: usize = 256 << 20;
 /// As `output`, also passing each complete stderr line (up to 64 KiB) to
 /// `on_line` as it arrives, e.g. Nix `--log-format internal-json` progress.
 pub fn output_lines(
-    program: &str,
+    program: Program,
     args: &[&str],
     seconds: u64,
     on_line: &(dyn Fn(&str) + Sync),
 ) -> Result<String> {
     run(
         command(program),
-        program,
+        program.name(),
         args,
         seconds,
         Some(on_line),
@@ -120,7 +207,9 @@ fn run(
     on_line: Option<&(dyn Fn(&str) + Sync)>,
     capture: Capture,
 ) -> Result<String> {
-    ensure!(!cancelled(), "Preparation was cancelled");
+    if cancelled() {
+        return Err(Cancelled.into());
+    }
     let mut child = command
         .args(args)
         .process_group(0)
@@ -178,7 +267,7 @@ fn run(
                 Ok(None) if Instant::now() >= end => {
                     anyhow::anyhow!("{program} timed out; installation is incomplete")
                 }
-                Ok(None) if cancelled() => anyhow::anyhow!("Preparation was cancelled"),
+                Ok(None) if cancelled() => Cancelled.into(),
                 Ok(None) => {
                     thread::sleep(Duration::from_millis(50));
                     continue;
@@ -188,9 +277,7 @@ fn run(
             // A group created for this child only; do not leave partitioning or
             // installation descendants running after reporting a timeout. The
             // pipe drains finish once the group is gone.
-            unsafe {
-                libc::kill(-(child.id() as i32), libc::SIGKILL);
-            }
+            crate::sys::kill_group(child.id());
             let _ = child.wait();
             break Err(stop);
         };
@@ -211,6 +298,7 @@ fn run(
 }
 
 #[cfg(test)]
+#[allow(clippy::disallowed_methods)]
 mod tests {
     use super::*;
     use std::sync::Mutex;

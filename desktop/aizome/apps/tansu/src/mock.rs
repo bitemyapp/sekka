@@ -8,13 +8,15 @@ use std::sync::Arc;
 
 use aizome_sys::disks::types::{flag_names, partition_type_name, type_for_filesystem};
 use aizome_sys::disks::{
-    BlockDevice, Confirm, DeletePartition, DisksState, Drive, Encrypted, Filesystem, Format, FormatSpec, Job,
-    LoopDevice, NewPartitionTable, Partition, PartitionTable, Repair, Resize, Rotation, SelfTest, Smart,
-    SmartAttribute, Swap, TableKind, Usage,
+    BlockDevice, Change, Confirm, CreatePartition, DeletePartition, DisksState, Drive, Encrypted, Filesystem, Format,
+    FormatSpec, Job, LoopDevice, NewPartitionTable, Partition, PartitionEntry, PartitionTable, Relabel, Repair, Resize,
+    Rotation, SelfTest, Smart, SmartAttribute, Swap, TableKind, Usage,
 };
 use aizome_sys::{Error, Task};
 
 use crate::backend::Backend;
+use crate::layout::Volume;
+use crate::plan::Queued;
 
 const MIB: u64 = 1 << 20;
 const GIB: u64 = 1 << 30;
@@ -76,6 +78,12 @@ impl Mock {
         self.log.borrow().clone()
     }
 
+    /// Change the disks as something other than Tansu would (a stick
+    /// swapped for another, another tool repartitioning a disk), for tests.
+    pub fn edit(&self, f: impl FnOnce(&mut DisksState)) {
+        self.change(f);
+    }
+
     fn change(&self, f: impl FnOnce(&mut DisksState)) {
         f(&mut self.state.borrow_mut());
         self.generation.set(self.generation.get() + 1);
@@ -101,12 +109,15 @@ impl Mock {
         format!("5a3c-{:04x}", self.serial.get())
     }
 
-    /// The device a confirmation names, refusing it in use, as UDisks
-    /// does.
-    fn confirmed(&self, path: &str) -> Result<BlockDevice, Error> {
+    /// The device a confirmation names, checked as UDisks's client checks
+    /// it: the same device as confirmed and, for an operation that destroys
+    /// data, not in use.
+    fn confirmed<Op: Change>(&self, confirm: Confirm<Op, Queued>) -> Result<BlockDevice, Error> {
         let s = self.state.borrow();
+        let target = confirm.check(&s)?;
+        let path = target.target().path();
         let b = s.block(path).cloned().ok_or_else(|| Error::NotFound(format!("{path} is gone")))?;
-        if s.in_use(path) {
+        if Op::REFUSED_IN_USE && s.in_use(path) {
             return Err(Error::InvalidArgument(format!("{} is in use: unmount it first", b.device)));
         }
         Ok(b)
@@ -187,7 +198,8 @@ impl Backend for Mock {
         ready(r)
     }
 
-    fn unlock(&self, block: &str, passphrase: &str) -> Task<String> {
+    fn unlock(&self, volume: Volume<'_>, passphrase: &str) -> Task<String> {
+        let block = volume.path();
         let r = self.call(format!("Unlock {}", self.device(block))).and_then(|()| {
             if passphrase.is_empty() || passphrase == "wrong" {
                 return Err(Error::Rejected("Error unlocking: wrong passphrase".into()));
@@ -389,12 +401,13 @@ impl Backend for Mock {
         ready(Ok(if ok { (true, String::new()) } else { (false, format!("mkfs.{fs}")) }))
     }
 
-    fn create_partition_table(&self, confirm: Confirm<NewPartitionTable>, kind: TableKind) -> Task<()> {
+    fn create_partition_table(&self, confirm: Confirm<NewPartitionTable, Queued>, kind: TableKind) -> Task<()> {
         let path = confirm.block().to_owned();
         let r = self
             .call(format!("Format({}) on {}", if kind == TableKind::Gpt { "gpt" } else { "dos" }, self.device(&path)))
             .and_then(|()| {
-                let disk = self.confirmed(&path)?;
+                let disk = self.confirmed(confirm)?;
+                let path = disk.path.clone();
                 if disk.partition.is_some() {
                     return Err(Error::InvalidArgument(
                         "A partition table goes on a whole disk, not a partition".into(),
@@ -422,13 +435,15 @@ impl Backend for Mock {
 
     fn create_partition(
         &self,
-        table: &str,
+        confirm: Confirm<CreatePartition, Queued>,
         offset: u64,
         size: u64,
         type_id: Option<&str>,
         name: &str,
         format: Option<FormatSpec>,
     ) -> Task<String> {
+        let table = confirm.block().to_owned();
+        let table = table.as_str();
         let r = self
             .call(format!(
                 "CreatePartition({offset}, {size}, {}) on {}",
@@ -436,6 +451,8 @@ impl Backend for Mock {
                 self.device(table)
             ))
             .and_then(|()| {
+                let table = self.confirmed(confirm)?.path;
+                let table = table.as_str();
                 let state = self.state.borrow().clone();
                 let disk = state.block(table).cloned().ok_or_else(|| Error::NotFound(table.into()))?;
                 let kind = disk
@@ -487,10 +504,11 @@ impl Backend for Mock {
         ready(r)
     }
 
-    fn delete_partition(&self, confirm: Confirm<DeletePartition>) -> Task<()> {
+    fn delete_partition(&self, confirm: Confirm<DeletePartition, Queued>) -> Task<()> {
         let path = confirm.block().to_owned();
         let r = self.call(format!("Delete {}", self.device(&path))).and_then(|()| {
-            let b = self.confirmed(&path)?;
+            let b = self.confirmed(confirm)?;
+            let path = b.path.clone();
             if b.partition.is_none() {
                 return Err(Error::InvalidArgument("Not a partition".into()));
             }
@@ -502,10 +520,10 @@ impl Backend for Mock {
         ready(r)
     }
 
-    fn format(&self, confirm: Confirm<Format>, spec: FormatSpec) -> Task<()> {
+    fn format(&self, confirm: Confirm<Format, Queued>, spec: FormatSpec) -> Task<()> {
         let path = confirm.block().to_owned();
         let r = self.call(format!("Format({}) on {}", spec.fs_type, self.device(&path))).and_then(|()| {
-            self.confirmed(&path)?;
+            let path = self.confirmed(confirm)?.path;
             if spec.fs_type != "empty" && !self.state.borrow().supported_filesystems.contains(&spec.fs_type) {
                 return Err(Error::InvalidArgument(format!("This system can't make {} filesystems", spec.fs_type)));
             }
@@ -520,10 +538,11 @@ impl Backend for Mock {
         ready(r)
     }
 
-    fn resize_partition(&self, confirm: Confirm<Resize>, size: u64) -> Task<()> {
+    fn resize_partition(&self, confirm: Confirm<Resize, Queued>, size: u64) -> Task<()> {
         let path = confirm.block().to_owned();
         let r = self.call(format!("ResizePartition({size}) {}", self.device(&path))).and_then(|()| {
-            let b = self.confirmed(&path)?;
+            let b = self.confirmed(confirm)?;
+            let path = b.path.clone();
             let part = b.partition.clone().ok_or_else(|| Error::InvalidArgument("Not a partition".into()))?;
             if size > part.size {
                 let state = self.state.borrow().clone();
@@ -550,10 +569,10 @@ impl Backend for Mock {
         ready(r)
     }
 
-    fn resize_filesystem(&self, confirm: Confirm<Resize>, size: u64) -> Task<()> {
+    fn resize_filesystem(&self, confirm: Confirm<Resize, Queued>, size: u64) -> Task<()> {
         let path = confirm.block().to_owned();
         let r = self.call(format!("ResizeFilesystem({size}) {}", self.device(&path))).and_then(|()| {
-            self.confirmed(&path)?;
+            let path = self.confirmed(confirm)?.path;
             self.change(|s| {
                 if let Some(b) = s.blocks.iter_mut().find(|b| b.path == path) {
                     let whole = b.size;
@@ -567,37 +586,55 @@ impl Backend for Mock {
         ready(r)
     }
 
-    fn repair(&self, confirm: Confirm<Repair>) -> Task<bool> {
+    fn repair(&self, confirm: Confirm<Repair, Queued>) -> Task<bool> {
         let path = confirm.block().to_owned();
-        let r = self.call(format!("Repair {}", self.device(&path))).and_then(|()| self.confirmed(&path).map(|_| true));
+        let r =
+            self.call(format!("Repair {}", self.device(&path))).and_then(|()| self.confirmed(confirm).map(|_| true));
         ready(r)
     }
 
-    fn set_label(&self, block: &str, label: &str) -> Task<()> {
-        let r = self.call(format!("SetLabel({label}) {}", self.device(block))).map(|()| {
+    fn repair_before_resize(&self, confirm: Confirm<Resize, Queued>) -> Task<bool> {
+        let path = confirm.block().to_owned();
+        let r =
+            self.call(format!("Repair {}", self.device(&path))).and_then(|()| self.confirmed(confirm).map(|_| true));
+        ready(r)
+    }
+
+    fn set_label(&self, confirm: Confirm<Relabel, Queued>, label: &str) -> Task<()> {
+        let block = confirm.block().to_owned();
+        let r = self.call(format!("SetLabel({label}) {}", self.device(&block))).and_then(|()| {
+            let block = self.confirmed(confirm)?.path;
             self.change(|s| {
                 if let Some(b) = s.blocks.iter_mut().find(|b| b.path == block) {
                     b.id_label = label.into();
                 }
-            })
+            });
+            Ok(())
         });
         ready(r)
     }
 
-    fn set_partition_type(&self, block: &str, type_id: &str) -> Task<()> {
-        let r = self.call(format!("SetType({type_id}) {}", self.device(block))).map(|()| {
+    fn set_partition_type(&self, confirm: Confirm<PartitionEntry, Queued>, type_id: &str) -> Task<()> {
+        let block = confirm.block().to_owned();
+        let r = self.call(format!("SetType({type_id}) {}", self.device(&block))).and_then(|()| {
+            let block = self.confirmed(confirm)?.path;
             self.change(|s| {
                 if let Some(p) = s.blocks.iter_mut().find(|b| b.path == block).and_then(|b| b.partition.as_mut()) {
                     p.type_id = type_id.into();
                     p.type_name = partition_type_name(type_id);
                 }
-            })
+            });
+            Ok(())
         });
         ready(r)
     }
 
-    fn set_partition_flags(&self, block: &str, flags: u64) -> Task<()> {
-        let r = self.call(format!("SetFlags({flags:#x}) {}", self.device(block))).map(|()| {
+    fn set_partition_flags(&self, confirm: Confirm<PartitionEntry, Queued>, flags: u64) -> Task<()> {
+        let block = confirm.block().to_owned();
+        let block = block.as_str();
+        let r = self.call(format!("SetFlags({flags:#x}) {}", self.device(block))).and_then(|()| {
+            let block = self.confirmed(confirm)?.path;
+            let block = block.as_str();
             self.change(|s| {
                 let kind = s
                     .block(block)
@@ -610,7 +647,8 @@ impl Backend for Mock {
                     p.flags = flags;
                     p.flag_names = flag_names(&kind, flags);
                 }
-            })
+            });
+            Ok(())
         });
         ready(r)
     }

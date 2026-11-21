@@ -7,7 +7,6 @@
 //! `sidebar_item`, `form_section`, `scroll`); what Genkan draws of its own
 //! (the partitions, the world map) is in [`partitions`] and [`map`].
 use crate::app::{Genkan, Msg, Step};
-use crate::format::size;
 use aizome_kit::prelude::*;
 use aizome_kit::widgets::layout::column as column_of;
 use aizome_kit::{column, row};
@@ -43,7 +42,7 @@ pub fn view(app: &Genkan) -> Element<Msg> {
         Step::Location => location::page(app),
         Step::Keyboard => keyboard::page(app),
         Step::Review => review::page(app),
-        Step::Install if app.completed => install::done(app),
+        Step::Install if app.completed() => install::done(app),
         Step::Install => install::page(app),
     };
     let content = container(page.max_width(PAGE_WIDTH).width(Fill))
@@ -54,7 +53,7 @@ pub fn view(app: &Genkan) -> Element<Msg> {
         header(app),
         scroll(content).key(app.step).width(Fill).height(Fill)
     ];
-    if !app.completed {
+    if !app.completed() {
         main = main.push(footer(app));
     }
     sidebar_layout(sidebar(app), main.width(Fill).height(Fill))
@@ -97,8 +96,8 @@ fn sidebar(app: &Genkan) -> Element<Msg> {
 /// A step in the sidebar: done ones ticked, the others numbered. Only the
 /// steps already reached before the review can be gone back to.
 fn step_item(app: &Genkan, step: Step) -> Element<Msg> {
-    let current = step == app.step && !app.completed;
-    let done = step < app.step || app.completed;
+    let current = step == app.step && !app.completed();
+    let done = step < app.step || app.completed();
     let detail = if done && !current {
         "✓".to_string()
     } else {
@@ -126,19 +125,17 @@ fn computer(app: &Genkan) -> Element<Msg> {
         .spacing(7.0)
     ]
     .spacing(4.0);
-    if app.disks.is_empty() && app.scanning {
+    if app.disks.is_empty() && app.scanning() {
         lines = lines.push(text("Looking for disks…").size(11.0).role(Role::Text3));
     } else {
         lines = lines.push(text(firmware).mono().size(11.0).role(Role::Text3));
     }
-    if let Some(memory) = app.memory {
-        lines = lines.push(
-            text(format!("{} of memory", size(memory.total)))
-                .mono()
-                .size(11.0)
-                .role(Role::Text3),
-        );
-    }
+    lines = lines.push(
+        text(app.memory().summary())
+            .mono()
+            .size(11.0)
+            .role(Role::Text3),
+    );
     container(lines.width(Fill))
         .padding(12.0)
         .edges(Edge::Line, Sides::TOP)
@@ -147,7 +144,7 @@ fn computer(app: &Genkan) -> Element<Msg> {
 }
 
 fn header(app: &Genkan) -> Element<Msg> {
-    let (title, subtitle) = if app.completed {
+    let (title, subtitle) = if app.completed() {
         ("Installation Complete".to_string(), String::new())
     } else if app.step == Step::Welcome {
         (app.step.heading().to_string(), String::new())
@@ -177,12 +174,12 @@ fn footer(app: &Genkan) -> Element<Msg> {
             button("Back")
                 .icon(Icon::ChevronLeft)
                 .on_press(Msg::Back)
-                .enabled(!app.reviewing)
+                .enabled(!app.reviewing())
                 .into(),
         );
     }
     items.push(spacer().into());
-    let installing = app.step == Step::Install && app.installing && !app.failed;
+    let installing = app.step == Step::Install && app.installing() && !app.failed();
     // A note (a check that failed, a refusal to close) comes first; then
     // the installation's reminder, or the work going on before it.
     let activity = app
@@ -219,7 +216,7 @@ fn footer(app: &Genkan) -> Element<Msg> {
         );
     }
     items.push(spacer().into());
-    let next_shown = app.step != Step::Install || (app.finished() && !app.completed);
+    let next_shown = app.step != Step::Install || (app.finished() && !app.completed());
     if next_shown {
         let next = button(app.next_label())
             .on_press(Msg::Next)

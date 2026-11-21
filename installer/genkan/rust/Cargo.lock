@@ -3,6 +3,10 @@
 version = 4
 
 [[package]]
+name = "aizome-typestate"
+version = "0.1.0"
+
+[[package]]
 name = "anyhow"
 version = "1.0.100"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -33,6 +37,7 @@ dependencies = [
 name = "calamares-nixos"
 version = "0.1.0"
 dependencies = [
+ "aizome-typestate",
  "anyhow",
  "base64ct",
  "gio",
