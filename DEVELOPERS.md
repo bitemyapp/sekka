@@ -682,6 +682,7 @@ For focused Rust work, run Cargo inside the development shell:
 ```sh
 cargo test --locked --manifest-path installer/genkan/rust/Cargo.toml
 cargo test --locked --manifest-path installer/genkan/ui/Cargo.toml
+cargo test --locked --manifest-path installer/genkan/rust/system/vpn-guard/Cargo.toml
 cargo test --locked --manifest-path desktop/tatami/tool/Cargo.toml
 cargo test --locked --manifest-path desktop/tatami/displays/Cargo.toml
 cargo test --locked --manifest-path desktop/tatami/network/Cargo.toml
@@ -2986,6 +2987,83 @@ and atomic backend validation failure. The fixture package only retains the
 normal Cargo test executable; the UI uses the production Network package.
 Autologin, software graphics and the private NAT make this component evidence,
 not qualification of an ISO or physical network hardware.
+
+## VPN address families
+
+A full-tunnel WireGuard connection carries the address families its
+`AllowedIPs` name, and NetworkManager, like wg-quick, routes only those into
+the tunnel. With an IPv4-only tunnel up, IPv6 keeps leaving by Wi-Fi or
+Ethernet, and a site with both kinds of address is reached over IPv6 first, so
+it sees the address the tunnel was meant to hide. An IPv6-only tunnel leaves
+IPv4 outside it the same way (bitemyapp/sekka#416). `sekka-vpn-guard`
+(`installer/genkan/rust/system/vpn-guard`: a Rust crate with its own workspace,
+its package and its module) blocks the family the tunnel does not carry for as
+long as the tunnel is up. `calamares.vpnGuard.enable = false` turns it off.
+
+It asks the kernel where a packet to a documentation address would go in each
+family (`ip route get 192.0.2.1`, `2001:db8::1`): nothing routes those on
+purpose, so only a default route, or the two halves that stand in for one,
+carries them. When one family goes into a WireGuard device and the other goes
+into no tunnel, the other is closed. A split tunnel closes nothing. A family
+in another kind of tunnel (`tun`, `xfrm`, `vti`) is neither taken as cover nor
+blocked.
+
+The block is the tunnel's own routing scheme ending in "unreachable". Each
+family has two policy rules that stay in place whether or not it is closed, at
+priority 32764 (`lookup main suppress_prefixlength 0`) and 32765
+(`lookup 5458759`), marked with routing protocol 83 so the guard recognises
+its own. While table 5458759 is empty they change nothing. To close a family
+the guard puts an unreachable default route in that table. The home network,
+link-local addresses and any route more specific than a default stay in
+force, and a connection to the closed family is refused at once instead of
+timing out, so programs fall back to the tunnel's family without a wait.
+NetworkManager's rules have smaller priority numbers: a tunnel that starts
+carrying the closed family wins before the guard is lifted. For each
+WireGuard peer whose far end is in the closed family the table also holds a
+`throw` route for that address, which sends it on to the main table. NixOS's
+reverse-path filter looks up the way back to every packet's source, and
+without that route it drops the tunnel's own replies, which stops the tunnel
+at its next handshake.
+
+So everything that changes while the system runs is a route, set with
+`ip route replace` and cleared with `ip route flush table`, both of which can
+be repeated. The guard never reads the words of an error. A step that reports
+failure is checked against the system: if what it was for is in place the run
+goes on, and otherwise it stops before the block goes in. After its steps the
+guard reads its rules and table once more, and the run has worked only if they
+are what was wanted.
+
+The program is NetworkManager's dispatcher script itself, run at `up`, `down`,
+`vpn-up`, `vpn-down`, `reapply`, DHCP and connectivity changes, and
+`sekka-vpn-guard.service` runs it once when a configuration is switched to;
+stopping that service takes the routes and the rules out. Every run reads the
+routes and brings the guard to what they call for under
+`/run/sekka-vpn-guard.lock`, so it keeps no state. It reads and changes routes
+through iproute2's JSON and `wg`, whose paths the package fixes at build time,
+instead of imitating the kernel's lookup or speaking netlink.
+`sekka-vpn-guard status` says where each family goes and why, and needs no
+privilege.
+
+What it does not do: it is not a kill switch, so both families leave directly
+again when the tunnel goes down; the other family is still open for the moment
+between the tunnel coming up and the dispatcher's run; only WireGuard devices
+count, not OpenVPN or other plugin VPNs; a far end that moves to another
+address in the blocked family is let through only at the next run; and DNS is
+not examined, so a resolver the home network handed out may still be asked.
+
+`nix build .#checks.x86_64-linux.vpn-guard` runs the crate's tests: the
+decision, the order of changes (no step puts the block in force without the
+rule and routes that belong beside it), steps that fail or lie about having
+worked, and the parsing of what iproute2 and `wg` print.
+`nix build .#checks.x86_64-linux.vpn-guard-vm` puts a Sekka system on a home
+network with IPv4 by DHCP and IPv6 by router advertisement, beside the same
+system with the guard off, a router, a web host that answers with its caller's
+address and a WireGuard server. It imports wg-quick files with `nmcli` and
+checks both directions, the refusal at once, the home router's reachability, a
+fresh handshake under the block with the reverse-path filter on, a tunnel for
+both families, the service, and that the unguarded system leaks. Wired
+interfaces and no real provider make this component evidence, not
+qualification of an ISO or physical network hardware.
 
 ## Simulated Wi-Fi
 

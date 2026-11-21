@@ -19,6 +19,7 @@
     ./store-space.nix
     ./tuning.nix
     ./usb-wake.nix
+    ./vpn-guard
     ./wpa-supplicant
   ];
 }

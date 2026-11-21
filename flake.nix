@@ -242,6 +242,8 @@
         };
         inherit tools calamares;
         sekka-discord = import ./nix/sekka-discord.nix { inherit pkgs; };
+        # Installed systems build this same definition (the vpn-guard module).
+        vpn-guard = pkgs.callPackage ./installer/genkan/rust/system/vpn-guard/package.nix { };
         chatgpt = (import ./nix/ai-packages.nix inputs.ai-apps.packages.${system}).chatgpt;
         aizome = inputs.aizome.packages.${system}.aizome;
         hotaru = inputs.aizome.packages.${system}.hotaru;
@@ -781,6 +783,11 @@
           inherit pkgs;
           desktopsModule = inputs.calamares.nixosModules.desktops;
           network = self.packages.${system}.network;
+        };
+        vpn-guard = self.packages.${system}.vpn-guard;
+        vpn-guard-vm = import ./nix/vpn-guard-vm-test.nix {
+          inherit pkgs;
+          sekkaModule = inputs.calamares.nixosModules.default;
         };
         wpa-supplicant-scan = import ./nix/wpa-supplicant-scan-test.nix {
           inherit pkgs;
