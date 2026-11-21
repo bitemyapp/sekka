@@ -29,6 +29,14 @@
     url = "github:bitemyapp/uta/6281c579fa213294327afc8be5fdb6711b528925";
     flake = false;
   };
+  # Shikka, which builds Aizome's workspace for comparison with the Buck2
+  # experiment (DEVELOPERS.md, "Building Aizome with Shikka"). A developer's
+  # tool: no image and no check builds it. Pinned by revision, so the
+  # nightly's input update doesn't move it, and with the Nixpkgs and Rust of
+  # its own lock, which its engine is built and tested with. Those are three
+  # more sources in an installed system's lock, beneath Sekka, and Yukimi's
+  # update fetches each new one: about 460 MB, once.
+  inputs.shikka.url = "github:bitemyapp/shikka/2eb9d5733e594ebc4deaacd51e9f984125d693c9";
 
   # Sekka's own packages, and numtide's for the AI applications, also
   # configured on Sekka systems by installer/genkan/rust/system/binary-cache.nix
@@ -248,6 +256,14 @@
         # Aizome's session fonts in one folder, for $AIZOME_FONT_DIR
         # (desktop/aizome/docs/kit.md).
         aizome-fonts = inputs.aizome.packages.${system}.fonts;
+        # Shikka at the revision this flake pins, as its own flake builds it.
+        inherit (inputs.shikka.packages.${system}) shikka;
+        # What Shikka builds Aizome's workspace with: SHIKKA_TOOLCHAIN names
+        # its env.json (DEVELOPERS.md, "Building Aizome with Shikka").
+        shikka-toolchain = import ./nix/shikka-toolchain.nix {
+          inherit pkgs;
+          aizome = inputs.aizome.packages.${system}.aizome;
+        };
         inherit (hyprlandPkgs) aquamarine hyprland;
         inherit (cargoGeigerPkgs) cargo-geiger;
         genkan = calamares;
@@ -413,6 +429,9 @@
         hyprlauncher-software = import ./nix/hyprlauncher-software-test.nix { pkgs = hyprlandPkgs; };
         aizome-ibus = import ./nix/aizome-ibus-test.nix { inherit pkgs inputs; };
         aizome-memory-policy = import ./nix/aizome-memory-policy-test.nix { inherit pkgs inputs; };
+        # Shikka's toolchain is assembled from Aizome's package, and checks
+        # itself for what the package's setup hooks give it.
+        shikka-toolchain = self.packages.${system}.shikka-toolchain;
         # Aizome's toolkit's own tests, under a headless sway
         # (desktop/aizome/sukumo).
         sukumo = import ./nix/sukumo-test.nix {

@@ -42,3 +42,12 @@ x11rb = { version = "0.13", default-features = false, features = ["res"] }
 [build-dependencies]
 sha2 = "0.10"
 toml.workspace = true
+
+# What Shikka cannot read from Cargo's unit graph (DEVELOPERS.md, "Building
+# Aizome with Shikka"); Cargo ignores this table. The core is a dylib that
+# the compositor and the logic library both link, so it needs the flag
+# scripts/rustc-wrapper gives it under Cargo. And build.rs fingerprints the
+# workspace's lockfile and the sources of the core's path dependencies.
+[package.metadata.shikka]
+rustflags = ["-C", "prefer-dynamic"]
+build-script-reads-workspace = true
