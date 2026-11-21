@@ -85,6 +85,27 @@ Settei, under General → Default Apps → Terminal. Upgrading from a Sekka
 without Hotaru switches foot to Hotaru once; if you had chosen another
 terminal, it stays.
 
+**AirPlay** mirrors a screen and laptop audio to a compatible TV. Open AirPlay
+from the launcher, select the TV, enter its on-screen passcode, and choose a
+screen in the sharing dialog. The window has audio mute and Stop Mirroring;
+closing it ends the share and forgets the TV pairing. Discovery uses Wi-Fi
+and, with Bluetooth on, nearby AirPlay advertisements.
+Discovery Details shows unnamed beacons, signal strength, advertised addresses
+and connection errors, with expandable raw data to help identify a missing TV.
+Signal sorting can be turned off to keep devices in address order. Track keeps
+one Bluetooth identity fixed while its signal changes, and marks old readings
+when reports stop arriving.
+
+The current window requires a Wayland desktop. Use Direct Wi-Fi can try a
+nearby TV through Apple's peer-to-peer network on supported adapters. This
+path is experimental and has not yet passed a sustained physical-TV playback
+test. Creating the link does not guarantee TV discovery or playback.
+Some adapters, including Intel, disconnect from normal Wi-Fi during
+the session, so internet playback pauses. Stopping direct Wi-Fi restores the
+previous connection. Guest networks and some protected video services may
+prevent playback. Compatibility with a
+particular TV needs a connection test.
+
 [![Aizome with Sumi beside Files and Hotaru stacked in one tab group](docs/images/sekka/aizome-desktop.png)](docs/images/sekka/aizome-desktop.png)
 
 [![The whole menu at the pointer](docs/images/sekka/aizome-menu.png)](docs/images/sekka/aizome-menu.png)

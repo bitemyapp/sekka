@@ -1,0 +1,95 @@
+# Trial backport of t4t5/owly PR #102, head 00b937e56a72566025b0101d9c5f096fd0665758.
+# Original code is MIT OR Apache-2.0; limited to opt-in battery variants.
+--- a/src/frame.rs
++++ b/src/frame.rs
+@@ -315,6 +315,28 @@ pub fn data_frame(src: MacAddr, dst: MacAddr, seq: u16, awdl_seq: u16, packet: &
+     out
+ }
+ 
++/// QoS control: TID 0, Ack Policy No Ack.
++const QOS_NO_ACK: u16 = 0x0020;
++
++/// AWDL-13: a QoS data frame (TID 0) carrying one IPv6 packet, whose Ack
++/// Policy asks for no ACK. That reaches the hardware with the frame, where
++/// radiotap's no-ACK flag may not: iwlwifi's newer TX path (AX210 and
++/// later) drops it, and the firmware then retries a frame the peer left
++/// its channel without answering, holding up every frame behind it.
++pub fn no_ack_data_frame(
++    src: MacAddr,
++    dst: MacAddr,
++    seq: u16,
++    awdl_seq: u16,
++    packet: &[u8],
++) -> Vec<u8> {
++    let mut out = Vec::with_capacity(HEADER_LEN + 2 + DATA_HEADER_LEN + packet.len());
++    put_header(&mut out, fc::QOS_DATA, dst, src, seq);
++    out.le16(QOS_NO_ACK);
++    put_msdu(&mut out, awdl_seq, packet);
++    out
++}
++
+ /// The bytes one packet adds to an A-MSDU, less the up to 3 bytes of
+ /// padding that may come before it.
+ pub fn amsdu_subframe_len(packet_len: usize) -> usize {
+@@ -382,6 +404,33 @@ mod tests {
+     const A: MacAddr = MacAddr([0x02, 0, 0, 0, 0, 0x01]);
+     const B: MacAddr = MacAddr([0x86, 0x08, 0x04, 0x8a, 0x2b, 0xf4]);
+ 
++    // spec: AWDL-13
++    #[test]
++    fn a_no_ack_data_frame_is_qos_data_asking_for_no_ack() {
++        let packet = [0x60, 0, 0, 0, 0, 0, 0x3b, 0x40];
++        let frame = no_ack_data_frame(A, B, 0x123, 7, &packet);
++        assert_eq!(&frame[..2], &[0x88, 0x00], "QoS data");
++        assert_eq!(
++            &frame[HEADER_LEN..HEADER_LEN + 2],
++            &[0x20, 0x00],
++            "TID 0, No Ack"
++        );
++        let plain = data_frame(A, B, 0x123, 7, &packet);
++        assert_eq!(&frame[2..HEADER_LEN], &plain[2..HEADER_LEN]);
++        assert_eq!(&frame[HEADER_LEN + 2..], &plain[HEADER_LEN..]);
++        let Received::Data {
++            header,
++            amsdu,
++            body,
++        } = parse(&frame).unwrap()
++        else {
++            panic!("not data");
++        };
++        assert!(!amsdu);
++        let m = msdus(&header, amsdu, body).unwrap();
++        assert_eq!((m.len(), m[0].dst, m[0].payload), (1, B, &packet[..]));
++    }
++
+     // spec: AWDL-13, T-AWDL-2
+     #[test]
+     fn a_data_frame_matches_the_golden_bytes() {
+--- a/src/node.rs
++++ b/src/node.rs
+@@ -105,7 +105,9 @@ pub struct Config {
+     /// `owl-05`): a peer visits our channel for a slot or two, and a frame
+     /// the hardware retries past the visit (15 times over 75-140 ms on an
+     /// AX201) holds up every frame behind it. Lost, it costs a TCP
+-    /// retransmission instead.
++    /// retransmission instead. A single packet goes as QoS data whose Ack
++    /// Policy asks for no ACK as well, since not every driver passes on
++    /// radiotap's flag ([`frame::no_ack_data_frame`]).
+     pub no_ack: bool,
+     /// Accept a peer's Block Ack session (AWDL-15).
+     pub accept_addba: bool,
+@@ -836,7 +838,12 @@ impl Node {
+             let awdl_seq = self.awdl_seq;
+             self.awdl_seq = self.awdl_seq.wrapping_add(batch.len() as u16);
+             let bytes = if batch.len() == 1 {
+-                frame::data_frame(self.cfg.addr, dst, seq, awdl_seq, &batch[0].packet.data)
++                let packet = &batch[0].packet.data;
++                if self.cfg.no_ack {
++                    frame::no_ack_data_frame(self.cfg.addr, dst, seq, awdl_seq, packet)
++                } else {
++                    frame::data_frame(self.cfg.addr, dst, seq, awdl_seq, packet)
++                }
+             } else {
+                 let packets: Vec<&[u8]> = batch.iter().map(|q| q.packet.data.as_slice()).collect();
+                 self.stats.tx_amsdu += 1;
+

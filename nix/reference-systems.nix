@@ -31,6 +31,10 @@ let
         inputs.tatami.nixosModules.default
         inputs.yukimi.nixosModules.default
         inputs.aizome.nixosModules.default
+        (import ../modules/airplay.nix {
+          airplay = inputs.aizome.packages.${system}.airplay;
+        })
+        { programs.sekka-airplay.enable = lib.mkDefault true; }
         # As nix/components.nix gives the catalog module Sekka's packages.
         { _module.args.sekkaPackages = inputs.catalog.packages.${system}; }
       ]
