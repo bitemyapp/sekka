@@ -76,10 +76,11 @@ what you can't. See [its README](desktop/aizome/README.md) for what is done
 and what isn't, and [aizome.computer](https://aizome.computer/) for every app
 in detail.
 
-**Chanoma 茶の間** turns a Sekka computer into the family television, where
-it's turned on (`programs.aizome.chanoma`). Kids use it with nothing but
+**Chanoma 茶の間** turns a Sekka computer into the family television. It
+comes with Aizome. Kids use it with nothing but
 a Bluetooth game controller: streaming services open full screen in
-Chrome, films and shows play from your own folders, and retro games play
+Google Chrome or Chromium, once you've installed one from Yukimi, films
+and shows play from your own folders, and retro games play
 through emulator cores, kept just where they were left: cartridge
 consoles, and the PlayStation, Saturn, Dreamcast and PlayStation 2 from
 their discs, each told apart by what's on it. Drives plugged

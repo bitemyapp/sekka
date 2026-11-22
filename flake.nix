@@ -349,6 +349,10 @@
         aizome-media-defaults = import ./nix/aizome-media-defaults-test.nix {
           inherit pkgs inputs installer;
         };
+        aizome-chanoma-defaults = import ./nix/aizome-chanoma-defaults-test.nix {
+          inherit pkgs inputs installer;
+          references = referenceSystems;
+        };
         pipewire-packages = import ./nix/pipewire-packages-test.nix {
           inherit pkgs installer;
           references = referenceSystems;

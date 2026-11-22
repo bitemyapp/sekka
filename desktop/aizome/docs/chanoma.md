@@ -5,32 +5,65 @@ from the disk, and games, driven by a game controller alone, with a
 grown-up's PIN on what kids may do and for how long. What it does is in
 [apps.md](apps.md#chanoma-tv); this is how, and what has been checked.
 
-Turn it on with the Aizome module:
+It comes with Aizome: an app like the others, with nothing to turn on.
+The one thing a grown-up chooses is the television's own account, in
+Settings (The TV account, below). The module's options are for a
+computer that is a television and nothing else:
 
 ```nix
 programs.aizome.chanoma = {
-  enable = true;
   # A television: start with every session, and again after a crash.
   autostart = true;
+  # Its controllers pair again without anyone confirming.
+  controllersPairAgain = true;
+  # The browser its services open in, where none is installed already.
+  browser = pkgs.google-chrome;
 };
 # With autostart, the computer comes on into Chanoma.
 services.displayManager.autoLogin = { enable = true; user = "tv"; };
 ```
 
-`enable` installs the package's `chanoma` output (the binary, its desktop
-entry and icon, kept out of Aizome's own output so desktops without it
-don't list it), the cores (`programs.aizome.chanoma.cores`; snes9x and
+`enable` (on unless turned off) installs the package's `chanoma` output
+(the binary, its desktop entry and icon, and the TV account's session,
+kept out of Aizome's own output so a system without it doesn't list
+it), the cores (`programs.aizome.chanoma.cores`; snes9x and
 Genesis Plus GX, whose licences forbid selling them, only where unfree
 packages are allowed; PCSX2 only on x86-64) and a PlayStation BIOS
 (`programs.aizome.chanoma.bios`: OpenBIOS, below), exports
-`CHANOMA_CORES`, `CHANOMA_BIOS` and `CHANOMA_BROWSER` to the session,
-installs the browser (`programs.aizome.chanoma.browser`: Google Chrome
-where unfree packages are allowed, as the services that protect their
-shows play only in it; none otherwise, and Chanoma looks on the PATH),
-keeps the TV account's own systemd to what it needs
-(`programs.aizome.chanoma.tvUnits`, under The TV account), and sets
-BlueZ to connect quickly and to let a controller that forgot the
-computer pair again without anyone confirming. `autostart` is a user unit wanted by and ordered after
+`CHANOMA_CORES` and `CHANOMA_BIOS` to the session, keeps the TV
+account's own systemd to what it needs
+(`programs.aizome.chanoma.tvUnits`, under The TV account), makes
+`/run/media/tv` for its drives, and has sshd refuse an account named
+`tv`. None of that does anything until Chanoma is opened or Settings
+makes the account.
+
+The cores are their libraries alone (`*_libretro.so`, copied into one
+folder), not their packages: each package has a launcher for RetroArch
+beside its core, and linked whole they brought RetroArch and Qt along.
+With that, Chanoma adds 188 MiB to a system (the cores 125, the games'
+databases 28, the app 26; store sizes, uncompressed, measured on
+2026-11-22 for Aizome's module alone with the unfree cores), where the
+packages whole added 350.
+
+What doesn't come with it, since it comes with every Aizome:
+
+- **A browser** (`programs.aizome.chanoma.browser`, none by default,
+  exported as `CHANOMA_BROWSER` when given). Chanoma uses the Google
+  Chrome or Chromium on the PATH, and where there's neither, a service
+  says a grown-up can install one from Yukimi. Google Chrome is unfree
+  and may not be passed on, and Sekka's installation media allow unfree
+  packages: a default that installed it would have put it on the media.
+- **Controllers pairing again unasked**
+  (`programs.aizome.chanoma.controllersPairAgain`): BlueZ connecting
+  quickly, and letting a controller that forgot the computer pair again
+  without anyone confirming. BlueZ has one policy for every device, so
+  with it anything that takes a paired device's address pairs unasked
+  too, and listening for quick connections uses more power: right for a
+  television in the living room, not for every laptop.
+  Without it, a controller that forgot the computer is paired again by a
+  grown-up (Settings, or Chanoma's *Controllers*).
+
+`autostart` is a user unit wanted by and ordered after
 `aizome-session.target`, which starts once the compositor is ready; it
 restarts on failure, and a stop (logging out) keeps a game where it was.
 The unit has systemd's short PATH, which is why the browser is passed

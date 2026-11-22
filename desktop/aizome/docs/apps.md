@@ -1142,9 +1142,11 @@ scripts and agents use (`record`, `status`, `watch`, `model`, `packs`,
 
 The family television: streaming services, films and shows from the
 disk, and games, all from a game controller, with a grown-up's PIN on
-what the kids may watch and play, and for how long. It isn't in every
-Aizome: `programs.aizome.chanoma.enable` installs it with its game cores
-(below, and [docs/chanoma.md](chanoma.md) for how it works).
+what the kids may watch and play, and for how long. It comes with Aizome,
+with its game cores (`programs.aizome.chanoma.enable = false` leaves it
+out); its streaming services need Google Chrome or Chromium installed,
+and the television's own account is made in Settings (below, and
+[docs/chanoma.md](chanoma.md) for how it works).
 
 - **Home** is shelves of tiles under spaced captions: *Keep playing*
   (games where they were left, with a picture of where; shows and films

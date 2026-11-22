@@ -2638,15 +2638,33 @@ The engine evaluation (PDFium against hayro over the pdf.js corpus, and
 why MuPDF and Poppler were ruled out by licence), the fork's work, and the
 reader's design are in [Shiori's notes](desktop/aizome/docs/shiori.md).
 
-Chanoma (`desktop/aizome/apps/chanoma`), the family television, is
-installed only where `programs.aizome.chanoma.enable` is set: the
+Chanoma (`desktop/aizome/apps/chanoma`), the family television, comes
+with Aizome (`programs.aizome.chanoma.enable`, on unless turned off): the
 package builds it into a `chanoma` output of its own, and the module
 adds it with its libretro cores (unfree snes9x and Genesis Plus GX only
 where unfree packages are allowed), OpenBIOS, a free PlayStation BIOS
 built from source (`desktop/aizome/nix/openbios.nix`, the `psx-openbios`
 package), and libretro-database's game databases for its systems (CC
 BY-SA 4.0, fetched file by file at a pinned commit:
-`desktop/aizome/nix/chanoma-metadata.nix`). It reads controllers from
+`desktop/aizome/nix/chanoma-metadata.nix`). So all of that is in every
+installed Aizome system and on the installation media, and the free
+systems `push-cache` publishes carry it for updates to download: 188 MiB
+of store paths, uncompressed (2026-11-22, Aizome's module alone). The
+module copies the cores' libraries out of their packages, which would
+otherwise bring RetroArch and Qt with them. The two unfree cores are in
+no cache, so a system that allows unfree packages compiles them when an
+update changes them. Nothing
+else comes with it unasked, which
+`nix build .#checks.x86_64-linux.aizome-chanoma-defaults` holds to for
+Aizome's module alone, the live media and the installed Aizome system
+the media carries: no browser (`programs.aizome.chanoma.browser` is none
+by default, since the media allows unfree packages and Google Chrome may
+not be passed on; Chanoma uses the Chrome or Chromium a grown-up
+installs), no change to how Bluetooth devices pair
+(`programs.aizome.chanoma.controllersPairAgain`, for a television), and
+nothing started (`autostart`). It is a configuration check: it runs
+nothing of Chanoma. The television's own account is the one thing a
+grown-up turns on, in Settings. It reads controllers from
 evdev itself so that it can grab them, drives libretro cores in its own
 process (unpacking zipped games for them), and opens streaming services
 in Chrome or Chromium driven through the compositor's IPC. The PIN keeps
