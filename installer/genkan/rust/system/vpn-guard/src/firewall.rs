@@ -8,7 +8,6 @@
 //! transaction, so concurrent deletion/recreation cannot overwrite another table.
 
 use std::io::Write;
-use std::net::IpAddr;
 use std::process::{Command, Stdio};
 
 use ipnet::IpNet;
@@ -24,6 +23,10 @@ const NFT: &str = match option_env!("SEKKA_VPN_GUARD_NFT") {
 const TABLE: &str = "sekka_vpn_guard";
 const OWNER: &str = "Managed exclusively by sekka-vpn-guard";
 const CHAIN: &str = "output";
+/// Link kinds that are tunnels. Traffic routing sent into one of these is
+/// inside a tunnel, whichever program made it, and is not the guard's to
+/// refuse.
+const TUNNEL_KINDS: [&str; 5] = ["wireguard", "tun", "xfrm", "vti", "vti6"];
 
 fn equal(left: Value, right: Value) -> Value {
     json!({"match": {"op": "==", "left": left, "right": right}})
@@ -46,21 +49,28 @@ fn rule(expressions: Vec<Value>) -> Value {
 
 /// Encode the canonical network base, or the bare address for a host prefix,
 /// the same way nft lists it when reading the kernel table back.
-fn network(text: &str, family: Family) -> Result<Value, String> {
-    let net = text
-        .parse::<IpNet>()
-        .or_else(|_| text.parse::<IpAddr>().map(IpNet::from))
-        .map_err(|_| format!("invalid {} trusted network {text}", family.name()))?;
-    if Family::of(net.addr()) != family {
-        return Err(format!(
-            "{text} is outside the {} address family",
-            family.name()
-        ));
+fn network(net: IpNet) -> Value {
+    if net.prefix_len() == net.max_prefix_len() {
+        return json!(net.addr().to_string());
     }
-    if net.prefix_len() == if family == Family::V4 { 32 } else { 128 } {
-        return Ok(json!(net.addr().to_string()));
-    }
-    Ok(json!({"prefix": {"addr": net.network().to_string(), "len": net.prefix_len()}}))
+    json!({"prefix": {"addr": net.network().to_string(), "len": net.prefix_len()}})
+}
+
+/// Destinations on the local network, reachable in the blocked family too.
+fn local(family: Family) -> impl Iterator<Item = IpNet> {
+    let nets: &[&str] = match family {
+        Family::V4 => &[
+            "10.0.0.0/8",
+            "172.16.0.0/12",
+            "192.168.0.0/16",
+            "169.254.0.0/16",
+            "224.0.0.0/24",
+            "255.255.255.255/32",
+        ],
+        Family::V6 => &["fc00::/7", "fe80::/10", "ff01::/16", "ff02::/16"],
+    };
+    nets.iter()
+        .map(|net| net.parse().expect("a constant prefix"))
 }
 
 fn table() -> Value {
@@ -79,10 +89,10 @@ fn family_gate(blocked: Family) -> Value {
 }
 
 fn chain(rules: &[Value]) -> Value {
-    // The unprivileged status display cannot read nft. When discovery is
-    // degraded, the privileged reader can still check that the entire policy
-    // last installed is intact. FNV-1a detects accidental drift; the comment
-    // is not authentication against another privileged firewall manager.
+    // The unprivileged status display cannot read nft. When NetworkManager
+    // cannot be read, the privileged reader can still check that the entire
+    // policy last installed is intact. FNV-1a detects accidental drift; the
+    // comment is not authentication against another privileged firewall manager.
     let mut fingerprint = 0xcbf29ce484222325u64;
     for rule in rules {
         for byte in rule.to_string().bytes() {
@@ -93,50 +103,26 @@ fn chain(rules: &[Value]) -> Value {
     json!({"chain": {"family": "inet", "table": TABLE, "name": CHAIN, "type": "filter", "hook": "output", "prio": 0, "policy": "accept", "comment": comment}})
 }
 
-fn desired(policy: &Policy) -> Result<Vec<Value>, String> {
+fn desired(policy: &Policy) -> Vec<Value> {
     let Some(blocked) = policy.blocked else {
-        return Ok(Vec::new());
+        return Vec::new();
     };
-    let (protocol, local, trusted): (_, &[&str], _) = match blocked {
-        Family::V4 => (
-            "ip",
-            &[
-                "10.0.0.0/8",
-                "172.16.0.0/12",
-                "192.168.0.0/16",
-                "169.254.0.0/16",
-                "224.0.0.0/24",
-                "255.255.255.255",
-            ],
-            &policy.trusted_v4,
-        ),
-        Family::V6 => (
-            "ip6",
-            &["fc00::/7", "fe80::/10", "ff01::/16", "ff02::/16"],
-            &policy.trusted_v6,
-        ),
+    let protocol = match blocked {
+        Family::V4 => "ip",
+        Family::V6 => "ip6",
     };
     let accept = json!({"accept": null});
     let mut rules = vec![
         family_gate(blocked),
         rule(vec![meta("oifname", json!("lo")), accept.clone()]),
     ];
-    for device in &policy.tunnels {
-        // nft treats an asterisk as a wildcard even in an ifname literal.
-        if device.contains(['*', '\\']) || device.starts_with('@') {
-            return Err(format!(
-                "cannot use {device:?} as an exact tunnel interface name"
-            ));
-        }
-        rules.push(rule(vec![meta("oifname", json!(device)), accept.clone()]));
+    for kind in TUNNEL_KINDS {
+        rules.push(rule(vec![meta("oifkind", json!(kind)), accept.clone()]));
     }
     for mark in &policy.marks {
-        if *mark == 0 {
-            return Err("zero is not a WireGuard transport mark".into());
-        }
         rules.push(rule(vec![
             meta("l4proto", json!("udp")),
-            meta("mark", json!(mark)),
+            meta("mark", json!(mark.get())),
             accept.clone(),
         ]));
     }
@@ -149,13 +135,10 @@ fn desired(policy: &Policy) -> Result<Vec<Value>, String> {
             ]));
         }
     }
-    for cidr in local
-        .iter()
-        .copied()
-        .chain(trusted.iter().map(String::as_str))
-    {
+    let trusted = policy.trusted.iter().copied();
+    for net in local(blocked).chain(trusted.filter(|net| Family::of(net.addr()) == blocked)) {
         rules.push(rule(vec![
-            payload(protocol, "daddr", network(cidr, blocked)?),
+            payload(protocol, "daddr", network(net)),
             accept.clone(),
         ]));
     }
@@ -168,7 +151,7 @@ fn desired(policy: &Policy) -> Result<Vec<Value>, String> {
     ]));
     let mut objects = vec![table(), chain(&rules)];
     objects.extend(rules);
-    Ok(objects)
+    objects
 }
 
 fn nft(args: &[&str], input: Option<&Value>) -> Result<Vec<u8>, String> {
@@ -312,7 +295,7 @@ fn transaction(current: &Installed, wanted: &[Value]) -> Option<Value> {
 }
 
 pub fn apply(policy: &Policy) -> Result<(), String> {
-    let wanted = desired(policy)?;
+    let wanted = desired(policy);
     if let Some(batch) = transaction(&read()?, &wanted) {
         nft(&["-f", "-"], Some(&batch))?;
         let actual = read()?;
@@ -328,6 +311,7 @@ pub fn apply(policy: &Policy) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::num::NonZeroU32;
 
     #[test]
     fn replacement_checks_owner_and_uses_handle_and_exclusive_create() {
@@ -358,17 +342,24 @@ mod tests {
 
     #[test]
     fn policy_keeps_transport_exceptions_narrow_and_readback_detects_drift() {
-        let mut policy = Policy {
+        let policy = Policy {
             blocked: Some(Family::V6),
-            marks: [1234].into(),
-            endpoints: ["[2001:db8::fe]:51515".parse().unwrap()].into(),
-            tunnels: ["workvpn".into()].into(),
-            trusted_v6: ["2001:db8:1::1/128".into()].into(),
+            marks: [NonZeroU32::new(1234).unwrap()].into(),
+            endpoints: [
+                "[2001:db8::fe]:51515".parse().unwrap(),
+                "198.51.100.7:51820".parse().unwrap(),
+            ]
+            .into(),
+            trusted: [
+                "2001:db8:1::1/128".parse().unwrap(),
+                "198.51.100.0/24".parse().unwrap(),
+            ]
+            .into(),
             ..Policy::default()
         };
         let mut installed = Installed {
             handle: Some(1),
-            objects: desired(&policy).unwrap(),
+            objects: desired(&policy),
         };
         let accept = json!({"accept": null});
         assert!(installed.objects.contains(&rule(vec![
@@ -387,27 +378,53 @@ mod tests {
         ])));
         assert!(!installed.objects.contains(&rule(vec![
             payload("ip6", "daddr", json!("2001:db8::fe")),
-            accept,
+            accept.clone(),
         ])));
+        // Nothing of the open family is written into the blocked one's rules.
+        assert!(
+            !installed
+                .objects
+                .iter()
+                .any(|o| o.to_string().contains("198.51.100."))
+        );
         assert_eq!(inspect(&installed).unwrap(), Some(Family::V6));
         installed.objects.pop();
         assert!(inspect(&installed).is_err());
         assert_eq!(inspect(&Installed::default()).unwrap(), None);
-        policy.marks.insert(0);
-        assert!(desired(&policy).is_err());
+        assert!(desired(&Policy::default()).is_empty());
     }
 
     #[test]
-    fn trusted_networks_compare_to_canonical_kernel_output() {
+    fn traffic_into_any_tunnel_device_passes_before_the_refusals() {
+        let policy = Policy {
+            blocked: Some(Family::V4),
+            ..Policy::default()
+        };
+        let rules = desired(&policy);
+        let position = |wanted: &Value| rules.iter().position(|rule| rule == wanted).unwrap();
+        let refusal = position(&rule(vec![
+            meta("l4proto", json!("tcp")),
+            json!({"reject": {"type": "tcp reset"}}),
+        ]));
+        for kind in TUNNEL_KINDS {
+            let accept = rule(vec![meta("oifkind", json!(kind)), json!({"accept": null})]);
+            assert!(position(&accept) < refusal, "{kind}");
+        }
+    }
+
+    #[test]
+    fn networks_compare_to_canonical_kernel_output() {
         assert_eq!(
-            network("fd12::abba/64", Family::V6).unwrap(),
+            network("fd12::abba/64".parse().unwrap()),
             json!({"prefix": {"addr": "fd12::", "len": 64}})
         );
         assert_eq!(
-            network("203.0.113.20/32", Family::V4).unwrap(),
+            network("203.0.113.20/32".parse().unwrap()),
             json!("203.0.113.20")
         );
-        assert!(network("203.0.113.20", Family::V6).is_err());
-        assert!(network("203.0.113.20/33", Family::V4).is_err());
+        assert_eq!(
+            local(Family::V4).last().map(network),
+            Some(json!("255.255.255.255"))
+        );
     }
 }

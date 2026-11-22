@@ -21,7 +21,7 @@ in
     enable = lib.mkOption {
       type = lib.types.bool;
       default = true;
-      description = "Protect host traffic in the address family a full-tunnel WireGuard connection does not carry.";
+      description = "Protect host traffic in the address family a full-tunnel NetworkManager WireGuard profile does not carry.";
     };
     trustedLanPrefixes = lib.mkOption {
       type = lib.types.listOf lib.types.str;
@@ -47,6 +47,8 @@ in
       description = "Apply the WireGuard address-family egress policy";
       wantedBy = [ "multi-user.target" ];
       # Arm the dispatcher before NetworkManager can activate its first profile.
+      # Every later run comes from NetworkManager's own events, which cover
+      # all the guard reads: the profiles NetworkManager has applied.
       before = [ "NetworkManager.service" ];
       # A changed executable or exception list is reconciled while the previous
       # nft table still protects the connection. Removal of the unit invokes stop.
@@ -58,24 +60,6 @@ in
         ExecStart = "${program} start";
         ExecReload = "${program} reconcile";
         ExecStop = "${program} stop";
-      };
-    };
-    # Retry incomplete snapshots and refresh roaming endpoints even when a
-    # kernel change did not produce a NetworkManager dispatcher event.
-    systemd.services.sekka-vpn-guard-refresh = {
-      description = "Reconcile the active WireGuard egress policy";
-      after = [ "sekka-vpn-guard.service" ];
-      serviceConfig = {
-        Type = "oneshot";
-        ExecStart = "${program} reconcile";
-      };
-    };
-    systemd.timers.sekka-vpn-guard-refresh = {
-      wantedBy = [ "timers.target" ];
-      timerConfig = {
-        OnBootSec = "30s";
-        OnUnitInactiveSec = "30s";
-        AccuracySec = "1s";
       };
     };
   };

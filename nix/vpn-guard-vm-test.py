@@ -1,3 +1,4 @@
+import ipaddress
 import re
 import shlex
 
@@ -67,7 +68,7 @@ def wait_policy(ipv4: str, ipv6: str) -> None:
         guarded.fail(NFT_TABLE)
 
 
-def connect(name: str, address: str, dns: str, allowed: str, port: int) -> None:
+def connect(name: str, address: str, dns: str, allowed: str, port: int, endpoint: str = VPN4) -> None:
     """Imports a wg-quick file as Settings and Network do, and brings it up."""
     conf = (
         f"Address = {address}\n"
@@ -76,7 +77,7 @@ def connect(name: str, address: str, dns: str, allowed: str, port: int) -> None:
         "[Peer]\n"
         f"PublicKey = {server_pub}\n"
         f"AllowedIPs = {allowed}\n"
-        f"Endpoint = {VPN4}:{port}\n"
+        f"Endpoint = {endpoint}:{port}\n"
     )
     guarded.succeed(
         "umask 077 && { printf '[Interface]\\nPrivateKey = '; cat /root/client.key; "
@@ -150,21 +151,15 @@ with subtest("IPv4-only full tunnel permits IPv4, private LAN and scoped IPv6"):
     refused_at_once(guarded, ONLY6)
     guarded.succeed(f"ip -6 route del {WEB6}/128")
 
-with subtest("Incomplete kernel discovery retains policy and recovers positive NetworkManager intent"):
-    # Below the normal main-table lookup, this valid group-suppression rule
-    # leaves these clients' routes unchanged but needs an unsupported selector.
-    rule = "priority 40000 table main suppress_ifgroup 42"
-    guarded.succeed("systemctl stop sekka-vpn-guard-refresh.timer", f"ip -4 rule add {rule}")
-    for previous in ("installed", "absent"):
-        if previous == "absent":
-            guarded.succeed("sekka-vpn-guard clear")
-            guarded.fail(NFT_TABLE)
-        guarded.fail("sekka-vpn-guard reconcile")
-        code, observed = guarded.execute("su -s /bin/sh demo -c 'sekka-vpn-guard status'")
-        assert code != 0 and "Degraded: IPv6 egress block installed" in observed, observed
-        guarded.succeed(NFT_TABLE)
-        refused_at_once(guarded, ONLY6)
-    guarded.succeed(f"ip -4 rule del {rule}", "sekka-vpn-guard reconcile", "systemctl start sekka-vpn-guard-refresh.timer")
+with subtest("A read NetworkManager does not answer keeps the installed block"):
+    guarded.succeed("systemctl kill --signal=SIGSTOP NetworkManager.service")
+    guarded.fail("sekka-vpn-guard reconcile")
+    code, observed = guarded.execute("su -s /bin/sh demo -c 'sekka-vpn-guard status'")
+    guarded.succeed("systemctl kill --signal=SIGCONT NetworkManager.service")
+    assert code != 0 and "Degraded: IPv6 egress block installed" in observed, observed
+    guarded.succeed(NFT_TABLE)
+    refused_at_once(guarded, ONLY6)
+    guarded.succeed("sekka-vpn-guard reconcile")
     wait_policy("open", "blocked")
     arrives_from(guarded, ONLY4, [VPN4])
 
@@ -237,19 +232,59 @@ with subtest("IPv6-only full tunnel negotiates fresh sessions at two IPv4 endpoi
     wait_policy("open", "open")
     arrives_from(guarded, ONLY4, [ISP4])
 
-with subtest("A connected IPv4 tunnel adds a full IPv6 path through the main table"):
-    connect("EXTEND", "192.168.201.2/32, fd00:201::2/128", "192.168.201.1", "0.0.0.0/0", 51822)
+with subtest("A profile edit counts once NetworkManager applies it"):
+    connect("CAROLINE", "192.168.201.2/32, fd00:201::2/128", "192.168.201.1", "0.0.0.0/0", 51822)
     wait_policy("open", "blocked")
     refused_at_once(guarded, ONLY6)
-    guarded.succeed(
-        f"wg set EXTEND peer {server_pub} allowed-ips 0.0.0.0/0,::/0",
-        "ip -6 route add default dev EXTEND src fd00:201::2 metric 5 table main",
-        "sekka-vpn-guard reconcile",
-    )
-    wait_policy("open", "open")
+    # Saved but not applied: the connected tunnel still takes all of IPv4.
+    guarded.succeed("nmcli connection modify CAROLINE ipv4.never-default yes", "sekka-vpn-guard reconcile")
+    wait_policy("open", "blocked")
     arrives_from(guarded, ONLY4, [VPN4])
-    arrives_from(guarded, ONLY6, [VPN6])
-    guarded.succeed("nmcli connection down EXTEND")
+    refused_at_once(guarded, ONLY6)
+    # Applied: the profile no longer asks for all of IPv4, so it is left alone.
+    guarded.succeed("nmcli connection up CAROLINE")
+    wait_policy("open", "open")
+    arrives_from(guarded, ONLY4, [ISP4])
+    arrives_from(guarded, ONLY6, guarded_own)
+    guarded.succeed("nmcli connection down CAROLINE")
+
+
+def everything_but(*left_out: str) -> str:
+    """AllowedIPs for all of IPv4 except the given networks, as a calculator writes them."""
+    nets = [ipaddress.IPv4Network("0.0.0.0/0")]
+    for hole in map(ipaddress.IPv4Network, left_out):
+        nets = [part for net in nets for part in (net.address_exclude(hole) if hole.subnet_of(net) else [net])]
+    return ", ".join(str(net) for net in sorted(nets))
+
+
+with subtest("A list that leaves out private ranges and its own server is still a full tunnel"):
+    public = everything_but("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", f"{VPN4}/32")
+    connect("ATLAS", "192.168.200.2/32", "192.168.200.1", public, 51820)
+    # Without a default route NetworkManager puts no mark on the tunnel's own packets.
+    assert guarded.succeed("wg show ATLAS fwmark").strip() == "off"
+    wait_policy("open", "blocked")
+    arrives_from(guarded, ONLY4, [VPN4])
+    refused_at_once(guarded, ONLY6)
+    arrives_from(guarded, BOTH, [VPN4])
+    private_network_answers(guarded)
+    guarded.succeed("nmcli connection down ATLAS")
+    wait_policy("open", "open")
+    arrives_from(guarded, ONLY6, guarded_own)
+
+with subtest("An unmarked full tunnel keeps reaching its server over the blocked family"):
+    connect("PBODY", "192.168.200.2/32", "192.168.200.1", "0.0.0.0/1, 128.0.0.0/1", 51820, endpoint=f"[{VPN6}]")
+    assert guarded.succeed("wg show PBODY fwmark").strip() == "off"
+    wait_policy("open", "blocked")
+    guarded.succeed(f"{NFT_TABLE} | grep -F 'ip6 daddr {VPN6} udp dport 51820 accept'")
+    arrives_from(guarded, ONLY4, [VPN4])
+    refused_at_once(guarded, ONLY6)
+    arrives_from(guarded, BOTH, [VPN4])
+    fields = guarded.succeed("wg show PBODY latest-handshakes").split()
+    assert len(fields) == 2 and fields[0] == server_pub and int(fields[1]) > 0, fields
+    assert guarded.succeed("wg show PBODY endpoints").split() == [server_pub, f"[{VPN6}]:51820"]
+    guarded.succeed("nmcli connection down PBODY")
+    wait_policy("open", "open")
+    arrives_from(guarded, ONLY4, [ISP4])
 
 with subtest("A full tunnel carrying both families remains usable in both"):
     connect("CHELL", "192.168.201.2/32, fd00:201::2/128", "192.168.201.1", "0.0.0.0/0, ::/0", 51822)
@@ -260,3 +295,7 @@ with subtest("A full tunnel carrying both families remains usable in both"):
     arrives_from(guarded, ONLY6, [VPN6])
     guarded.succeed("nmcli connection down CHELL")
     guarded.wait_until_succeeds(f"ip route get {WEB4} | grep 'dev eth1'", timeout=60)
+
+with subtest("Every run NetworkManager's events started had an answer"):
+    failed = guarded.succeed("journalctl -b -o cat -t nm-dispatcher | grep -F 'sekka-vpn-guard:' || true").strip()
+    assert not failed, failed

@@ -21,11 +21,21 @@
 # - preserves private and link-local access and permits a public LAN address
 #   only when the configuration explicitly trusts it;
 # - keeps a tunnel whose far end is in the blocked family working through a
-#   fresh handshake, with NixOS's reverse-path filter on;
+#   fresh handshake, with NixOS's reverse-path filter on, by the mark
+#   NetworkManager gives the tunnel or, for a tunnel with none, by the
+#   server address in its profile;
+# - treats a profile that leaves out only private ranges and its own server
+#   as the full tunnel it is, and a profile set never to be the default as
+#   the split tunnel it is, once NetworkManager has applied that setting;
+# - keeps an installed block when NetworkManager does not answer;
 # - lifts the block when the tunnel goes down, and never sets it for a
 #   tunnel that carries both families;
 # - survives a live switch to an updated policy and is removed by a switch
 #   to a generation with the option disabled.
+#
+# The guard reads NetworkManager's applied profiles and nothing from the
+# kernel's routing, so a tunnel made outside NetworkManager is not covered
+# and not tested here.
 #
 # Component evidence only: wired interfaces, no real provider, and QEMU's
 # user network (eth0) kept out of NetworkManager's hands so that eth1 is the
@@ -257,6 +267,15 @@ pkgs.testers.runNixOSTest {
           (address4 "203.0.113.21")
         ];
         ipv6.addresses = [ (address6 "2001:db8:ffff::20") ];
+        # The way back to the home network's IPv6 prefix, for the tunnel
+        # whose server is reached over IPv6.
+        ipv6.routes = [
+          {
+            address = "2001:db8:1::";
+            prefixLength = 64;
+            via = "2001:db8:ffff::1";
+          }
+        ];
       };
       boot.kernel.sysctl = forwarding;
       networking.nftables.enable = true;
