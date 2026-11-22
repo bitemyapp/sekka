@@ -31,6 +31,7 @@ use wayland_protocols::wp::text_input::zv3::client::{zwp_text_input_manager_v3, 
 use wayland_protocols::xdg::decoration::zv1::client::{zxdg_decoration_manager_v1, zxdg_toplevel_decoration_v1};
 use wayland_protocols::xdg::foreign::zv2::client::{zxdg_exported_v2, zxdg_exporter_v2};
 use wayland_protocols::xdg::shell::client::{xdg_surface, xdg_toplevel, xdg_wm_base};
+use wayland_protocols::xdg::toplevel_tag::v1::client::xdg_toplevel_tag_manager_v1;
 
 static COUNTER: AtomicU32 = AtomicU32::new(0);
 
@@ -398,6 +399,9 @@ pub struct Spec {
     /// while the window has the keys, a commit applied only by a `done`
     /// whose serial counts its own commits.
     pub text_input: bool,
+    /// The tag it gives its toplevel before the first commit
+    /// (xdg-toplevel-tag), as Aizome's kit tags a utility window.
+    pub tag: Option<String>,
 }
 
 impl Spec {
@@ -416,10 +420,15 @@ impl Spec {
             animated: false,
             defer_mapping: false,
             text_input: false,
+            tag: None,
         }
     }
     pub fn text_input(mut self) -> Spec {
         self.text_input = true;
+        self
+    }
+    pub fn tag(mut self, tag: &str) -> Spec {
+        self.tag = Some(tag.into());
         self
     }
     pub fn pixel_pattern(mut self, pattern: fn(i32, i32) -> u32) -> Spec {
@@ -647,6 +656,11 @@ fn run_client(stream: UnixStream, spec: Spec, rx: Receiver<Cmd>, seen: Arc<Mutex
     if spec.fullscreen {
         tl.set_fullscreen(spec.fullscreen_output.and_then(|i| outputs.get(i)));
     }
+    if let Some(tag) = &spec.tag {
+        let tags: xdg_toplevel_tag_manager_v1::XdgToplevelTagManagerV1 =
+            globals.bind(&qh, 1..=1, ()).expect("xdg_toplevel_tag_manager_v1");
+        tags.set_toplevel_tag(&tl, tag.clone());
+    }
     surface.commit();
     app.surface = Some(surface);
     app.xdg_surface = Some(xs);
@@ -793,7 +807,8 @@ ignore!(
     zwp_text_input_manager_v3::ZwpTextInputManagerV3,
     zxdg_exporter_v2::ZxdgExporterV2,
     zwp_idle_inhibit_manager_v1::ZwpIdleInhibitManagerV1,
-    zwp_idle_inhibitor_v1::ZwpIdleInhibitorV1
+    zwp_idle_inhibitor_v1::ZwpIdleInhibitorV1,
+    xdg_toplevel_tag_manager_v1::XdgToplevelTagManagerV1
 );
 
 impl Dispatch<zxdg_exported_v2::ZxdgExportedV2, ()> for App {

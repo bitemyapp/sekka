@@ -166,8 +166,9 @@ fractional-scale, presentation-time, single-pixel-buffer, cursor-shape,
 idle-notify, idle-inhibit, keyboard-shortcuts-inhibit, pointer-constraints,
 relative-pointer, pointer-gestures, text-input-v3, input-method-v2,
 virtual-keyboard, security-context, content-type, tablet, alpha-modifier,
-fifo, commit-timing, xdg-toplevel-icon, xdg-system-bell (rung as the
-shell's `bell` binding), ext-foreign-toplevel-list,
+fifo, commit-timing, xdg-toplevel-icon, xdg-toplevel-tag (a window
+tagged `utility` is kept by itself: see below), xdg-system-bell (rung as
+the shell's `bell` binding), ext-foreign-toplevel-list,
 wlr-foreign-toplevel-management (3), wlr-output-management (4),
 wlr-screencopy (3), ext-image-copy-capture (1) with ext-image-capture-source
 (1) and wlr-gamma-control (1). Privileged ones (layer shell,
@@ -233,6 +234,17 @@ Notes for client authors:
 - A toplevel's app_id should be set before its first commit; it picks the
   remembered size and place, the icon, and whether ❖ reaches it untouched
   (`org.aizome.…` apps) or as Ctrl.
+- A toplevel tagged `utility` (xdg-toplevel-tag, set before its first
+  commit) is one of its app's small windows beside the others, and is kept
+  by itself. It opens at the size it asks for, placed as a new window is,
+  not at its app's remembered size and place. It doesn't open as a tab on
+  the app's focused window, and no window opens as a tab on it. Closing
+  it leaves the app's remembered place as it was. Dropping its tab on
+  another window, ⌃❖S and `aizomectl stack` stack it as they do any
+  window. Aizome's kit tags the windows opened with `.utility()`: Hako's
+  Operations, Myaku's Energy Meters, Fusen's stickies. The tag is read
+  when the window opens: changing it afterwards changes nothing until the
+  window opens again. Other tags mean nothing to Aizome.
 - Layer surfaces: `aizome-deskbar` is placed around (new windows open clear
   of it). Exclusive keyboard interactivity on the top and overlay layers
   takes the keyboard while mapped; on-demand takes it on a click; a
@@ -519,7 +531,7 @@ connections and the way out depend on.
 | `input.rs`, `focus.rs` | Input from libinput, winit or IPC; the core's keys (VT switching, ⌃❖R, Ctrl+Alt+Del) before the logic's, a key `catch-key` waits for, and those `catch-keys` keeps over a window; keyboard focus, popup grabs, grab wrappers |
 | `keyboards.rs` | The keyboards that type, who each is, and the keymap of the one typing (its own keys from `[[input.keyboards]]`) |
 | `shell.rs`, `handlers.rs`, `popups.rs` | Surfaces, xdg-shell, layer shell, session lock and the smaller protocols; the window registry |
-| `protocols/` | wlr-screencopy and ext-image-copy-capture with its output and window sources (`capture`: the streams and copies they share, wl_shm and dmabuf, per-stream damage; an output's copy draws the logic's scene), wlr foreign toplevel management, wlr output management, wlr gamma control, xdg-toplevel-icon |
+| `protocols/` | wlr-screencopy and ext-image-copy-capture with its output and window sources (`capture`: the streams and copies they share, wl_shm and dmabuf, per-stream damage; an output's copy draws the logic's scene), wlr foreign toplevel management, wlr output management, wlr gamma control, xdg-toplevel-icon, and the tag xdg-toplevel-tag gives a window (`toplevel_tag`) |
 | `backend/` | headless (GLES on a render node or pixman, 60 Hz pacing only while damaged), winit, udev (DRM/KMS, multi-GPU GLES or pixman dumb buffers) |
 | `recovery/` | Ctrl+Alt+Del's overlay: state, keys and actions (`mod.rs`), drawing (`view.rs`, with the core's painter), apps' processes on a thread (`procinfo.rs`, `x11.rs`), pings (`ping.rs`), Reset Input (`reset.rs`). The core calls it before the logic: the first check in `decide_key` and `pointer_button`, `pointer_moved` and `scroll` in input, `may_constrain` (pointer constraints), the first items of `State::scene`, `frame_flags` (udev), `exclusive_keyboard_target`, `handle_request`, `client_pong` and `constraint_requested`, and `start` in `run`. |
 | `watchdog.rs` | systemd's watchdog keepalive from the main loop and the stall watcher (backtrace, `stall.log`, the notice after a restart). |

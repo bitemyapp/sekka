@@ -934,3 +934,76 @@ fn a_bar_coming_to_a_display_fits_windows_rather_than_scaling_them() {
     assert_eq!(m.get(a).unwrap().restore, Some(r));
     assert_eq!(m.get(a).unwrap().frame, Some(usable(LAPTOP)));
 }
+
+/// A window that has just opened: not focused yet, as when the logic asks
+/// where it goes.
+fn open(m: &mut Model, app: &str, role: Role, parent: Option<WinId>) -> WinId {
+    let id = m.insert(app, app, None, Rect::new(100, 100, 400, 300), parent);
+    m.get_mut(id).unwrap().role = role;
+    id
+}
+
+#[test]
+fn a_window_is_a_utility_window_by_its_tag() {
+    assert_eq!(Role::from_tag(Some("utility")), Role::Utility);
+    assert_eq!(Role::from_tag(Some("main window")), Role::Ordinary);
+    assert_eq!(Role::from_tag(Some("")), Role::Ordinary);
+    assert_eq!(Role::from_tag(None), Role::Ordinary);
+}
+
+#[test]
+fn an_ordinary_window_opens_as_a_tab_on_its_apps_focused_window() {
+    let mut m = model();
+    let a = add(&mut m, "files");
+    let b = open(&mut m, "files", Role::Ordinary, None);
+    assert_eq!(m.tab_host(b), Some(a));
+    // Another app's window has the focus: on its own.
+    add(&mut m, "term");
+    let c = open(&mut m, "files", Role::Ordinary, None);
+    assert_eq!(m.tab_host(c), None);
+    // Nothing has it.
+    m.focus(None);
+    assert_eq!(m.tab_host(c), None);
+    // A window isn't a tab on itself.
+    m.focus(Some(c));
+    assert_eq!(m.tab_host(c), None);
+}
+
+#[test]
+fn a_utility_window_or_a_dialog_opens_by_itself() {
+    let mut m = model();
+    let a = add(&mut m, "files");
+    let operations = open(&mut m, "files", Role::Utility, None);
+    assert_eq!(m.tab_host(operations), None);
+    let dialog = open(&mut m, "files", Role::Ordinary, Some(a));
+    assert_eq!(m.tab_host(dialog), None);
+}
+
+#[test]
+fn nothing_opens_as_a_tab_on_a_utility_window() {
+    let mut m = model();
+    let sticky = open(&mut m, "notes", Role::Utility, None);
+    m.focus(Some(sticky));
+    let main = open(&mut m, "notes", Role::Ordinary, None);
+    assert_eq!(m.tab_host(main), None);
+    let another = open(&mut m, "notes", Role::Utility, None);
+    assert_eq!(m.tab_host(another), None);
+    // By hand it stacks as any window does.
+    assert!(m.stack(sticky, main).is_some());
+    assert_eq!(m.group_of(sticky).unwrap().members, vec![sticky, main]);
+}
+
+#[test]
+fn only_an_apps_ordinary_windows_share_its_place() {
+    let mut m = model();
+    let a = add(&mut m, "files");
+    assert!(m.get(a).unwrap().shares_app_place());
+    let operations = open(&mut m, "files", Role::Utility, None);
+    assert!(!m.get(operations).unwrap().shares_app_place());
+    let dialog = open(&mut m, "files", Role::Ordinary, Some(a));
+    assert!(!m.get(dialog).unwrap().shares_app_place());
+    // Before a window is in the model, from what its toplevel says.
+    assert!(shares_app_place(None, Role::Ordinary));
+    assert!(!shares_app_place(None, Role::Utility));
+    assert!(!shares_app_place(Some(a), Role::Ordinary));
+}

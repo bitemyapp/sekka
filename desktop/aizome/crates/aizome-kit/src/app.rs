@@ -482,7 +482,7 @@ impl Platform for SidestepPlatform<'_> {
                     o = o.max_size(m.width, m.height);
                 }
                 if *utility {
-                    o = o.minimizable(false);
+                    o = o.minimizable(false).tag(crate::platform::UTILITY_TAG);
                 }
                 if let Some(p) = parent.and_then(|p| self.maps.to_side.get(&p)) {
                     o = o.transient_for(*p);

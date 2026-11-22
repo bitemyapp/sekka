@@ -1,3 +1,4 @@
+| [A toplevel's description replaces its tag](#xdg-toplevel-tag) | Aizome keeps the tag from the handler ([`protocols/toplevel_tag.rs`](../../../desktop/aizome/crates/aizome-comp-core/src/protocols/toplevel_tag.rs)) | Fixed on `master`: [Smithay#2045](https://github.com/Smithay/smithay/pull/2045) |
 # Smithay
 
 Aizome's compositor (`desktop/aizome/crates/aizome-comp-core`) is built on
@@ -140,6 +141,19 @@ comparison on `master`; with it,
 [`desktop/aizome/crates/aizome-comp-core/src/protocols/toplevel_icon.rs`](../../../desktop/aizome/crates/aizome-comp-core/src/protocols/toplevel_icon.rs)
 can give way to Smithay's `XdgToplevelIconManager`, keeping
 [`desktop/aizome/crates/aizome-comp/tests/chromium.rs`](../../../desktop/aizome/crates/aizome-comp/tests/chromium.rs).
+
+### xdg-toplevel-tag
+
+In 0.7.0 `set_toplevel_description` stores the description where the tag is
+kept (`XdgToplevelTagSurfaceData`), so a window that sets both reads back its
+description as its tag. Aizome reads the tag to tell its apps' utility
+windows, and keeps its own copy from `XdgToplevelTagHandler::set_tag`, which
+is given the right string.
+[Smithay#2045](https://github.com/Smithay/smithay/pull/2045) stores the
+description in its own field (checked on 2026-11-22 against `master` at
+a38bb709); with it,
+[`desktop/aizome/crates/aizome-comp-core/src/protocols/toplevel_tag.rs`](../../../desktop/aizome/crates/aizome-comp-core/src/protocols/toplevel_tag.rs)
+can read Smithay's record and drop its own.
 
 ### Input method keymaps
 

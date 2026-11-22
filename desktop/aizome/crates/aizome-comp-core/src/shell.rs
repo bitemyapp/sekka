@@ -206,6 +206,7 @@ impl State {
         let surface = toplevel.wl_surface().clone();
         let (app_id, title) = toplevel_ids(&toplevel);
         let parent = toplevel.parent().and_then(|p| self.az.window_for_surface(&p));
+        let tag = crate::protocols::toplevel_tag::tag(&toplevel);
         let pid =
             self.az.dh.get_client(surface.id()).ok().and_then(|c| c.get_credentials(&self.az.dh).ok()).map(|c| c.pid);
         let ssd = toplevel.current_state().decoration_mode == Some(DecorationMode::ServerSide);
@@ -218,7 +219,7 @@ impl State {
         let committed = toplevel.current_state();
         let fullscreen = committed.states.contains(xdg_toplevel::State::Fullscreen);
         let fullscreen_output = committed.fullscreen_output.as_ref().and_then(Output::from_resource);
-        let info = MapInfo { app_id, title, pid, parent, ssd, size, fullscreen, fullscreen_output };
+        let info = MapInfo { app_id, title, pid, parent, tag, ssd, size, fullscreen, fullscreen_output };
         if self.lg.healthy() {
             self.lg_call((), |vt, st| (vt.window_mapped)(st, id, &info));
         } else {

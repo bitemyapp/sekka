@@ -15,7 +15,7 @@ use smithay::wayland::shell::xdg::{ToplevelSurface, XdgToplevelSurfaceData};
 use tracing::info;
 
 use crate::prelude::*;
-use crate::wm::{DeskId, DeskMove, Placement, Refocus, ScreenGeom, Side};
+use crate::wm::{DeskId, DeskMove, Placement, Refocus, Role, ScreenGeom, Side};
 
 /// One work area for initial bounds, restored geometry, fill/split and
 /// subsequent shell/output changes. The Deskbar does not use an exclusive
@@ -907,8 +907,10 @@ pub fn place_new_window(st: &mut State, id: WinId, size: (i32, i32), parent: Opt
     let insets = l.insets_for(id);
     let app_id = l.wm.get(id).map(|w| w.app_id.clone()).unwrap_or_default();
     // Where the app was last, on this display; from another display, at the
-    // same place on this one in proportion.
-    let remembered = (parent.is_none() && st.az.settings.windows.remember_geometry)
+    // same place on this one in proportion. (A dialog and a utility window
+    // are placed as new.)
+    let shares = l.wm.get(id).is_some_and(|w| w.shares_app_place());
+    let remembered = (shares && st.az.settings.windows.remember_geometry)
         .then(|| l.remembered.get(&app_id))
         .flatten()
         .and_then(|r| {
@@ -952,8 +954,8 @@ fn set_fullscreen_on(st: &mut State, id: WinId, on: Option<bool>, output: Option
     }
 }
 
-/// A toplevel's first configure: the usable area as bounds, and the size
-/// its app last had.
+/// A toplevel's first configure: the usable area as bounds, and for one
+/// of its app's ordinary windows the size the app last had.
 pub fn first_configure(st: &mut State, toplevel: &ToplevelSurface) {
     // The core already agreed on the full output size for a request made
     // before mapping. Remembered normal-window bounds must not replace it.
@@ -968,7 +970,9 @@ pub fn first_configure(st: &mut State, toplevel: &ToplevelSurface) {
         None => desk_output(st, st.lg.r().wm.current_desk()),
     };
     let usable = out.as_ref().map(|o| window_area(&st.az, o));
-    let remembered = (parent.is_none() && st.az.settings.windows.remember_geometry)
+    // The client says what the window is (its tag) before this commit.
+    let role = Role::from_tag(aizome_comp_core::protocols::toplevel_tag::tag(toplevel).as_deref());
+    let remembered = (crate::wm::shares_app_place(parent, role) && st.az.settings.windows.remember_geometry)
         .then(|| st.lg.r().remembered.get(&app_id))
         .flatten();
     toplevel.with_pending_state(|s| {
@@ -990,19 +994,17 @@ pub fn window_mapped(st: &mut State, id: WinId, info: &MapInfo) {
     l.wm.insert_as(id, &info.app_id, &info.title, info.pid, Rect::new(0, 0, info.size.0, info.size.1), info.parent);
     if let Some(w) = l.wm.get_mut(id) {
         w.ssd = info.ssd;
+        w.role = Role::from_tag(info.tag.as_deref());
     }
     l.wins.insert(id, Default::default());
     place_new_window(st, id, info.size, info.parent);
 
-    // A new window of the focused app joins its group, when asked for.
-    let l = st.lg.r();
-    let focused = l.wm.focused();
-    let same_app = focused.filter(|f| l.wm.get(*f).is_some_and(|w| w.app_id == info.app_id && w.id != id));
+    // A new window of the focused app joins its group, when asked for: an
+    // ordinary window on an ordinary one (see `Model::tab_host`).
     if st.az.settings.windows.stack_new_windows_of_same_app
-        && info.parent.is_none()
-        && let Some(f) = same_app
+        && let Some(host) = st.lg.r().wm.tab_host(id)
     {
-        st.stack(f, id);
+        st.stack(host, id);
     }
     if info.fullscreen {
         set_fullscreen_on(st, id, Some(true), info.fullscreen_output.clone());
@@ -1094,7 +1096,7 @@ pub fn window_unmapped(st: &mut State, id: WinId) {
     let remember = st.az.settings.windows.remember_geometry;
     let l = st.lg.m();
     if let Some(w) = l.wm.get(id) {
-        if w.placement == Placement::Free && w.parent.is_none() && remember {
+        if w.placement == Placement::Free && w.shares_app_place() && remember {
             let (app, rect) = (w.app_id.clone(), w.rect);
             l.remembered.set(&app, rect);
         }
@@ -1252,6 +1254,7 @@ pub fn adopt_windows(st: &mut State) {
             .and_then(|c| c.get_credentials(&st.az.dh).ok())
             .map(|c| c.pid);
         let parent = toplevel.parent().and_then(|p| st.az.window_for_surface(&p));
+        let role = Role::from_tag(aizome_comp_core::protocols::toplevel_tag::tag(&toplevel).as_deref());
         let l = st.lg.m();
         l.wins.entry(id).or_default();
         if let Some(w) = l.wm.get_mut(id) {
@@ -1259,6 +1262,7 @@ pub fn adopt_windows(st: &mut State) {
             w.title = title;
             w.app_id = app_id;
             w.ssd = ssd;
+            w.role = role;
             continue;
         }
         let size = (geo.size.w.max(1), geo.size.h.max(1));
@@ -1266,6 +1270,7 @@ pub fn adopt_windows(st: &mut State) {
         l.wm.insert_as(id, &app_id, &title, pid, rect, parent);
         if let Some(w) = l.wm.get_mut(id) {
             w.ssd = ssd;
+            w.role = role;
         }
         if view.rect.is_empty() {
             place_new_window(st, id, size, parent);

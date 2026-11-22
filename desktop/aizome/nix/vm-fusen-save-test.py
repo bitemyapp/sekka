@@ -177,12 +177,32 @@ try:
         "sticky native Close protects existing file then retry closes only sticky"
     ):
         chord("super+t")
+        # A window of its own at a sticky's size: the compositor keeps a
+        # utility window off the tabs of the app's focused window, where
+        # another of the app's windows would open.
         s = until(
-            "sticky window",
-            lambda: next((s for s in windows() if s["title"] == "Draft"), None),
+            "sticky window of its own",
+            lambda: next(
+                (
+                    s
+                    for s in windows()
+                    if s["title"] == "Draft"
+                    and s["group"] is None
+                    and (s["geometry"]["w"], s["geometry"]["h"]) == (260, 240)
+                ),
+                None,
+            ),
         )
+        assert all(w["group"] is None for w in windows()), windows()
         focus(s)
-        e = until("sticky editor", lambda: find(s, name="sticky-editor"))
+
+        def sticky_editor():
+            # Drawn at the sticky's size, not the main window's.
+            e = find(s, name="sticky-editor")
+            fits = e and e["shown"][2] <= s["geometry"]["w"] and e["shown"][3] <= s["geometry"]["h"]
+            return e if fits else None
+
+        e = until("sticky editor", sticky_editor)
         x, y, width, height = e["shown"]
         g = s["geometry"]
         click(g["x"] + x + width / 2, g["y"] + y + height / 2)

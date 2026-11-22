@@ -37,6 +37,32 @@ pub enum Side {
     Right,
 }
 
+/// What a window is among its app's windows, as the app says with the tag
+/// it gives the window (xdg-toplevel-tag) before the window opens.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Role {
+    /// A main or document window: no tag, or one that means nothing here.
+    #[default]
+    Ordinary,
+    /// A small window beside the app's others (a palette, a progress
+    /// window, a sticky note), kept by itself. It doesn't open as a tab on
+    /// the app's focused window and no window opens as a tab on it; it
+    /// opens at its own size, not where the app's windows last were; and
+    /// where it was isn't where the app's next window opens. Stacking it by
+    /// hand works as for any window.
+    Utility,
+}
+
+impl Role {
+    /// A utility window's tag. Aizome's kit gives it to its utility windows
+    /// (`UTILITY_TAG` in aizome-kit's `platform.rs`, the same string).
+    pub const UTILITY_TAG: &str = "utility";
+
+    pub fn from_tag(tag: Option<&str>) -> Role {
+        if tag == Some(Role::UTILITY_TAG) { Role::Utility } else { Role::Ordinary }
+    }
+}
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Win {
@@ -64,6 +90,7 @@ pub struct Win {
     pub tab_offset: i32,
     /// The window this one is a dialog of.
     pub parent: Option<WinId>,
+    pub role: Role,
     /// Aizome draws the frame (server-side decorations); otherwise only
     /// the tab.
     pub ssd: bool,
@@ -128,6 +155,18 @@ impl Win {
     pub fn fill(&self) -> bool {
         self.placement == Placement::Fill
     }
+    /// Whether it opens where and as large as its app's last window was,
+    /// and leaves its own place for the app's next one: an app's ordinary
+    /// windows do. A dialog goes over its parent, and a utility window
+    /// keeps its own size.
+    pub fn shares_app_place(&self) -> bool {
+        shares_app_place(self.parent, self.role)
+    }
+}
+
+/// [`Win::shares_app_place`], for a window that isn't in the model yet.
+pub fn shares_app_place(parent: Option<WinId>, role: Role) -> bool {
+    parent.is_none() && role == Role::Ordinary
 }
 
 /// Windows stacked into one frame, their tabs side by side.
@@ -285,6 +324,7 @@ impl Model {
                 group: None,
                 tab_offset: 0,
                 parent,
+                role: Role::Ordinary,
                 ssd: true,
                 frame: None,
                 home: None,
@@ -365,6 +405,20 @@ impl Model {
 
     pub fn focused(&self) -> Option<WinId> {
         self.focused
+    }
+
+    /// The window a newly opened window becomes a tab on, where new windows
+    /// of the focused app join its group: the focused window, when it is
+    /// another window of the same app. A dialog stays over its parent and
+    /// a utility window by itself, and nothing opens as a tab on a utility
+    /// window.
+    pub fn tab_host(&self, new: WinId) -> Option<WinId> {
+        let new = self.wins.get(&new)?;
+        if new.parent.is_some() || new.role == Role::Utility {
+            return None;
+        }
+        let focused = self.wins.get(&self.focused?)?;
+        (focused.id != new.id && focused.app_id == new.app_id && focused.role != Role::Utility).then_some(focused.id)
     }
 
     pub fn on_current_desk(&self, id: WinId) -> bool {

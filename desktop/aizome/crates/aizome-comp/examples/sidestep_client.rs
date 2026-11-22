@@ -14,12 +14,15 @@
 //! `frost` puts a 300 × 400pt panel at (200, 120) drawn as the shell draws its
 //! frosted menus in Full (namespace `aizome-menu`): a face at 90% alpha with a
 //! hard shadow at half alpha 3pt right and down, clear around it.
+//! `utility` opens the window `toplevel` does and, once that has the
+//! keyboard, a 200 × 120pt window titled "Palette" tagged `utility`
+//! (xdg-toplevel-tag); `second` does the same without the tag.
 
 use std::time::Duration;
 
 use sidestep_ui::kurbo::Rect;
 use sidestep_ui::layer_shell::{Anchors, Layer, LayerOptions, Margins};
-use sidestep_ui::{App, Background, Canvas, Color, Cx, Handler, TimerId, WindowId, WindowOptions};
+use sidestep_ui::{App, Background, Canvas, Color, Cx, Handler, TimerId, WindowEvent, WindowId, WindowOptions};
 
 pub const GREEN: Color = Color::rgb8(0x26, 0xa2, 0x69);
 pub const MAGENTA: Color = Color::rgb8(0xc0, 0x26, 0x8a);
@@ -87,8 +90,26 @@ impl Handler for Client {
                     cx.open_window(WindowOptions::layer(opts).size(size.0, size.1).background(Background::Transparent));
                 self.windows.push(w);
             }
+            "utility" | "second" => {
+                let w = cx.open_window(WindowOptions::new("Sidestep test").size(320.0, 200.0));
+                self.windows.push(w);
+            }
             "lock" => cx.lock_session(),
             m => panic!("unknown mode {m}"),
+        }
+    }
+
+    fn window_event(&mut self, cx: &mut Cx, window: WindowId, event: WindowEvent) {
+        // The second window opens while the first is the compositor's
+        // focused window.
+        let second = matches!(self.mode.as_str(), "utility" | "second");
+        if second && self.windows == [window] && event == WindowEvent::Focused(true) {
+            let mut options = WindowOptions::new("Palette").size(200.0, 120.0);
+            if self.mode == "utility" {
+                options = options.tag("utility");
+            }
+            let w = cx.open_window(options);
+            self.windows.push(w);
         }
     }
 
