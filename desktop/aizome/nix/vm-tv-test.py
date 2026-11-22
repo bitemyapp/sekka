@@ -92,8 +92,11 @@ with subtest("an existing ordinary account named tv keeps its own login policy")
     machine.fail("/etc/tv-account-helper set none </dev/null")
     assert "aizome-tv-kiosk" not in machine.succeed("id -nG tv").split()
     sshd = machine.succeed("sshd -T -C user=tv,host=localhost,addr=127.0.0.1")
-    assert "tv" not in [name for line in sshd.splitlines() if line.startswith("denyusers ") for name in line.split()[1:]]
-    assert "aizome-tv-kiosk" in [name for line in sshd.splitlines() if line.startswith("denygroups ") for name in line.split()[1:]]
+    def denied(keyword):
+        return [name for line in sshd.splitlines() if line.lower().startswith(keyword + " ") for name in line.split()[1:]]
+
+    assert "tv" not in denied("denyusers"), sshd
+    assert "aizome-tv-kiosk" in denied("denygroups"), sshd
     machine.succeed("userdel tv")
 
 with subtest("a failed record write leaves the new account locked and retryable"):
