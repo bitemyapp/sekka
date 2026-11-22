@@ -248,8 +248,9 @@ struct Keeper {
     kept: bool,
     /// The world Chanoma asks the page in, apart from its own scripts.
     world: Option<i64>,
-    /// What answers to Chanoma's asks are for, by id.
-    asks: HashMap<u64, Pending>,
+    /// Wait for each keyboard command before sending the next one. Chromium
+    /// routes input and evaluations separately on their way to the renderer.
+    pending: Option<(u64, Pending)>,
 }
 
 /// An answer awaited for an ask.
@@ -259,6 +260,10 @@ enum Pending {
     /// What has the keyboard; asked again in a new world if the page's
     /// document (and the world with it) has gone.
     Probe { again: bool },
+    /// Dispatch the release once the browser has processed the press.
+    KeyDown { session: String, up: Value },
+    /// The edit has reached the browser.
+    Edited,
 }
 
 /// Keep the browser on `pipe` to `sites`, opening `start` in it, while
@@ -286,7 +291,7 @@ pub fn keep(
         answered: false,
         kept: !kept.load(Ordering::Acquire),
         world: None,
-        asks: HashMap::new(),
+        pending: None,
     };
     k.send(None, "Target.setDiscoverTargets", json!({ "discover": true }));
     let attach = json!({ "autoAttach": true, "waitForDebuggerOnStart": true, "flatten": true });
@@ -299,7 +304,9 @@ pub fn keep(
         if want != k.kept {
             k.set_kept(want);
         }
-        while let Ok(a) = asked.rx.try_recv() {
+        while k.pending.is_none()
+            && let Ok(a) = asked.rx.try_recv()
+        {
             k.ask(a);
         }
         if !k.answered && began.elapsed() > ANSWER_IN {
@@ -382,8 +389,8 @@ impl Keeper {
             if let Some(target) = self.histories.remove(&id) {
                 self.take_back(&target, &m["result"]);
             }
-            if let Some(p) = self.asks.remove(&id) {
-                self.answered_ask(p, m, told);
+            if let Some((_, pending)) = self.pending.take_if(|(expected, _)| *expected == id) {
+                self.answered_ask(pending, m, told);
             }
             return;
         }
@@ -534,12 +541,13 @@ impl Keeper {
             // As a keyboard's typing is: through the browser's input, to
             // whatever has its keyboard, a frame from elsewhere too.
             Ask::Type(text) => {
-                self.send(Some(&session), "Input.insertText", json!({ "text": text }));
+                let id = self.send(Some(&session), "Input.insertText", json!({ "text": text }));
+                self.pending = Some((id, Pending::Edited));
             }
             Ask::Key(key) => {
-                for e in key_events(key) {
-                    self.send(Some(&session), "Input.dispatchKeyEvent", e);
-                }
+                let [down, up] = key_events(key);
+                let id = self.send(Some(&session), "Input.dispatchKeyEvent", down);
+                self.pending = Some((id, Pending::KeyDown { session, up }));
             }
         }
     }
@@ -562,7 +570,7 @@ impl Keeper {
             ),
         };
         let asked = self.send(Some(&session), method, params);
-        self.asks.insert(asked, pending);
+        self.pending = Some((asked, pending));
     }
 
     fn answered_ask(&mut self, p: Pending, m: &Value, told: &impl Fn(Told)) {
@@ -582,6 +590,11 @@ impl Keeper {
                 }
             }
             Pending::Probe { .. } => told(Told::Focused(focused(&result["result"]["value"]))),
+            Pending::KeyDown { session, up } => {
+                let id = self.send(Some(&session), "Input.dispatchKeyEvent", up);
+                self.pending = Some((id, Pending::Edited));
+            }
+            Pending::Edited => {}
         }
     }
 
