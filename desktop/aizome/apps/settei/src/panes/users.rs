@@ -968,7 +968,7 @@ impl Pane for Users {
             }
             Msg::TvForgetPin => cx.confirm(Confirm::new(
                 "Forget Chanoma's PIN on the TV account?",
-                "Chanoma on the TV asks a grown-up to choose a new PIN when it next starts. Until then it stays in kids' mode.",
+                "Chanoma on the TV asks for a new PIN when it next starts, and whoever starts it chooses it: start it yourself.",
                 "Forget PIN",
                 Msg::TvForgetPinConfirmed,
             )),

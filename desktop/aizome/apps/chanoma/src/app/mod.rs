@@ -224,6 +224,9 @@ pub enum AfterPin {
     Time,
     /// Leave Chanoma.
     Leave,
+    /// A new PIN to choose: asked of a grown-up changing it, so that
+    /// grown-up mode left on isn't enough to take the PIN over.
+    NewPin,
 }
 
 /// The PIN pad's own state.
@@ -242,6 +245,19 @@ pub struct PinState {
 pub enum Modal {
     Pin { pin: PinState, after: AfterPin },
     Menu { menu: ui::menu::Menu, kind: MenuKind },
+}
+
+impl Modal {
+    /// Whether it's a grown-up's to answer, so it goes when grown-up mode
+    /// does: a new PIN being chosen (or the PIN asked for first), more
+    /// time to give, something to remove. A PIN asked for otherwise stays:
+    /// it's how a grown-up comes back.
+    fn grown_ups(&self) -> bool {
+        match self {
+            Modal::Pin { pin, after } => pin.new || *after == AfterPin::NewPin,
+            Modal::Menu { kind, .. } => matches!(kind, MenuKind::Time | MenuKind::Remove(_)),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -379,6 +395,9 @@ impl Config {
 
 pub struct Chanoma {
     pub config: Config,
+    /// The settings file is there and couldn't be read: nothing opens, and
+    /// nothing is written over it, until a grown-up sets Chanoma up again.
+    pub unreadable: bool,
     pub settings: Settings,
     pub usage: Usage,
     pub lockout: Lockout,
@@ -490,7 +509,21 @@ pub struct Chanoma {
 
 impl Chanoma {
     pub fn new(config: Config) -> Chanoma {
-        let mut settings: Settings = crate::store::read(&config.dirs.settings());
+        // Settings that are there and can't be read aren't a first setup:
+        // whoever held the controller would choose the PIN, and the rules
+        // kept would be written over. Closed, until a grown-up sets
+        // Chanoma up again ([`Chanoma::unreadable_screen`]).
+        let (mut settings, unreadable) = match crate::store::read_kept::<Settings>(&config.dirs.settings()) {
+            crate::store::Kept::Read(s) => (s, false),
+            crate::store::Kept::Missing => (Settings::default(), false),
+            crate::store::Kept::Unreadable(why) => {
+                log::warn!(
+                    "chanoma: {} can't be read ({why}): closed until a grown-up sets Chanoma up again",
+                    config.dirs.settings().display()
+                );
+                (Settings::default(), true)
+            }
+        };
         settings.merge_folders();
         if !settings.setup_done {
             default_folders(&mut settings);
@@ -502,11 +535,13 @@ impl Chanoma {
         let recent = Recent::load(&config.dirs);
         let layouts = state::load_layouts(&config.dirs);
         let screen = match &config.after_crash {
+            _ if unreadable => Self::unreadable_screen(config.tv),
             _ if !settings.setup_done || settings.pin.is_none() => Screen::Welcome,
             Some(what) => Screen::Problem("Chanoma started again".into(), what.clone()),
             None => Screen::Home,
         };
         Chanoma {
+            unreadable,
             settings,
             usage,
             lockout,
@@ -593,13 +628,37 @@ impl Chanoma {
     }
 
     pub fn save_settings(&self) {
-        if let Err(e) = crate::store::write(&self.config.dirs.settings(), &self.settings) {
+        // Never over settings that couldn't be read: what's here stands in
+        // for them only until a grown-up has set Chanoma up again.
+        if self.unreadable {
+            return;
+        }
+        if let Err(e) = crate::store::write_kept(&self.config.dirs.settings(), &self.settings) {
             log::warn!("chanoma: keeping the settings: {e}");
         }
     }
 
     pub fn save_lockout(&self) {
-        let _ = crate::store::write(&self.config.dirs.state.join("lockout.json"), &self.lockout);
+        if let Err(e) = crate::store::write_kept(&self.config.dirs.state.join("lockout.json"), &self.lockout) {
+            log::warn!("chanoma: keeping the wrong PINs' count: {e}");
+        }
+    }
+
+    /// What shows while the settings can't be read, and how a grown-up
+    /// sets Chanoma up again: with the computer account's password, or on
+    /// the TV account (whose password may be nothing) from their own
+    /// account's Settings.
+    fn unreadable_screen(tv: bool) -> Screen {
+        let how = if tv {
+            "A grown-up can set Chanoma up again from their own account: in Settings, under Users & Groups, the TV \
+             account's Forget Chanoma's PIN. Then Chanoma asks for a new one."
+        } else {
+            "A grown-up can set Chanoma up again by signing in with the password of this computer's account."
+        };
+        Screen::Problem(
+            "Chanoma's settings can't be read".into(),
+            format!("Nothing opens until they're set again. {how}"),
+        )
     }
 
     /// The button that says yes on a controller of `family`.
@@ -625,6 +684,10 @@ impl Chanoma {
         // Search may return to a show's episodes after grown-up mode
         // locked while typing. Recheck the destination, as playback does.
         let screen = match screen {
+            // With settings that can't be read, every way leads back to
+            // saying so, but a grown-up's sign-in.
+            Screen::Reset | Screen::Problem(..) if self.unreadable => screen,
+            _ if self.unreadable => Self::unreadable_screen(self.config.tv),
             Screen::Episodes(i)
                 if i != usize::MAX
                     && !self.is_grownup()
@@ -666,6 +729,14 @@ impl Chanoma {
     pub fn lock(&mut self, cx: &mut Cx<Msg>) {
         self.grownup = None;
         log::info!("chanoma: kids' mode");
+        // What a grown-up left over the screen goes too: a kid finding a
+        // new PIN's pad still up would choose the PIN.
+        if self.modal.as_ref().is_some_and(Modal::grown_ups) {
+            self.modal = None;
+        }
+        if let Some((w, ..)) = self.site.take() {
+            cx.close_window(w);
+        }
         self.toast_note(ui::Note::Kids, "Kids' mode", cx);
         // An episode list opened by a grown-up may no longer be visible.
         if let Screen::Episodes(i) = self.screen
@@ -1000,7 +1071,14 @@ impl Chanoma {
             Input::Space => Input::Ok,
             _ => i,
         };
-        if self.site.is_some() {
+        if let Some(w) = self.site.as_ref().map(|s| s.0) {
+            // The sheet's fields are a keyboard's (its Backspace is no way
+            // out). A controller's Back or Home puts it away, or a
+            // television with no keyboard would be stuck under it.
+            if matches!(i, Input::Back | Input::Home) && self.family != Family::Keyboard {
+                self.site = None;
+                cx.close_window(w);
+            }
             return;
         }
         if self.modal.is_some() {
@@ -1031,6 +1109,13 @@ impl Chanoma {
             Screen::Folders => self.picker_input(i, cx),
             Screen::Search => self.search_input(i, cx),
             Screen::Reset => self.reset_input(i, cx),
+            // The settings can't be read: the one way on is a grown-up's
+            // sign-in (on the TV account, from their own account instead).
+            Screen::Problem(..) if self.unreadable => {
+                if i == Input::Ok && !self.config.tv {
+                    self.start_reset(cx);
+                }
+            }
             Screen::Problem(..) => {
                 if matches!(i, Input::Ok | Input::Back) {
                     self.go(Screen::Home, cx);
@@ -1154,8 +1239,9 @@ impl Chanoma {
                 match i {
                     Input::Dir(Dir::Up) => self.modal_focus = self.modal_focus.saturating_sub(1),
                     Input::Dir(Dir::Down) => self.modal_focus = (self.modal_focus + 1).min(n.saturating_sub(1)),
-                    // Not deciding about time is deciding none: kids' mode again.
-                    Input::Back if kind == MenuKind::Time => {
+                    // Not deciding about time is deciding none: kids' mode
+                    // again, whichever button put the menu away.
+                    Input::Back | Input::Home if kind == MenuKind::Time => {
                         self.close_modal(cx);
                         self.grownup = None;
                     }
@@ -1176,6 +1262,11 @@ impl Chanoma {
     }
 
     fn menu_chosen(&mut self, kind: MenuKind, choice: usize, cx: &mut Cx<Msg>) {
+        // A grown-up's menu answers to a grown-up only, however it came to
+        // be showing.
+        if matches!(kind, MenuKind::Time | MenuKind::Remove(_)) && !self.is_grownup() {
+            return self.close_modal(cx);
+        }
         match (kind, choice) {
             (MenuKind::Game | MenuKind::NoController, 0) => self.close_modal(cx),
             (MenuKind::Game, 1) => {
@@ -1310,6 +1401,11 @@ impl Chanoma {
             }
             return;
         }
+        // A new PIN is a grown-up's to choose, or anyone's where there's
+        // none yet (the first setup, a PIN forgotten).
+        if matches!(&self.modal, Some(Modal::Pin { pin, .. }) if pin.new) && !self.may_choose_pin() {
+            return self.close_modal(cx);
+        }
         let stored_len = self.pin_length();
         let locked = self.lockout.wait(self.now_secs()).is_some();
         let Some(Modal::Pin { pin, .. }) = &mut self.modal else { return };
@@ -1373,6 +1469,12 @@ impl Chanoma {
         self.settings.pin.as_ref().and(self.settings.pin_length).map(usize::from)
     }
 
+    /// Whether a new PIN may be chosen now: in grown-up mode, or where
+    /// there's no PIN to have asked for.
+    fn may_choose_pin(&self) -> bool {
+        self.is_grownup() || self.settings.pin.is_none()
+    }
+
     fn pin_checked(&mut self, ok: bool, cx: &mut Cx<Msg>) {
         let now = self.now_secs();
         let Some(Modal::Pin { pin, after }) = &mut self.modal else { return };
@@ -1387,7 +1489,12 @@ impl Chanoma {
         self.lockout.succeeded();
         self.save_lockout();
         self.modal = None;
-        self.unlock(cx);
+        // Asked of a grown-up already (changing the PIN), it's theirs still.
+        if self.is_grownup() {
+            self.touched();
+        } else {
+            self.unlock(cx);
+        }
         match after {
             AfterPin::Unlock => self.close_modal(cx),
             AfterPin::Settings => self.open_grownups(None, cx),
@@ -1396,10 +1503,15 @@ impl Chanoma {
                 self.shutdown();
                 cx.quit();
             }
+            AfterPin::NewPin => self.ask_new_pin(cx),
         }
     }
 
     fn pin_made(&mut self, hash: crate::rules::PinHash, cx: &mut Cx<Msg>) {
+        // Kids' mode came back while it was being made: it isn't kept.
+        if !self.may_choose_pin() {
+            return self.close_modal(cx);
+        }
         let len = match &self.modal {
             Some(Modal::Pin { pin, .. }) => pin.first.as_ref().map_or(0, String::len).max(4),
             _ => 4,
@@ -1645,13 +1757,15 @@ impl Chanoma {
 
     pub fn overlay(&self) -> Option<Overlay> {
         match &self.modal {
-            Some(Modal::Pin { pin, .. }) => {
+            Some(Modal::Pin { pin, after }) => {
                 let (title, prompt) = if pin.new {
                     if pin.first.is_some() {
                         ("Press it again", "The same buttons, to be sure")
                     } else {
                         ("Choose a PIN", "Four to eight presses of these buttons. Nobody sees which")
                     }
+                } else if *after == AfterPin::NewPin {
+                    ("The PIN you have", "Press it first, then choose the new one")
                 } else {
                     ("Grown-ups only", "Press the PIN's buttons")
                 };
@@ -1889,9 +2003,17 @@ impl Chanoma {
                 self.stage(self.scene(View::Message(m), Some(ch)))
             }
             Screen::Problem(title, body) => {
-                let m = ui::screens::Message::new(ui::screens::Art::Oops, title.clone(), body.clone())
-                    .actions(&["Back home"]);
-                self.stage(self.scene(View::Message(m), Some(self.chrome(self.hints("Choose", None)))))
+                // Settings that can't be read: the way on is to sign in,
+                // and on the TV account there's none from here.
+                let actions: &[&str] = match (self.unreadable, self.config.tv) {
+                    (true, true) => &[],
+                    (true, false) => &["Sign in"],
+                    (false, _) => &["Back home"],
+                };
+                let m = ui::screens::Message::new(ui::screens::Art::Oops, title.clone(), body.clone()).actions(actions);
+                // Nothing to choose, no hint that there is.
+                let hints = if actions.is_empty() { Vec::new() } else { self.hints("Choose", None) };
+                self.stage(self.scene(View::Message(m), Some(self.chrome(hints))))
             }
         }
     }
@@ -2268,7 +2390,9 @@ impl Chanoma {
     }
 
     pub fn save_usage(&mut self) {
-        let _ = crate::store::write(&self.config.dirs.state.join("usage.json"), &self.usage);
+        if let Err(e) = crate::store::write_kept(&self.config.dirs.state.join("usage.json"), &self.usage) {
+            log::warn!("chanoma: keeping today's minutes: {e}");
+        }
         self.dirty_usage = false;
         self.usage_saved = Some(Instant::now());
     }

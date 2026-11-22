@@ -619,10 +619,32 @@ digit one way and no two alike.
 
 It's kept as PBKDF2-HMAC-SHA-256 with a random salt and 150,000
 rounds (about a tenth of a second, checked off the interface thread).
-Three wrong PINs are free; then the pad waits 30 seconds, doubling each
-time up to 15 minutes, and the count is kept in `lockout.json`. This keeps
-out kids with a controller; it can't resist someone who can run code as
-the TV's user (who can read the hash, or `aizome-chanoma --reset-pin`).
+Two wrong PINs are free; the third locks the pad for 30 seconds, doubling
+each time up to 15 minutes, and the count is kept in `lockout.json`. A
+lock that would end later than any lock lasts (the clock was put back
+since the wrong PIN) is brought back to 15 minutes (`Lockout::settle`).
+This keeps out kids with a controller; it can't resist someone who can
+run code as the TV's user (who can read the hash, or `aizome-chanoma
+--reset-pin`).
+
+Grown-up mode left on mustn't be enough to take the PIN over:
+
+- *Change the PIN…* asks for the PIN there is first (`AfterPin::NewPin`).
+- When grown-up mode locks, by itself or asked to, what a grown-up left
+  over the screen goes with it (`Modal::grown_ups`): a new PIN's pad, the
+  more-time menu, a removal asked about, and the sheet adding a website.
+  Those answer only in grown-up mode, and a new PIN is kept only then or
+  where there's none yet.
+- Putting the more-time menu away, with Back or Home, is kids' mode again.
+
+The settings, the wrong PINs' count and today's minutes are on the disk
+before they take the old file's place (`store::write_kept`), so a power
+cut leaves the old file or the new. Settings that are there and can't be
+read (`store::read_kept`) aren't a first setup, where whoever held the
+controller would choose the PIN: Chanoma says they can't be read, opens
+nothing and writes nothing over them. A grown-up sets it up again by
+signing in with the computer account's password (then a new PIN and the
+first setup), or on the TV account with Settings' *Forget Chanoma's PIN*.
 
 **Forgot it?** (Start on the pad, when the PIN is asked for) signs in
 with the password of the computer's account Chanoma runs as
@@ -840,7 +862,8 @@ drive beside its backups. Games' settings handle that a system at a time
   Redump's names carry (`(USA)`, `(Rev 1)`, `(Beta)`, `[!]`), so a
   well-named set needs no database:
   - **Systems**: a page of every system with games found, each a switch,
-    so a whole system goes with one press (`systems_off`).
+    so a whole system goes with one press (`systems_off`): from *Keep
+    playing* too, and none of its games starts.
   - **Hide demos, betas and prototypes** (on unless turned off;
     `hide_variants`): demos, betas, prototypes, samples, kiosk and test
     discs, promos, pirates, and GoodTools' bad dumps, hacks, trainers,
@@ -1407,6 +1430,16 @@ before calling any of it tested on hardware.
 - In grown-up mode a page goes anywhere, and grown-up mode doesn't lock
   itself under a page: a page handed to a kid in grown-up mode isn't
   kept until kids' mode comes back.
+- Grown-up mode doesn't lock itself under a game or a film either, any
+  button pressed keeps it, and no time counts in it. There's no way to
+  play one thing kids aren't allowed and be in kids' mode after: a
+  grown-up locks it from Home (*Kids' mode*) when what they put on ends.
+- Whoever starts Chanoma first on the TV account, or first after
+  Settings' *Forget Chanoma's PIN*, chooses the grown-up PIN: a grown-up
+  starts it then.
+- The TV account's PIN is its account's password. sshd refuses the
+  account (the module's `DenyUsers`); any other service that checks
+  passwords through PAM would take the PIN.
 - Links to other programs (`mailto:`, an app's own scheme) aren't web
   pages, so this doesn't refuse them; what Chrome does with one in kiosk
   mode hasn't been tried.

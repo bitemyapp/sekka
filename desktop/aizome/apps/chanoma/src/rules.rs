@@ -147,6 +147,20 @@ impl Lockout {
     pub fn succeeded(&mut self) {
         *self = Lockout::default();
     }
+
+    /// Bring a lock that ends later than any lock lasts back to the longest
+    /// one from `now`: whether it changed. The clock was put back since
+    /// the wrong PIN (a computer started before it knew the time), and the
+    /// pad, with the password that resets the PIN, would wait out the
+    /// difference.
+    pub fn settle(&mut self, now: u64) -> bool {
+        let latest = now + MAX_LOCK_SECS;
+        let late = self.until > latest;
+        if late {
+            self.until = latest;
+        }
+        late
+    }
 }
 
 /// When the television sleeps: minutes of the day, crossing midnight when
@@ -446,6 +460,27 @@ mod tests {
         assert_eq!(l.wait(5000), Some(MAX_LOCK_SECS));
         l.succeeded();
         assert_eq!(l, Lockout::default());
+    }
+
+    #[test]
+    fn a_clock_put_back_doesnt_lock_the_pad_for_the_difference() {
+        let mut l = Lockout::default();
+        // Wrong PINs while the clock ran a year ahead.
+        let ahead = 1_800_000_000 + 365 * 86_400;
+        for _ in 0..3 {
+            l.failed(ahead);
+        }
+        assert_eq!(l.wait(ahead), Some(30));
+        // A lock within the longest one is left as it is.
+        assert!(!l.settle(ahead));
+        assert_eq!(l.wait(ahead), Some(30));
+        // The clock set right: the longest lock from now, not a year.
+        let now = 1_800_000_000;
+        assert!(l.wait(now).is_some_and(|w| w > MAX_LOCK_SECS));
+        assert!(l.settle(now));
+        assert_eq!(l.wait(now), Some(MAX_LOCK_SECS));
+        assert_eq!(l.failures, 3, "the count is kept");
+        assert!(!l.settle(now));
     }
 
     #[test]

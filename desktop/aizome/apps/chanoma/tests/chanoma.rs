@@ -2388,3 +2388,249 @@ fn started_again_after_a_crash_it_says_what_happened_then_goes_home() {
     input(&mut h, Input::Ok);
     assert_eq!(h.program().screen, Screen::Home);
 }
+
+#[test]
+fn changing_the_pin_asks_for_the_pin_there_is_and_kids_mode_takes_a_pad_left_open() {
+    use aizome_chanoma::app::{AfterPin, PinState};
+    let (dirs, cores) = household("change-pin", |_| {});
+    let clock = ManualClock::at(2026, 10, 31, 17, 0);
+    let mut h = harness(config(dirs, cores, clock));
+    into_settings(&mut h);
+    to_section(&mut h, 6);
+    to_row(&mut h, "Change the PIN…");
+    input(&mut h, Input::Ok);
+    // The PIN there is comes first: grown-up mode left on isn't enough.
+    let Some(aizome_chanoma::ui::Overlay::Pin(pad)) = h.program().overlay() else { panic!("no pad") };
+    assert_eq!(pad.title, "The PIN you have");
+    assert!(matches!(&h.program().modal, Some(Modal::Pin { pin, after: AfterPin::NewPin }) if !pin.new));
+    // A wrong one counts as any wrong PIN, and no new PIN is asked for.
+    type_pin(&mut h, "1111");
+    until(&mut h, |a| matches!(&a.modal, Some(Modal::Pin { pin, .. }) if !pin.checking && pin.error.is_some()));
+    assert_eq!(h.program().lockout.failures, 1);
+    assert!(matches!(&h.program().modal, Some(Modal::Pin { pin, .. }) if !pin.new));
+    type_pin(&mut h, PIN);
+    until(&mut h, |a| matches!(&a.modal, Some(Modal::Pin { pin, .. }) if pin.new));
+    assert!(h.program().is_grownup());
+
+    // Left like that until grown-up mode locks itself, the pad goes with
+    // it: a kid finding it up would choose the PIN.
+    h.program_mut().grownup = Some(Instant::now() - Duration::from_secs(16 * 60));
+    h.send(Msg::Tick);
+    assert!(!h.program().is_grownup());
+    assert_eq!(h.program().modal, None);
+    assert_eq!(h.program().screen, Screen::Home);
+    // One that came to show in kids' mode anyway chooses nothing.
+    h.program_mut().modal =
+        Some(Modal::Pin { pin: PinState { new: true, ..PinState::default() }, after: AfterPin::Settings });
+    press(&mut h, button_of(1).expect("a digit"));
+    assert_eq!(h.program().modal, None, "a new PIN isn't a kid's to choose");
+    assert!(h.program().settings.pin.as_ref().is_some_and(|p| p.verify(PIN)));
+
+    // A grown-up changes it: the PIN, then the new one twice.
+    into_settings(&mut h);
+    to_section(&mut h, 6);
+    to_row(&mut h, "Change the PIN…");
+    input(&mut h, Input::Ok);
+    type_pin(&mut h, PIN);
+    until(&mut h, |a| matches!(&a.modal, Some(Modal::Pin { pin, .. }) if pin.new));
+    for _ in 0..2 {
+        type_pin(&mut h, "1357");
+        press(&mut h, Button::South);
+    }
+    until(&mut h, |a| a.settings.pin.as_ref().is_some_and(|p| p.verify("1357")));
+    assert!(h.program().is_grownup());
+    assert_eq!(h.program().screen, Screen::GrownUps);
+    assert_eq!(h.program().lockout.failures, 0);
+}
+
+#[test]
+fn the_more_time_menu_put_away_is_kids_mode_again_whichever_button_did_it() {
+    let (dirs, cores) = household("time-menu", |s| {
+        s.limits.daily[5] = Some(60);
+    });
+    let clock = ManualClock::at(2026, 10, 31, 15, 0);
+    let mut h = harness(config(dirs, cores, clock));
+    h.program_mut().usage.used = 60 * 60;
+    h.send(Msg::Tick);
+    assert_eq!(h.program().screen, Screen::Closed);
+    let time_menu = |a: &Chanoma| matches!(a.modal, Some(Modal::Menu { kind: MenuKind::Time, .. }));
+    // A grown-up's PIN, then no decision: Back or Home, it's kids' mode.
+    for (away, name) in [(Input::Home, "Home"), (Input::Back, "Back")] {
+        input(&mut h, Input::Ok);
+        type_pin(&mut h, PIN);
+        until(&mut h, time_menu);
+        assert!(h.program().is_grownup());
+        input(&mut h, away);
+        assert_eq!(h.program().modal, None);
+        assert!(!h.program().is_grownup(), "{name} left grown-up mode on");
+        assert_eq!(h.program().screen, Screen::Closed);
+    }
+    // So asking again is the PIN again, not the menu.
+    input(&mut h, Input::Ok);
+    assert!(matches!(h.program().modal, Some(Modal::Pin { .. })));
+
+    // The menu left up when grown-up mode locks itself goes with it.
+    type_pin(&mut h, PIN);
+    until(&mut h, time_menu);
+    h.program_mut().grownup = Some(Instant::now() - Duration::from_secs(16 * 60));
+    h.send(Msg::Tick);
+    assert!(!h.program().is_grownup());
+    assert_eq!(h.program().modal, None);
+    // And one showing in kids' mode anyway gives no time.
+    input(&mut h, Input::Ok);
+    type_pin(&mut h, PIN);
+    until(&mut h, time_menu);
+    h.program_mut().grownup = None;
+    input(&mut h, Input::Ok);
+    assert_eq!(h.program().modal, None);
+    assert_eq!(h.program().usage.granted, 0, "time given in kids' mode");
+    assert_eq!(h.program().screen, Screen::Closed);
+}
+
+#[test]
+fn a_system_turned_off_takes_its_games_from_keep_playing() {
+    let (dirs, cores) = household("system-off", |_| {});
+    // Played before the system was turned off.
+    let mut recent = Recent::default();
+    recent.touch(Item::Game { key: "snes/snes/Test Quest (USA).sfc".into() });
+    recent.save(&dirs);
+    let clock = ManualClock::at(2026, 10, 31, 17, 0);
+    let mut h = harness(config(dirs, cores, clock));
+    let keeps = |h: &Harness<Chanoma>| h.program().home_view().shelves.iter().any(|s| s.title == "Keep playing");
+    assert!(keeps(&h));
+    let system = h.program().library.games[0].system.id.to_owned();
+    h.program_mut().settings.systems_off.insert(system);
+    h.program_mut().reshow();
+    assert!(!keeps(&h), "a game of a system turned off, in kids' Keep playing");
+    // Off is off for a grown-up too.
+    h.program_mut().grownup = Some(Instant::now());
+    assert!(!keeps(&h));
+}
+
+#[test]
+fn settings_that_cant_be_read_open_nothing_until_a_grown_up_signs_in() {
+    use aizome_chanoma::store::{Kept, read_kept};
+    let closed = |a: &Chanoma| matches!(&a.screen, Screen::Problem(t, _) if t == "Chanoma's settings can't be read");
+    let (dirs, cores) = household("unreadable", |_| {});
+    // Cut short, as a power cut could leave a file renamed too soon.
+    let damaged = b"{\n  \"pin\": {\n    \"salt\": \"";
+    std::fs::write(dirs.settings(), damaged).unwrap();
+    let clock = ManualClock::at(2026, 10, 31, 17, 0);
+    let mut h = harness(config(dirs.clone(), cores, clock));
+    assert!(closed(h.program()), "{:?}", h.program().screen);
+    // Not a first setup, where whoever held the controller would choose
+    // the PIN: nothing opens, by any button, and nothing is written.
+    for i in [Input::Back, Input::Home, Input::Menu, Input::Alt, Input::Dir(Dir::Down)] {
+        input(&mut h, i);
+        assert!(closed(h.program()), "{:?}", h.program().screen);
+        assert_eq!(h.program().modal, None);
+    }
+    h.send(Msg::Tick);
+    assert!(closed(h.program()));
+    assert_eq!(std::fs::read(dirs.settings()).unwrap(), damaged, "written over");
+    shot(&mut h, "40-settings-unreadable");
+
+    // A grown-up signs in with the computer account's password; backing
+    // out of that is closed again.
+    input(&mut h, Input::Ok);
+    assert_eq!(h.program().screen, Screen::Reset);
+    assert_eq!(h.program().reset_view().title, "Set Chanoma up again");
+    input(&mut h, Input::Back);
+    assert!(closed(h.program()));
+    input(&mut h, Input::Ok);
+    for c in "hunter2".chars() {
+        input(&mut h, Input::Typed(c));
+    }
+    press(&mut h, Button::Start);
+    // Right: a new PIN, then the first setup, which writes them anew.
+    until(&mut h, |a| matches!(&a.modal, Some(Modal::Pin { pin, .. }) if pin.new));
+    assert_eq!(h.program().screen, Screen::Welcome);
+    assert!(!h.program().unreadable);
+    for _ in 0..2 {
+        type_pin(&mut h, "1357");
+        press(&mut h, Button::South);
+    }
+    until(&mut h, |a| a.settings.pin.as_ref().is_some_and(|p| p.verify("1357")));
+    assert_eq!(h.program().screen, Screen::GrownUps);
+    assert!(matches!(read_kept::<Settings>(&dirs.settings()), Kept::Read(s) if s.pin.is_some()));
+
+    // The TV account's password may be nothing: no sign-in there, and
+    // Settings' Forget Chanoma's PIN (`--reset-pin`) is the way.
+    let (dirs, cores) = household("unreadable-tv", |_| {});
+    std::fs::write(dirs.settings(), b"").unwrap();
+    let mut config = config(dirs, cores, ManualClock::at(2026, 10, 31, 17, 0));
+    config.tv = true;
+    let mut h = harness(config);
+    assert!(closed(h.program()), "{:?}", h.program().screen);
+    input(&mut h, Input::Ok);
+    assert!(closed(h.program()));
+    assert!(h.program().reset.is_none());
+    shot(&mut h, "41-settings-unreadable-tv");
+}
+
+#[test]
+fn a_forgotten_pin_is_signed_in_for_though_time_is_up() {
+    let (dirs, cores) = household("forgot-closed", |s| {
+        s.limits.daily[5] = Some(60);
+    });
+    let clock = ManualClock::at(2026, 10, 31, 15, 0);
+    let mut h = harness(config(dirs, cores, clock));
+    h.program_mut().usage.used = 60 * 60;
+    h.send(Msg::Tick);
+    assert_eq!(h.program().screen, Screen::Closed);
+    input(&mut h, Input::Ok);
+    assert!(matches!(h.program().modal, Some(Modal::Pin { .. })));
+    press(&mut h, Button::Start);
+    assert_eq!(h.program().screen, Screen::Reset);
+    // The closed screen doesn't take its place a second later.
+    h.send(Msg::Tick);
+    h.send(Msg::Tick);
+    assert_eq!(h.program().screen, Screen::Reset);
+    // Left, it's closed again: nothing opens from there.
+    input(&mut h, Input::Back);
+    h.send(Msg::Tick);
+    assert_eq!(h.program().screen, Screen::Closed);
+}
+
+#[test]
+fn a_controller_puts_the_website_sheet_away_and_so_does_kids_mode() {
+    let (dirs, cores) = household("site-sheet", |_| {});
+    let clock = ManualClock::at(2026, 10, 31, 17, 0);
+    let mut h = harness(config(dirs, cores, clock));
+    into_settings(&mut h);
+    to_section(&mut h, 1);
+    to_row(&mut h, "Add a website…");
+    input(&mut h, Input::Ok);
+    assert!(h.program().site.is_some());
+    // Its fields are a keyboard's: Backspace there is no way out.
+    input(&mut h, Input::Erase);
+    assert!(h.program().site.is_some());
+    // A controller's no is, so a television without a keyboard isn't
+    // stuck under it.
+    press(&mut h, Button::East);
+    assert!(h.program().site.is_none());
+    assert_eq!(h.program().screen, Screen::GrownUps);
+    // Left open until grown-up mode locks itself, it goes with it.
+    input(&mut h, Input::Ok);
+    assert!(h.program().site.is_some());
+    h.program_mut().grownup = Some(Instant::now() - Duration::from_secs(16 * 60));
+    h.send(Msg::Tick);
+    assert!(!h.program().is_grownup());
+    assert!(h.program().site.is_none());
+    assert!(h.program().settings.custom_services.is_empty());
+}
+
+#[test]
+fn a_lock_kept_from_a_clock_that_ran_ahead_lasts_no_longer_than_the_longest() {
+    use aizome_chanoma::rules::{Lockout, MAX_LOCK_SECS};
+    let (dirs, cores) = household("lock-clock", |_| {});
+    let clock = ManualClock::at(2026, 10, 31, 17, 0);
+    let mut h = harness(config(dirs.clone(), cores, clock));
+    let now = h.program().now_secs();
+    // Wrong PINs kept while the clock ran a year ahead.
+    h.program_mut().lockout = Lockout { failures: 3, until: now + 365 * 86_400 + 30 };
+    h.send(Msg::Tick);
+    assert_eq!(h.program().lockout.wait(now), Some(MAX_LOCK_SECS));
+    let saved: Lockout = aizome_chanoma::store::read(&dirs.state.join("lockout.json"));
+    assert_eq!((saved.failures, saved.until), (3, now + MAX_LOCK_SECS));
+}

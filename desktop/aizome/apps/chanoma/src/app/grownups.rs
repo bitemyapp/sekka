@@ -1029,13 +1029,9 @@ impl Chanoma {
             Act::TryDrive(i) => self.try_drive_again(i, cx),
             Act::Pair => self.start_pairing(cx),
             Act::SetUp(id) => self.start_setup(id, cx),
-            Act::ChangePin => {
-                self.modal = Some(super::Modal::Pin {
-                    pin: super::PinState { new: true, ..super::PinState::default() },
-                    after: super::AfterPin::Settings,
-                });
-                self.modal_focus = 0;
-            }
+            // The PIN there is comes first: grown-up mode left on mustn't
+            // be enough to take the PIN over.
+            Act::ChangePin => self.ask_pin(super::AfterPin::NewPin, cx),
             Act::Lock => self.lock(cx),
             Act::Leave => {
                 self.leave_grownups(cx);

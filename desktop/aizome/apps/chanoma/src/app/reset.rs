@@ -52,8 +52,15 @@ impl Chanoma {
             );
             return;
         }
+        log::info!("chanoma: the PIN forgotten");
+        self.start_reset(cx);
+    }
+
+    /// Sign in with the computer account's password: for a forgotten PIN,
+    /// or to set Chanoma up again where its settings can't be read.
+    pub fn start_reset(&mut self, cx: &mut Cx<Msg>) {
         let (login, name) = self.config.account.clone();
-        log::info!("chanoma: the PIN forgotten; signing in as {login}");
+        log::info!("chanoma: signing in as {login}");
         self.modal = None;
         self.reset = Some(Reset {
             password: String::new(),
@@ -74,7 +81,7 @@ impl Chanoma {
         let who = if r.name == r.login { r.login.clone() } else { format!("{} ({})", r.name, r.login) };
         let wait = self.lockout.wait(self.now_secs());
         SignIn {
-            title: "Forgot the PIN?".into(),
+            title: if self.unreadable { "Set Chanoma up again" } else { "Forgot the PIN?" }.into(),
             lines: vec![
                 format!("Sign in with the password of this computer's account, {who},"),
                 "then choose a new PIN.".into(),
@@ -196,8 +203,11 @@ impl Chanoma {
         self.lockout.succeeded();
         self.save_lockout();
         self.reset = None;
+        // Settings that couldn't be read are set again from the start: the
+        // PIN, then the first setup, whose end writes them anew.
+        let again = std::mem::take(&mut self.unreadable);
         self.unlock(cx);
-        self.go(Screen::Home, cx);
+        self.go(if again { Screen::Welcome } else { Screen::Home }, cx);
         self.modal = Some(Modal::Pin { pin: PinState { new: true, ..PinState::default() }, after: AfterPin::Unlock });
         self.modal_focus = 0;
         self.sync_hud(cx);

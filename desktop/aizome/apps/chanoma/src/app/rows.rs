@@ -134,7 +134,9 @@ impl Chanoma {
         for item in &self.recent.items {
             match item {
                 Item::Game { key } => {
+                    // Not one of a system turned off since it was played.
                     if let Some(g) = self.library.games.iter().find(|g| &g.key == key)
+                        && !self.settings.systems_off.contains(g.system.id)
                         && (grownup || self.settings.game_allowed(key))
                     {
                         recent.push((self.game_tile(g, true), Act::Game(key.clone())));

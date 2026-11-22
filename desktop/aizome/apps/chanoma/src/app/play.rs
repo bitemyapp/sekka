@@ -176,6 +176,11 @@ impl Chanoma {
 
     pub fn start_game(&mut self, key: &str, cx: &mut Cx<Msg>) {
         let Some(g) = self.library.games.iter().find(|g| g.key == key).cloned() else { return };
+        // A system turned off is off for everyone, from wherever its game
+        // was chosen (*Keep playing* remembers games from before).
+        if self.settings.systems_off.contains(g.system.id) {
+            return;
+        }
         if !self.is_grownup() && !self.settings.game_allowed(key) {
             return;
         }

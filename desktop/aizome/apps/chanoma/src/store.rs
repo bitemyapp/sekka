@@ -121,20 +121,96 @@ pub fn read_opt<T: for<'de> Deserialize<'de>>(path: &Path) -> Option<T> {
     std::fs::read(path).ok().and_then(|b| serde_json::from_slice(&b).ok())
 }
 
+/// What a file the rules stand on held: one that's there and can't be read
+/// isn't taken for one that was never written.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Kept<T> {
+    /// No such file: nothing was kept yet.
+    Missing,
+    Read(T),
+    /// It's there, and it can't be read or isn't what was written: why.
+    Unreadable(String),
+}
+
+/// `path` as JSON, telling a file that isn't there from one that can't be
+/// read.
+pub fn read_kept<T: for<'de> Deserialize<'de>>(path: &Path) -> Kept<T> {
+    match std::fs::read(path) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Kept::Missing,
+        Err(e) => Kept::Unreadable(e.to_string()),
+        Ok(b) => match serde_json::from_slice(&b) {
+            Ok(v) => Kept::Read(v),
+            Err(e) => Kept::Unreadable(e.to_string()),
+        },
+    }
+}
+
 /// Write `value` to `path` whole: a sibling file renamed over it.
 pub fn write<T: Serialize>(path: &Path, value: &T) -> std::io::Result<()> {
     let bytes = serde_json::to_vec_pretty(value).map_err(std::io::Error::other)?;
-    write_bytes(path, &bytes)
+    write_whole(path, &bytes, false)
+}
+
+/// Write `value` to `path` whole, on the disk before it takes the old
+/// file's place, and its new name after: for what the rules stand on (the
+/// settings, wrong PINs, today's minutes). Renamed without that, a file
+/// can come back from a power cut empty on some filesystems.
+pub fn write_kept<T: Serialize>(path: &Path, value: &T) -> std::io::Result<()> {
+    let bytes = serde_json::to_vec_pretty(value).map_err(std::io::Error::other)?;
+    write_whole(path, &bytes, true)
 }
 
 /// Write `bytes` to `path` whole.
 pub fn write_bytes(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    write_whole(path, bytes, false)
+}
+
+fn write_whole(path: &Path, bytes: &[u8], synced: bool) -> std::io::Result<()> {
+    use std::io::Write;
     let dir = path.parent().unwrap_or(Path::new("."));
     std::fs::create_dir_all(dir)?;
     let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     let tmp = dir.join(format!(".{name}.tmp"));
-    std::fs::write(&tmp, bytes)?;
-    std::fs::rename(&tmp, path).inspect_err(|_| {
+    let written = (|| {
+        let mut f = std::fs::File::create(&tmp)?;
+        f.write_all(bytes)?;
+        if synced {
+            f.sync_all()?;
+        }
+        std::fs::rename(&tmp, path)
+    })();
+    if written.is_err() {
         let _ = std::fs::remove_file(&tmp);
-    })
+    }
+    written?;
+    // The folder too, so the rename is kept. Where a folder can't be
+    // synced the file is still whole, old or new.
+    if synced && let Ok(d) = std::fs::File::open(dir) {
+        let _ = d.sync_all();
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_file_that_cant_be_read_isnt_one_that_was_never_written() {
+        let dir = std::env::temp_dir().join(format!("chanoma-store-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = dir.join("kept.json");
+        assert_eq!(read_kept::<Vec<u32>>(&path), Kept::Missing);
+        write_kept(&path, &vec![1u32, 2, 3]).unwrap();
+        assert_eq!(read_kept::<Vec<u32>>(&path), Kept::Read(vec![1, 2, 3]));
+        assert!(!dir.join(".kept.json.tmp").exists(), "the sibling file is gone once renamed");
+        // Cut short, emptied, or of another shape: there, and unreadable.
+        for damaged in ["[1, 2", "", "{\"a\": 1}"] {
+            std::fs::write(&path, damaged).unwrap();
+            assert!(matches!(read_kept::<Vec<u32>>(&path), Kept::Unreadable(_)), "{damaged:?}");
+        }
+        // The lenient read still takes it for nothing kept.
+        assert_eq!(read::<Vec<u32>>(&path), Vec::<u32>::new());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

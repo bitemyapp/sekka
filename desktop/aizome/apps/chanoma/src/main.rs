@@ -41,7 +41,7 @@ fn main() {
         settings.pin = None;
         settings.pin_length = None;
         settings.setup_done = false;
-        match aizome_chanoma::store::write(&path, &settings) {
+        match aizome_chanoma::store::write_kept(&path, &settings) {
             Ok(()) => println!("The PIN is forgotten: Chanoma asks for a new one when it starts."),
             Err(e) => {
                 eprintln!("{}: {e}", path.display());

@@ -26,6 +26,10 @@ impl Chanoma {
         let elapsed = self.last_tick.map_or(0.0, |t| now.duration_since(t).as_secs_f64().min(5.0));
         self.last_tick = Some(now);
         self.local = self.config.clock.local();
+        let unix = self.now_secs();
+        if self.lockout.settle(unix) {
+            self.save_lockout();
+        }
         if self.usage.roll(&self.local) {
             self.warned = 0;
             self.dirty_usage = true;
@@ -88,7 +92,14 @@ impl Chanoma {
                 if self.playing() {
                     self.end_activity(cx);
                 }
-                if !matches!(self.screen, Screen::Closed | Screen::Welcome | Screen::GrownUps) && self.modal.is_none() {
+                // A grown-up signing in for a forgotten PIN (or reading how,
+                // on the TV account) isn't sent back mid-way: nothing plays
+                // from there, and leaving it comes here again.
+                let stays = matches!(
+                    self.screen,
+                    Screen::Closed | Screen::Welcome | Screen::GrownUps | Screen::Reset | Screen::Problem(..)
+                );
+                if !stays && self.modal.is_none() {
                     self.go(Screen::Closed, cx);
                 }
             }
