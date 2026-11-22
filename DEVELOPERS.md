@@ -2651,11 +2651,15 @@ BY-SA 4.0, fetched file by file at a pinned commit:
 installed Aizome system and on the installation media, and the free
 systems `push-cache` publishes carry it for updates to download: 173 MiB
 of store paths, uncompressed (2026-11-22, Aizome's module alone). The
-module copies the cores' libraries out of their packages, which would
-otherwise bring RetroArch and Qt with them. Where unfree packages are
+module copies each core library into a separate store path. The free
+and unfree configurations share these paths, so an update can download
+the patched Play! core from the free system's closure. The combined
+directory links to the libraries without pulling in RetroArch and Qt. Where unfree packages are
 allowed, as on the media and the installed systems it carries, Google
 Chrome comes too (`programs.aizome.chanoma.browser`, 458 MiB more), with
-the two unfree cores. The media already carried Chrome in the offline
+the two unfree cores. Ordinary desktop launches use the catalog's keyring
+wrapper. Chanoma starts the underlying browser with its own profile.
+The media already carried Chrome in the offline
 application cache, behind the catalog's keyring wrapper
 (`installer/genkan/rust/src/keyring.nix`). That one comes from the
 applications' Nixpkgs and Chanoma's from the system's, which are
@@ -2665,10 +2669,8 @@ Chrome, and when the two give different Chromes (7 and 8 November 2026:
 cores, so such a system fetches Chrome from Google and compiles the two
 cores when an update changes them. The systems `push-cache` publishes refuse
 unfree packages (`free` in `nix/reference-systems.nix`) and have none
-of the three. BlueZ is set to connect quickly and to let
-a device that forgot the computer pair again without anyone confirming,
-for Chanoma's controllers; BlueZ has one policy for every device, so
-this holds for all of them on every Aizome system.
+of the three. BlueZ allows fast reconnection of paired controllers and
+keeps the system's configured policy for replacement pairings.
 `nix build .#checks.x86_64-linux.aizome-chanoma-defaults` holds Aizome's
 module alone (with unfree packages allowed and refused), the live media
 and the installed Aizome system the media carries to all of this, to

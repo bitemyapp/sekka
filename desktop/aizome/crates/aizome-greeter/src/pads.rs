@@ -103,10 +103,7 @@ impl Couch {
 impl Greeter {
     /// The TV account's way in, if it's the one logging in.
     pub fn tv_auth(&self) -> Option<Auth> {
-        match self.stage {
-            Stage::Name => None,
-            _ => self.user().and_then(|u| u.tv.as_ref()).map(|t| t.auth),
-        }
+        self.tv_login().map(|t| t.auth)
     }
 
     /// The TV account with nothing to sign in with, not yet started:
@@ -220,8 +217,8 @@ impl Greeter {
         }
         match (self.stage, self.tv_auth()) {
             (Stage::People, _) => {}
-            (Stage::Password, Some(Auth::None)) => {}
-            (Stage::Password, Some(Auth::Pin)) => self.couch.pin = true,
+            (_, Some(Auth::None)) => {}
+            (_, Some(Auth::Pin)) => self.couch.pin = true,
             _ => {
                 if self.couch.keys.is_none() {
                     self.couch.keys = Some(Keyboard { fixed_caret: true, ..Keyboard::new(None) });
@@ -432,7 +429,7 @@ impl Greeter {
             return;
         }
         self.password.push(d);
-        let length = self.user().and_then(|u| u.tv.as_ref()).and_then(|t| t.pin_length).map(usize::from);
+        let length = self.tv_login().and_then(|t| t.pin_length).map(usize::from);
         if length == Some(self.password.len()) {
             self.submit(cx);
         }
@@ -493,9 +490,9 @@ impl Greeter {
             return None;
         }
         let family = self.couch.family();
-        let length = self.user().and_then(|u| u.tv.as_ref()).and_then(|t| t.pin_length).map(usize::from);
+        let length = self.tv_login().and_then(|t| t.pin_length).map(usize::from);
         let pin = (self.couch.active && self.couch.pin).then(|| aizome_sofa::pinpad::Pad {
-            title: self.user().map(|u| u.real_name.clone()).unwrap_or_default(),
+            title: self.user().map(|u| u.real_name.clone()).or_else(|| self.login.user.clone()).unwrap_or_default(),
             prompt: match length {
                 Some(_) => "Press the PIN's buttons".into(),
                 None => "Press the PIN's buttons, then Done".into(),

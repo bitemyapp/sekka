@@ -208,23 +208,36 @@ let
     # unit has only systemd's).
     CHANOMA_BROWSER = lib.getExe cfg.chanoma.browser;
   };
-  # The cores' libraries alone, copied out of their packages: Chanoma loads
-  # each `*_libretro.so` itself. A core's package has a launcher for
-  # RetroArch beside it, and linked whole, the cores brought RetroArch and
-  # Qt (some 150 MiB) to every Aizome.
-  chanomaCores = pkgs.runCommand "chanoma-cores" { } ''
-    mkdir -p $out/lib/retroarch/cores
-    for core in ${lib.concatMapStringsSep " " (core: "${core}") cfg.chanoma.cores}; do
-      cp -L "$core"/lib/retroarch/cores/*_libretro.so $out/lib/retroarch/cores/
-    done
-  '';
+  # A free core has the same store path in the published system and in
+  # systems with extra cores, including the patched Play! library.
+  coreLibraries =
+    core:
+    pkgs.runCommand "chanoma-${lib.getName core}" { } ''
+      mkdir -p $out/lib/retroarch/cores
+      cp -L ${core}/lib/retroarch/cores/*_libretro.so $out/lib/retroarch/cores/
+    '';
+  chanomaCores = pkgs.symlinkJoin {
+    name = "chanoma-cores";
+    # Later entries historically took precedence for overlapping packages.
+    paths = map coreLibraries (lib.reverseList cfg.chanoma.cores);
+    postBuild = lib.optionalString (cfg.chanoma.cores == [ ]) "mkdir -p $out/lib/retroarch/cores";
+  };
+  # Desktop launchers use the catalog's keyring policy. Chanoma opens
+  # its own profiles through CHANOMA_BROWSER above.
+  withKeyring = import ../../../installer/genkan/rust/src/keyring.nix { inherit lib pkgs; };
+  desktopBrowser = withKeyring { id = lib.getName cfg.chanoma.browser; } cfg.chanoma.browser;
   # Google Chrome, where this system can have it: it's unfree, and built
   # for x86-64 alone.
   chrome =
     let
-      unfree = pkgs.config.allowUnfree or false || (pkgs.config.allowUnfreePredicate or (_: false)) pkgs.google-chrome;
+      unfree =
+        pkgs.config.allowUnfree or false
+        || (pkgs.config.allowUnfreePredicate or (_: false)) pkgs.google-chrome;
     in
-    if unfree && lib.meta.availableOn pkgs.stdenv.hostPlatform pkgs.google-chrome then pkgs.google-chrome else null;
+    if unfree && lib.meta.availableOn pkgs.stdenv.hostPlatform pkgs.google-chrome then
+      pkgs.google-chrome
+    else
+      null;
   # The TV account's own systemd starts only what Chanoma and its browser
   # need: a generator its systemd runs as it starts (systemd.generator(7))
   # masks every other unit the login's targets pull in, for that account
@@ -261,7 +274,10 @@ let
 in
 {
   # The login screen, aizome-greeter on greetd (programs.aizome.greeter).
-  imports = [ ./greeter.nix ];
+  imports = [
+    ./greeter.nix
+    ./tv-ssh.nix
+  ];
 
   options.programs.aizome = {
     enable = lib.mkEnableOption "the Aizome desktop session";
@@ -307,13 +323,8 @@ in
           play and for how long. It comes with Aizome, as one more app,
           with its game cores, a free PlayStation BIOS, the games'
           databases and its browser (`browser`); `false` leaves all of it
-          out. With it, Bluetooth devices connect quickly and one that
-          forgot the computer pairs again without anyone confirming (for
-          its controllers; BlueZ has one policy for every device),
-          Settings offers the TV account (Users & Groups), sshd refuses
-          an account named `tv`, and `/run/media/tv` is there for its
-          drives. The television's own account is made in Settings, and
-          only there.
+          out. Settings offers the TV account in Users & Groups. Its
+          controllers reconnect quickly and its drives use `/run/media/tv`.
         '';
       };
       cores = lib.mkOption {
@@ -548,21 +559,14 @@ in
       # the shell asks once a session rather than finding out mid-recording.
       pkgs.libva-utils
     ]
-    ++ lib.optionals cfg.chanoma.enable (
-      [ cfg.package.chanoma ] ++ lib.optional (cfg.chanoma.browser != null) cfg.chanoma.browser
-    );
+    ++ lib.optional cfg.chanoma.enable cfg.package.chanoma
+    ++ lib.optional (cfg.chanoma.enable && cfg.chanoma.browser != null) (lib.lowPrio desktopBrowser);
 
-    # Controllers reconnect by themselves once paired (Chanoma trusts
-    # them): quicker with fast connection; and one that forgot the
-    # computer pairs again without anyone confirming (just-works
-    # re-pairing), which a kid with only a controller couldn't do. BlueZ
-    # has one policy for every device, so this holds for all of the
-    # computer's Bluetooth devices, on every system Chanoma comes with;
-    # hardware.bluetooth.settings.General sets either back.
-    hardware.bluetooth.settings.General = lib.mkIf cfg.chanoma.enable {
-      FastConnectable = lib.mkDefault true;
-      JustWorksRepairing = lib.mkDefault "always";
-    };
+    # Already paired controllers can reconnect quickly. BlueZ keeps the
+    # system's policy for accepting a replacement pairing.
+    hardware.bluetooth.settings.General.FastConnectable = lib.mkIf cfg.chanoma.enable (
+      lib.mkDefault true
+    );
     systemd.user.generators = lib.mkIf cfg.chanoma.enable { aizome-tv-units = tvUnits; };
     # The TV account's drives, for every account to read
     # (chanoma.shareTvDrives): UDisks keeps to a /run/media/USER that's
@@ -571,11 +575,6 @@ in
       "d /run/media 0755 root root -"
       "d /run/media/tv 0755 root root -"
     ];
-    # The TV account signs in with nothing or a PIN of a few digits, and
-    # that is its password: right for a login screen in the room, not for
-    # the network. Its nologin shell ends a session over SSH but not sshd's
-    # forwarding, so sshd refuses the account, where sshd runs.
-    services.openssh.settings.DenyUsers = lib.mkIf cfg.chanoma.enable [ "tv" ];
     # A television: Chanoma with every session, and again after a crash.
     # Leaving it with the PIN ends it for the session.
     systemd.user.services.aizome-chanoma = lib.mkIf (cfg.chanoma.enable && cfg.chanoma.autostart) {

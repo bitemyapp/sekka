@@ -298,6 +298,20 @@ fn follows_adapters_and_devices() {
 }
 
 #[test]
+fn pairing_only_leaves_trust_and_connection_to_the_caller() {
+    let bus = test_bus!();
+    let (_fake, _shared) = serve(&bus);
+    let bt = Bluetooth::with_bus(bus.bus(), Wake::none());
+    assert!(eventually(|| bt.available()));
+    bt.register_agent(|prompt| prompt.responder.respond(PairingResponse::Accept)).wait().unwrap();
+    bt.pair_only(SPEAKER).wait().unwrap();
+    assert!(eventually(|| bt.snapshot().device(SPEAKER).is_some_and(|d| d.paired)));
+    let state = bt.snapshot();
+    let speaker = state.device(SPEAKER).unwrap();
+    assert!(!speaker.trusted && !speaker.connected);
+}
+
+#[test]
 fn pairing_asks_the_agent() {
     let bus = test_bus!();
     let (_fake, shared) = serve(&bus);

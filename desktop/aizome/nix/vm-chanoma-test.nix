@@ -152,6 +152,7 @@ let
         os.unlink(FIFO)
     os.mkfifo(FIFO)
     ui = make()
+    second = None
     print("pad ready", flush=True)
     while True:
         with open(FIFO) as f:
@@ -159,7 +160,12 @@ let
                 words = line.split()
                 if not words:
                     continue
-                if words[0] == "unplug":
+                if words[0] == "second-on":
+                    second = make()
+                elif words[0] == "second-off":
+                    second.close()
+                    second = None
+                elif words[0] == "unplug":
                     ui.close()
                     ui = None
                 elif words[0] == "plug":

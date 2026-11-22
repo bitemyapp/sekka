@@ -325,7 +325,17 @@ service_handle!(Bluetooth, BluetoothState);
 impl Bluetooth {
     /// Follow BlueZ on the system bus.
     pub fn new(wake: Wake) -> Bluetooth {
-        match Bus::system() {
+        Self::from_connection(Bus::system(), wake)
+    }
+
+    /// Follow BlueZ for one pairing screen. Its discovery session belongs to
+    /// this connection, so leaving an earlier screen cannot stop a later one.
+    pub fn for_pairing(wake: Wake) -> Bluetooth {
+        Self::from_connection(Bus::private_system(), wake)
+    }
+
+    fn from_connection(bus: Result<Bus>, wake: Wake) -> Bluetooth {
+        match bus {
             Ok(bus) => Bluetooth::with_bus(bus, wake),
             Err(error) => {
                 log::info!("aizome-sys: no system bus for BlueZ: {error}");
@@ -480,14 +490,17 @@ impl Bluetooth {
     pub fn pair(&self, device: &str) -> Task<()> {
         let device = device.to_owned();
         self.task(move |bus| {
-            match bus.call_with::<_, ()>(Opts::long(PAIR_TIMEOUT), BLUEZ, &device, IFACE_DEVICE, "Pair", &()) {
-                Ok(()) => {}
-                Err(Error::DBus { name, .. }) if name == "org.bluez.Error.AlreadyExists" => {}
-                Err(error) => return Err(error),
-            }
+            pair(bus, &device)?;
             bus.set(BLUEZ, &device, IFACE_DEVICE, "Trusted", true)?;
             connect(bus, &device)
         })
+    }
+
+    /// Pair without trusting or connecting. A caller can check that the
+    /// pairing screen is still open before it authorizes those actions.
+    pub fn pair_only(&self, device: &str) -> Task<()> {
+        let device = device.to_owned();
+        self.task(move |bus| pair(bus, &device))
     }
 
     /// Stop pairing in progress.
@@ -555,6 +568,13 @@ impl Bluetooth {
 impl Drop for Bluetooth {
     fn drop(&mut self) {
         self.stop.stop();
+    }
+}
+
+fn pair(bus: &Bus, device: &str) -> Result<()> {
+    match bus.call_with(Opts::long(PAIR_TIMEOUT), BLUEZ, device, IFACE_DEVICE, "Pair", &()) {
+        Err(Error::DBus { name, .. }) if name == "org.bluez.Error.AlreadyExists" => Ok(()),
+        result => result,
     }
 }
 

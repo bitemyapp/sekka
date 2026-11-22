@@ -216,7 +216,8 @@ impl Chanoma {
             core,
             game: g.path.clone(),
             save_ram: dirs.saves().join(format!("{file}.srm")),
-            resume: state.is_file(),
+            legacy_key: Some(g.legacy_file_key()),
+            resume: true,
             picture: dirs.states().join(format!("{file}.png")),
             state,
             system_dir,
@@ -342,11 +343,14 @@ impl Chanoma {
             }
             return;
         }
-        // Words from a session already put away.
-        if self.game.as_ref().is_none_or(|g| g.id != id) {
-            return;
-        }
         match e {
+            // The final write can fail while stop_game is joining the session.
+            GameEvent::SaveFailed(why) => {
+                if id == self.starts.count {
+                    self.toast(why, cx);
+                }
+            }
+            _ if self.game.as_ref().is_none_or(|g| g.id != id) => {}
             GameEvent::Started { aspect, resumed, .. } => {
                 self.done_waiting(cx);
                 if let Some(g) = &mut self.game {
@@ -504,11 +508,13 @@ impl Chanoma {
             old.browser.close();
         }
         let tx = self.sender.clone();
+        self.page_serial += 1;
+        let serial = self.page_serial;
         let dir = self.config.dirs.browser().join(profile);
         let kept = !self.is_grownup();
         match Browser::open(&exe, &dir, profile, url, sites, kept, agent, drive, self.shared.clone(), move |e| {
             if let Some(t) = &tx {
-                t.send(Msg::Browser(e));
+                t.send(Msg::Browser(serial, e));
             }
         }) {
             Ok(b) => {
@@ -532,7 +538,10 @@ impl Chanoma {
         }
     }
 
-    pub fn browser_event(&mut self, e: browser::Event, cx: &mut Cx<Msg>) {
+    pub fn browser_event(&mut self, serial: u64, e: browser::Event, cx: &mut Cx<Msg>) {
+        if serial != self.page_serial || self.page.is_none() {
+            return;
+        }
         match e {
             browser::Event::Shown(_) => {
                 if let Some(p) = &mut self.page {
@@ -542,7 +551,10 @@ impl Chanoma {
                 self.toast_note(ui::Note::Home, self.way_back(), cx);
             }
             browser::Event::Gone => {
-                if self.page.take().is_some() && self.screen == Screen::Watching {
+                if let Some(p) = self.page.take() {
+                    p.browser.close();
+                }
+                if self.screen == Screen::Watching {
                     self.modal = None;
                     self.after_activity(cx);
                 }

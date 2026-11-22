@@ -154,7 +154,20 @@ impl Recent {
 
 /// Controllers' layouts set up in Chanoma, by SDL's guid.
 pub fn load_layouts(dirs: &Dirs) -> HashMap<String, Mapping> {
-    crate::store::read(&dirs.state.join("controllers.json"))
+    let mut layouts: HashMap<String, Mapping> = crate::store::read(&dirs.state.join("controllers.json"));
+    // Older versions saved a setup even when every step timed out.
+    layouts.retain(|_, mapping| usable_layout(mapping));
+    layouts
+}
+
+/// Menus need both face actions and navigation in each direction, from the pad or left stick.
+pub(super) fn usable_layout(mapping: &Mapping) -> bool {
+    use crate::pad::mapping::Output::{Axis as Stick, Button as Key};
+    use crate::pad::{Axis, Button};
+    mapping.has(Key(Button::South))
+        && mapping.has(Key(Button::East))
+        && (mapping.has(Stick(Axis::LeftX)) || (mapping.has(Key(Button::Left)) && mapping.has(Key(Button::Right))))
+        && (mapping.has(Stick(Axis::LeftY)) || (mapping.has(Key(Button::Up)) && mapping.has(Key(Button::Down))))
 }
 
 pub fn save_layouts(dirs: &Dirs, layouts: &HashMap<String, Mapping>) {

@@ -40,6 +40,8 @@ pub struct Launch {
     pub game: PathBuf,
     /// The game's battery-backed save.
     pub save_ram: PathBuf,
+    /// Older versions saved the same game under this name.
+    pub legacy_key: Option<String>,
     /// Its state where it was left.
     pub state: PathBuf,
     /// A picture of where it was left.
@@ -75,6 +77,8 @@ pub enum Event {
     Started { core: String, aspect: f64, resumed: bool },
     /// It couldn't start.
     Failed(String),
+    /// A write to the game's save or resume state failed.
+    SaveFailed(String),
     /// The picture's shape changed.
     Aspect(f64),
     /// It ended: whether where it was left was kept.
@@ -220,6 +224,17 @@ fn save_ram(api: &Api) -> Option<Vec<u8>> {
         let data = (api.get_memory_data)(ffi::RETRO_MEMORY_SAVE_RAM);
         (size > 0 && !data.is_null()).then(|| std::slice::from_raw_parts(data.cast::<u8>(), size).to_vec())
     }
+}
+
+/// Only bytes that reached disk can suppress the next write.
+fn checkpoint(path: &Path, last: &mut Option<Vec<u8>>, current: Option<Vec<u8>>) -> std::io::Result<()> {
+    if let Some(bytes) = &current
+        && current != *last
+    {
+        crate::store::write_bytes(path, bytes)?;
+        *last = current;
+    }
+    Ok(())
 }
 
 fn state(api: &Api) -> Option<Vec<u8>> {
@@ -391,11 +406,13 @@ fn run(
     {
         threw = Some(why);
     }
-    load_save_ram(&api, &launch.save_ram);
+    let legacy = launch.legacy_key.as_deref();
+    load_save_ram(&api, &crate::store::existing_game_file(&launch.save_ram, legacy));
+    let mut last_save = save_ram(&api);
     let mut resumed = false;
     if threw.is_none()
         && launch.resume
-        && let Ok(bytes) = std::fs::read(&launch.state)
+        && let Ok(bytes) = std::fs::read(crate::store::existing_game_file(&launch.state, legacy))
     {
         // Mupen64Plus-Next creates its emulation coroutine in init, but
         // only starts it in retro_run. Until then retro_unserialize
@@ -435,7 +452,15 @@ fn run(
     let mut frame_time = Duration::from_secs_f64(1.0 / av.timing.fps.clamp(1.0, 240.0));
     let mut next = Instant::now();
     let mut paused = false;
-    let mut last_save = save_ram(&api);
+    let save_failed = |path: &Path, err: std::io::Error| {
+        log::warn!("chanoma: couldn't write {}: {err}", path.display());
+        events(Event::SaveFailed(format!("Couldn't save game progress: {err}")));
+    };
+    let mut save_battery = || {
+        if let Err(e) = checkpoint(&launch.save_ram, &mut last_save, save_ram(&api)) {
+            save_failed(&launch.save_ram, e);
+        }
+    };
     let mut save_check = Instant::now() + Duration::from_secs(30);
     let mut out = Vec::with_capacity(4096);
     let mut keep = true;
@@ -496,13 +521,7 @@ fn run(
         let now = Instant::now();
         if now >= save_check {
             save_check = now + Duration::from_secs(30);
-            let s = save_ram(&api);
-            if s != last_save {
-                if let Some(bytes) = &s {
-                    let _ = crate::store::write_bytes(&launch.save_ram, bytes);
-                }
-                last_save = s;
-            }
+            save_battery();
         }
         // The clock sets the pace; a machine that fell behind (a stall)
         // starts counting again rather than racing to catch up.
@@ -520,18 +539,18 @@ fn run(
     unsafe { &mut *host_ptr }.still();
     // A core that threw may have left its memory half done: the saves
     // kept before stay.
-    if threw.is_none()
-        && let Some(bytes) = save_ram(&api)
-        && Some(&bytes) != last_save.as_ref()
-    {
-        let _ = crate::store::write_bytes(&launch.save_ram, &bytes);
+    if threw.is_none() {
+        save_battery();
     }
     let mut kept = false;
     if keep
         && threw.is_none()
         && let Some(bytes) = state(&api)
     {
-        kept = crate::store::write_bytes(&launch.state, &bytes).is_ok();
+        match crate::store::write_bytes(&launch.state, &bytes) {
+            Ok(()) => kept = true,
+            Err(e) => save_failed(&launch.state, e),
+        }
         // SAFETY: not inside a core call.
         let h = unsafe { &*host_ptr };
         if let Some((w, hgt, rgba)) = h.last_rgba() {
@@ -588,6 +607,22 @@ fn save_picture(path: &Path, w: u32, h: u32, rgba: &[u8], aspect: f64) -> Result
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn failed_battery_writes_are_retried_with_unchanged_bytes() {
+        let dir = std::env::temp_dir().join(format!("chanoma-checkpoint-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("game.srm");
+        std::fs::create_dir(&path).unwrap();
+        let mut last = Some(vec![1]);
+        assert!(checkpoint(&path, &mut last, Some(vec![2])).is_err());
+        assert_eq!(last, Some(vec![1]));
+        std::fs::remove_dir(&path).unwrap();
+        checkpoint(&path, &mut last, Some(vec![2])).unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), [2]);
+        assert_eq!(last, Some(vec![2]));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 
     #[test]
     fn a_bios_offered_is_linked_in_beside_a_grown_ups_own() {

@@ -9,7 +9,7 @@ use aizome_greeter::config::{Config, State};
 use aizome_greeter::greetd::{AuthMessageType, ErrorType, Response};
 use aizome_greeter::login::Step;
 use aizome_greeter::sessions::{Kind, Session};
-use aizome_greeter::users::User;
+use aizome_greeter::users::{Accounts, User};
 use aizome_kit::prelude::*;
 use aizome_kit::sidestep_ui::{Modifiers, NamedKey};
 use aizome_kit::testing::Harness;
@@ -83,7 +83,8 @@ fn config() -> Config {
 }
 
 fn greeter(state: State, users: Vec<User>) -> Harness<Greeter> {
-    let g = Greeter::with(config(), state, users, sessions(), "ganymede".into(), false, false);
+    let accounts = Accounts { tv: users.iter().find_map(|u| u.tv.clone()), visible: users };
+    let g = Greeter::with(config(), state, accounts, sessions(), "ganymede".into(), false, false);
     let mut h = Harness::new(g);
     h.set_outputs(vec![output()]);
     for k in h.windows() {
@@ -391,6 +392,22 @@ fn the_tv_account_with_nothing_to_sign_in_with_starts_when_asked() {
     assert_eq!(h.program().login.step, Step::Starting);
     h.send(Msg::Greetd(Response::Success));
     assert_eq!(h.program().login.step, Step::Done);
+}
+
+#[test]
+fn typing_a_hidden_tv_accounts_name_still_starts_its_kiosk() {
+    let accounts = Accounts { visible: people(), tv: tv_user(Auth::Pin, Some(4)).tv };
+    let cfg = Config { user_list: false, default_session: Some("tatami".into()), ..config() };
+    let mut state = State::default();
+    state.logged_in("tv", "gnome");
+    let mut h = Harness::new(Greeter::with(cfg, state, accounts, sessions(), "tv-room".into(), false, false));
+    h.send(Msg::Name("tv".into()));
+    h.send(Msg::SubmitName);
+    assert_eq!(h.program().tv_auth(), Some(Auth::Pin));
+    assert_eq!(h.program().session().unwrap().exec, Config::default().tv_session);
+    h.send(Msg::Greetd(Response::Success));
+    h.send(Msg::Greetd(Response::Success));
+    assert_eq!(h.program().state.sessions.get("tv").map(String::as_str), Some("chanoma"));
 }
 
 #[test]

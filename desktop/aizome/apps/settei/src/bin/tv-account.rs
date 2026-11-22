@@ -13,19 +13,35 @@
 //!   grown-ups' PIN), as `aizome-chanoma --reset-pin` run as the account.
 //!
 //! It runs only what's named here, found in the system's own folders, and
-//! writes only the account's record (`/var/lib/aizome/tv-account.toml`).
+//! keeps the account's record at `/var/lib/aizome/tv-account.toml`.
 
-use std::io::Read;
+use std::fs::File;
+use std::io::{Read, Write};
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use aizome_sys::tv::{self, Auth, TvAccount};
+
+// A shadow password beginning with '!' is locked. This particular value
+// identifies a useradd completed by this helper before its record was saved.
+const PENDING: &str = "!aizome-tv-account-pending";
+const SSH_GROUP: &str = "aizome-tv-kiosk";
 
 fn main() {
     // SAFETY: geteuid has no preconditions.
     if unsafe { libc::geteuid() } != 0 {
         fail("this runs as root, through pkexec");
     }
+    // Two Settings windows must not interleave account, credential and record changes.
+    let lock = File::options()
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .mode(0o600)
+        .open("/run/aizome-tv-account.lock")
+        .unwrap_or_else(|e| fail(&e.to_string()));
+    lock.lock().unwrap_or_else(|e| fail(&e.to_string()));
     let args: Vec<String> = std::env::args().skip(1).collect();
     let result = match args.iter().map(String::as_str).collect::<Vec<_>>()[..] {
         ["set", auth] => match Auth::parse(auth) {
@@ -76,8 +92,17 @@ fn run(cmd: &mut Command) -> Result<(), String> {
 }
 
 /// Whether an account `name` exists.
-fn exists(name: &str) -> bool {
-    std::fs::read_to_string("/etc/passwd").unwrap_or_default().lines().any(|l| l.split(':').next() == Some(name))
+fn exists(name: &str) -> Result<bool, String> {
+    let passwd = std::fs::read_to_string("/etc/passwd").map_err(|e| format!("/etc/passwd: {e}"))?;
+    Ok(passwd.lines().any(|l| l.split(':').next() == Some(name)))
+}
+
+fn pending(name: &str) -> Result<bool, String> {
+    let shadow = std::fs::read_to_string("/etc/shadow").map_err(|e| format!("/etc/shadow: {e}"))?;
+    Ok(shadow.lines().any(|line| {
+        let mut fields = line.split(':');
+        fields.next() == Some(name) && fields.next() == Some(PENDING)
+    }))
 }
 
 fn set(auth: Auth, secret: &str) -> Result<(), String> {
@@ -85,23 +110,36 @@ fn set(auth: Auth, secret: &str) -> Result<(), String> {
     change.check().map_err(|e| e.to_string())?;
     let current = TvAccount::read();
     let user = current.as_ref().map_or(tv::NAME, |t| t.user.as_str()).to_owned();
-    if !exists(&user) {
-        let nologin = tool("nologin")?;
-        run(Command::new(tool("useradd")?)
-            .args(["--create-home", "--user-group", "--comment", tv::REAL_NAME, "--shell"])
-            .arg(nologin)
-            .arg(&user))?;
-    } else if current.is_none() {
-        return Err(format!("There's already an account called {user}, and it isn't the TV account"));
-    }
     let hash = match auth {
         Auth::None => String::new(),
         Auth::Pin | Auth::Password => aizome_sys::users::crypt_password(secret).map_err(|e| e.to_string())?,
     };
-    // Unlocked too, should it have been locked.
-    run(Command::new(tool("usermod")?).arg("--password").arg(&hash).arg(&user))?;
+    let usermod = tool("usermod")?;
+    if !exists(&user)? {
+        let nologin = tool("nologin")?;
+        run(Command::new(tool("useradd")?)
+            .args(["--create-home", "--user-group", "--groups", SSH_GROUP, "--password", PENDING])
+            .args(["--comment", tv::REAL_NAME, "--shell"])
+            .arg(nologin)
+            .arg(&user))?;
+    } else if current.is_none() && !pending(&user)? {
+        return Err(format!("There's already an account called {user}, and it isn't the TV account"));
+    }
+
+    // Publish the kiosk identity before installing any usable credential.
+    // If writing it fails on creation, the locked marker lets the next
+    // attempt finish without claiming an unrelated account named tv.
     let record = TvAccount { user, auth, pin_length: (auth == Auth::Pin).then_some(secret.len() as u8) };
-    write(&record)
+    write(&record)?;
+    let install =
+        run(Command::new(usermod).args(["--append", "--groups", SSH_GROUP, "--password", &hash, &record.user]));
+    if install.is_err() {
+        // An existing account still authenticates with its former credential.
+        if let Some(previous) = current {
+            write(&previous)?;
+        }
+    }
+    install
 }
 
 /// The record, whole: a new file renamed over the old, readable by all.
@@ -112,14 +150,17 @@ fn write(record: &TvAccount) -> Result<(), String> {
     std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     let _ = std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o755));
     let new = path.with_extension("new");
-    std::fs::write(&new, record.to_toml()).map_err(|e| format!("{}: {e}", new.display()))?;
-    std::fs::set_permissions(&new, std::fs::Permissions::from_mode(0o644)).map_err(|e| e.to_string())?;
-    std::fs::rename(&new, path).map_err(|e| format!("{}: {e}", path.display()))
+    let mut file = File::create(&new).map_err(|e| format!("{}: {e}", new.display()))?;
+    file.write_all(record.to_toml().as_bytes()).map_err(|e| e.to_string())?;
+    file.set_permissions(std::fs::Permissions::from_mode(0o644)).map_err(|e| e.to_string())?;
+    file.sync_all().map_err(|e| e.to_string())?;
+    std::fs::rename(&new, path).map_err(|e| format!("{}: {e}", path.display()))?;
+    File::open(dir).and_then(|d| d.sync_all()).map_err(|e| format!("{}: {e}", dir.display()))
 }
 
 fn remove(files: bool) -> Result<(), String> {
     let Some(record) = TvAccount::read() else { return Ok(()) };
-    if exists(&record.user) {
+    if exists(&record.user)? {
         let mut cmd = Command::new(tool("userdel")?);
         if files {
             cmd.arg("--remove");

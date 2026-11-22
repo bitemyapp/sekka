@@ -86,7 +86,28 @@ def shows(text):
 start_all()
 machine.wait_for_unit("multi-user.target")
 
-with subtest("Settings' helper makes the TV account, with a PIN"):
+with subtest("an existing ordinary account named tv keeps its own login policy"):
+    machine.wait_for_unit("sshd.service")
+    machine.succeed("useradd --no-create-home tv")
+    machine.fail("/etc/tv-account-helper set none </dev/null")
+    assert "aizome-tv-kiosk" not in machine.succeed("id -nG tv").split()
+    sshd = machine.succeed("sshd -T -C user=tv,host=localhost,addr=127.0.0.1")
+    assert "tv" not in [name for line in sshd.splitlines() if line.startswith("denyusers ") for name in line.split()[1:]]
+    assert "aizome-tv-kiosk" in [name for line in sshd.splitlines() if line.startswith("denygroups ") for name in line.split()[1:]]
+    machine.succeed("userdel tv")
+
+with subtest("a failed record write leaves the new account locked and retryable"):
+    record_path = "/var/lib/aizome/tv-account.toml"
+    machine.succeed(f"mkdir -p {record_path}")
+    machine.fail("/etc/tv-account-helper set none </dev/null")
+    assert machine.succeed("passwd -S tv").split()[1] == "L"
+    assert "aizome-tv-kiosk" in machine.succeed("id -nG tv").split()
+    machine.succeed(f"rmdir {record_path}")
+    machine.succeed("/etc/tv-account-helper set none </dev/null")
+    assert machine.succeed("passwd -S tv").split()[1] == "NP"
+    assert 'auth = "none"' in machine.succeed(f"cat {record_path}")
+
+with subtest("Settings' helper changes the TV account to a PIN"):
     machine.succeed(f"printf %s {TV_PIN} | /etc/tv-account-helper set pin")
     record = machine.succeed("cat /var/lib/aizome/tv-account.toml")
     assert 'user = "tv"' in record and 'auth = "pin"' in record and "pin_length = 4" in record, record
@@ -97,10 +118,12 @@ with subtest("Settings' helper makes the TV account, with a PIN"):
     machine.fail("su tv -c true </dev/null")
     # Nor sshd, whose forwarding a nologin shell wouldn't stop: the PIN is
     # the account's password, and only a few digits.
-    machine.wait_for_unit("sshd.service")
-    sshd = machine.succeed("sshd -T -C user=tv,host=localhost,addr=127.0.0.1")
-    denied = [line.split()[1:] for line in sshd.splitlines() if line.lower().startswith("denyusers")]
-    assert denied == [["tv"]], denied
+    assert "aizome-tv-kiosk" in machine.succeed("id -nG tv").split()
+    # A record written before the group was introduced is migrated on activation.
+    machine.succeed("gpasswd -d tv aizome-tv-kiosk")
+    assert "aizome-tv-kiosk" not in machine.succeed("id -nG tv").split()
+    machine.succeed("/run/current-system/activate")
+    assert "aizome-tv-kiosk" in machine.succeed("id -nG tv").split()
     # The login screen reads it when it starts.
     machine.succeed("systemctl restart greetd")
     until("the login screen", greeter_up)

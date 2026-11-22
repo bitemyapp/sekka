@@ -126,7 +126,7 @@ pub enum Msg {
     Tick,
     /// What the folders hold: as the files index knew it, or (`true`) read
     /// again.
-    Scanned(Arc<Library>, bool),
+    Scanned(u64, Arc<Library>, bool),
     /// What a look found has been in the header long enough.
     LookSaid(u64),
     /// Starting has shown long enough ([`splash`]).
@@ -137,21 +137,21 @@ pub enum Msg {
     /// Box art fetched (or not), and its picture if it was.
     ArtFetched(PathBuf, crate::art::Fetched, Option<Image>),
     /// A PIN typed was checked: right or not.
-    PinChecked(bool),
+    PinChecked(u64, bool),
     /// A new PIN's hash, made off the interface thread.
-    PinMade(crate::rules::PinHash),
+    PinMade(u64, u8, crate::rules::PinHash),
     /// What the game of a start (by its number) says.
     Game(u64, crate::retro::Event),
     /// A start (by its number) has gone on a while.
     StartWait(u64),
-    Browser(crate::browser::Event),
+    Browser(u64, crate::browser::Event),
     Film(aizome_media::Event),
     /// What a film's subtitles show changes now.
     CueTick,
     /// The desktop's media controls (a media key) ask something of the film.
     Mpris(aizome_mpris::Action),
-    Bluetooth,
-    Paired(String, Result<(), String>),
+    Bluetooth(u64),
+    Paired(u64, String, Result<(), String>),
     /// The drives changed, or one finished opening.
     Drives,
     /// Drives finished opening, or couldn't be opened.
@@ -166,7 +166,7 @@ pub enum Msg {
     /// The account's password checked, for a forgotten PIN: right or not.
     SignedIn(bool),
     /// How far looking through the folders has got.
-    Looking(crate::library::Look),
+    Looking(u64, crate::library::Look),
     /// Looking for games on the drives: where, and how many folders so far.
     Finding(String, usize),
     /// The folders of games found on the drives (`true`: looked again, done).
@@ -407,6 +407,8 @@ pub struct Chanoma {
     /// Which of its games show, by place ([`crate::collection`]).
     pub shown: Vec<usize>,
     pub scanned: bool,
+    /// Only the latest scan may update the library and its progress.
+    pub scan_generation: u64,
     /// Starting, Chanoma's name up until Home has its games.
     pub splash: Option<splash::Splash>,
     pub pads: Option<Pads>,
@@ -443,6 +445,8 @@ pub struct Chanoma {
     pub episode_focus: usize,
     pub grownups: grownups::State,
     pub modal: Option<Modal>,
+    /// Identifies the PIN check or hash started by the current pad.
+    pin_request: u64,
     pub toast: Option<(String, ui::Note, Instant)>,
     /// Grown-up mode, and its last use.
     pub grownup: Option<Instant>,
@@ -450,6 +454,8 @@ pub struct Chanoma {
     /// Games starting, and one given up on.
     pub starts: play::Starts,
     pub page: Option<play::Page>,
+    /// Queued events belong only to the browser that sent them.
+    pub page_serial: u64,
     pub film: Option<play::Film>,
     /// Films on the desktop's media controls, which read the playing
     /// film's clock (none between films), count the films played, and
@@ -478,6 +484,7 @@ pub struct Chanoma {
     pub art_agent: Option<ureq::Agent>,
     pub sender: Option<MsgSender<Msg>>,
     pub pairing: Option<grownups::Pairing>,
+    pairing_session: u64,
     /// Choosing a folder.
     pub picker: Option<picker::Picker>,
     pub search: Option<search::Search>,
@@ -550,6 +557,7 @@ impl Chanoma {
             library: Arc::new(Library::default()),
             shown: Vec::new(),
             scanned: false,
+            scan_generation: 0,
             splash: None,
             pads: None,
             shared: Arc::new(Shared::default()),
@@ -573,11 +581,13 @@ impl Chanoma {
             episode_focus: 0,
             grownups: grownups::State::default(),
             modal: None,
+            pin_request: 0,
             toast: None,
             grownup: None,
             game: None,
             starts: play::Starts::default(),
             page: None,
+            page_serial: 0,
             film: None,
             mpris: None,
             film_clock: Arc::default(),
@@ -599,6 +609,7 @@ impl Chanoma {
             art_agent: None,
             sender: None,
             pairing: None,
+            pairing_session: 0,
             picker: None,
             search: None,
             reset: None,
@@ -699,6 +710,15 @@ impl Chanoma {
         };
         if screen != self.screen {
             log::info!("chanoma: {screen:?}");
+        }
+        if self.screen == Screen::Pairing && screen != Screen::Pairing {
+            self.end_pairing();
+        }
+        if self.screen == Screen::SetUpPad && screen != Screen::SetUpPad {
+            self.setup = None;
+            if let Some(pads) = &self.pads {
+                pads.raw(false);
+            }
         }
         self.screen = screen;
         self.focus = Focus::default();
@@ -959,6 +979,10 @@ impl Chanoma {
                 let marks = self.home_marks();
                 self.controllers.retain(|p| p.id != id);
                 self.chords.forget(id);
+                if self.setup.as_ref().is_some_and(|s| s.pad == id) {
+                    self.cancel_setup(cx);
+                    self.toast_note(ui::Note::Controller, "Controller disconnected. Its layout was kept.", cx);
+                }
                 self.restore_home_marks(&marks);
                 // A game whose player 1 went: wait for them.
                 if self.screen == Screen::Playing && slot == 0 && self.modal.is_none() {
@@ -1447,7 +1471,10 @@ impl Chanoma {
                 Some(first) if first == typed => {
                     pin.checking = true;
                     let rounds = self.config.pin_rounds;
-                    cx.spawn(move || Msg::PinMade(crate::rules::PinHash::new(&typed, rounds)));
+                    self.pin_request += 1;
+                    let request = self.pin_request;
+                    let len = typed.len() as u8; // valid_pin checked the four-to-eight digits.
+                    cx.spawn(move || Msg::PinMade(request, len, crate::rules::PinHash::new(&typed, rounds)));
                 }
                 Some(_) => {
                     // From the start: which of the two was meant isn't known.
@@ -1461,7 +1488,9 @@ impl Chanoma {
         let Some(hash) = self.settings.pin.clone() else { return };
         let typed = std::mem::take(&mut pin.typed);
         pin.checking = true;
-        cx.spawn(move || Msg::PinChecked(hash.verify(&typed)));
+        self.pin_request += 1;
+        let request = self.pin_request;
+        cx.spawn(move || Msg::PinChecked(request, hash.verify(&typed)));
     }
 
     /// The PIN's length, where it was kept.
@@ -1475,9 +1504,12 @@ impl Chanoma {
         self.is_grownup() || self.settings.pin.is_none()
     }
 
-    fn pin_checked(&mut self, ok: bool, cx: &mut Cx<Msg>) {
+    fn pin_checked(&mut self, request: u64, ok: bool, cx: &mut Cx<Msg>) {
         let now = self.now_secs();
         let Some(Modal::Pin { pin, after }) = &mut self.modal else { return };
+        if self.pin_request != request || !pin.checking || pin.new {
+            return;
+        }
         pin.checking = false;
         if !ok {
             self.lockout.failed(now);
@@ -1507,18 +1539,16 @@ impl Chanoma {
         }
     }
 
-    fn pin_made(&mut self, hash: crate::rules::PinHash, cx: &mut Cx<Msg>) {
-        // Kids' mode came back while it was being made: it isn't kept.
-        if !self.may_choose_pin() {
-            return self.close_modal(cx);
+    fn pin_made(&mut self, request: u64, len: u8, hash: crate::rules::PinHash, cx: &mut Cx<Msg>) {
+        if self.pin_request != request
+            || !matches!(&self.modal, Some(Modal::Pin { pin, .. }) if pin.new && pin.checking)
+            || !self.may_choose_pin()
+        {
+            return;
         }
-        let len = match &self.modal {
-            Some(Modal::Pin { pin, .. }) => pin.first.as_ref().map_or(0, String::len).max(4),
-            _ => 4,
-        };
         let first_run = !self.settings.setup_done;
         self.settings.pin = Some(hash);
-        self.settings.pin_length = u8::try_from(len).ok();
+        self.settings.pin_length = Some(len);
         self.save_settings();
         self.modal = None;
         self.grownup = Some(Instant::now());
@@ -2209,7 +2239,10 @@ impl Program for Chanoma {
             }
             Msg::Edge => self.edge_reached(cx),
             Msg::Tick => self.tick(cx),
-            Msg::Scanned(lib, fresh) => {
+            Msg::Scanned(generation, lib, fresh) => {
+                if generation != self.scan_generation {
+                    return;
+                }
                 if fresh && self.look_shown {
                     self.say_look(&lib, cx);
                 }
@@ -2263,22 +2296,25 @@ impl Program for Chanoma {
                 // The next ones wanted.
                 self.want_art(cx);
             }
-            Msg::PinChecked(ok) => self.pin_checked(ok, cx),
-            Msg::PinMade(hash) => self.pin_made(hash, cx),
+            Msg::PinChecked(request, ok) => self.pin_checked(request, ok, cx),
+            Msg::PinMade(request, len, hash) => self.pin_made(request, len, hash, cx),
             Msg::Game(id, e) => self.game_event(id, e, cx),
             Msg::StartWait(id) => self.start_waited(id, cx),
-            Msg::Browser(e) => self.browser_event(e, cx),
+            Msg::Browser(serial, e) => self.browser_event(serial, e, cx),
             Msg::Film(e) => self.film_event(e, cx),
             Msg::CueTick => self.schedule_cues(cx),
             Msg::Mpris(a) => self.on_mpris(a, cx),
-            Msg::Bluetooth => self.bluetooth_changed(cx),
-            Msg::Paired(device, r) => self.paired(device, r, cx),
+            Msg::Bluetooth(session) => self.bluetooth_changed(session, cx),
+            Msg::Paired(session, device, r) => self.paired(session, device, r, cx),
             Msg::Drives => self.drives_changed(cx),
             Msg::Opened(outcomes) => self.opened(outcomes, cx),
             Msg::Listed(reading, listing, inside) => self.listed(reading, listing, inside),
             Msg::Known(reading, known) => self.known(reading, known),
             Msg::Suggested(s) => self.suggested(s, cx),
-            Msg::Looking(look) => {
+            Msg::Looking(generation, look) => {
+                if generation != self.scan_generation {
+                    return;
+                }
                 self.look_shown |= !look.over;
                 if let Some(f) = &look.folder
                     && !self.look_folders.contains(f)
@@ -2371,6 +2407,7 @@ impl Program for Chanoma {
 impl Chanoma {
     /// Put away what's playing before going (Leave, or the window closed).
     pub fn shutdown(&mut self) {
+        self.end_pairing();
         // One still starting may never come back to be stopped.
         match self.game.take() {
             Some(g) if g.started => g.session.stop(true),
@@ -2401,6 +2438,11 @@ impl Chanoma {
     /// index knows at once, then what's there now (only folders that
     /// changed are read again).
     pub fn rescan(&mut self, cx: &mut Cx<Msg>) {
+        self.scan_generation += 1;
+        let generation = self.scan_generation;
+        self.looking = None;
+        self.look_shown = false;
+        self.look_folders.clear();
         if let Some(s) = &mut self.splash {
             s.scan_due = true;
         }
@@ -2420,17 +2462,17 @@ impl Chanoma {
                     let mut index = dirs.open_index();
                     // The databases read once, for both looks.
                     let mut catalogs = crate::metadata::Catalogs::default();
-                    tx.send(Msg::Scanned(scan(&mut index, &mut catalogs, false, &|_| {}), false));
+                    tx.send(Msg::Scanned(generation, scan(&mut index, &mut catalogs, false, &|_| {}), false));
                     // How far the look has got, for Home and the settings.
                     let tell = |l: &crate::library::Look| {
-                        tx.send(Msg::Looking(l.clone()));
+                        tx.send(Msg::Looking(generation, l.clone()));
                     };
-                    tx.send(Msg::Scanned(scan(&mut index, &mut catalogs, true, &tell), true));
+                    tx.send(Msg::Scanned(generation, scan(&mut index, &mut catalogs, true, &tell), true));
                 });
             }
             None => cx.spawn(move || {
                 let mut catalogs = crate::metadata::Catalogs::default();
-                Msg::Scanned(scan(&mut dirs.open_index(), &mut catalogs, true, &|_| {}), true)
+                Msg::Scanned(generation, scan(&mut dirs.open_index(), &mut catalogs, true, &|_| {}), true)
             }),
         }
     }

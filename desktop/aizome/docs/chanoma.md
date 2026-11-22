@@ -33,26 +33,25 @@ where unfree packages are allowed, as the services that protect their
 shows play only in it; none otherwise, and Chanoma looks on the PATH),
 keeps the TV account's own systemd to what it needs
 (`programs.aizome.chanoma.tvUnits`, under The TV account), makes
-`/run/media/tv` for its drives, has sshd refuse an account named `tv`,
-and sets BlueZ to connect quickly and to let a controller that forgot
-the computer pair again without anyone confirming.
+`/run/media/tv` for its drives, has sshd refuse the managed account,
+and enables fast Bluetooth reconnection for paired controllers.
 
 Since it comes with every Aizome, so does each of those. Two reach
 past Chanoma:
 
 - **Google Chrome** is installed on every system that allows unfree
   packages, the installation media's among them, and shows among the
-  apps. Sekka's cache publishes nothing unfree, so such a system
+  apps with the same desktop keyring wrapper as the catalog browser.
+  Chanoma launches its own browser profiles directly.
+  Sekka's cache publishes nothing unfree, so such a system
   fetches Chrome from Google when an update changes it.
-- **BlueZ has one pairing policy for every device**
-  (`JustWorksRepairing = always`, `FastConnectable`): anything that
-  takes a paired device's address pairs again unasked, a keyboard's as
-  much as a controller's, and listening for quick connections uses more
-  power. `hardware.bluetooth.settings.General` sets either back.
+- **Bluetooth reconnection** uses BlueZ's `FastConnectable`, which may
+  increase power use. Replacement pairings follow the system's BlueZ policy.
 
-The cores are their libraries alone (`*_libretro.so`, copied into one
-folder), not their packages: each package has a launcher for RetroArch
-beside its core, and linked whole they brought RetroArch and Qt along.
+Each core's `*_libretro.so` files are copied into their own store path.
+Chanoma's core directory links those copies. Free and unfree systems
+share the same copies of the free cores, including the patched Play!
+library. The original packages also include launchers for RetroArch.
 The copied libraries are the packages' own, byte for byte, and the
 packages hold nothing else. With that, Chanoma adds 173 MiB to a system
 that refuses unfree packages (the cores 110, the games' databases 28,
@@ -380,10 +379,16 @@ pausing, saving and leaving are Chanoma's.
   a PipeWire stream of 512-frame cycles (about 11 ms). Frames are paced by
   the clock; the resampling ratio leans by at most half a per cent toward
   60 ms buffered, absorbing the sound card's drift.
-- **Saves**: the core's save RAM is read before the game starts and
-  written when it changes (checked every 30 seconds) and at the end.
-  Leaving keeps the core's whole state and a PNG of the last frame (the
-  *Keep playing* tile); the next start carries on from it.
+- **Saves.** Chanoma loads the core's battery save when the game starts.
+  It writes changes every 30 seconds and when the game ends. A failed
+  write shows a message and leaves the changed bytes due for the next
+  write. Leaving also saves the core's state for the next session and a
+  PNG of its last frame for *Keep playing*.
+  The three filenames use the SHA-256 of the game key (system and path
+  relative to the games folder). Older saves, states and pictures with
+  flattened filenames still load until the game writes a new one. If
+  two games previously shared a filename, both can read that original
+  and each writes its own progress from then on.
 - Callbacks have no context in libretro, so the running core's host is
   one process-wide pointer: one game at a time. Cores run in Chanoma's
   process; a core that crashes takes Chanoma with it, and the autostart
@@ -1468,14 +1473,9 @@ before calling any of it tested on hardware.
   Settings' *Forget Chanoma's PIN*, chooses the grown-up PIN: a grown-up
   starts it then.
 - The TV account's PIN is its account's password. sshd refuses the
-  account (the module's `DenyUsers`); any other service that checks
-  passwords through PAM would take the PIN.
-- Controllers pair again by themselves because every Bluetooth device
-  does: BlueZ's `JustWorksRepairing = always` has no list of devices, and
-  it's set on every system Chanoma comes with. Something nearby that
-  takes a paired keyboard's address would pair as that keyboard without
-  anyone being asked. Not tried: Chanoma confirming for its own
-  controllers alone, which BlueZ's `confirm` would allow.
+  managed account through its `aizome-tv-kiosk` group, even after Chanoma
+  is disabled. Other services that check
+  passwords through PAM can accept the PIN.
 - The rules are for a kid holding a controller. Over a page a keyboard
   and a mouse belong to the browser's window (The way home), all but
   Home and F1, so Chrome's own shortcuts, its context menu, its DevTools

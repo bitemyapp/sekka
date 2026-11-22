@@ -45,7 +45,7 @@ pub fn prepare(cfg: &Config) -> Option<SettingsFile> {
 fn prepare_inner(cfg: &Config) -> Result<Option<SettingsFile>, String> {
     let state = State::load(&cfg.state);
     let users = crate::users::find(&cfg.hidden_users);
-    let Some(user) = user(&state, &users) else { return Ok(None) };
+    let Some(user) = user(&state, &users.visible) else { return Ok(None) };
     let bus = aizome_sys::Bus::system().map_err(|e| e.to_string())?;
     let text = aizome_sys::users::display_scales(&bus, user.uid).map_err(|e| e.to_string())?;
     let scales = DisplayScales::from_toml(&text).ok_or("invalid display scales")?;

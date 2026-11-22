@@ -305,7 +305,7 @@ pub fn system_of(path: &Path, root: &Path, discs: Discs) -> Option<&'static Syst
 fn folder_system(path: &Path, root: &Path) -> Option<&'static System> {
     path.ancestors()
         .skip(1)
-        .take_while(|d| *d != root && d.starts_with(root))
+        .take_while(|d| d.starts_with(root))
         .find_map(|d| d.file_name().and_then(|n| system_named(&n.to_string_lossy())))
 }
 
@@ -367,8 +367,14 @@ pub struct Game {
 }
 
 impl Game {
-    /// A file-name-safe form of the key, for saves.
+    /// The full game key, including its separators, hashed to a bounded filename.
     pub fn file_key(&self) -> String {
+        use sha2::{Digest, Sha256};
+        format!("{:x}", Sha256::digest(self.key.as_bytes()))
+    }
+
+    /// The name previous versions used for saved games. Only read it.
+    pub fn legacy_file_key(&self) -> String {
         self.key.chars().map(|c| if c == '/' || c == '\\' { '~' } else { c }).collect()
     }
 }
@@ -772,7 +778,7 @@ pub fn find_games(
         for f in &files {
             let Some(system) = system_of(f, &root, &mut discs) else { continue };
             // The nearest folder named for the system, else the game's own.
-            let named = f.ancestors().skip(1).take_while(|d| d.starts_with(&root) && *d != root).find(|d| {
+            let named = f.ancestors().skip(1).take_while(|d| d.starts_with(&root)).find(|d| {
                 d.file_name().is_some_and(|n| system.folders.contains(&folder_key(&n.to_string_lossy()).as_str()))
             });
             let folder = named.or(f.parent()).unwrap_or(&root).to_path_buf();
@@ -1182,7 +1188,13 @@ mod tests {
         assert_eq!(lib.games[1].art.as_deref(), Some(games.join("SNES/media/Kirby (USA).png").as_path()));
         // The NES and Nintendo 64 games have no cores here.
         assert_eq!(lib.unplayable, 2);
-        assert_eq!(lib.games[0].file_key(), "psx~PS1~Disc.cue");
+        assert_eq!(lib.games[0].legacy_file_key(), "psx~PS1~Disc.cue");
+        let mut game = lib.games[0].clone();
+        game.key = "psx/PS1~Disc.cue".into();
+        assert_eq!(game.legacy_file_key(), lib.games[0].legacy_file_key());
+        assert_ne!(game.file_key(), lib.games[0].file_key());
+        game.key = "nested/".repeat(80);
+        assert_eq!(game.file_key().len(), 64);
         let _ = std::fs::remove_dir_all(&d);
     }
 
@@ -1200,7 +1212,13 @@ mod tests {
         }
         std::fs::write(games.join("N64/Fourth.zip"), crate::zip::tests::zip(&[("Fourth.z64", b"cartridge")], true))
             .unwrap();
-        let lib = scan(&mut index(&d), &[games], &[cores], None, &mut Default::default(), true, &|_| {});
+        let mut idx = index(&d);
+        let found = find_games(&mut idx, &[("Drive".into(), games.clone())], true, &|_, _| {});
+        let suggested = found.iter().find(|f| f.folder == games.join("N64")).unwrap();
+        let installed = Cores::scan(std::slice::from_ref(&cores));
+        let (picked, _) = scan_games(&mut idx, std::slice::from_ref(&suggested.folder), &installed, true);
+        assert!(picked.iter().any(|game| game.path.ends_with("Fourth.zip")));
+        let lib = scan(&mut idx, &[games], &[cores], None, &mut Default::default(), true, &|_| {});
         assert_eq!(lib.games.len(), 4);
         assert_eq!(lib.unplayable, 0);
         for g in &lib.games {

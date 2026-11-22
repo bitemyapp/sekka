@@ -1,6 +1,6 @@
 # Chanoma comes with Aizome, whole, with nothing to turn on: the app, its
 # browser where the system may have Google Chrome, and its controllers
-# pairing again by themselves. Evaluated for Aizome's module alone (with
+# reconnecting under the system's pairing policy. Evaluated for Aizome's module alone (with
 # unfree packages allowed and refused), the live media, and the installed
 # Aizome system the media carries. The installed
 # system the binary cache publishes refuses unfree packages, and has no
@@ -64,11 +64,18 @@ in
 # With Aizome, and with what its services and controllers need.
 assert hasChanoma on;
 assert browsers on == [ "google-chrome" ];
-assert (bluetooth on).JustWorksRepairing == "always" && (bluetooth on).FastConnectable;
+assert (bluetooth on).FastConnectable && !(bluetooth on ? JustWorksRepairing);
+# The desktop entry uses the catalog's keyring wrapper. The TV keeps
+# its own browser profiles and receives the raw executable by store path.
+assert lib.all (p: toString p != toString on.programs.aizome.chanoma.browser) (packages on);
+assert builtins.elem "CHANOMA_BROWSER=${lib.getExe on.programs.aizome.chanoma.browser}" (
+  lib.splitString "\n" on.environment.etc."xdg/aizome/environment".text
+);
 # Nothing starts by itself, and the TV account's PIN is no way in over the
 # network, wherever Settings may make that account.
 assert !(on.systemd.user.services ? aizome-chanoma);
-assert on.services.openssh.settings.DenyUsers == [ "tv" ];
+assert on.services.openssh.settings.DenyUsers == null;
+assert builtins.elem "aizome-tv-kiosk" on.services.openssh.settings.DenyGroups;
 # Where unfree packages are refused it still comes, without the browser.
 assert hasChanoma free;
 assert free.programs.aizome.chanoma.browser == null && browsers free == [ ];
@@ -76,12 +83,13 @@ assert free.programs.aizome.chanoma.browser == null && browsers free == [ ];
 assert !hasChanoma off && browsers off == [ ];
 assert !(bluetooth off ? JustWorksRepairing) && !(bluetooth off ? FastConnectable);
 assert off.services.openssh.settings.DenyUsers == null;
+assert builtins.elem "aizome-tv-kiosk" off.services.openssh.settings.DenyGroups;
 # The live media and the installed system it carries are as the module
 # alone is.
 assert installer.config.nixpkgs.config.allowUnfree && media.nixpkgs.config.allowUnfree;
 assert hasChanoma installer.config && browsers installer.config == [ "google-chrome" ];
 assert hasChanoma media && browsers media == [ "google-chrome" ];
-assert (bluetooth media).JustWorksRepairing == "always";
+assert (bluetooth media).FastConnectable && !(bluetooth media ? JustWorksRepairing);
 # The published system refuses unfree packages: Chanoma, and no Chrome.
 assert !published.nixpkgs.config.allowUnfree;
 assert hasChanoma published;

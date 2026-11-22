@@ -88,11 +88,18 @@ pub fn parse(
     users
 }
 
-/// The people on this system who can log in.
-pub fn find(hidden: &[String]) -> Vec<User> {
+/// Accounts shown in the chooser and the TV record, even if its name is hidden.
+pub struct Accounts {
+    pub visible: Vec<User>,
+    pub tv: Option<TvAccount>,
+}
+
+pub fn find(hidden: &[String]) -> Accounts {
     let defs = std::fs::read_to_string("/etc/login.defs").unwrap_or_default();
     let passwd = std::fs::read_to_string("/etc/passwd").unwrap_or_default();
-    parse(&passwd, uid_range(&defs), hidden, Path::new(ICONS), TvAccount::read().as_ref())
+    let tv = TvAccount::read();
+    let visible = parse(&passwd, uid_range(&defs), hidden, Path::new(ICONS), tv.as_ref());
+    Accounts { visible, tv }
 }
 
 #[cfg(test)]

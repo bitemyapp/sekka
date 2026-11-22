@@ -210,6 +210,7 @@ fn an_opengl_core_draws_and_its_frames_come_the_right_way_up() {
         core: CoreSource::Api(api()),
         game: dir.join("game.gdi"),
         save_ram: dir.join("game.srm"),
+        legacy_key: None,
         state: dir.join("game.state"),
         picture: dir.join("game.png"),
         resume: false,

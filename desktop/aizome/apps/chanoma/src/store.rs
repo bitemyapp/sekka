@@ -145,6 +145,21 @@ pub fn read_kept<T: for<'de> Deserialize<'de>>(path: &Path) -> Kept<T> {
     }
 }
 
+/// Read a legacy game save until this version has written its own. Two old game
+/// keys could share a filename, so the original stays available to both.
+pub fn existing_game_file(path: &Path, legacy_key: Option<&str>) -> PathBuf {
+    if let Some(key) = legacy_key
+        && matches!(path.try_exists(), Ok(false))
+        && let Some(ext) = path.extension().and_then(|ext| ext.to_str())
+    {
+        let old = path.with_file_name(format!("{key}.{ext}"));
+        if old.is_file() {
+            return old;
+        }
+    }
+    path.to_owned()
+}
+
 /// Write `value` to `path` whole: a sibling file renamed over it.
 pub fn write<T: Serialize>(path: &Path, value: &T) -> std::io::Result<()> {
     let bytes = serde_json::to_vec_pretty(value).map_err(std::io::Error::other)?;

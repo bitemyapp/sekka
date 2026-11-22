@@ -88,12 +88,14 @@ impl Chanoma {
         // fetched); else where it was left, if it was played; else none,
         // and the tile draws its sprite.
         let played = || self.recent.items.iter().any(|i| matches!(i, Item::Game { key } if *key == g.key));
-        let (art, pixels) = if picture && state.is_file() {
-            (Some(state), true)
+        let saved_picture = || crate::store::existing_game_file(&state, Some(&g.legacy_file_key()));
+        let recent_picture = picture.then(saved_picture).filter(|p| p.is_file());
+        let (art, pixels) = if let Some(saved) = recent_picture {
+            (Some(saved), true)
         } else if let Some(a) = g.art.clone().or_else(|| self.box_art(g)) {
             (Some(a), false)
         } else if played() {
-            (Some(state), true)
+            (Some(saved_picture()), true)
         } else {
             (None, false)
         };

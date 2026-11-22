@@ -30,6 +30,7 @@ import time
 APP = "org.aizome.Chanoma"
 PIN = "2468"
 GAME_KEY = "gb/gb/Chanoma Test (World).zip"
+SAVE_KEY = hashlib.sha256(GAME_KEY.encode()).hexdigest()
 
 
 def user(command):
@@ -194,14 +195,26 @@ with subtest("Home pauses it and stopping keeps where it was"):
     pad("tap down")
     pad("tap south")
     until("Home again", lambda: logged("chanoma: Home"))
-    machine.succeed(f"test -s '/home/alice/.local/share/aizome/chanoma/states/{GAME_KEY.replace('/', '~')}.state'")
-    machine.succeed(f"test -s '/home/alice/.local/share/aizome/chanoma/states/{GAME_KEY.replace('/', '~')}.png'")
+    machine.succeed(f"test -s '/home/alice/.local/share/aizome/chanoma/states/{SAVE_KEY}.state'")
+    machine.succeed(f"test -s '/home/alice/.local/share/aizome/chanoma/states/{SAVE_KEY}.png'")
 
-with subtest("a controller that comes back is player 1 again"):
-    pad("unplug")
-    until("Chanoma sees it go", lambda: logged("went (player 1)"))
+with subtest("unplugging and reconnecting player one leaves player two connected"):
+    pad("second-on")
+    until("the second controller is connected", lambda: logged("is player 2"))
+    # Queue both the evdev hangup and the directory notification in one poll.
+    child = machine.succeed("pgrep -n -u alice -f '[.]aizome-chanoma-wrapped'").strip()
+    machine.succeed(f"kill -STOP {child}")
+    try:
+        pad("unplug")
+        machine.succeed("udevadm settle")
+    finally:
+        machine.succeed(f"kill -CONT {child}")
+    until("Chanoma sees player one go", lambda: logged("went (player 1)"))
     pad("plug")
     until("and come back", lambda: logged("is player 1", 2))
+    assert not logged("went (player 2)"), "unplugging player one disconnected player two"
+    pad("second-off")
+    until("player two goes when unplugged", lambda: logged("went (player 2)"))
 
 def browser():
     # Not any other window: Aizome's welcome tour opens at a first login.
@@ -386,12 +399,12 @@ with subtest("leaving with the session keeps a game too"):
     pad("tap south")
     until("the game plays again", lambda: logged("chanoma: Playing", 2))
     before = machine.succeed(
-        f"stat -c %Y '/home/alice/.local/share/aizome/chanoma/states/{GAME_KEY.replace('/', '~')}.state'"
+        f"stat -c %Y '/home/alice/.local/share/aizome/chanoma/states/{SAVE_KEY}.state'"
     ).strip()
     time.sleep(1.5)
     user("systemctl --user stop aizome-chanoma")
     after = machine.succeed(
-        f"stat -c %Y '/home/alice/.local/share/aizome/chanoma/states/{GAME_KEY.replace('/', '~')}.state'"
+        f"stat -c %Y '/home/alice/.local/share/aizome/chanoma/states/{SAVE_KEY}.state'"
     ).strip()
     assert int(after) > int(before), (before, after)
 

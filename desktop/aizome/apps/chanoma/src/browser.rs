@@ -379,8 +379,8 @@ impl Browser {
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null());
-        let (child, pipe) = devtools::spawn(&mut command)?;
         let (asker, asked) = devtools::asking()?;
+        let (child, pipe) = devtools::spawn(&mut command)?;
         let pid = child.id() as i32;
         let child = Arc::new(Mutex::new(child));
         let window = Arc::new(Mutex::new(None));
@@ -446,7 +446,16 @@ impl Browser {
     /// End it: its window asked to close, the process stopped if it's
     /// still there in a few seconds. Doesn't wait.
     pub fn close(self) {
-        let _ = std::thread::Builder::new().name("chanoma-browser-close".into()).spawn(move || self.close_and_wait());
+        self.stop.store(true, Ordering::Release);
+        let child = self.child.clone();
+        if let Err(e) =
+            std::thread::Builder::new().name("chanoma-browser-close".into()).spawn(move || self.close_and_wait())
+        {
+            log::warn!("chanoma: couldn't start the browser cleanup thread: {e}");
+            let mut child = child.lock().unwrap_or_else(|e| e.into_inner());
+            let _ = child.kill();
+            let _ = child.wait();
+        }
     }
 
     /// End it, waiting until it has (Chanoma leaving: a browser left
@@ -458,17 +467,18 @@ impl Browser {
         {
             let _ = c.request(&Request::Close { id: Some(id) });
         }
-        // SAFETY: a signal to the browser this process started.
-        unsafe { libc::kill(self.pid, libc::SIGTERM) };
+        let mut child = self.child.lock().unwrap_or_else(|e| e.into_inner());
+        if !matches!(child.try_wait(), Ok(None)) {
+            return;
+        }
+        // SAFETY: the child is unreaped and only holders of this mutex may
+        // reap it, so its PID cannot be reassigned before the signal.
+        unsafe { libc::kill(child.id() as i32, libc::SIGTERM) };
         let deadline = Instant::now() + Duration::from_secs(5);
-        loop {
-            let done = self.child.lock().map(|mut c| matches!(c.try_wait(), Ok(Some(_)))).unwrap_or(true);
-            if done {
-                return;
-            }
-            if Instant::now() > deadline {
-                let _ = self.child.lock().map(|mut c| c.kill());
-                let _ = self.child.lock().map(|mut c| c.wait());
+        while matches!(child.try_wait(), Ok(None)) {
+            if Instant::now() >= deadline {
+                let _ = child.kill();
+                let _ = child.wait();
                 return;
             }
             std::thread::sleep(Duration::from_millis(100));
@@ -523,7 +533,10 @@ fn follow(
         if stop.load(Ordering::Acquire) {
             return;
         }
-        let exited = child.lock().map(|mut c| matches!(c.try_wait(), Ok(Some(_)))).unwrap_or(true);
+        if child.lock().map(|mut c| matches!(c.try_wait(), Ok(Some(_)))).unwrap_or(true) {
+            events(Event::Gone);
+            return;
+        }
         if client.is_none() {
             client = aizome_ipc::Client::connect().ok();
         }
@@ -569,7 +582,7 @@ fn follow(
                 }
             }
         }
-        if exited || (shown.is_none() && started.elapsed() > Duration::from_secs(60)) {
+        if shown.is_none() && started.elapsed() > Duration::from_secs(60) {
             events(Event::Gone);
             return;
         }

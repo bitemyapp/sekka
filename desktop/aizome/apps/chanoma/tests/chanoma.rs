@@ -694,10 +694,15 @@ fn a_game_plays_pauses_and_carries_on_where_it_was_left() {
     input(&mut h, Input::Dir(Dir::Down));
     input(&mut h, Input::Ok);
     assert_eq!(h.program().screen, Screen::Home);
-    let state = dirs.states().join("snes~snes~Test Quest (USA).sfc.state");
+    let file = h.program().library.games.iter().find(|g| g.title == "Test Quest").unwrap().file_key();
+    let state = dirs.states().join(format!("{file}.state"));
     assert!(exists(&state), "{}", state.display());
-    assert!(exists(&dirs.states().join("snes~snes~Test Quest (USA).sfc.png")));
+    assert!(exists(&dirs.states().join(format!("{file}.png"))));
     let left_at = FRAMES.load(Ordering::SeqCst);
+    // An existing installation has the old flattened filename. It still
+    // resumes, and its next save goes to the game's unique filename.
+    let legacy = dirs.states().join("snes~snes~Test Quest (USA).sfc.state");
+    std::fs::rename(&state, &legacy).unwrap();
     // It leads Home now, and carries on from there.
     let home = h.program().home_view();
     assert_eq!(home.shelves[0].title, "Keep playing");
@@ -711,10 +716,12 @@ fn a_game_plays_pauses_and_carries_on_where_it_was_left() {
         std::thread::sleep(Duration::from_millis(10));
     }
     assert!(FRAMES.load(Ordering::SeqCst) >= left_at);
+    assert!(h.program().toast.as_ref().is_some_and(|t| t.0 == "Carrying on where you left off"));
     press(&mut h, Button::Guide);
     input(&mut h, Input::Dir(Dir::Down));
     input(&mut h, Input::Dir(Dir::Down));
     input(&mut h, Input::Ok);
+    assert!(exists(&state) && exists(&legacy));
 }
 
 /// Choose the tile called `label` at Home.
@@ -965,11 +972,11 @@ fn a_page_always_has_a_way_home_by_keyboard_and_mouse() {
 
     // The page shows: how to come back is said over it, and a strip along
     // the top waits for the pointer.
-    h.send(Msg::Browser(aizome_chanoma::browser::Event::Shown(7)));
+    h.send(Msg::Browser(h.program().page_serial, aizome_chanoma::browser::Event::Shown(7)));
     assert_eq!(h.program().toast.as_ref().map(|t| t.0.as_str()), Some("Press Home on the controller to come back"));
     // Kept to the service in kids' mode: a link elsewhere stays, said so.
     assert!(h.program().page.as_ref().is_some_and(|p| p.browser.is_kept()));
-    h.send(Msg::Browser(aizome_chanoma::browser::Event::Outside("www.example.com".into())));
+    h.send(Msg::Browser(h.program().page_serial, aizome_chanoma::browser::Event::Outside("www.example.com".into())));
     assert_eq!(h.program().toast.as_ref().map(|t| t.0.as_str()), Some("That's outside PBS KIDS Video"));
     assert_eq!(h.program().screen, Screen::Watching);
     let edge = h.program().edge.expect("the strip along the top");
@@ -1000,7 +1007,7 @@ fn a_page_always_has_a_way_home_by_keyboard_and_mouse() {
 
     // Home on the keyboard over the page, which the compositor keeps for
     // Chanoma: the menu; Down and Return go home.
-    h.send(Msg::Browser(aizome_chanoma::browser::Event::Home));
+    h.send(Msg::Browser(h.program().page_serial, aizome_chanoma::browser::Event::Home));
     assert!(page_menu(&h), "Home on the keyboard");
     let hud = over(&mut h);
     shot_of(&mut h, hud, "12-page-menu");
@@ -1010,11 +1017,27 @@ fn a_page_always_has_a_way_home_by_keyboard_and_mouse() {
     let a = h.program();
     assert!(a.page.is_none() && a.edge.is_none() && a.hud.is_none(), "the page and what was over it, gone");
 
+    // A late event from the previous browser leaves the new page open.
+    // Losing the current window also stops and reaps its process.
+    let old = h.program().page_serial;
+    input(&mut h, Input::Ok);
+    let pid = h.program().page.as_ref().unwrap().browser.pid;
+    h.send(Msg::Browser(old, aizome_chanoma::browser::Event::Gone));
+    assert_eq!(h.program().page.as_ref().unwrap().browser.pid, pid);
+    h.send(Msg::Browser(h.program().page_serial, aizome_chanoma::browser::Event::Gone));
+    assert_eq!(h.program().screen, Screen::Home);
+    let proc = PathBuf::from(format!("/proc/{pid}"));
+    let end = Instant::now() + Duration::from_secs(10);
+    while proc.exists() {
+        assert!(Instant::now() < end, "the browser child was left running");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+
     // Again from Keep playing, in a browser that can't be kept to the
     // service: it's ended, and the screen says why.
     input(&mut h, Input::Ok);
     assert_eq!(h.program().screen, Screen::Watching);
-    h.send(Msg::Browser(aizome_chanoma::browser::Event::Unkept));
+    h.send(Msg::Browser(h.program().page_serial, aizome_chanoma::browser::Event::Unkept));
     assert!(h.program().page.is_none());
     assert!(matches!(&h.program().screen, Screen::Problem(t, _) if t == "PBS KIDS Video didn't open"));
 }
@@ -1128,16 +1151,17 @@ fn checking_a_folder_shows_quietly_on_home_how_far_it_got_then_what_it_found() {
     let games = cores.parent().unwrap().join("Games");
     let clock = ManualClock::at(2026, 10, 31, 17, 0);
     let mut h = harness(config(dirs, cores, clock));
+    let generation = h.program().scan_generation;
     let activity = |h: &Harness<Chanoma>| h.program().chrome(Vec::new()).activity;
     assert_eq!(activity(&h), None, "nothing going on");
     let look = |folders, files, parts, over| Look { folder: Some(games.clone()), folders, files, parts, over };
     // A look the index answers at once (its only word is that it's over)
     // isn't shown.
-    h.send(Msg::Looking(look(3, 40, Some((2, 2)), true)));
+    h.send(Msg::Looking(generation, look(3, 40, Some((2, 2)), true)));
     assert_eq!(activity(&h), None);
     // One that goes on: which folder, how far through its own folders, and
     // how many files so far.
-    h.send(Msg::Looking(look(212, 4812, Some((12, 31)), false)));
+    h.send(Msg::Looking(generation, look(212, 4812, Some((12, 31)), false)));
     let a = activity(&h).expect("shown");
     // Every start looks: it says why.
     assert_eq!(a.label, "Checking Games for new games");
@@ -1146,23 +1170,106 @@ fn checking_a_folder_shows_quietly_on_home_how_far_it_got_then_what_it_found() {
     shot(&mut h, "15-home-reading");
     // Then the games recognised, then what it found for a while (longer
     // than the toast that may hide it): here, nothing new.
-    h.send(Msg::Looking(Look::default()));
+    h.send(Msg::Looking(generation, Look::default()));
     assert_eq!(activity(&h).map(|a| a.label).as_deref(), Some("Recognising the games"));
     let library = h.program().library.clone();
-    h.send(Msg::Scanned(library.clone(), true));
+    h.send(Msg::Scanned(generation, library.clone(), true));
     let a = activity(&h).expect("what it found");
     assert_eq!((a.label.as_str(), a.count.as_str(), a.progress), ("Checked Games", "Nothing new", Some(1000)));
     shot(&mut h, "15-home-checked");
     h.advance(aizome_chanoma::app::LOOK_SAID);
     assert_eq!(activity(&h), None);
     // Another look, finding a game more: it says so.
-    h.send(Msg::Looking(look(212, 4813, Some((30, 31)), false)));
+    h.send(Msg::Looking(generation, look(212, 4813, Some((30, 31)), false)));
     let mut more = (*library).clone();
     let mut game = more.games[0].clone();
     game.key.push_str(" II");
     more.games.push(game);
-    h.send(Msg::Scanned(std::sync::Arc::new(more), true));
+    let latest = Arc::new(more);
+    h.send(Msg::Scanned(generation, latest.clone(), true));
+    h.send(Msg::Looking(generation - 1, Look::default()));
+    h.send(Msg::Scanned(generation - 1, library.clone(), false));
+    h.send(Msg::Scanned(generation - 1, library, true));
+    assert!(Arc::ptr_eq(&h.program().library, &latest), "a superseded scan cannot restore the old collection");
+    assert!(h.program().looking.is_none(), "a superseded scan's progress is ignored too");
     assert_eq!(activity(&h).map(|a| a.count).as_deref(), Some("1 new game"));
+}
+
+#[test]
+fn incomplete_controller_setup_keeps_the_previous_layout() {
+    use aizome_chanoma::app::state::{load_layouts, save_layouts};
+    use aizome_chanoma::pad::mapping::{Input as PadInput, Mapping, Output, Source};
+    let (dirs, cores) = household("incomplete-pad", |_| {});
+    let buttons = [Button::South, Button::East, Button::Up, Button::Down, Button::Left, Button::Right];
+    let original = Mapping {
+        binds: buttons.into_iter().enumerate().map(|(i, b)| (PadInput::Key(i as u16), Output::Button(b))).collect(),
+        source: Source::SetUp,
+    };
+    let layouts = [(String::new(), original)].into_iter().collect();
+    save_layouts(&dirs, &layouts);
+    let clock = ManualClock::at(2026, 10, 31, 17, 0);
+    let mut h = harness(config(dirs.clone(), cores, clock));
+    into_settings(&mut h);
+    to_section(&mut h, 5);
+    to_row(&mut h, "Player 1: Xbox Wireless Controller");
+    input(&mut h, Input::Ok);
+    assert_eq!(h.program().screen, Screen::SetUpPad);
+    for _ in 0..19 {
+        h.program_mut().setup.as_mut().unwrap().since = Instant::now() - Duration::from_secs(9);
+        h.send(Msg::Tick);
+    }
+    assert_eq!(h.program().screen, Screen::GrownUps);
+    assert_eq!(h.program().layouts, layouts);
+    assert_eq!(load_layouts(&dirs), layouts);
+    to_section(&mut h, 5);
+    to_row(&mut h, "Player 1: Xbox Wireless Controller");
+    input(&mut h, Input::Ok);
+    h.send(Msg::Pad(PadEvent::Disconnected { id: 1, slot: 0 }));
+    assert_eq!(h.program().screen, Screen::GrownUps);
+    assert!(h.program().setup.is_none());
+    assert_eq!(load_layouts(&dirs), layouts);
+}
+
+#[test]
+fn idle_relock_ends_controller_pairing_and_discards_its_replies() {
+    // Run the real pairing screen without access to the workstation's Bluetooth.
+    const NO_BUS: &str = "unix:path=/dev/null";
+    if std::env::var("DBUS_SYSTEM_BUS_ADDRESS").as_deref() != Ok(NO_BUS) {
+        let status = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "idle_relock_ends_controller_pairing_and_discards_its_replies"])
+            .env("DBUS_SYSTEM_BUS_ADDRESS", NO_BUS)
+            .status()
+            .unwrap();
+        assert!(status.success());
+        return;
+    }
+    let (dirs, cores) = household("pairing-relock", |_| {});
+    let mut h = harness(config(dirs, cores, ManualClock::at(2026, 10, 31, 17, 0)));
+    let open = |h: &mut Harness<Chanoma>| {
+        into_settings(h);
+        to_section(h, 5);
+        to_row(h, "Pair a controller…");
+        input(h, Input::Ok);
+        assert_eq!(h.program().screen, Screen::Pairing);
+    };
+    let device = "/org/bluez/hci0/dev_AA_BB_CC_DD_EE_FF";
+    open(&mut h);
+    h.program_mut().pairing.as_mut().unwrap().pending.insert(device.into());
+    h.program_mut().grownup = Some(Instant::now() - Duration::from_secs(16 * 60));
+    h.send(Msg::Tick);
+    assert_eq!(h.program().screen, Screen::Home);
+    assert!(h.program().pairing.is_none(), "the old pairing screen and its requests are closed");
+    h.send(Msg::Bluetooth(1));
+    h.send(Msg::Paired(1, device.into(), Ok(())));
+    assert!(h.program().pairing.is_none());
+
+    // A late reply for the same device cannot finish a later session's request.
+    open(&mut h);
+    h.program_mut().pairing.as_mut().unwrap().pending.insert(device.into());
+    h.send(Msg::Paired(1, device.into(), Ok(())));
+    assert!(h.program().pairing.as_ref().unwrap().pending.contains(device));
+    h.send(Msg::Paired(2, device.into(), Ok(())));
+    assert!(!h.program().pairing.as_ref().unwrap().pending.contains(device));
 }
 
 /// A controller told to rumble does until it's told to stop: a game paused
@@ -1178,6 +1285,7 @@ fn a_games_rumble_stops_when_it_pauses_and_when_it_ends() {
         core: CoreSource::Api(test_core()),
         game,
         save_ram: here.join("game.srm"),
+        legacy_key: None,
         state: here.join("game.state"),
         picture: here.join("game.png"),
         resume: false,
@@ -1231,7 +1339,7 @@ fn typing(h: &Harness<Chanoma>) -> Option<&aizome_chanoma::app::typing::Typing> 
 }
 
 fn focused(h: &mut Harness<Chanoma>, f: Focused) {
-    h.send(Msg::Browser(aizome_chanoma::browser::Event::Focused(f)));
+    h.send(Msg::Browser(h.program().page_serial, aizome_chanoma::browser::Event::Focused(f)));
 }
 
 fn search_box(text: &str) -> Focused {
@@ -1256,7 +1364,7 @@ fn a_box_chosen_on_a_page_brings_chanomas_keyboard_but_not_on_youtube() {
     let clock = ManualClock::at(2026, 10, 31, 17, 0);
     let mut h = harness(config(dirs, cores, clock));
     input(&mut h, Input::Ok);
-    h.send(Msg::Browser(aizome_chanoma::browser::Event::Shown(7)));
+    h.send(Msg::Browser(h.program().page_serial, aizome_chanoma::browser::Event::Shown(7)));
     assert!(h.program().page.as_ref().is_some_and(|p| p.keyboard));
 
     // A click (A) on the page lands on a search box, the page says: the
@@ -1331,7 +1439,7 @@ fn a_box_chosen_on_a_page_brings_chanomas_keyboard_but_not_on_youtube() {
         .expect("YouTube on Home");
     h.send(Msg::Click(aizome_chanoma::ui::Target::Tile(row, col)));
     assert_eq!(h.program().page.as_ref().map(|p| p.name.as_str()), Some("YouTube"));
-    h.send(Msg::Browser(aizome_chanoma::browser::Event::Shown(8)));
+    h.send(Msg::Browser(h.program().page_serial, aizome_chanoma::browser::Event::Shown(8)));
     press(&mut h, Button::South);
     focused(&mut h, search_box(""));
     press(&mut h, Button::Select);
@@ -1359,7 +1467,8 @@ fn when_time_runs_out_the_game_is_kept_and_a_grown_up_can_give_more() {
     h.send(Msg::Tick);
     assert_eq!(h.program().screen, Screen::Closed);
     assert!(h.program().game.is_none());
-    assert!(exists(&dirs.states().join("snes~snes~Test Quest (USA).sfc.state")), "kept where it was left");
+    let file = h.program().library.games.iter().find(|g| g.title == "Test Quest").unwrap().file_key();
+    assert!(exists(&dirs.states().join(format!("{file}.state"))), "kept where it was left");
     shot(&mut h, "11-times-up");
     // Kids can't start anything now.
     input(&mut h, Input::Home);
@@ -2426,6 +2535,13 @@ fn changing_the_pin_asks_for_the_pin_there_is_and_kids_mode_takes_a_pad_left_ope
     assert_eq!(h.program().modal, None, "a new PIN isn't a kid's to choose");
     assert!(h.program().settings.pin.as_ref().is_some_and(|p| p.verify(PIN)));
 
+    // A hash completing after its pad was dismissed leaves the old PIN in place.
+    h.program_mut().grownup = Some(Instant::now());
+    h.send(Msg::PinMade(0, 6, PinHash::new("913579", 10)));
+    assert_eq!(h.program().settings.pin_length, Some(4));
+    assert!(h.program().settings.pin.as_ref().unwrap().verify(PIN));
+    h.program_mut().grownup = None;
+
     // A grown-up changes it: the PIN, then the new one twice.
     into_settings(&mut h);
     to_section(&mut h, 6);
@@ -2434,10 +2550,11 @@ fn changing_the_pin_asks_for_the_pin_there_is_and_kids_mode_takes_a_pad_left_ope
     type_pin(&mut h, PIN);
     until(&mut h, |a| matches!(&a.modal, Some(Modal::Pin { pin, .. }) if pin.new));
     for _ in 0..2 {
-        type_pin(&mut h, "1357");
+        type_pin(&mut h, "135790");
         press(&mut h, Button::South);
     }
-    until(&mut h, |a| a.settings.pin.as_ref().is_some_and(|p| p.verify("1357")));
+    until(&mut h, |a| a.settings.pin.as_ref().is_some_and(|p| p.verify("135790")));
+    assert_eq!(h.program().settings.pin_length, Some(6));
     assert!(h.program().is_grownup());
     assert_eq!(h.program().screen, Screen::GrownUps);
     assert_eq!(h.program().lockout.failures, 0);

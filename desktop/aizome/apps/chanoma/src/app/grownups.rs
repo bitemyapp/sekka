@@ -201,8 +201,10 @@ fn cycle<T: PartialEq + Copy>(options: &[T], v: T, forward: bool) -> T {
 pub struct Pairing {
     pub bt: aizome_sys::bluetooth::Bluetooth,
     pub adapter: Option<String>,
-    /// Devices pairing was started for.
-    pub tried: HashSet<String>,
+    /// Devices whose Pair request has not yet completed.
+    pub pending: HashSet<String>,
+    /// Successful requests whose BlueZ snapshot may still say unpaired.
+    paired: HashSet<String>,
     /// What each found controller is doing, for the list.
     pub status: Vec<(String, String)>,
     pub connected: usize,
@@ -1153,18 +1155,30 @@ impl Chanoma {
     // Pairing.
 
     pub fn start_pairing(&mut self, cx: &mut Cx<Msg>) {
+        self.pairing_session += 1;
+        let session = self.pairing_session;
         let tx = self.sender.clone();
-        let bt = aizome_sys::bluetooth::Bluetooth::new(aizome_sys::Wake::new(move || {
+        let bt = aizome_sys::bluetooth::Bluetooth::for_pairing(aizome_sys::Wake::new(move || {
             if let Some(t) = &tx {
-                t.send(Msg::Bluetooth);
+                t.send(Msg::Bluetooth(session));
             }
         }));
-        self.pairing = Some(Pairing { bt, adapter: None, tried: HashSet::new(), status: Vec::new(), connected: 0 });
+        self.pairing = Some(Pairing {
+            bt,
+            adapter: None,
+            pending: HashSet::new(),
+            paired: HashSet::new(),
+            status: Vec::new(),
+            connected: 0,
+        });
         self.go(Screen::Pairing, cx);
-        self.bluetooth_changed(cx);
+        self.bluetooth_changed(session, cx);
     }
 
-    pub fn bluetooth_changed(&mut self, cx: &mut Cx<Msg>) {
+    pub fn bluetooth_changed(&mut self, session: u64, cx: &mut Cx<Msg>) {
+        if session != self.pairing_session {
+            return;
+        }
         let Some(p) = &mut self.pairing else { return };
         let state = p.bt.snapshot();
         if p.adapter.is_none()
@@ -1187,31 +1201,36 @@ impl Chanoma {
                 "pairing…"
             };
             status.push((name, what.to_owned()));
-            if !d.paired && p.tried.insert(d.path.clone()) {
-                let task = p.bt.pair(&d.path);
+            if !d.paired && !p.paired.contains(&d.path) && p.pending.insert(d.path.clone()) {
+                let task = p.bt.pair_only(&d.path);
                 let path = d.path.clone();
-                cx.spawn(move || Msg::Paired(path, task.wait().map_err(|e| e.to_string())));
+                cx.spawn(move || Msg::Paired(session, path, task.wait().map_err(|e| e.to_string())));
             }
         }
         p.status = status;
     }
 
-    pub fn paired(&mut self, device: String, result: Result<(), String>, cx: &mut Cx<Msg>) {
+    pub fn paired(&mut self, session: u64, device: String, result: Result<(), String>, cx: &mut Cx<Msg>) {
+        if session != self.pairing_session {
+            return;
+        }
         let Some(p) = &mut self.pairing else { return };
+        if !p.pending.remove(&device) {
+            return;
+        }
         match result {
             Ok(()) => {
+                p.paired.insert(device.clone());
                 // Trusted, it reconnects by itself whenever it's switched on.
                 drop(p.bt.set_trusted(&device, true));
                 let task = p.bt.connect(&device);
                 cx.spawn(move || {
                     let _ = task.wait();
-                    Msg::Bluetooth
+                    Msg::Bluetooth(session)
                 });
             }
             Err(e) => {
                 log::warn!("chanoma: pairing {device}: {e}");
-                // Tried again when it shows up next.
-                p.tried.remove(&device);
             }
         }
     }
@@ -1239,12 +1258,17 @@ impl Chanoma {
     }
 
     pub fn stop_pairing(&mut self, cx: &mut Cx<Msg>) {
-        if let Some(p) = self.pairing.take()
-            && let Some(a) = &p.adapter
-        {
-            drop(p.bt.stop_discovery(a));
-        }
         self.open_grownups(Some(CONTROLLERS), cx);
+    }
+
+    pub(super) fn end_pairing(&mut self) {
+        let Some(pairing) = self.pairing.take() else { return };
+        if let Some(adapter) = &pairing.adapter {
+            drop(pairing.bt.stop_discovery(adapter));
+        }
+        for device in &pairing.pending {
+            drop(pairing.bt.cancel_pairing(device));
+        }
     }
 
     // Setting a controller's buttons up.
@@ -1300,10 +1324,6 @@ impl Chanoma {
     }
 
     pub fn cancel_setup(&mut self, cx: &mut Cx<Msg>) {
-        self.setup = None;
-        if let Some(p) = &self.pads {
-            p.raw(false);
-        }
         self.open_grownups(Some(CONTROLLERS), cx);
     }
 
@@ -1315,13 +1335,21 @@ impl Chanoma {
             return;
         }
         let s = self.setup.take().expect("set up above");
-        self.layouts.insert(s.guid.clone(), Mapping { binds: s.binds, source: Source::SetUp });
+        let mapping = Mapping { binds: s.binds, source: Source::SetUp };
+        self.open_grownups(Some(CONTROLLERS), cx);
+        if !super::state::usable_layout(&mapping) {
+            self.toast_note(
+                crate::ui::Note::Controller,
+                "Set up the directions, OK and Back to change the layout.",
+                cx,
+            );
+            return;
+        }
+        self.layouts.insert(s.guid, mapping);
         super::state::save_layouts(&self.config.dirs, &self.layouts);
         if let Some(p) = &self.pads {
-            p.raw(false);
             p.set_layouts(self.layouts.clone());
         }
-        self.open_grownups(Some(CONTROLLERS), cx);
         self.toast_note(crate::ui::Note::Controller, format!("{} is set up", s.name), cx);
     }
 

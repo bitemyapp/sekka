@@ -10,7 +10,7 @@ use std::time::Duration;
 use aizome_gamepad::{PadEvent, Pads};
 use aizome_kit::prelude::*;
 use aizome_kit::{Anchors, Image, KeyboardInteractivity, Layer, LayerOptions, Margins, Menu, MenuItem, MenuStyle};
-use aizome_sys::tv::Auth;
+use aizome_sys::tv::{Auth, TvAccount};
 
 use crate::clock::Now;
 use crate::config::{Config, State};
@@ -19,7 +19,7 @@ use crate::login::{Launch, Login, Step};
 use crate::pads::{Couch, Spot};
 use crate::sessions::{Kind, Session};
 use crate::sofa;
-use crate::users::User;
+use crate::users::{Accounts, User};
 
 /// Where the login is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -120,6 +120,7 @@ pub struct Greeter {
     pub cfg: Config,
     pub state: State,
     pub users: Vec<User>,
+    tv: Option<TvAccount>,
     pub sessions: Vec<Session>,
     pub stage: Stage,
     /// The person in the row with the selection (the `People` stage) or
@@ -169,12 +170,13 @@ impl Greeter {
     pub fn with(
         cfg: Config,
         state: State,
-        users: Vec<User>,
+        accounts: Accounts,
         sessions: Vec<Session>,
         hostname: String,
         live: bool,
         demo: bool,
     ) -> Greeter {
+        let Accounts { visible: users, tv } = accounts;
         let last = state.last_user.as_ref().and_then(|u| users.iter().position(|x| &x.name == u));
         let tv_session = Session {
             id: "chanoma".into(),
@@ -197,6 +199,7 @@ impl Greeter {
             cfg,
             state,
             users,
+            tv,
             sessions,
             stage,
             selected: last.unwrap_or(0),
@@ -232,30 +235,38 @@ impl Greeter {
     }
 
     /// The user name the login is for.
-    fn username(&self) -> Option<String> {
+    fn username(&self) -> Option<&str> {
         match self.stage {
-            Stage::Name => self.login.user.clone(),
-            _ => self.user().map(|u| u.name.clone()),
+            Stage::Name => self.login.user.as_deref(),
+            _ => self.user().map(|u| u.name.as_str()),
         }
+    }
+
+    pub(crate) fn tv_login(&self) -> Option<&TvAccount> {
+        self.tv.as_ref().filter(|tv| Some(tv.user.as_str()) == self.username())
     }
 
     /// The session picked for whoever is logging in: theirs from last
     /// time, else the default, else the first. The TV account's is
     /// Chanoma's, always.
     pub fn session(&self) -> Option<&Session> {
-        if self.tv_auth().is_some() {
+        self.session_for(self.username())
+    }
+
+    fn session_for(&self, username: Option<&str>) -> Option<&Session> {
+        if self.tv.as_ref().is_some_and(|tv| Some(tv.user.as_str()) == username) {
             return Some(&self.tv_session);
         }
         let by_id = |id: &str| self.sessions.iter().find(|s| s.id == id);
-        self.username()
-            .and_then(|u| self.session_of.get(&u).cloned())
-            .and_then(|id| by_id(&id))
+        username
+            .and_then(|u| self.session_of.get(u))
+            .and_then(|id| by_id(id))
             .or_else(|| self.cfg.default_session.as_deref().and_then(by_id))
             .or_else(|| self.sessions.first())
     }
 
     fn launch(&self) -> Launch {
-        match self.session() {
+        match self.session_for(self.login.user.as_deref()) {
             Some(s) => Launch { cmd: s.command(&self.cfg.x11_prefix), env: s.env() },
             None => Launch { cmd: Vec::new(), env: Vec::new() },
         }
@@ -303,12 +314,16 @@ impl Greeter {
     }
 
     fn heard(&mut self, response: Response, cx: &mut Cx<Msg>) {
+        // Another seat may have created the TV account since the chooser opened.
+        if self.live && matches!(response, Response::Success) {
+            self.tv = TvAccount::read();
+        }
         let launch = self.launch();
         let failed = self.login.failed;
         let next = self.login.heard(response, &launch);
         self.send(next);
         // A PIN pressed whole before greetd asked for it goes now.
-        let length = self.user().and_then(|u| u.tv.as_ref()).and_then(|t| t.pin_length).map(usize::from);
+        let length = self.tv_login().and_then(|t| t.pin_length).map(usize::from);
         if self.couch.pin && matches!(self.login.step, Step::Ask { .. }) && length == Some(self.password.len()) {
             self.submit(cx);
         }
@@ -319,7 +334,9 @@ impl Greeter {
             cx.after(Duration::from_millis(30), Msg::Shake(1));
         }
         if self.login.step == Step::Done {
-            if let (Some(user), Some(session)) = (self.username(), self.session().map(|s| s.id.clone())) {
+            if let Some(user) = self.login.user.clone()
+                && let Some(session) = self.session_for(Some(&user)).map(|s| s.id.clone())
+            {
                 self.state.logged_in(&user, &session);
                 if self.live
                     && let Err(e) = self.state.save(&self.cfg.state)
@@ -698,7 +715,7 @@ impl Program for Greeter {
             Msg::SessionMenu => self.session_menu(cx),
             Msg::PickSession(i) => {
                 if let (Some(user), Some(s)) = (self.username(), self.sessions.get(i)) {
-                    self.session_of.insert(user, s.id.clone());
+                    self.session_of.insert(user.to_owned(), s.id.clone());
                 }
                 if let Some(w) = self.main_window() {
                     cx.close_menus(w);

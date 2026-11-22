@@ -282,7 +282,7 @@ fn named(k: &KeyEvent) -> Option<NamedKey> {
 
 /// The person logging in, the field, their session, and what's to say.
 fn password(g: &Greeter, size: Size, typed: bool) -> (Element<Msg>, f64) {
-    let tv = !typed && g.tv_auth().is_some();
+    let tv = g.tv_auth().is_some();
     let (real, initial, pic) = match (typed, g.user()) {
         (false, Some(u)) => (u.real_name.clone(), u.initial(), g.avatars.get(&u.name).cloned()),
         _ => {

@@ -957,18 +957,18 @@ impl Worker {
                 if fds[0].revents != 0 && !self.commands() {
                     return;
                 }
-                if fds[1].revents != 0 {
-                    self.inotify_events();
-                }
-                // Back to front, so removing one leaves the rest's places.
-                for i in (0..self.pads.len()).rev() {
-                    let Some(fd) = fds.get(i + 2) else { continue };
+                // Consume this snapshot before inotify adds or removes devices.
+                // Back to front, so removing one preserves the earlier indices.
+                for (i, fd) in fds[2..].iter().enumerate().rev() {
                     let readable = fd.revents & libc::POLLIN != 0;
                     let broken = fd.revents & (libc::POLLERR | libc::POLLHUP | libc::POLLNVAL) != 0;
                     // What's left to read first; then gone, if it is.
                     if (broken && !readable) || (readable && !self.read_pad(i, now)) {
                         self.remove(i);
                     }
+                }
+                if fds[1].revents != 0 {
+                    self.inotify_events();
                 }
             } else if n < 0 && std::io::Error::last_os_error().raw_os_error() != Some(libc::EINTR) {
                 std::thread::sleep(Duration::from_millis(50));
