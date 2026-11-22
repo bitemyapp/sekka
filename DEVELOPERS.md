@@ -2273,6 +2273,17 @@ Aizome checks (`aizome-login`, `aizome-automatic-login`,
 `aizome-greeter-desktops`, `aizome-ibus`,
 `aizome-ibus-policy`) still run with the others.
 
+Three of them log in with a password or read the keyring: `greeter`,
+`greeter-x11` and `network-auth`. Their VMs are built from Nixpkgs with Sekka's
+gnome-keyring fix (`nix/overlays/gnome-keyring.nix`), which Sekka's systems get
+from `modules/gnome-keyring-fixes.nix`. Nixpkgs' daemon aborts when a client's
+first call comes before the daemon has recorded the client, and the keyring is
+locked from then on; `greeter` then timed out waiting for it to unlock, in 5
+of 192 runs started 64 at a time. The fix is the checks' package set
+(`keyringPkgs` in `desktop/aizome/nix/default.nix`) because a check's VM takes
+no overlay from a module. Aizome's module sets none, so a system that uses the
+module without Sekka's runs Nixpkgs' daemon.
+
 The package version is a plain `0.1.0`. Aizome's flake added its own revision
 to it. Inside Sekka that revision would be Sekka's, and every Sekka commit
 would rebuild Aizome. The source hash already tells the builds apart.
