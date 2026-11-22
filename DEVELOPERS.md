@@ -2656,11 +2656,14 @@ otherwise bring RetroArch and Qt with them. Where unfree packages are
 allowed, as on the media and the installed systems it carries, Google
 Chrome comes too (`programs.aizome.chanoma.browser`, 458 MiB more), with
 the two unfree cores. The media already carried Chrome in the offline
-application cache, but built from the applications' own Nixpkgs: a
-second derivation of the same version, so the media has it twice. No
-cache has those three, so
-such a system fetches Chrome from Google and compiles the two cores
-when an update changes them. The systems `push-cache` publishes refuse
+application cache, behind the catalog's keyring wrapper
+(`installer/genkan/rust/src/keyring.nix`). That one comes from the
+applications' Nixpkgs and Chanoma's from the system's, which are
+pinned apart: at one revision, as they mostly are, the media carry one
+Chrome, and when the two give different Chromes (7 and 8 November 2026:
+156 and 157) they carry both. No cache has Chrome or the two unfree
+cores, so such a system fetches Chrome from Google and compiles the two
+cores when an update changes them. The systems `push-cache` publishes refuse
 unfree packages (`free` in `nix/reference-systems.nix`) and have none
 of the three. BlueZ is set to connect quickly and to let
 a device that forgot the computer pair again without anyone confirming,
