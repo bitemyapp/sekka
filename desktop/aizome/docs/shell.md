@@ -253,6 +253,13 @@ Results:
   Short queries, explicit app names and longer requests such as “terminal
   settings” use ordinary matching. Choosing the Files or Settings scope
   still searches only that scope.
+  Aizome's own apps also answer to their generic names as strongly as to
+  their titles: “calculator” finds Soroban, and “fi” finds Hako before
+  GNOME's Files. Native apps win equal matches; usage history still breaks
+  those ties. These aliases don't override a chosen default or carry Apps
+  past Commands that ordinary matching would put first. They aren't
+  highlighted in the app's title; “nautilus” still finds GNOME's Files when
+  its desktop entry is visible.
 - **Settings**: every Settei pane and its main options ("Keyboard ›
   Remap Caps Lock"), opening Settei at that place. The list comes from
   `aizome-settei --list-settings --json` (cached), so it stays in step.

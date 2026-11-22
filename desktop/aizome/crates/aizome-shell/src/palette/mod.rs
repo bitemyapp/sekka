@@ -417,6 +417,10 @@ impl Shell {
                         .key(key.clone());
                 item.boost = self.frecency.boost(&key);
                 item.purposes = defaults.iter().filter(|(id, _)| *id == a.id).map(|(_, purpose)| *purpose).collect();
+                item.aizome = crate::apps::catalog::is_aizome(a);
+                if item.aizome {
+                    item.aliases = a.generic_name.iter().cloned().collect();
+                }
                 out.push(item);
             }
         }
