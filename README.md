@@ -98,7 +98,13 @@ password); when time runs out the game is saved and a friendly screen
 says goodnight. It wears the desktop's own look, made large enough to
 read from the sofa, so it's as much at home with the grown-ups. A
 keyboard and mouse work too, with a way back to Home from anywhere, a
-streaming page included. A grown-up can give the television an account of
+streaming page included. The kids' rules are made for a kid holding a
+controller: a keyboard or mouse on a streaming page works the browser
+itself too, its shortcuts and menus included, and those aren't closed
+off. Opened in a grown-up's own account, Chanoma is one app on that
+desktop, and a keyboard there still reaches the desktop's shortcuts and
+everything else the account opens. A grown-up can give the
+television an account of
 its own in Settings, under Users & Groups: it opens straight into Chanoma
 in kids' mode and can't open anything else, it signs in with nothing, a
 PIN or a password, as you choose, and leaving Chanoma logs out. The

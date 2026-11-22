@@ -1440,6 +1440,21 @@ before calling any of it tested on hardware.
 - The TV account's PIN is its account's password. sshd refuses the
   account (the module's `DenyUsers`); any other service that checks
   passwords through PAM would take the PIN.
+- The rules are for a kid holding a controller. Over a page a keyboard
+  and a mouse belong to the browser's window (The way home), all but
+  Home and F1, so Chrome's own shortcuts, its context menu, its DevTools
+  and its file dialogs aren't closed off, in kids' mode and in the TV
+  account's session alike. What they'd let a kid do hasn't been tried in
+  a real Chrome. A page they lead to is still asked about over the pipe.
+  A file dialog would show the account's own files, though, Chanoma's
+  settings and today's minutes among them (settings that are gone are a
+  first setup, where the PIN is chosen). The TV account's session keeps
+  the compositor's Ctrl+Alt+Del and the keys that switch consoles.
+- In a grown-up's own account Chanoma is a window on their desktop.
+  Closing it asks for the PIN, and a controller reaches nothing else,
+  but a keyboard reaches the desktop's shortcuts (the palette, a
+  terminal, the other windows), which Chanoma doesn't take. The TV
+  account's session has none of them.
 - Links to other programs (`mailto:`, an app's own scheme) aren't web
   pages, so this doesn't refuse them; what Chrome does with one in kiosk
   mode hasn't been tried.
