@@ -6,8 +6,6 @@
 #              import, with Aizome chosen, on a home network (eth1) that gives
 #              it IPv4 by DHCP and a global IPv6 address by router
 #              advertisement
-#   unguarded  the same system with calamares.vpnGuard.enable off: the leak
-#              itself, so that the test is known to see it
 #   isp        the home router: NAT for IPv4, routed IPv6
 #   internet   a web host that answers with the address a request came from
 #   vpn        a WireGuard server with an IPv4-only tunnel, an IPv6-only one
@@ -20,13 +18,14 @@
 # - blocks IPv6 while the IPv4-only tunnel is up and IPv4 while the IPv6-only
 #   one is, at once and not after a timeout, so that a site with both kinds
 #   of address is reached through the tunnel without a wait;
-# - leaves the home router reachable in the blocked family;
+# - preserves private and link-local access and permits a public LAN address
+#   only when the configuration explicitly trusts it;
 # - keeps a tunnel whose far end is in the blocked family working through a
 #   fresh handshake, with NixOS's reverse-path filter on;
 # - lifts the block when the tunnel goes down, and never sets it for a
 #   tunnel that carries both families;
-# - is lifted and set again by its service, as when a configuration that
-#   turns it off or on is switched to.
+# - survives a live switch to an updated policy and is removed by a switch
+#   to a generation with the option disabled.
 #
 # Component evidence only: wired interfaces, no real provider, and QEMU's
 # user network (eth0) kept out of NetworkManager's hands so that eth1 is the
@@ -51,7 +50,6 @@ let
     prefixLength = 64;
   };
   client =
-    guard:
     { pkgs, lib, ... }:
     {
       imports = [ sekkaModule ];
@@ -65,7 +63,26 @@ let
       calamares.defaultDesktop = "aizome";
       calamares.applications = [ ];
       calamares.installUser = "demo";
-      calamares.vpnGuard.enable = guard;
+      specialisation.trusted.configuration = {
+        calamares.vpnGuard.trustedLanPrefixes = [ "2001:db8:1::1/128" ];
+        # switch-to-configuration has stopped the old units by the time
+        # activation runs, and has yet to start the new ones. Inspect the
+        # kernel policy at this point while the tunnel stays connected.
+        system.activationScripts.vpnGuardContinuity = {
+          deps = [ "etc" ];
+          text = ''
+            if test -e /run/observe-vpn-switch; then
+              if ${pkgs.nftables}/bin/nft list table inet sekka_vpn_guard >/dev/null &&
+                 ! ${pkgs.curl}/bin/curl -g -6 -fsS --max-time 3 'http://[2001:db8:ffff::10]/' >/dev/null; then
+                echo blocked > /run/vpn-during-switch
+              else
+                echo open > /run/vpn-during-switch
+              fi
+            fi
+          '';
+        };
+      };
+      specialisation.disabled.configuration.calamares.vpnGuard.enable = lib.mkForce false;
       users.users.demo = {
         isNormalUser = true;
         uid = 1000;
@@ -88,8 +105,7 @@ let
       hardware.graphics.enable = true;
       # Fixture only: QEMU's user network would be a second way out.
       networking.networkmanager.unmanaged = [ "interface-name:eth0" ];
-      # Fixture tools: key generation, and nft to read the reverse-path
-      # filter's counter.
+      # Fixture tools for WireGuard and checking the installed kernel policy.
       environment.systemPackages = [
         pkgs.wireguard-tools
         pkgs.nftables
@@ -101,8 +117,7 @@ pkgs.testers.runNixOSTest {
   globalTimeout = 1800;
   node.pkgsReadOnly = false;
 
-  nodes.guarded = client true;
-  nodes.unguarded = client false;
+  nodes.guarded = client;
 
   nodes.isp =
     { lib, ... }:
@@ -119,11 +134,23 @@ pkgs.testers.runNixOSTest {
       networking.firewall.enable = false;
       networking.interfaces.lan = {
         ipv4.addresses = [ (address4 "192.168.1.1") ];
-        ipv6.addresses = [ (address6 "2001:db8:1::1") ];
+        ipv6.addresses = [
+          (address6 "2001:db8:1::1")
+          (address6 "fd42::1")
+        ];
       };
       networking.interfaces.wan = {
         ipv4.addresses = [ (address4 "203.0.113.1") ];
         ipv6.addresses = [ (address6 "2001:db8:ffff::1") ];
+        # A reachable service in the NAT64 prefix lets the client test
+        # its IPv6 egress policy without depending on an actual translator.
+        ipv6.routes = [
+          {
+            address = "64:ff9b::";
+            prefixLength = 96;
+            via = "2001:db8:ffff::10";
+          }
+        ];
       };
       boot.kernel.sysctl = forwarding;
       networking.nftables.enable = true;
@@ -143,6 +170,10 @@ pkgs.testers.runNixOSTest {
             MinRtrAdvInterval 3;
             MaxRtrAdvInterval 10;
             prefix 2001:db8:1::/64 {
+              AdvOnLink on;
+              AdvAutonomous on;
+            };
+            prefix fd42::/64 {
               AdvOnLink on;
               AdvAutonomous on;
             };
@@ -172,7 +203,13 @@ pkgs.testers.runNixOSTest {
       };
       networking.interfaces.eth1 = {
         ipv4.addresses = [ (address4 "203.0.113.10") ];
-        ipv6.addresses = [ (address6 "2001:db8:ffff::10") ];
+        ipv6.addresses = [
+          (address6 "2001:db8:ffff::10")
+          {
+            address = "64:ff9b::cb00:710a";
+            prefixLength = 128;
+          }
+        ];
         # The way back to the home network's IPv6 prefix.
         ipv6.routes = [
           {
@@ -215,7 +252,10 @@ pkgs.testers.runNixOSTest {
       };
       networking.firewall.enable = false;
       networking.interfaces.eth1 = {
-        ipv4.addresses = [ (address4 "203.0.113.20") ];
+        ipv4.addresses = [
+          (address4 "203.0.113.20")
+          (address4 "203.0.113.21")
+        ];
         ipv6.addresses = [ (address6 "2001:db8:ffff::20") ];
       };
       boot.kernel.sysctl = forwarding;

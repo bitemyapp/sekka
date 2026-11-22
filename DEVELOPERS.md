@@ -2990,80 +2990,76 @@ not qualification of an ISO or physical network hardware.
 
 ## VPN address families
 
-A full-tunnel WireGuard connection carries the address families its
-`AllowedIPs` name, and NetworkManager, like wg-quick, routes only those into
-the tunnel. With an IPv4-only tunnel up, IPv6 keeps leaving by Wi-Fi or
-Ethernet, and a site with both kinds of address is reached over IPv6 first, so
-it sees the address the tunnel was meant to hide. An IPv6-only tunnel leaves
-IPv4 outside it the same way (bitemyapp/sekka#416). `sekka-vpn-guard`
-(`installer/genkan/rust/system/vpn-guard`: a Rust crate with its own workspace,
-its package and its module) blocks the family the tunnel does not carry for as
-long as the tunnel is up. `calamares.vpnGuard.enable = false` turns it off.
+NetworkManager and WireGuard route each address family independently. A
+single-family full tunnel can leave applications using the physical connection
+for the other family. Sekka enables `calamares.vpnGuard.enable` by default on
+NetworkManager systems. The guard protects locally generated traffic while
+the tunnel is connected. Split tunnels retain their ordinary routing.
+Disconnecting restores normal internet access.
 
-It asks the kernel where a packet to a documentation address would go in each
-family (`ip route get 192.0.2.1`, `2001:db8::1`): nothing routes those on
-purpose, so only a default route, or the two halves that stand in for one,
-carries them. When one family goes into a WireGuard device and the other goes
-into no tunnel, the other is closed. A split tunnel closes nothing. A family
-in another kind of tunnel (`tun`, `xfrm`, `vti`) is neither taken as cover nor
-blocked.
+The Rust helper in `installer/genkan/rust/system/vpn-guard` reads links,
+routes and policy rules using route netlink, and reads peer AllowedIPs,
+endpoint addresses and transport marks using WireGuard generic netlink.
+It considers host-wide routes selected for ordinary unmarked traffic and
+the prefixes the selected device's peers can carry. A default or a union
+of prefixes covering the family qualifies. This covers complementary half
+defaults and avoids treating a broad split tunnel or a route to a single
+test address as a full tunnel. Another recognized tunnel already carrying
+the other family keeps that family available.
 
-The block is the tunnel's own routing scheme ending in "unreachable". Each
-family has two policy rules that stay in place whether or not it is closed, at
-priority 32764 (`lookup main suppress_prefixlength 0`) and 32765
-(`lookup 5458759`), marked with routing protocol 83 so the guard recognises
-its own. While table 5458759 is empty they change nothing. To close a family
-the guard puts an unreachable default route in that table. The home network,
-link-local addresses and any route more specific than a default stay in
-force, and a connection to the closed family is refused at once instead of
-timing out, so programs fall back to the tunnel's family without a wait.
-NetworkManager's rules have smaller priority numbers: a tunnel that starts
-carrying the closed family wins before the guard is lifted. For each
-WireGuard peer whose far end is in the closed family the table also holds a
-`throw` route for that address, which sends it on to the main table. NixOS's
-reverse-path filter looks up the way back to every packet's source, and
-without that route it drops the tunnel's own replies, which stops the tunnel
-at its next handshake.
+For a single-family full tunnel the helper installs an `inet` nftables output
+chain. Routing still selects the outgoing device. A more-specific public
+route on the physical interface is subject to the same filter as the default.
+An encrypted WireGuard UDP transport can use its nonzero device mark as
+its endpoint changes. An unmarked transport gets an exception for the known
+remote address and UDP port. TCP receives a reset and other blocked traffic
+gets an ICMP rejection so applications can try the available family promptly.
 
-So everything that changes while the system runs is a route, set with
-`ip route replace` and cleared with `ip route flush table`, both of which can
-be repeated. The guard never reads the words of an error. A step that reports
-failure is checked against the system: if what it was for is in place the run
-goes on, and otherwise it stops before the block goes in. After its steps the
-guard reads its rules and table once more, and the run has worked only if they
-are what was wanted.
+Loopback, allowed tunnel interfaces, private IPv4, IPv6 ULA, link-local
+addresses and local multicast remain available. A LAN device addressed by
+global IPv6 needs an explicit destination exception in the blocked family.
+For example, `calamares.vpnGuard.trustedLanPrefixes = [ "2001:db8:1::40/128" ];`
+permits that address outside the tunnel on every network. The prefix list
+is validated while building the system. Choose exceptions accordingly.
 
-The program is NetworkManager's dispatcher script itself, run at `up`, `down`,
-`vpn-up`, `vpn-down`, `reapply`, DHCP and connectivity changes, and
-`sekka-vpn-guard.service` runs it once when a configuration is switched to;
-stopping that service takes the routes and the rules out. Every run reads the
-routes and brings the guard to what they call for under
-`/run/sekka-vpn-guard.lock`, so it keeps no state. It reads and changes routes
-through iproute2's JSON and `wg`, whose paths the package fixes at build time,
-instead of imitating the kernel's lookup or speaking netlink.
-`sekka-vpn-guard status` says where each family goes and why, and needs no
-privilege.
+The `sekka_vpn_guard` table carries an owner comment. The helper refuses to
+touch a same-named table with a different owner. It replaces the observed
+table by handle and creates the new policy in a single nftables transaction,
+then checks the installed chain and ordered rules. It leaves routing tables
+alone. A root-only lock serializes NetworkManager events with service changes.
+Unprivileged `sekka-vpn-guard status` reports the last verified policy for
+both families from an atomically published file in `/run/sekka-vpn-guard`.
 
-What it does not do: it is not a kill switch, so both families leave directly
-again when the tunnel goes down; the other family is still open for the moment
-between the tunnel coming up and the dispatcher's run; only WireGuard devices
-count, not OpenVPN or other plugin VPNs; a far end that moves to another
-address in the blocked family is let through only at the next run; and DNS is
-not examined, so a resolver the home network handed out may still be asked.
+The service arms the guard before NetworkManager starts. Pre-up and regular
+dispatcher events reconcile it. An enabled-to-enabled NixOS switch reloads
+the policy in place. Stopping the service disarms the dispatcher before
+clearing the owned table. This also lets an option removal clean up a live
+connection even if an earlier dispatcher event is queued. A timer retries
+every 30 seconds and refreshes unmarked endpoint changes.
 
-`nix build .#checks.x86_64-linux.vpn-guard` runs the crate's tests: the
-decision, the order of changes (no step puts the block in force without the
-rule and routes that belong beside it), steps that fail or lie about having
-worked, and the parsing of what iproute2 and `wg` print.
-`nix build .#checks.x86_64-linux.vpn-guard-vm` puts a Sekka system on a home
-network with IPv4 by DHCP and IPv6 by router advertisement, beside the same
-system with the guard off, a router, a web host that answers with its caller's
-address and a WireGuard server. It imports wg-quick files with `nmcli` and
-checks both directions, the refusal at once, the home router's reachability, a
-fresh handshake under the block with the reverse-path filter on, a tunnel for
-both families, the service, and that the unguarded system leaks. Wired
-interfaces and no real provider make this component evidence, not
-qualification of an ISO or physical network hardware.
+On an incomplete or unsupported kernel snapshot the helper retains the
+installed block and reports degraded status. If no block exists yet,
+NetworkManager's activating and active profiles can provide positive
+evidence for a conventional single-family full tunnel. In that case the
+helper installs a conservative block until kernel state can be verified.
+With neither a previous policy nor sufficient evidence from NetworkManager,
+status reports the uncertainty. An nftables transaction failure preserves
+the previous rules.
+
+The scope is host egress for the unsupported family. Forwarding for routed
+VMs, containers and hotspots follows the host's forwarding policy. DNS
+server choice, direct-route exceptions in the carried family, and traffic
+after disconnect are separate policies. NetworkManager activation and
+firewall installation are separate operations. Unmarked peer transport can
+need a refresh after roaming. An administrator replacing the entire nftables
+ruleset can remove the guard until the next reconciliation.
+
+From the root flake, run
+`nix build .#checks.x86_64-linux.vpn-guard .#checks.x86_64-linux.vpn-guard-vm`.
+The component VM imports real NetworkManager profiles, checks the address a
+dual-stack web server sees, exercises fresh authenticated handshakes, and
+switches a connected client between enabled, configured and disabled NixOS
+generations. It uses disposable wired guests and a local test VPN.
 
 ## Simulated Wi-Fi
 
