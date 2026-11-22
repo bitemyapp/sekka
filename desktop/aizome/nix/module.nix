@@ -546,6 +546,11 @@ in
       "d /run/media 0755 root root -"
       "d /run/media/tv 0755 root root -"
     ];
+    # The TV account signs in with nothing or a PIN of a few digits, and
+    # that is its password: right for a login screen in the room, not for
+    # the network. Its nologin shell ends a session over SSH but not sshd's
+    # forwarding, so sshd refuses the account, where sshd runs.
+    services.openssh.settings.DenyUsers = lib.mkIf cfg.chanoma.enable [ "tv" ];
     # A television: Chanoma with every session, and again after a crash.
     # Leaving it with the PIN ends it for the session.
     systemd.user.services.aizome-chanoma = lib.mkIf (cfg.chanoma.enable && cfg.chanoma.autostart) {

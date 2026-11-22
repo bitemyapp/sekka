@@ -95,6 +95,12 @@ with subtest("Settings' helper makes the TV account, with a PIN"):
     assert passwd.strip().endswith("/nologin"), passwd
     # A console won't let it in.
     machine.fail("su tv -c true </dev/null")
+    # Nor sshd, whose forwarding a nologin shell wouldn't stop: the PIN is
+    # the account's password, and only a few digits.
+    machine.wait_for_unit("sshd.service")
+    sshd = machine.succeed("sshd -T -C user=tv,host=localhost,addr=127.0.0.1")
+    denied = [line.split()[1:] for line in sshd.splitlines() if line.lower().startswith("denyusers")]
+    assert denied == [["tv"]], denied
     # The login screen reads it when it starts.
     machine.succeed("systemctl restart greetd")
     until("the login screen", greeter_up)

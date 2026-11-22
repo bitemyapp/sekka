@@ -11,6 +11,9 @@ self.packages.${pkgs.stdenv.hostPlatform.system}.aizome.overrideAttrs (old: {
   preBuild = "";
   postBuild = "";
   doCheck = false;
+  # One output: the package's `chanoma` is made by its install phase, which
+  # this replaces.
+  outputs = [ "out" ];
   buildPhase = ''
     runHook preBuild
     cargo test --offline --release -j "$NIX_BUILD_CORES" -p aizome-sys --test disks_encrypted_real --no-run

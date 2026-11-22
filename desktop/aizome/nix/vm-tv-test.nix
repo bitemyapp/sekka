@@ -112,6 +112,9 @@ pkgs.testers.runNixOSTest {
         cores = [ pkgs.libretro.gambatte ];
         browser = null;
       };
+      # A computer with an SSH server: the TV account's PIN must be no way
+      # in there.
+      services.openssh.enable = true;
       services.displayManager.defaultSession = "aizome";
       hardware.uinput.enable = true;
       users.users.alice = {
