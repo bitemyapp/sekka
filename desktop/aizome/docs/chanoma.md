@@ -5,19 +5,16 @@ from the disk, and games, driven by a game controller alone, with a
 grown-up's PIN on what kids may do and for how long. What it does is in
 [apps.md](apps.md#chanoma-tv); this is how, and what has been checked.
 
-It comes with Aizome: an app like the others, with nothing to turn on.
-The one thing a grown-up chooses is the television's own account, in
-Settings (The TV account, below). The module's options are for a
-computer that is a television and nothing else:
+It comes with Aizome, whole, with nothing to turn on: an app like the
+others, with its cores, its browser and its controllers' pairing. The
+one thing a grown-up chooses is the television's own account, in
+Settings (The TV account, below). For a computer that is a television
+and nothing else, the module can start it with every session:
 
 ```nix
 programs.aizome.chanoma = {
   # A television: start with every session, and again after a crash.
   autostart = true;
-  # Its controllers pair again without anyone confirming.
-  controllersPairAgain = true;
-  # The browser its services open in, where none is installed already.
-  browser = pkgs.google-chrome;
 };
 # With autostart, the computer comes on into Chanoma.
 services.displayManager.autoLogin = { enable = true; user = "tv"; };
@@ -30,38 +27,38 @@ it), the cores (`programs.aizome.chanoma.cores`; snes9x and
 Genesis Plus GX, whose licences forbid selling them, only where unfree
 packages are allowed; PCSX2 only on x86-64) and a PlayStation BIOS
 (`programs.aizome.chanoma.bios`: OpenBIOS, below), exports
-`CHANOMA_CORES` and `CHANOMA_BIOS` to the session, keeps the TV
-account's own systemd to what it needs
+`CHANOMA_CORES`, `CHANOMA_BIOS` and `CHANOMA_BROWSER` to the session,
+installs the browser (`programs.aizome.chanoma.browser`: Google Chrome
+where unfree packages are allowed, as the services that protect their
+shows play only in it; none otherwise, and Chanoma looks on the PATH),
+keeps the TV account's own systemd to what it needs
 (`programs.aizome.chanoma.tvUnits`, under The TV account), makes
-`/run/media/tv` for its drives, and has sshd refuse an account named
-`tv`. None of that does anything until Chanoma is opened or Settings
-makes the account.
+`/run/media/tv` for its drives, has sshd refuse an account named `tv`,
+and sets BlueZ to connect quickly and to let a controller that forgot
+the computer pair again without anyone confirming.
+
+Since it comes with every Aizome, so does each of those. Two reach
+past Chanoma:
+
+- **Google Chrome** is installed on every system that allows unfree
+  packages, the installation media's among them, and shows among the
+  apps. Sekka's cache publishes nothing unfree, so such a system
+  fetches Chrome from Google when an update changes it.
+- **BlueZ has one pairing policy for every device**
+  (`JustWorksRepairing = always`, `FastConnectable`): anything that
+  takes a paired device's address pairs again unasked, a keyboard's as
+  much as a controller's, and listening for quick connections uses more
+  power. `hardware.bluetooth.settings.General` sets either back.
 
 The cores are their libraries alone (`*_libretro.so`, copied into one
 folder), not their packages: each package has a launcher for RetroArch
 beside its core, and linked whole they brought RetroArch and Qt along.
-With that, Chanoma adds 188 MiB to a system (the cores 125, the games'
-databases 28, the app 26; store sizes, uncompressed, measured on
-2026-11-22 for Aizome's module alone with the unfree cores), where the
-packages whole added 350.
-
-What doesn't come with it, since it comes with every Aizome:
-
-- **A browser** (`programs.aizome.chanoma.browser`, none by default,
-  exported as `CHANOMA_BROWSER` when given). Chanoma uses the Google
-  Chrome or Chromium on the PATH, and where there's neither, a service
-  says a grown-up can install one from Yukimi. Google Chrome is unfree
-  and may not be passed on, and Sekka's installation media allow unfree
-  packages: a default that installed it would have put it on the media.
-- **Controllers pairing again unasked**
-  (`programs.aizome.chanoma.controllersPairAgain`): BlueZ connecting
-  quickly, and letting a controller that forgot the computer pair again
-  without anyone confirming. BlueZ has one policy for every device, so
-  with it anything that takes a paired device's address pairs unasked
-  too, and listening for quick connections uses more power: right for a
-  television in the living room, not for every laptop.
-  Without it, a controller that forgot the computer is paired again by a
-  grown-up (Settings, or Chanoma's *Controllers*).
+The copied libraries are the packages' own, byte for byte, and the
+packages hold nothing else. With that, Chanoma adds 173 MiB to a system
+that refuses unfree packages (the cores 110, the games' databases 28,
+the app 26) and 658 to one that allows them (Google Chrome 458, and the
+two unfree cores); store sizes, uncompressed, measured on 2026-11-22 for
+Aizome's module alone. The packages linked whole added 160 more.
 
 `autostart` is a user unit wanted by and ordered after
 `aizome-session.target`, which starts once the compositor is ready; it
@@ -1473,6 +1470,12 @@ before calling any of it tested on hardware.
 - The TV account's PIN is its account's password. sshd refuses the
   account (the module's `DenyUsers`); any other service that checks
   passwords through PAM would take the PIN.
+- Controllers pair again by themselves because every Bluetooth device
+  does: BlueZ's `JustWorksRepairing = always` has no list of devices, and
+  it's set on every system Chanoma comes with. Something nearby that
+  takes a paired keyboard's address would pair as that keyboard without
+  anyone being asked. Not tried: Chanoma confirming for its own
+  controllers alone, which BlueZ's `confirm` would allow.
 - The rules are for a kid holding a controller. Over a page a keyboard
   and a mouse belong to the browser's window (The way home), all but
   Home and F1, so Chrome's own shortcuts, its context menu, its DevTools

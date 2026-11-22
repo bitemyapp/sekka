@@ -1,7 +1,7 @@
-# Chanoma comes with Aizome, and nothing comes with Chanoma unasked: no
-# browser (Google Chrome may not be passed on, and the media allows unfree
-# packages), no change to how Bluetooth devices pair, nothing started.
-# Evaluated for Aizome's module alone, the live media, and the installed
+# Chanoma comes with Aizome, whole, with nothing to turn on: the app, its
+# browser where the system may have Google Chrome, and its controllers
+# pairing again by themselves. Evaluated for Aizome's module alone (with
+# unfree packages allowed and refused), the live media, and the installed
 # Aizome system the media carries. A configuration check: it builds and
 # runs nothing of Chanoma.
 {
@@ -20,17 +20,19 @@ let
         inputs.aizome.nixosModules.default
         {
           programs.aizome.enable = true;
-          # As the media and most installed systems are: where a browser
-          # by default would have been Google Chrome.
-          nixpkgs.config.allowUnfree = true;
           services.openssh.enable = true;
         }
         extra
       ];
     }).config;
-  on = alone { };
-  off = alone { programs.aizome.chanoma.enable = false; };
-  television = alone { programs.aizome.chanoma.controllersPairAgain = true; };
+  # As the media and most installed systems are.
+  on = alone { nixpkgs.config.allowUnfree = true; };
+  # As the systems the binary cache publishes are.
+  free = alone { nixpkgs.config.allowUnfree = false; };
+  off = alone {
+    nixpkgs.config.allowUnfree = true;
+    programs.aizome.chanoma.enable = false;
+  };
   media = references.systems.aizome.config;
 
   packages = config: builtins.filter builtins.isAttrs config.environment.systemPackages;
@@ -46,31 +48,34 @@ let
     chanoma = hasChanoma config;
     browsers = browsers config;
     unfree = config.nixpkgs.config.allowUnfree;
+    pairsAgain = (bluetooth config).JustWorksRepairing or null;
   };
 in
-# With Aizome, and with nothing else.
+# With Aizome, and with what its services and controllers need.
 assert hasChanoma on;
-assert on.programs.aizome.chanoma.browser == null;
-assert browsers on == [ ];
-assert !(bluetooth on ? JustWorksRepairing) && !(bluetooth on ? FastConnectable);
+assert browsers on == [ "google-chrome" ];
+assert (bluetooth on).JustWorksRepairing == "always" && (bluetooth on).FastConnectable;
+# Nothing starts by itself, and the TV account's PIN is no way in over the
+# network, wherever Settings may make that account.
 assert !(on.systemd.user.services ? aizome-chanoma);
-# The TV account's PIN is no way in over the network, wherever Settings
-# may make that account.
 assert on.services.openssh.settings.DenyUsers == [ "tv" ];
-# A television asks for its controllers to pair again unasked.
-assert (bluetooth television).JustWorksRepairing == "always";
-assert (bluetooth television).FastConnectable;
+# Where unfree packages are refused it still comes, without the browser.
+assert hasChanoma free;
+assert free.programs.aizome.chanoma.browser == null && browsers free == [ ];
 # Left out, all of it goes.
-assert !hasChanoma off;
+assert !hasChanoma off && browsers off == [ ];
+assert !(bluetooth off ? JustWorksRepairing) && !(bluetooth off ? FastConnectable);
 assert off.services.openssh.settings.DenyUsers == null;
-# The live media and the installed system it carries allow unfree packages:
-# Chanoma is there, and no browser came with it.
+# The live media and the installed system it carries are as the module
+# alone is.
 assert installer.config.nixpkgs.config.allowUnfree && media.nixpkgs.config.allowUnfree;
-assert hasChanoma installer.config && browsers installer.config == [ ];
-assert hasChanoma media && browsers media == [ ];
+assert hasChanoma installer.config && browsers installer.config == [ "google-chrome" ];
+assert hasChanoma media && browsers media == [ "google-chrome" ];
+assert (bluetooth media).JustWorksRepairing == "always";
 pkgs.writeText "aizome-chanoma-defaults.json" (
   builtins.toJSON {
     alone = summary on;
+    free = summary free;
     live = summary installer.config;
     media = summary media;
   }

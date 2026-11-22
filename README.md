@@ -77,10 +77,10 @@ and what isn't, and [aizome.computer](https://aizome.computer/) for every app
 in detail.
 
 **Chanoma 茶の間** turns a Sekka computer into the family television. It
-comes with Aizome. Kids use it with nothing but
+comes with Aizome, with nothing to turn on. Kids use it with nothing but
 a Bluetooth game controller: streaming services open full screen in
-Google Chrome or Chromium, once you've installed one from Yukimi, films
-and shows play from your own folders, and retro games play
+Google Chrome, which comes with it where unfree software is allowed,
+films and shows play from your own folders, and retro games play
 through emulator cores, kept just where they were left: cartridge
 consoles, and the PlayStation, Saturn, Dreamcast and PlayStation 2 from
 their discs, each told apart by what's on it. Drives plugged
@@ -114,7 +114,10 @@ after it logs out. The login
 screen takes a game controller too, so the whole evening needs no
 keyboard: nothing changes there until a button is pressed, then the
 controller chooses who logs in and types a password on an on-screen
-keyboard, or presses the TV's PIN on its buttons. It has been tested in a
+keyboard, or presses the TV's PIN on its buttons. So that a controller
+finds its way back without one, a Bluetooth device that has forgotten
+the computer pairs with it again without anyone confirming, and that
+holds for every Bluetooth device, not controllers alone. It has been tested in a
 virtual machine with a virtual controller and with real emulator cores,
 and used on a television with a physical controller; Netflix-style
 services haven't been checked. The Dreamcast and PlayStation 2 draw on

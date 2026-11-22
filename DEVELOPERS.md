@@ -2648,23 +2648,27 @@ package), and libretro-database's game databases for its systems (CC
 BY-SA 4.0, fetched file by file at a pinned commit:
 `desktop/aizome/nix/chanoma-metadata.nix`). So all of that is in every
 installed Aizome system and on the installation media, and the free
-systems `push-cache` publishes carry it for updates to download: 188 MiB
+systems `push-cache` publishes carry it for updates to download: 173 MiB
 of store paths, uncompressed (2026-11-22, Aizome's module alone). The
 module copies the cores' libraries out of their packages, which would
-otherwise bring RetroArch and Qt with them. The two unfree cores are in
-no cache, so a system that allows unfree packages compiles them when an
-update changes them. Nothing
-else comes with it unasked, which
-`nix build .#checks.x86_64-linux.aizome-chanoma-defaults` holds to for
-Aizome's module alone, the live media and the installed Aizome system
-the media carries: no browser (`programs.aizome.chanoma.browser` is none
-by default, since the media allows unfree packages and Google Chrome may
-not be passed on; Chanoma uses the Chrome or Chromium a grown-up
-installs), no change to how Bluetooth devices pair
-(`programs.aizome.chanoma.controllersPairAgain`, for a television), and
-nothing started (`autostart`). It is a configuration check: it runs
-nothing of Chanoma. The television's own account is the one thing a
-grown-up turns on, in Settings. It reads controllers from
+otherwise bring RetroArch and Qt with them. Where unfree packages are
+allowed, as on the media and the installed systems it carries, Google
+Chrome comes too (`programs.aizome.chanoma.browser`, 458 MiB more), with
+the two unfree cores. The media already carried Chrome in the offline
+application cache, but built from the applications' own Nixpkgs: a
+second derivation of the same version, so the media has it twice. No
+cache has those three, so
+such a system fetches Chrome from Google and compiles the two cores
+when an update changes them. BlueZ is set to connect quickly and to let
+a device that forgot the computer pair again without anyone confirming,
+for Chanoma's controllers; BlueZ has one policy for every device, so
+this holds for all of them on every Aizome system.
+`nix build .#checks.x86_64-linux.aizome-chanoma-defaults` holds Aizome's
+module alone (with unfree packages allowed and refused), the live media
+and the installed Aizome system the media carries to all of this, and
+to nothing being started (`autostart`). It is a configuration check: it
+runs nothing of Chanoma. The television's own account is the one thing
+a grown-up turns on, in Settings. It reads controllers from
 evdev itself so that it can grab them, drives libretro cores in its own
 process (unpacking zipped games for them), and opens streaming services
 in Chrome or Chromium driven through the compositor's IPC. The PIN keeps

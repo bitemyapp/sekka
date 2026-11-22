@@ -218,6 +218,13 @@ let
       cp -L "$core"/lib/retroarch/cores/*_libretro.so $out/lib/retroarch/cores/
     done
   '';
+  # Google Chrome, where this system can have it: it's unfree, and built
+  # for x86-64 alone.
+  chrome =
+    let
+      unfree = pkgs.config.allowUnfree or false || (pkgs.config.allowUnfreePredicate or (_: false)) pkgs.google-chrome;
+    in
+    if unfree && lib.meta.availableOn pkgs.stdenv.hostPlatform pkgs.google-chrome then pkgs.google-chrome else null;
   # The TV account's own systemd starts only what Chanoma and its browser
   # need: a generator its systemd runs as it starts (systemd.generator(7))
   # masks every other unit the login's targets pull in, for that account
@@ -298,12 +305,15 @@ in
           films and shows from the disk, and games, from a Bluetooth
           controller, with a grown-up's PIN on what kids may watch and
           play and for how long. It comes with Aizome, as one more app,
-          with its game cores, a free PlayStation BIOS and the games'
-          databases; `false` leaves all of it out. Installed, it changes
-          nothing until it's opened, but for the TV account: Settings
-          offers one (Users & Groups), sshd refuses an account named `tv`,
-          and `/run/media/tv` is there for its drives. The television's
-          own account is made in Settings, and only there.
+          with its game cores, a free PlayStation BIOS, the games'
+          databases and its browser (`browser`); `false` leaves all of it
+          out. With it, Bluetooth devices connect quickly and one that
+          forgot the computer pairs again without anyone confirming (for
+          its controllers; BlueZ has one policy for every device),
+          Settings offers the TV account (Users & Groups), sshd refuses
+          an account named `tv`, and `/run/media/tv` is there for its
+          drives. The television's own account is made in Settings, and
+          only there.
         '';
       };
       cores = lib.mkOption {
@@ -377,32 +387,18 @@ in
       };
       browser = lib.mkOption {
         type = lib.types.nullOr lib.types.package;
-        default = null;
-        example = lib.literalExpression "pkgs.google-chrome";
+        default = chrome;
+        defaultText = lib.literalExpression "pkgs.google-chrome where unfree packages are allowed (on x86-64), else null";
+        example = lib.literalExpression "pkgs.chromium";
         description = ''
-          A browser for the streaming services to open in, installed with
-          Chanoma. None unless given: Chanoma comes with every Aizome, and
-          a browser, Google Chrome least of all (it's unfree, and may not
-          be passed on), shouldn't come with it unasked. With none,
-          Chanoma uses Google Chrome or Chromium from the PATH, whichever
-          is installed, and says a grown-up can install one where neither
-          is. The services that protect their shows (Netflix, Disney+ and
-          the like, with Widevine) play only in Google Chrome; in Chromium
-          they say they need it.
-        '';
-      };
-      controllersPairAgain = lib.mkOption {
-        type = lib.types.bool;
-        default = false;
-        description = ''
-          For a television: let a controller that forgot the computer
-          pair again without anyone confirming (BlueZ's
-          `JustWorksRepairing = always`), which a kid with only a
-          controller couldn't do, and connect quickly (`FastConnectable`).
-          Both hold for every Bluetooth device on the computer, not
-          Chanoma's controllers alone: anything taking a paired device's
-          address pairs unasked too, and listening for quick connections
-          uses more power. So they're off unless turned on.
+          The browser the streaming services open in, installed with
+          Chanoma. Google Chrome where the system allows unfree
+          packages: the services that protect their shows (Netflix,
+          Disney+ and the like, with Widevine) play only in it. With
+          none, Chanoma uses Google Chrome or Chromium from the PATH, and
+          in Chromium those services say they need Google Chrome. Since
+          Chanoma comes with every Aizome, so does this browser: `null`
+          leaves it out.
         '';
       };
       tvUnits = lib.mkOption {
@@ -559,15 +555,14 @@ in
     # Controllers reconnect by themselves once paired (Chanoma trusts
     # them): quicker with fast connection; and one that forgot the
     # computer pairs again without anyone confirming (just-works
-    # re-pairing), which a kid with only a controller couldn't do. For
-    # a television (chanoma.controllersPairAgain): BlueZ has one policy
-    # for every device, so not for every computer Chanoma comes with.
-    hardware.bluetooth.settings.General =
-      lib.mkIf (cfg.chanoma.enable && cfg.chanoma.controllersPairAgain)
-        {
-          FastConnectable = lib.mkDefault true;
-          JustWorksRepairing = lib.mkDefault "always";
-        };
+    # re-pairing), which a kid with only a controller couldn't do. BlueZ
+    # has one policy for every device, so this holds for all of the
+    # computer's Bluetooth devices, on every system Chanoma comes with;
+    # hardware.bluetooth.settings.General sets either back.
+    hardware.bluetooth.settings.General = lib.mkIf cfg.chanoma.enable {
+      FastConnectable = lib.mkDefault true;
+      JustWorksRepairing = lib.mkDefault "always";
+    };
     systemd.user.generators = lib.mkIf cfg.chanoma.enable { aizome-tv-units = tvUnits; };
     # The TV account's drives, for every account to read
     # (chanoma.shareTvDrives): UDisks keeps to a /run/media/USER that's
