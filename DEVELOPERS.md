@@ -2669,8 +2669,12 @@ Chrome, and when the two give different Chromes (7 and 8 November 2026:
 cores, so such a system fetches Chrome from Google and compiles the two
 cores when an update changes them. The systems `push-cache` publishes refuse
 unfree packages (`free` in `nix/reference-systems.nix`) and have none
-of the three. BlueZ allows fast reconnection of paired controllers and
-keeps the system's configured policy for replacement pairings.
+of the three. BlueZ is set to connect quickly and to let
+a device that forgot the computer pair again without anyone confirming,
+for Chanoma's controllers; BlueZ has one policy for every device, so
+this holds for all of them on every Aizome system. That is decided on
+purpose, with its cost known, and is not to be removed as a fix
+(`desktop/aizome/docs/chanoma.md`, "Decided on purpose").
 `nix build .#checks.x86_64-linux.aizome-chanoma-defaults` holds Aizome's
 module alone (with unfree packages allowed and refused), the live media
 and the installed Aizome system the media carries to all of this, to

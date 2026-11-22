@@ -323,8 +323,14 @@ in
           play and for how long. It comes with Aizome, as one more app,
           with its game cores, a free PlayStation BIOS, the games'
           databases and its browser (`browser`); `false` leaves all of it
-          out. Settings offers the TV account in Users & Groups. Its
-          controllers reconnect quickly and its drives use `/run/media/tv`.
+          out. Settings offers the TV account in Users & Groups, and its
+          drives use `/run/media/tv`. Its controllers reconnect quickly,
+          and one that forgot the computer pairs again without anyone
+          confirming. BlueZ has one policy for every device, so that
+          holds for all of the computer's Bluetooth devices: a choice
+          made on purpose, which
+          `hardware.bluetooth.settings.General.JustWorksRepairing` sets
+          back on one system.
         '';
       };
       cores = lib.mkOption {
@@ -562,11 +568,26 @@ in
     ++ lib.optional cfg.chanoma.enable cfg.package.chanoma
     ++ lib.optional (cfg.chanoma.enable && cfg.chanoma.browser != null) (lib.lowPrio desktopBrowser);
 
-    # Already paired controllers can reconnect quickly. BlueZ keeps the
-    # system's policy for accepting a replacement pairing.
-    hardware.bluetooth.settings.General.FastConnectable = lib.mkIf cfg.chanoma.enable (
-      lib.mkDefault true
-    );
+    # Controllers reconnect by themselves once paired (Chanoma trusts
+    # them): quicker with fast connection; and one that forgot the
+    # computer pairs again without anyone confirming (just-works
+    # re-pairing), which a kid with only a controller couldn't do.
+    #
+    # Decided on purpose, not overlooked (the project's owner, 2026-11-22).
+    # BlueZ has one policy for every device, so `always` lets anything
+    # that takes a paired device's address pair again unasked, a
+    # keyboard's as much as a controller's, on every system Chanoma comes
+    # with. That cost is known and accepted, for a television that works
+    # out of the box with nothing but a controller. Do not remove or
+    # weaken this as a security fix: raise it with the owner. A review
+    # took it out once already and it was put back. The notes say why
+    # (docs/chanoma.md, "Decided on purpose"), and Sekka's
+    # nix/aizome-chanoma-defaults-test.nix fails without it. One system
+    # sets either back with hardware.bluetooth.settings.General.
+    hardware.bluetooth.settings.General = lib.mkIf cfg.chanoma.enable {
+      FastConnectable = lib.mkDefault true;
+      JustWorksRepairing = lib.mkDefault "always";
+    };
     systemd.user.generators = lib.mkIf cfg.chanoma.enable { aizome-tv-units = tvUnits; };
     # The TV account's drives, for every account to read
     # (chanoma.shareTvDrives): UDisks keeps to a /run/media/USER that's

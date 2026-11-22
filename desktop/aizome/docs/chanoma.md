@@ -34,7 +34,8 @@ shows play only in it; none otherwise, and Chanoma looks on the PATH),
 keeps the TV account's own systemd to what it needs
 (`programs.aizome.chanoma.tvUnits`, under The TV account), makes
 `/run/media/tv` for its drives, has sshd refuse the managed account,
-and enables fast Bluetooth reconnection for paired controllers.
+and sets BlueZ to connect quickly and to let a controller that forgot
+the computer pair again without anyone confirming.
 
 Since it comes with every Aizome, so does each of those. Two reach
 past Chanoma:
@@ -45,8 +46,12 @@ past Chanoma:
   Chanoma launches its own browser profiles directly.
   Sekka's cache publishes nothing unfree, so such a system
   fetches Chrome from Google when an update changes it.
-- **Bluetooth reconnection** uses BlueZ's `FastConnectable`, which may
-  increase power use. Replacement pairings follow the system's BlueZ policy.
+- **BlueZ has one pairing policy for every device**
+  (`JustWorksRepairing = always`, `FastConnectable`): anything that
+  takes a paired device's address pairs again unasked, a keyboard's as
+  much as a controller's, and listening for quick connections uses more
+  power. `hardware.bluetooth.settings.General` sets either back. This
+  one is [decided on purpose](#decided-on-purpose), not an oversight.
 
 Each core's `*_libretro.so` files are copied into their own store path.
 Chanoma's core directory links those copies. Free and unfree systems
@@ -1440,6 +1445,34 @@ Bluetooth pairing screen against BlueZ, DRM services (Netflix and the
 like) in Google Chrome, sound, the ISO, or a television. These need doing
 before calling any of it tested on hardware.
 
+## Decided on purpose
+
+These read as defects in a review and are not. The project's owner chose
+each knowing what it costs. A change that reverses one is not a fix:
+raise it with the owner. Each is marked "Decided on purpose" where it
+is set, and `checks.aizome-chanoma-defaults`
+(`nix/aizome-chanoma-defaults-test.nix`) fails when one is taken out.
+
+- **A Bluetooth device that forgot the computer pairs again without
+  anyone confirming** (`JustWorksRepairing = always`, in the module, on
+  every system Chanoma comes with). What it costs: BlueZ has one policy
+  for every device and no list of them, so something nearby that takes a
+  paired keyboard's address pairs as that keyboard, unasked. Why it
+  stays: a television has to work out of the box with nothing but a
+  controller. A controller used with something else in between forgets
+  the computer, and a kid holding it can confirm nothing. It is how
+  Chanoma was used on a television. Decided on 2026-11-22. A review
+  took it out the same day as a security fix, and it was put back. One
+  system sets it back with
+  `hardware.bluetooth.settings.General.JustWorksRepairing`.
+- **Chanoma comes with every Aizome, whole, with nothing to turn on**:
+  the app, its cores, and Google Chrome where unfree packages are
+  allowed. The television's own account, made in Settings, is the one
+  thing a grown-up turns on. What it costs: the sizes at the top of
+  these notes, and Chrome among the apps of someone who never opens
+  Chanoma. Decided on 2026-11-22. `programs.aizome.chanoma.enable =
+  false` leaves all of it out on one system.
+
 ## Limits
 
 - A core stuck loading for good keeps its thread in Chanoma's process:
@@ -1476,6 +1509,13 @@ before calling any of it tested on hardware.
   managed account through its `aizome-tv-kiosk` group, even after Chanoma
   is disabled. Other services that check
   passwords through PAM can accept the PIN.
+- Controllers pair again by themselves because every Bluetooth device
+  does: BlueZ's `JustWorksRepairing = always` has no list of devices, and
+  it's set on every system Chanoma comes with. Something nearby that
+  takes a paired keyboard's address would pair as that keyboard without
+  anyone being asked. This is [decided on purpose](#decided-on-purpose).
+  Not tried: Chanoma confirming for its own controllers alone, which
+  BlueZ's `confirm` would allow.
 - The rules are for a kid holding a controller. Over a page a keyboard
   and a mouse belong to the browser's window (The way home), all but
   Home and F1, so Chrome's own shortcuts, its context menu, its DevTools

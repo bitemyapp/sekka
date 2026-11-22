@@ -114,9 +114,10 @@ after it logs out. The login
 screen takes a game controller too, so the whole evening needs no
 keyboard: nothing changes there until a button is pressed, then the
 controller chooses who logs in and types a password on an on-screen
-keyboard, or presses the TV's PIN on its buttons. A paired controller can
-reconnect on its own. A grown-up can pair it again in Settings if it
-forgets the computer. Chanoma has been tested in a
+keyboard, or presses the TV's PIN on its buttons. So that a controller
+finds its way back without one, a Bluetooth device that has forgotten
+the computer pairs with it again without anyone confirming, and that
+holds for every Bluetooth device, not controllers alone. Chanoma has been tested in a
 virtual machine with a virtual controller and with real emulator cores,
 and used on a television with a physical controller; Netflix-style
 services haven't been checked. The Dreamcast and PlayStation 2 draw on
