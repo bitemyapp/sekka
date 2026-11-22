@@ -19,6 +19,15 @@ let
   # The network agent's libsecret, with the Secret Service key fix that
   # Nixpkgs' lacks until 0.21.8 (nix/libsecret-dh-padding.nix).
   libsecretFor = pkgs: import ../../../nix/libsecret-dh-padding.nix { inherit (pkgs) lib libsecret; };
+  # Nixpkgs with the gnome-keyring Sekka's systems run
+  # (nix/overlays/gnome-keyring.nix), for the checks that log in with a
+  # password or read the keyring: Nixpkgs' daemon aborts when a client's
+  # first call comes before it has recorded the client, and the login
+  # keyring is locked from then on. A check's VM is built from the packages
+  # the check is given and takes no overlay from a module
+  # (pkgs.testers.runNixOSTest makes nixpkgs.overlays read-only), so the fix
+  # comes as the check's packages, and Aizome's module sets no overlay.
+  keyringPkgs = forAll (pkgs: pkgs.extend (import ../../../nix/overlays/gnome-keyring.nix));
   # Libraries the compositor (smithay), the toolkit (Sukumo) and the
   # apps link against or load at run time.
   buildInputs =
@@ -160,8 +169,14 @@ let
       timezone-policy = import ./timezone-policy-test.nix { inherit pkgs self; };
       # The login screen: people, sessions (another Wayland one, an X11
       # one), a wrong password, logging out and back (vm-greeter-test.nix).
-      greeter = import ./vm-greeter-test.nix { inherit pkgs self; };
-      greeter-x11 = import ./vm-greeter-x11-test.nix { inherit pkgs self; };
+      greeter = import ./vm-greeter-test.nix {
+        pkgs = keyringPkgs.${pkgs.stdenv.hostPlatform.system};
+        inherit self;
+      };
+      greeter-x11 = import ./vm-greeter-x11-test.nix {
+        pkgs = keyringPkgs.${pkgs.stdenv.hostPlatform.system};
+        inherit self;
+      };
       koyomi-session = import ./vm-koyomi-session-test.nix { inherit pkgs self; };
       koyomi-modal = import ./vm-koyomi-modal-test.nix { inherit pkgs self; };
       shashin-modal = import ./vm-shashin-modal-test.nix { inherit pkgs self; };
@@ -196,7 +211,10 @@ let
       fusen-save = import ./vm-fusen-save-test.nix { inherit pkgs self; };
       encrypted-volumes = import ./vm-encrypted-volumes-test.nix { inherit pkgs self; };
       wallpaper-choice = import ./vm-wallpaper-choice-test.nix { inherit pkgs self; };
-      network-auth = import ./vm-network-auth-test.nix { inherit pkgs self; };
+      network-auth = import ./vm-network-auth-test.nix {
+        pkgs = keyringPkgs.${pkgs.stdenv.hostPlatform.system};
+        inherit self;
+      };
       polkit-recovery = import ./vm-polkit-recovery-test.nix { inherit pkgs self; };
       # Nisshi's reader through real polkit and pkexec: your own journal,
       # the system's once polkit says yes, refused without (vm-nisshi-test.nix).
