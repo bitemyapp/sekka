@@ -2289,11 +2289,15 @@ first login, and logs the same user back in. These are component checks; they
 do not qualify an ISO or physical suspend/resume. A user manager that dies
 takes the session, and the watch, with it.
 
-`aizome-checks` holds the 24 VM checks Aizome's flake had, under the names it
-gave them. They are in `legacyPackages`, not `checks`, so `nix flake check` and
-CI don't run them, just as they didn't run in Aizome's repository. Sekka's own
-Aizome checks (`aizome-login`, `aizome-automatic-login`,
-`aizome-greeter-desktops`, `aizome-ibus`,
+`aizome-checks` holds Aizome's own VM checks, under the names its flake gives
+them: 33 on 2026-11-22, listed by
+`nix eval .#aizome-checks --apply builtins.attrNames`. They are in
+`legacyPackages`, not `checks`, so `nix flake check`, pull requests and the
+nightly don't run them. They run on `main`, after every push to it and once a
+day, in a workflow of their own that holds nothing back
+([Aizome's VM checks on main](#aizomes-vm-checks-on-main)); run the ones a
+change touches before merging it. Sekka's own Aizome checks (`aizome-login`,
+`aizome-automatic-login`, `aizome-greeter-desktops`, `aizome-ibus`,
 `aizome-ibus-policy`) still run with the others.
 
 Three of them log in with a password or read the keyring: `greeter`,
@@ -3839,6 +3843,74 @@ before building if any is missing. The nightly's own push to `main` starts no
 run: the workflow token's pushes start no workflows, and the nightly publishes
 that revision itself.
 
+### Aizome's VM checks on main
+
+`.github/workflows/aizome.yml` runs Aizome's own VM checks
+(`legacyPackages.x86_64-linux.aizome-checks`, see [Aizome](#aizome)), which
+`nix flake check`, pull requests, "Check and cache main" and the nightly all
+leave out. It runs on the builder for every push to `main`, once a day on
+GitHub's schedule (12:17 UTC), and from its **Run workflow** button (Actions,
+"Aizome's VM checks") or with
+
+```sh
+gh workflow run aizome.yml --ref main
+```
+
+The daily run is for the nightly's input update, whose push starts no
+workflow. GitHub creates scheduled runs hours late and drops some (see
+[Nightly builds](#nightly-builds)). Nothing waits on this run, so a late one
+costs nothing, and after a dropped one the next push to `main` checks the same
+inputs. One run builds at a time; while it does, GitHub keeps only the newest
+waiting run.
+
+The workflow holds nothing back. It publishes nothing, holds no secrets and
+moves no branch, and neither a pull request nor the nightly waits for it. A
+failing check is a red run on the commit in Actions. GitHub notifies whoever's
+push started the run and, for the daily run, whoever last changed the
+workflow's `cron` line, each by their own notification settings.
+
+`scripts/ci-named-checks.py` evaluates the set once and builds every check in
+one `nix build --keep-going`, through the retention wrapper (group
+`main-aizome`, see [The builder](#the-builder)). Every check runs even after
+one fails, and none is retried. It then asks the store which outputs are
+valid. A failed build leaves what it wrote at its output path, so the path
+being there says nothing. The run's summary lists every check by name with its
+result and time, failures first. Each failed check also gets:
+
+- an error annotation on the run, which names the check and its derivation;
+- its own log, folded under its name in the step's log;
+- the last 40 lines of that log in the summary.
+
+The log is the check's own lines from the build's output, picked out by the
+derivation name Nix puts before each line. A job cannot run `nix log`: its
+container has the store and the daemon's socket but not `/nix/var/log`. On the
+builder itself, `nix log` with the derivation the annotation names gives the
+whole log, and the failed check's output path keeps what the run wrote, such
+as screenshots, until the check is built again or the store is collected.
+GitHub shows at most ten annotations from a step; the summary and the log name
+every failure.
+
+A check whose derivation passed before is not run again, and the summary says
+so ("passed before, not run again"). A push that changes nothing the checks
+are built from costs the evaluation, about ten seconds, and the failing checks
+again if there are any.
+
+On wx-workstation on 2026-11-22, with main at 279bdcff, the Aizome package
+built and every check that uses Aizome's module made to run again:
+
+- One run took 19 minutes 49 seconds. 31 of the 33 checks were done within
+  three minutes. `settings` took nine minutes, and `idle-inhibit`, which sits
+  through real idle time in one VM, 19 minutes 41 seconds.
+- 16 VMs ran at once for the first two minutes, the 16 builds the image allows
+  a slot (`max-jobs = 16`), each a guest with 4 GiB and four cores. After
+  three minutes there were two, after nine, one. The VMs held 17.5 GiB at
+  their peak, and the load reached 24 on 128 threads.
+- Two runs at once, one in each slot, took 19 minutes 54 seconds and
+  19 minutes 47 seconds, with 32 VMs, 32.9 GiB and a load of 30 at their peak.
+- Evaluating the 33 derivations took 10 seconds and 8.2 GiB.
+- No passing check failed in the 75 times one ran across those three runs,
+  which is why the job retries nothing.
+
 ### Trusted pull requests
 
 `.github/workflows/pr.yml` builds and tests open, non-draft PRs targeting
@@ -3871,7 +3943,9 @@ The job builds Uta and every check under `checks.x86_64-linux` with the
 existing lock, including package check phases and the component VM checks;
 each check starts building as soon as it is evaluated. One push reports every
 failing check, and the passing ones stay rooted for the next push. The
-separate `aizome-checks` and `iso-checks` legacy outputs, the evaluation of the
+separate `aizome-checks` (run on `main`, see
+[Aizome's VM checks on main](#aizomes-vm-checks-on-main)) and `iso-checks`
+legacy outputs, the evaluation of the
 flake's other outputs (the nightly's) and actual ISO installation/hardware
 qualification remain separate. Results
 appear on the tested PR head as `Trusted PR / build and tests`; a newer
@@ -3881,8 +3955,8 @@ changes while queued, dispatch again against the new merge.
 
 `nix build .#checks.x86_64-linux.pr-ci` exercises trust rejection, merge
 identity, API failures, runner admission, Git object reuse with private
-candidate state, and the retention wrapper and its bounds, and lints the
-build, ISO and release workflows. Enabling
+candidate state, the retention wrapper and its bounds, and the report of
+named checks, and lints the build, ISO, Aizome and release workflows. Enabling
 this workflow requires deploying the updated runner image below; the former
 admission hook rejects all pull-request events. Release publication remains
 manually disabled.
@@ -4022,8 +4096,8 @@ it runs. Rooting
 inputs is best effort: if Nix can't list them, the results stay rooted, the
 job warns, and a passing build stays green.
 
-Retention is separate for main and PR work, and for Uta, checks and published
-packages. Each group keeps two successful main generations or four successful
+Retention is separate for main and PR work, and for Uta, checks, published
+packages, the ISO and Aizome's VM checks. Each group keeps two successful main generations or four successful
 PR generations, expiring after seven days; the newest successful main
 generation is kept until replaced. Failed generations last a day, one per main
 group and two per PR group. Below 200 GiB of free store space, the daemon's

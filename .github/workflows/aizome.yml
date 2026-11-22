@@ -1,0 +1,61 @@
+name: Aizome's VM checks
+
+on:
+  push:
+    branches: [main]
+  # Main after the nightly has moved it: the nightly's own push starts no
+  # workflow. GitHub delivers schedules late and drops some (DEVELOPERS.md,
+  # "Nightly builds"); nothing waits on this run, and the next push to main
+  # checks the same revision.
+  schedule:
+    - cron: "17 12 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One run at a time. While it builds, GitHub keeps only the newest waiting
+# run, so a burst of merges checks the first and the last.
+concurrency:
+  group: sekka-aizome-checks-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  checks:
+    # Aizome's own VM checks (legacyPackages.x86_64-linux.aizome-checks,
+    # desktop/aizome/nix), which the flake's checks leave out, on main as
+    # merged and on the sandboxed builder (nix/runner.nix and DEVELOPERS.md).
+    # A check whose derivation passed before is not run again. It publishes
+    # nothing, holds no secrets, moves no branch and gates nothing: a failure
+    # is this run going red, with each failed check named.
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: [self-hosted, linux, x64, sekka-builder]
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Check the builder
+        shell: bash
+        run: |
+          set -euo pipefail
+          nix --version
+          # As in the nightly: the checks are NixOS tests in VMs.
+          # The ${...} in single quotes are Nix's own.
+          # shellcheck disable=SC2016
+          nix build --no-link --impure --print-build-logs --expr '
+            let pkgs = (builtins.getFlake (toString ./.)).inputs.nixpkgs.legacyPackages.x86_64-linux;
+            in pkgs.runCommand "kvm-${toString builtins.currentTime}" { requiredSystemFeatures = [ "kvm" ]; } "exec 3<>/dev/kvm && touch $out"
+          ' || {
+            echo "::error::The builder's Nix daemon cannot give builds KVM, which the NixOS tests need (see DEVELOPERS.md)."
+            exit 1
+          }
+      - name: Run Aizome's VM checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Every check runs even after one fails. The step's summary lists
+          # each by name, and each failure's log is folded under its name.
+          python3 scripts/ci-named-checks.py --title "Aizome's VM checks" --label aizome \
+            .#legacyPackages.x86_64-linux.aizome-checks
+          git diff --exit-code
