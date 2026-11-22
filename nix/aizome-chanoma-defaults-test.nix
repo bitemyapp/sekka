@@ -2,13 +2,15 @@
 # browser where the system may have Google Chrome, and its controllers
 # pairing again by themselves. Evaluated for Aizome's module alone (with
 # unfree packages allowed and refused), the live media, and the installed
-# Aizome system the media carries. A configuration check: it builds and
-# runs nothing of Chanoma.
+# Aizome system the media carries. The installed
+# system the binary cache publishes refuses unfree packages, and has no
+# Chrome. A configuration check: it builds and runs nothing of Chanoma.
 {
   pkgs,
   inputs,
   installer,
   references,
+  applicationCatalog,
 }:
 let
   inherit (pkgs) lib;
@@ -34,6 +36,14 @@ let
     programs.aizome.chanoma.enable = false;
   };
   media = references.systems.aizome.config;
+  # The same installed system as the binary cache publishes it
+  # (packages.installed-systems).
+  published =
+    (import ./reference-systems.nix {
+      inherit inputs applicationCatalog;
+      desktops = [ "aizome" ];
+      free = true;
+    }).systems.aizome.config;
 
   packages = config: builtins.filter builtins.isAttrs config.environment.systemPackages;
   # The package's `chanoma` output: the app, its entry and the TV session.
@@ -72,11 +82,16 @@ assert installer.config.nixpkgs.config.allowUnfree && media.nixpkgs.config.allow
 assert hasChanoma installer.config && browsers installer.config == [ "google-chrome" ];
 assert hasChanoma media && browsers media == [ "google-chrome" ];
 assert (bluetooth media).JustWorksRepairing == "always";
+# The published system refuses unfree packages: Chanoma, and no Chrome.
+assert !published.nixpkgs.config.allowUnfree;
+assert hasChanoma published;
+assert published.programs.aizome.chanoma.browser == null && browsers published == [ ];
 pkgs.writeText "aizome-chanoma-defaults.json" (
   builtins.toJSON {
     alone = summary on;
     free = summary free;
     live = summary installer.config;
     media = summary media;
+    published = summary published;
   }
 )

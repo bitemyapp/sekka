@@ -1862,7 +1862,8 @@ that fallback and affected cached ancestors need no compiler. Clients substitute
 reference separately, so the shared libraries come from cache.nixos.org; the
 Sekka cache is incomplete on its own, and `nix copy --from` it alone fails.
 All of these are evaluated refusing unfree packages (`installed-systems`
-forces it), so NVIDIA's driver and other unfree packages are never published,
+asks its reference configuration for it, which
+`checks.aizome-chanoma-defaults` holds it to), so NVIDIA's driver and other unfree packages are never published,
 and one added to a desktop makes the push fail rather than publish it.
 Installed systems at the same lock use the identical store paths.
 The command also writes `nix-cache-info` with priority 50, so Nix asks
@@ -2659,14 +2660,17 @@ application cache, but built from the applications' own Nixpkgs: a
 second derivation of the same version, so the media has it twice. No
 cache has those three, so
 such a system fetches Chrome from Google and compiles the two cores
-when an update changes them. BlueZ is set to connect quickly and to let
+when an update changes them. The systems `push-cache` publishes refuse
+unfree packages (`free` in `nix/reference-systems.nix`) and have none
+of the three. BlueZ is set to connect quickly and to let
 a device that forgot the computer pair again without anyone confirming,
 for Chanoma's controllers; BlueZ has one policy for every device, so
 this holds for all of them on every Aizome system.
 `nix build .#checks.x86_64-linux.aizome-chanoma-defaults` holds Aizome's
 module alone (with unfree packages allowed and refused), the live media
-and the installed Aizome system the media carries to all of this, and
-to nothing being started (`autostart`). It is a configuration check: it
+and the installed Aizome system the media carries to all of this, to
+the published system refusing unfree packages and having no Chrome,
+and to nothing being started (`autostart`). It is a configuration check: it
 runs nothing of Chanoma. The television's own account is the one thing
 a grown-up turns on, in Settings. It reads controllers from
 evdev itself so that it can grab them, drives libretro cores in its own

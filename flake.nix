@@ -350,7 +350,12 @@
           inherit pkgs inputs installer;
         };
         aizome-chanoma-defaults = import ./nix/aizome-chanoma-defaults-test.nix {
-          inherit pkgs inputs installer;
+          inherit
+            pkgs
+            inputs
+            installer
+            applicationCatalog
+            ;
           references = referenceSystems;
         };
         pipewire-packages = import ./nix/pipewire-packages-test.nix {

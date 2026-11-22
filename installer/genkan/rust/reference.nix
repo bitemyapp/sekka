@@ -12,6 +12,9 @@
   filesystem ? "ext4",
   swap ? true,
   tuning ? true,
+  # Allow unfree packages, as Genkan asks. The systems the binary cache
+  # publishes refuse them (nix/reference-systems.nix).
+  unfree ? true,
   stateVersion ? "26.11",
 }:
 { lib, pkgs, ... }:
@@ -80,6 +83,6 @@
     ];
     hashedPasswordFile = "/etc/nixos-secrets/user-password.hash";
   };
-  nixpkgs.config.allowUnfree = true;
+  nixpkgs.config.allowUnfree = unfree;
   system.stateVersion = stateVersion;
 }
