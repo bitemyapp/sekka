@@ -18,7 +18,8 @@ with the same pieces (`aizome-face`).
   one, the initial shows on the selection colour.
 - **The password**, once someone is picked. Their picture and name sit
   above the field, which has the focus rail. A wrong password shakes the
-  field and says *That password didn't work. Try again.* PAM's other
+  field and says *That password didn't work. Try again.* (*That PIN
+  didn't work*, for the TV account's PIN, typed or pressed). PAM's other
   questions and messages show too (a code, a key to touch). Caps Lock is
   pointed out.
 - **The session**, under the field: the one that will start. Click it, or

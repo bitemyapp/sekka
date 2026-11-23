@@ -468,8 +468,8 @@ fn boxed_field(f: Element<Msg>, failed: u32, lit: bool) -> Element<Msg> {
 /// What's to say under the field: why the last try failed, what PAM says,
 /// Caps Lock, or why the power menu didn't do it.
 fn message(g: &Greeter, size: Size) -> Element<Msg> {
-    let msg = if let Some((m, tone)) = &g.login.message {
-        Some((m.clone(), if *tone == Tone::Error { Hue::Red } else { Hue::Text2 }))
+    let msg = if let Some((m, tone)) = g.said() {
+        Some((m, if tone == Tone::Error { Hue::Red } else { Hue::Text2 }))
     } else if let Some(e) = &g.power_error {
         Some((e.clone(), Hue::Red))
     } else if g.caps {

@@ -446,3 +446,40 @@ fn the_tv_accounts_pin_is_pressed_on_the_pad_and_goes_when_its_long_enough() {
     let pad = h.program().sofa().and_then(|s| s.pin).expect("the pad");
     assert_eq!(pad.error.as_deref(), Some("That PIN didn't work. Try again."));
 }
+
+#[test]
+fn the_tv_accounts_pin_typed_wrong_is_refused_as_a_pin() {
+    let mut users = people();
+    users.push(tv_user(Auth::Pin, Some(4)));
+    let mut h = greeter(State::default(), users);
+    let w = main_window(&h);
+    // No controller: the keyboard picks the TV and types its PIN.
+    for _ in 0..3 {
+        h.named(w, NamedKey::ArrowRight, Modifiers::NONE);
+    }
+    h.named(w, NamedKey::Enter, Modifiers::NONE);
+    assert_eq!(h.program().login.user.as_deref(), Some("tv"));
+    asks_password(&mut h);
+    h.type_text(w, "0000");
+    h.named(w, NamedKey::Enter, Modifiers::NONE);
+    assert_eq!(h.program().login.step, Step::Waiting);
+    h.send(Msg::Greetd(Response::Error {
+        error_type: ErrorType::AuthError,
+        description: "pam_authenticate: AUTH_ERR".into(),
+    }));
+    // greetd answers the cancel, then asks again.
+    h.send(Msg::Greetd(Response::Success));
+    asks_password(&mut h);
+    assert!(matches!(h.program().login.step, Step::Ask { .. }));
+    let texts = h.texts(w);
+    assert!(texts.iter().any(|t| t == "That PIN didn't work. Try again."), "{texts:?}");
+    assert!(!texts.iter().any(|t| t.contains("password")), "a PIN isn't called a password: {texts:?}");
+    // What PAM says of its own stays in PAM's words, for a PIN too.
+    h.type_text(w, "1357");
+    h.named(w, NamedKey::Enter, Modifiers::NONE);
+    h.send(Msg::Greetd(Response::AuthMessage {
+        auth_message_type: AuthMessageType::Info,
+        auth_message: "Your password will expire in 3 days".into(),
+    }));
+    assert!(h.texts(w).iter().any(|t| t == "Your password will expire in 3 days"), "{:?}", h.texts(w));
+}

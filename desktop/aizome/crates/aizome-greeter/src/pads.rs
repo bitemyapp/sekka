@@ -27,7 +27,7 @@ use aizome_sofa::pinpad::{Chorded, Chords};
 use aizome_sys::tv::Auth;
 
 use crate::app::{Greeter, Msg, PowerVerb, Stage};
-use crate::login::Step;
+use crate::login::{Secret, Step, Tone};
 
 /// What the controller is on.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -104,6 +104,17 @@ impl Greeter {
     /// The TV account's way in, if it's the one logging in.
     pub fn tv_auth(&self) -> Option<Auth> {
         self.tv_login().map(|t| t.auth)
+    }
+
+    /// What the login has to say, in the words of what whoever is logging
+    /// in signs in with: the TV account's PIN is a PIN, typed in the field
+    /// or pressed on the pad.
+    pub fn said(&self) -> Option<(String, Tone)> {
+        let secret = match self.tv_auth() {
+            Some(Auth::Pin) => Secret::Pin,
+            Some(Auth::None | Auth::Password) | None => Secret::Password,
+        };
+        self.login.message.as_ref().map(|(said, tone)| (said.words(secret), *tone))
     }
 
     /// The TV account with nothing to sign in with, not yet started:
@@ -499,7 +510,7 @@ impl Greeter {
             },
             typed: self.password.chars().count(),
             length,
-            error: self.login.message.as_ref().map(|(m, _)| m.replace("password", "PIN")),
+            error: self.said().map(|(words, _)| words),
             wait: None,
             checking: self.login.step == Step::Waiting,
             family,
