@@ -29,12 +29,17 @@
 //!
 //! Needs `services.udisks2.enable`. Changing system devices asks for
 //! administrator rights through polkit; removable drives need none.
+//!
+//! [`Automount`] mounts drives as they're plugged in, for a program that
+//! wants their files without anyone opening them first.
 
+mod automount;
 pub mod confirm;
 mod model;
 mod smart;
 pub mod types;
 
+pub use automount::{Automount, Opening, Outcome};
 pub use confirm::{Confirm, DeletePartition, Destructive, Format, NewPartitionTable, Repair, Resize};
 pub use model::{
     BlockDevice, DisksState, Drive, Encrypted, Filesystem, FreeSpace, Health, Job, LoopDevice, Partition,
@@ -287,6 +292,27 @@ impl Disks {
     pub fn mount(&self, block: &str) -> Task<String> {
         let block = block.to_owned();
         self.task(move |bus| bus.call_with(MOUNT, UDISKS, &block, IFACE_FILESYSTEM, "Mount", &(empty(),)))
+    }
+
+    /// Mount a filesystem unless it's mounted already, by anyone, a moment
+    /// ago included: the result is where it is mounted.
+    pub fn open(&self, block: &str) -> Task<String> {
+        let block = block.to_owned();
+        self.task(move |bus| {
+            let mounted = |bus: &Bus| {
+                Disks::refreshed(bus).block(&block).and_then(|b| b.filesystem.as_ref()?.mount_points.first().cloned())
+            };
+            if let Some(at) = mounted(bus) {
+                return Ok(at);
+            }
+            match bus.call_with(MOUNT, UDISKS, &block, IFACE_FILESYSTEM, "Mount", &(empty(),)) {
+                // Someone mounted it between the look and the call.
+                Err(Error::DBus { name, message }) if name.ends_with(".AlreadyMounted") => {
+                    mounted(bus).ok_or(Error::DBus { name, message })
+                }
+                result => result,
+            }
+        })
     }
 
     /// Unmount a filesystem; `force` detaches it even while files are open

@@ -313,6 +313,9 @@ pub struct Aizome {
     /// Where the pointer is (kept beside smithay's, which sits behind a lock
     /// held during pointer callbacks).
     pub pointer_pos: Point<f64, Logical>,
+    /// The pointer hasn't moved since the compositor started: what's drawn
+    /// under it hears it as it appears (`point_at_new_surface`).
+    pub pointer_resting: bool,
     /// Shown in the stack-drop feedback and the grab cursors.
     pub dnd_icon: Option<WlSurface>,
     /// Where the drag icon is, relative to the pointer.
@@ -360,6 +363,8 @@ impl State {
     ) -> State {
         let dh = display.handle();
         let clock = Clock::new();
+        // A kiosk (the TV) shows no pointer until a mouse moves it.
+        let first_cursor = if options.kiosk { CursorImageStatus::Hidden } else { CursorImageStatus::default_named() };
 
         let socket = match &options.socket {
             Some(name) => ListeningSocketSource::with_name(name).expect("bind the Wayland socket"),
@@ -544,9 +549,10 @@ impl State {
             palette,
             startup_renderer: settings.renderer_choice(),
             settings,
-            cursor_status: CursorImageStatus::default_named(),
+            cursor_status: first_cursor,
             cursor_override: None,
             pointer_pos: Point::from((0.0, 0.0)),
+            pointer_resting: true,
             cursor_theme,
             dnd_icon: None,
             dnd_offset: (0, 0).into(),

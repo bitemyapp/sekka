@@ -1862,7 +1862,8 @@ that fallback and affected cached ancestors need no compiler. Clients substitute
 reference separately, so the shared libraries come from cache.nixos.org; the
 Sekka cache is incomplete on its own, and `nix copy --from` it alone fails.
 All of these are evaluated refusing unfree packages (`installed-systems`
-forces it), so NVIDIA's driver and other unfree packages are never published,
+asks its reference configuration for it, which
+`checks.aizome-chanoma-defaults` holds it to), so NVIDIA's driver and other unfree packages are never published,
 and one added to a desktop makes the push fail rather than publish it.
 Installed systems at the same lock use the identical store paths.
 The command also writes `nix-cache-info` with priority 50, so Nix asks
@@ -2648,6 +2649,112 @@ killed and replaced.
 The engine evaluation (PDFium against hayro over the pdf.js corpus, and
 why MuPDF and Poppler were ruled out by licence), the fork's work, and the
 reader's design are in [Shiori's notes](desktop/aizome/docs/shiori.md).
+
+Chanoma (`desktop/aizome/apps/chanoma`), the family television, comes
+with Aizome (`programs.aizome.chanoma.enable`, on unless turned off): the
+package builds it into a `chanoma` output of its own, and the module
+adds it with its libretro cores (unfree snes9x and Genesis Plus GX only
+where unfree packages are allowed), OpenBIOS, a free PlayStation BIOS
+built from source (`desktop/aizome/nix/openbios.nix`, the `psx-openbios`
+package), and libretro-database's game databases for its systems (CC
+BY-SA 4.0, fetched file by file at a pinned commit:
+`desktop/aizome/nix/chanoma-metadata.nix`). So all of that is in every
+installed Aizome system and on the installation media, and the free
+systems `push-cache` publishes carry it for updates to download: 173 MiB
+of store paths, uncompressed (2026-11-22, Aizome's module alone). The
+module copies each core library into a separate store path. The free
+and unfree configurations share these paths, so an update can download
+the patched Play! core from the free system's closure. The combined
+directory links to the libraries without pulling in RetroArch and Qt. Where unfree packages are
+allowed, as on the media and the installed systems it carries, Google
+Chrome comes too (`programs.aizome.chanoma.browser`, 458 MiB more), with
+the two unfree cores. Ordinary desktop launches use the catalog's keyring
+wrapper. Chanoma starts the underlying browser with its own profile.
+The media already carried Chrome in the offline
+application cache, behind the catalog's keyring wrapper
+(`installer/genkan/rust/src/keyring.nix`). That one comes from the
+applications' Nixpkgs and Chanoma's from the system's, which are
+pinned apart: at one revision, as they mostly are, the media carry one
+Chrome, and when the two give different Chromes (7 and 8 November 2026:
+156 and 157) they carry both. No cache has Chrome or the two unfree
+cores, so such a system fetches Chrome from Google and compiles the two
+cores when an update changes them. The systems `push-cache` publishes refuse
+unfree packages (`free` in `nix/reference-systems.nix`) and have none
+of the three. BlueZ is set to connect quickly and to let
+a device that forgot the computer pair again without anyone confirming,
+for Chanoma's controllers; BlueZ has one policy for every device, so
+this holds for all of them on every Aizome system. That is decided on
+purpose, with its cost known, and is not to be removed as a fix
+(`desktop/aizome/docs/chanoma.md`, "Decided on purpose").
+`nix build .#checks.x86_64-linux.aizome-chanoma-defaults` holds Aizome's
+module alone (with unfree packages allowed and refused), the live media
+and the installed Aizome system the media carries to all of this, to
+the published system refusing unfree packages and having no Chrome,
+and to nothing being started (`autostart`). It is a configuration check: it
+runs nothing of Chanoma. The television's own account is the one thing
+a grown-up turns on, in Settings. It reads controllers from
+evdev itself so that it can grab them, drives libretro cores in its own
+process (unpacking zipped games for them), and opens streaming services
+in Chrome or Chromium driven through the compositor's IPC. The PIN keeps
+out kids with a controller, not someone with a terminal. A forgotten PIN
+is reset with the account's password through PAM, from `aizome-sys`'s
+`pam` feature (the lock screen's, moved there to share it); box art
+comes from thumbnails.libretro.com over HTTPS (`ureq`, as Tenki fetches
+the weather). It reads its folders, for games and videos alike, through
+`aizome-index` (`desktop/aizome/crates/aizome-index`), a files index in
+one SQLite database under `$XDG_CACHE_HOME/aizome/index` that any Aizome
+app can share: a second look lists only folders whose modified time
+changed. Its design and measurements are in [the files index's
+notes](desktop/aizome/docs/files-index.md).
+
+Nintendo 64 support uses the default `libretro.mupen64plus` package
+(Mupen64Plus-Next), GLideN64 through Chanoma's OpenGL host, and the pinned
+Nintendo 64 game database. See [the Nintendo 64 notes](desktop/aizome/docs/chanoma.md#nintendo-64)
+for formats, controls, limits and the optional real-core rendering/resume
+check. Search keeps the category it was opened in. Newly found films and
+shows wait for approval by default, as games do; saved policies remain in
+effect. Switching films back to approval does not approve the existing
+library, and playback rechecks the film or show's permission.
+
+What a controller needs is shared with the login screen as two crates:
+`aizome-gamepad` (controllers from evdev, by position, through SDL's
+database) and `aizome-sofa` (the sofa-sized look, the on-screen keyboard
+and the PIN pad, whose ten digits a controller short of buttons presses as
+chords with Select). The TV account (Settings, Users & Groups;
+`aizome_sys::tv`) is a real account with nologin for a shell, made and
+changed by `aizome-tv-account`, a root helper Settings runs through
+pkexec under its own polkit action (installed in the package's `libexec`,
+as Nisshi's is); its record, nothing secret, is
+`/var/lib/aizome/tv-account.toml`. The login screen forces its session,
+`aizome-chanoma-session` (the compositor's new `--kiosk` mode with
+`aizome-chanoma --tv` alone, ending with it), and `aizome-session` hands
+over to it too.
+
+```sh
+cargo test -p aizome-index
+cargo test -p aizome-gamepad -p aizome-sofa
+cargo test -p aizome-chanoma
+cargo test -p aizome-greeter                 # the controller at the login screen, the TV account
+cargo test -p aizome-settei --test window    # setting the TV account up
+CHANOMA_TEST_CORES=<folder of *_libretro.so> \
+  cargo test -p aizome-chanoma --test cores -- --ignored --nocapture
+nix build .#aizome-checks.chanoma -L
+nix build .#aizome-checks.tv -L              # login screen to Chanoma and back, a controller alone
+```
+
+The first (also run in the package's check phase) covers the rules,
+controller mappings, the frontend and whole evenings through a core the
+test defines. The second loads nixpkgs' cores and plays a generated Game
+Boy game with gambatte, SameBoy and mGBA. The VM check drives the packaged
+app in an Aizome session with a uinput controller alone: found and held,
+a game opened, played (its picture read from the compositor), paused and
+kept; a page in Chromium clicked, keyed and pointed at, and the overlay
+menu over it. The TV check drives the login screen with the same kind of
+controller: Alice's password on the on-screen keyboard, the TV account
+made by its helper and its PIN pressed on the PIN pad, Chanoma set up and
+left in its kiosk session, and the login screen back. None of these is a physical controller, a DRM service or a
+television; [Chanoma's notes](desktop/aizome/docs/chanoma.md) record what
+has and hasn't been checked.
 
 The lock screen follows enabled Wayland outputs throughout lock acquisition
 and the confirmed lock. Every display has a focused password field sharing

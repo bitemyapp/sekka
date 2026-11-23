@@ -579,3 +579,26 @@ fn the_real_bar_of_another_display_renames_a_desk_from_its_menu() {
     a.wait_seen("the window has the keyboard again", |s| s.keyboard_focus);
     wait("the fields gone", || real_rename_field(&c, FIRST).is_none() && real_rename_field(&c, SECOND).is_none());
 }
+
+/// A window that appears under a pointer that hasn't moved since the
+/// compositor started (a login screen, a kiosk's program) has the pointer
+/// at once, not at its next move, so the cursor it sets (or hides) shows.
+#[test]
+fn a_window_under_a_resting_pointer_has_it_at_once() {
+    let c = Compositor::start(Options::default());
+    let input = || {
+        let aizome_ipc::Response::InputState { state } = c.request(Request::InputState) else { panic!() };
+        state
+    };
+    assert_eq!(input().pointer_focus, None, "nothing under it yet");
+    let mut spec = Spec::new("test.resting", 0x2266cc);
+    spec.fullscreen = true;
+    let _a = c.client(spec);
+    c.wait_window("test.resting");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while input().pointer_focus.is_none() && std::time::Instant::now() < deadline {
+        c.settle();
+    }
+    let focus = input().pointer_focus;
+    assert!(focus.as_deref().is_some_and(|f| f.contains("test.resting")), "{focus:?}");
+}

@@ -1,0 +1,13 @@
+[package]
+name = "aizome-mpris"
+description = "A media player's side of MPRIS 2 (the desktop's media controls and media keys), for Aizome's players: Utsushi and Chanoma"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+log.workspace = true
+# The same version and features as aizome-sys's (the shell's side).
+zbus = { version = "5.19", default-features = false, features = ["async-io", "blocking-api"] }

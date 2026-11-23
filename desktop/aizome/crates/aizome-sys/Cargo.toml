@@ -26,6 +26,12 @@ roxmltree = "0.21"
 # PipeWire's volume and devices, through pipewire-pulse (see audio.rs).
 libpulse-binding = "2.30"
 serde.workspace = true
+# The TV account's record (tv.rs).
+toml.workspace = true
+
+[features]
+# Checking passwords through PAM (pam.rs): links libpam.
+pam = []
 
 [dev-dependencies]
 aizome-apps = { workspace = true, features = ["test-util"] }

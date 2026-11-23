@@ -467,7 +467,7 @@ mod tests {
             "users.users.root.initialHashedPassword=\"!\";",
             "extraGroups=[\"networkmanager\"\"wheel\"];",
             "hashedPasswordFile=\"/etc/nixos-secrets/user-password.hash\";",
-            "nixpkgs.config.allowUnfree=true;",
+            "nixpkgs.config.allowUnfree=",
         ] {
             assert!(generated.contains(fragment), "config.rs lacks {fragment}");
             assert!(

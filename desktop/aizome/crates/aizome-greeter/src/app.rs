@@ -7,15 +7,19 @@ use std::path::PathBuf;
 use std::sync::mpsc;
 use std::time::Duration;
 
+use aizome_gamepad::{PadEvent, Pads};
 use aizome_kit::prelude::*;
 use aizome_kit::{Anchors, Image, KeyboardInteractivity, Layer, LayerOptions, Margins, Menu, MenuItem, MenuStyle};
+use aizome_sys::tv::{Auth, TvAccount};
 
 use crate::clock::Now;
 use crate::config::{Config, State};
 use crate::greetd::{self, Request, Response};
 use crate::login::{Launch, Login, Step};
-use crate::sessions::Session;
-use crate::users::User;
+use crate::pads::{Couch, Spot};
+use crate::sessions::{Kind, Session};
+use crate::sofa;
+use crate::users::{Accounts, User};
 
 /// Where the login is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -90,6 +94,18 @@ pub enum Msg {
         rgba: Option<Vec<u8>>,
     },
     Avatar(String, Option<Image>),
+    /// What the controllers did.
+    Pad(PadEvent),
+    /// A click on what a controller brought up (or the panel about
+    /// controllers).
+    Sofa(sofa::Target),
+    /// The button at the top right: the panel about controllers.
+    Help,
+    /// The pointer moved over the login screen, off the controller's
+    /// panels: the mouse is back.
+    Pointer,
+    /// The TV account's Start (it has nothing to sign in with).
+    StartTv,
 }
 
 /// A display's wallpaper: which file, at what size in pixels, and the
@@ -104,6 +120,7 @@ pub struct Greeter {
     pub cfg: Config,
     pub state: State,
     pub users: Vec<User>,
+    tv: Option<TvAccount>,
     pub sessions: Vec<Session>,
     pub stage: Stage,
     /// The person in the row with the selection (the `People` stage) or
@@ -133,6 +150,11 @@ pub struct Greeter {
     /// Pretend to be greetd (`--demo`): any user, the password `aizome`.
     pub demo: bool,
     pub power_error: Option<String>,
+    /// The game controllers, and what they've brought up.
+    pub couch: Couch,
+    pads: Option<Pads>,
+    /// The TV account's session, whatever's picked: Chanoma alone.
+    pub tv_session: Session,
 }
 
 impl Greeter {
@@ -148,13 +170,23 @@ impl Greeter {
     pub fn with(
         cfg: Config,
         state: State,
-        users: Vec<User>,
+        accounts: Accounts,
         sessions: Vec<Session>,
         hostname: String,
         live: bool,
         demo: bool,
     ) -> Greeter {
+        let Accounts { visible: users, tv } = accounts;
         let last = state.last_user.as_ref().and_then(|u| users.iter().position(|x| &x.name == u));
+        let tv_session = Session {
+            id: "chanoma".into(),
+            name: "Chanoma".into(),
+            comment: String::new(),
+            exec: cfg.tv_session.clone(),
+            desktop_names: vec!["Chanoma".into()],
+            kind: Kind::Wayland,
+            path: PathBuf::new(),
+        };
         let stage = if !cfg.user_list || users.is_empty() {
             Stage::Name
         } else if last.is_some() || users.len() == 1 {
@@ -167,6 +199,7 @@ impl Greeter {
             cfg,
             state,
             users,
+            tv,
             sessions,
             stage,
             selected: last.unwrap_or(0),
@@ -187,6 +220,9 @@ impl Greeter {
             live,
             demo,
             power_error: None,
+            couch: Couch::default(),
+            pads: None,
+            tv_session,
         }
     }
 
@@ -199,26 +235,38 @@ impl Greeter {
     }
 
     /// The user name the login is for.
-    fn username(&self) -> Option<String> {
+    fn username(&self) -> Option<&str> {
         match self.stage {
-            Stage::Name => self.login.user.clone(),
-            _ => self.user().map(|u| u.name.clone()),
+            Stage::Name => self.login.user.as_deref(),
+            _ => self.user().map(|u| u.name.as_str()),
         }
     }
 
+    pub(crate) fn tv_login(&self) -> Option<&TvAccount> {
+        self.tv.as_ref().filter(|tv| Some(tv.user.as_str()) == self.username())
+    }
+
     /// The session picked for whoever is logging in: theirs from last
-    /// time, else the default, else the first.
+    /// time, else the default, else the first. The TV account's is
+    /// Chanoma's, always.
     pub fn session(&self) -> Option<&Session> {
+        self.session_for(self.username())
+    }
+
+    fn session_for(&self, username: Option<&str>) -> Option<&Session> {
+        if self.tv.as_ref().is_some_and(|tv| Some(tv.user.as_str()) == username) {
+            return Some(&self.tv_session);
+        }
         let by_id = |id: &str| self.sessions.iter().find(|s| s.id == id);
-        self.username()
-            .and_then(|u| self.session_of.get(&u).cloned())
-            .and_then(|id| by_id(&id))
+        username
+            .and_then(|u| self.session_of.get(u))
+            .and_then(|id| by_id(id))
             .or_else(|| self.cfg.default_session.as_deref().and_then(by_id))
             .or_else(|| self.sessions.first())
     }
 
     fn launch(&self) -> Launch {
-        match self.session() {
+        match self.session_for(self.login.user.as_deref()) {
             Some(s) => Launch { cmd: s.command(&self.cfg.x11_prefix), env: s.env() },
             None => Launch { cmd: Vec::new(), env: Vec::new() },
         }
@@ -247,7 +295,10 @@ impl Greeter {
         }
     }
 
-    fn submit(&mut self, cx: &mut Cx<Msg>) {
+    pub(crate) fn submit(&mut self, cx: &mut Cx<Msg>) {
+        if self.tv_start() {
+            return self.start_tv(cx);
+        }
         match self.login.step {
             Step::Ask { .. } => {
                 let mut answer = std::mem::take(&mut self.password);
@@ -263,10 +314,19 @@ impl Greeter {
     }
 
     fn heard(&mut self, response: Response, cx: &mut Cx<Msg>) {
+        // Another seat may have created the TV account since the chooser opened.
+        if self.live && matches!(response, Response::Success) {
+            self.tv = TvAccount::read();
+        }
         let launch = self.launch();
         let failed = self.login.failed;
         let next = self.login.heard(response, &launch);
         self.send(next);
+        // A PIN pressed whole before greetd asked for it goes now.
+        let length = self.tv_login().and_then(|t| t.pin_length).map(usize::from);
+        if self.couch.pin && matches!(self.login.step, Step::Ask { .. }) && length == Some(self.password.len()) {
+            self.submit(cx);
+        }
         if self.login.failed != failed {
             greetd::zero_string(&mut self.password);
             self.shake = 1;
@@ -274,7 +334,9 @@ impl Greeter {
             cx.after(Duration::from_millis(30), Msg::Shake(1));
         }
         if self.login.step == Step::Done {
-            if let (Some(user), Some(session)) = (self.username(), self.session().map(|s| s.id.clone())) {
+            if let Some(user) = self.login.user.clone()
+                && let Some(session) = self.session_for(Some(&user)).map(|s| s.id.clone())
+            {
                 self.state.logged_in(&user, &session);
                 if self.live
                     && let Err(e) = self.state.save(&self.cfg.state)
@@ -289,24 +351,75 @@ impl Greeter {
         }
     }
 
-    fn pick(&mut self, i: usize, cx: &mut Cx<Msg>) {
+    pub(crate) fn pick(&mut self, i: usize, cx: &mut Cx<Msg>) {
         if i >= self.users.len() {
             return;
         }
         self.selected = i;
         self.stage = Stage::Password;
         self.login.message = None;
+        self.couch.keys = None;
+        self.couch.pin = false;
+        self.couch.spot = Spot::Field;
+        // The TV account with nothing to sign in with starts when asked
+        // (its Start), not by being chosen.
+        if self.tv_auth() == Some(Auth::None) {
+            let cancel = self.login.cancel();
+            self.send(cancel);
+            greetd::zero_string(&mut self.password);
+            cx.focus("greeter-start");
+        } else {
+            self.begin();
+            cx.focus("greeter-password");
+        }
+        self.bring_up_typing(cx);
+    }
+
+    /// The TV account's Start: greetd's session, which PAM lets in without
+    /// a question (`nullok`), and then Chanoma's.
+    pub(crate) fn start_tv(&mut self, cx: &mut Cx<Msg>) {
+        if !self.tv_start() {
+            return;
+        }
+        log::info!("greeter: starting the TV account");
         self.begin();
         cx.focus("greeter-password");
     }
 
-    fn back_to_people(&mut self, cx: &mut Cx<Msg>) {
+    pub(crate) fn next_person(&mut self) {
+        if !self.users.is_empty() {
+            self.selected = (self.selected + 1) % self.users.len();
+        }
+    }
+
+    pub(crate) fn previous_person(&mut self) {
+        if !self.users.is_empty() {
+            self.selected = (self.selected + self.users.len() - 1) % self.users.len();
+        }
+    }
+
+    /// The user name typed (the `Name` stage): ask greetd for them.
+    pub(crate) fn submit_name(&mut self, cx: &mut Cx<Msg>) {
+        let name = self.name.trim().to_owned();
+        if !name.is_empty() {
+            let r = self.login.begin(&name);
+            self.send(r);
+            cx.focus("greeter-name");
+            self.couch.keys = None;
+            self.bring_up_typing(cx);
+        }
+    }
+
+    pub(crate) fn back_to_people(&mut self, cx: &mut Cx<Msg>) {
         if self.users.len() < 2 || !self.cfg.user_list {
             return;
         }
         greetd::zero_string(&mut self.password);
         self.login.message = None;
         self.stage = Stage::People;
+        self.couch.keys = None;
+        self.couch.pin = false;
+        self.couch.spot = Spot::People;
         // Whoever was half logged in: greetd lets go.
         let cancel = self.login.cancel();
         self.send(cancel);
@@ -342,7 +455,7 @@ impl Greeter {
         cx.show_menu(win, anchor, menu, MenuStyle::below());
     }
 
-    fn power(&mut self, verb: PowerVerb, cx: &mut Cx<Msg>) {
+    pub(crate) fn power(&mut self, verb: PowerVerb, cx: &mut Cx<Msg>) {
         if !self.live {
             return;
         }
@@ -437,6 +550,22 @@ impl Greeter {
         }
     }
 
+    /// Listen to the game controllers (holding none: nothing else reads
+    /// them here).
+    fn start_pads(&mut self, cx: &mut Cx<Msg>) {
+        if !self.live || !self.cfg.controllers {
+            return;
+        }
+        let path = self.cfg.controller_database.clone().or_else(aizome_gamepad::mapping::Database::standard_path);
+        let database = path.as_deref().map(aizome_gamepad::mapping::Database::load).unwrap_or_default();
+        let config =
+            aizome_gamepad::Config { dir: PathBuf::from("/dev/input"), database, layouts: HashMap::new(), grab: false };
+        let out = cx.stream();
+        self.pads = Some(Pads::start(config, move |e| {
+            out.send(Msg::Pad(e));
+        }));
+    }
+
     fn start_greetd(&mut self, cx: &mut Cx<Msg>) {
         if !self.live {
             return;
@@ -491,9 +620,13 @@ impl Program for Greeter {
     fn launched(&mut self, cx: &mut Cx<Msg>) {
         cx.set_appearance(aizome_kit::theme::Appearance::default());
         self.start_greetd(cx);
+        self.start_pads(cx);
         self.sync_windows(cx);
         self.load_avatars(cx);
-        if self.stage == Stage::Password {
+        if self.stage == Stage::Password && self.tv_auth() == Some(Auth::None) {
+            // Back from the TV account: it starts again only when asked.
+            cx.focus("greeter-start");
+        } else if self.stage == Stage::Password {
             self.begin();
             cx.focus("greeter-password");
         } else if self.stage == Stage::People {
@@ -516,8 +649,37 @@ impl Program for Greeter {
     }
 
     fn update(&mut self, msg: Msg, cx: &mut Cx<Msg>) {
+        // What the keyboard and the mouse send: the controller's things
+        // give way to them.
+        if matches!(
+            msg,
+            Msg::Password(_)
+                | Msg::Name(_)
+                | Msg::Submit
+                | Msg::SubmitName
+                | Msg::Pick(_)
+                | Msg::Select(_)
+                | Msg::Next
+                | Msg::Previous
+                | Msg::Other
+                | Msg::People
+                | Msg::SessionMenu
+                | Msg::PowerMenu
+                | Msg::Pointer
+                | Msg::StartTv
+        ) {
+            self.leave_couch();
+        }
         match msg {
             Msg::Nothing => {}
+            Msg::Pad(e) => self.pad(e, cx),
+            Msg::Sofa(t) => self.sofa_click(t, cx),
+            Msg::Help => {
+                self.couch.power = None;
+                self.couch.help = !self.couch.help;
+            }
+            Msg::Pointer => {}
+            Msg::StartTv => self.start_tv(cx),
             Msg::Greetd(r) => self.heard(r, cx),
             Msg::GreetdLost(why) => {
                 log::error!("greetd: {why}");
@@ -534,27 +696,14 @@ impl Program for Greeter {
             Msg::Submit => self.submit(cx),
             Msg::Caps(on) => self.caps = on,
             Msg::Name(n) => self.name = n,
-            Msg::SubmitName => {
-                let name = self.name.trim().to_owned();
-                if !name.is_empty() {
-                    let r = self.login.begin(&name);
-                    self.send(r);
-                    cx.focus("greeter-name");
-                }
-            }
+            Msg::SubmitName => self.submit_name(cx),
             // Return in the row: whoever has the selection.
             Msg::Pick(i) => self.pick(if i == usize::MAX { self.selected } else { i }, cx),
             Msg::Select(i) => self.selected = i.min(self.users.len().saturating_sub(1)),
-            Msg::Next => {
-                if !self.users.is_empty() {
-                    self.selected = (self.selected + 1) % self.users.len();
-                }
-            }
-            Msg::Previous => {
-                if !self.users.is_empty() {
-                    self.selected = (self.selected + self.users.len() - 1) % self.users.len();
-                }
-            }
+            Msg::Next => self.next_person(),
+            Msg::Previous => self.previous_person(),
+            // Escape closes the panel about controllers first.
+            Msg::People if self.couch.help => self.couch.help = false,
             Msg::People => self.back_to_people(cx),
             Msg::Other => {
                 greetd::zero_string(&mut self.password);
@@ -566,7 +715,7 @@ impl Program for Greeter {
             Msg::SessionMenu => self.session_menu(cx),
             Msg::PickSession(i) => {
                 if let (Some(user), Some(s)) = (self.username(), self.sessions.get(i)) {
-                    self.session_of.insert(user, s.id.clone());
+                    self.session_of.insert(user.to_owned(), s.id.clone());
                 }
                 if let Some(w) = self.main_window() {
                     cx.close_menus(w);

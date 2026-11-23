@@ -1,9 +1,13 @@
-//! The desktop's media controls (MPRIS 2): Utsushi as
-//! `org.mpris.MediaPlayer2.utsushi`, for the menu bar's media widget and
-//! the media keys (both the shell's), and anything else that speaks it.
-//! D-Bus runs on a thread of its own; the interface publishes its state
+//! The desktop's media controls (MPRIS 2), from a player's side: a player
+//! ([`Identity`]) as `org.mpris.MediaPlayer2.<bus>`, for the menu bar's
+//! media widget and the media keys (both the shell's: `aizome-sys`'s
+//! `mpris` follows the players), and anything else that speaks it.
+//! Utsushi and Chanoma are players.
+//!
+//! D-Bus runs on a thread of its own; the player publishes its [`State`]
 //! when it changes (never as the position moves: MPRIS readers estimate
-//! it, and `Seeked` says when it jumps).
+//! it, and `Seeked` says when it jumps), and hears what's asked of it as
+//! [`Action`]s.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, mpsc};
@@ -13,6 +17,33 @@ use zbus::zvariant::{ObjectPath, OwnedValue, Str, Value};
 
 const PATH: &str = "/org/mpris/MediaPlayer2";
 const INTERFACE: &str = "org.mpris.MediaPlayer2.Player";
+
+/// Who the player is, as MPRIS says it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Identity {
+    /// The last part of its bus name: `org.mpris.MediaPlayer2.<bus>`.
+    pub bus: &'static str,
+    /// Its name, as people know it ("Utsushi").
+    pub name: &'static str,
+    /// Its desktop entry, without `.desktop` ("org.aizome.Utsushi").
+    pub desktop_entry: &'static str,
+    /// What it may be asked to open (`OpenUri`): none, nothing.
+    pub uri_schemes: &'static [&'static str],
+    pub mime_types: &'static [&'static str],
+    /// Whether it may be asked to quit, or to come forward.
+    pub can_quit: bool,
+    pub can_raise: bool,
+    /// The slowest and fastest it plays (1 and 1: as recorded only).
+    pub rates: (f64, f64),
+}
+
+impl Identity {
+    /// The object path naming item `item`: under its desktop entry's name
+    /// (`/org/aizome/Utsushi/item/3`).
+    fn item_path(&self, item: u64) -> String {
+        format!("/{}/item/{item}", self.desktop_entry.replace('.', "/"))
+    }
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Action {
@@ -82,23 +113,30 @@ impl Default for State {
 
 type Notify = Arc<dyn Fn(Action) + Send + Sync>;
 
-struct Root(Notify);
+struct Root {
+    id: Identity,
+    notify: Notify,
+}
 
 #[zbus::interface(name = "org.mpris.MediaPlayer2")]
 impl Root {
     fn raise(&self) {
-        (self.0)(Action::Raise);
+        if self.id.can_raise {
+            (self.notify)(Action::Raise);
+        }
     }
     fn quit(&self) {
-        (self.0)(Action::Quit);
+        if self.id.can_quit {
+            (self.notify)(Action::Quit);
+        }
     }
     #[zbus(property)]
     fn can_quit(&self) -> bool {
-        true
+        self.id.can_quit
     }
     #[zbus(property)]
     fn can_raise(&self) -> bool {
-        true
+        self.id.can_raise
     }
     #[zbus(property)]
     fn has_track_list(&self) -> bool {
@@ -106,25 +144,24 @@ impl Root {
     }
     #[zbus(property)]
     fn identity(&self) -> &str {
-        "Utsushi"
+        self.id.name
     }
     #[zbus(property)]
     fn desktop_entry(&self) -> &str {
-        "org.aizome.Utsushi"
+        self.id.desktop_entry
     }
     #[zbus(property)]
     fn supported_uri_schemes(&self) -> Vec<String> {
-        vec!["file".into(), "http".into(), "https".into()]
+        self.id.uri_schemes.iter().map(|s| (*s).to_owned()).collect()
     }
     #[zbus(property)]
     fn supported_mime_types(&self) -> Vec<String> {
-        ["video/mp4", "video/x-matroska", "video/webm", "audio/mpeg", "audio/flac", "audio/ogg", "audio/mp4"]
-            .map(String::from)
-            .to_vec()
+        self.id.mime_types.iter().map(|s| (*s).to_owned()).collect()
     }
 }
 
 struct Transport {
+    id: Identity,
     state: Arc<Mutex<State>>,
     notify: Notify,
     /// Where playback is now: the player's clock, read when asked.
@@ -177,12 +214,18 @@ impl Transport {
     }
     fn set_position(&self, track_id: ObjectPath<'_>, position: i64) {
         let s = self.state();
-        if s.can_seek && track_id.as_str() == item_path(s.item) && position >= 0 && position as f64 / 1e6 <= s.duration {
+        if s.can_seek
+            && track_id.as_str() == self.id.item_path(s.item)
+            && position >= 0
+            && position as f64 / 1e6 <= s.duration
+        {
             (self.notify)(Action::Seek(position as f64 / 1e6));
         }
     }
     fn open_uri(&self, uri: &str) {
-        (self.notify)(Action::Open(uri.to_owned()));
+        if self.id.uri_schemes.iter().any(|s| uri.starts_with(&format!("{s}:"))) {
+            (self.notify)(Action::Open(uri.to_owned()));
+        }
     }
     #[zbus(property)]
     fn playback_status(&self) -> &str {
@@ -213,12 +256,12 @@ impl Transport {
         if rate == 0.0 {
             (self.notify)(Action::Pause);
         } else if rate.is_finite() {
-            (self.notify)(Action::Rate(rate.clamp(0.5, 2.0)));
+            (self.notify)(Action::Rate(rate.clamp(self.id.rates.0, self.id.rates.1)));
         }
     }
     #[zbus(property)]
     fn metadata(&self) -> HashMap<String, OwnedValue> {
-        metadata(&self.state())
+        metadata(&self.id, &self.state())
     }
     #[zbus(property)]
     fn volume(&self) -> f64 {
@@ -237,11 +280,11 @@ impl Transport {
     }
     #[zbus(property)]
     fn minimum_rate(&self) -> f64 {
-        0.5
+        self.id.rates.0
     }
     #[zbus(property)]
     fn maximum_rate(&self) -> f64 {
-        2.0
+        self.id.rates.1
     }
     #[zbus(property)]
     fn can_go_next(&self) -> bool {
@@ -269,16 +312,12 @@ impl Transport {
     }
 }
 
-fn item_path(item: u64) -> String {
-    format!("/org/aizome/Utsushi/item/{item}")
-}
-
-fn metadata(s: &State) -> HashMap<String, OwnedValue> {
+fn metadata(id: &Identity, s: &State) -> HashMap<String, OwnedValue> {
     if s.title.is_empty() {
         return HashMap::new();
     }
     let mut m: HashMap<String, OwnedValue> = HashMap::new();
-    if let Ok(p) = ObjectPath::try_from(item_path(s.item)) {
+    if let Ok(p) = ObjectPath::try_from(id.item_path(s.item)) {
         m.insert("mpris:trackid".into(), p.into());
     }
     m.insert("mpris:length".into(), ((s.duration * 1e6) as i64).into());
@@ -300,28 +339,50 @@ fn metadata(s: &State) -> HashMap<String, OwnedValue> {
     m
 }
 
+/// A file (or an address) as the URL MPRIS wants for what plays and its
+/// picture (`xesam:url`, `mpris:artUrl`): an address as it was given, a
+/// file as a `file://` URL escaped as GLib escapes it (spaces, `#` and `%`
+/// included).
+pub fn url_of(path: &std::path::Path) -> String {
+    use std::os::unix::ffi::OsStrExt;
+    let bytes = path.as_os_str().as_bytes();
+    if !bytes.starts_with(b"/") && path.to_string_lossy().contains("://") {
+        return path.to_string_lossy().into_owned();
+    }
+    let mut s = String::from("file://");
+    for &b in bytes {
+        if b.is_ascii_alphanumeric() || b"!$&'()*+,-./:=@_~".contains(&b) {
+            s.push(b as char);
+        } else {
+            s.push_str(&format!("%{b:02X}"));
+        }
+    }
+    s
+}
+
 /// The MPRIS service: publish states, hear actions.
 pub struct Mpris {
     updates: mpsc::Sender<State>,
 }
 
 impl Mpris {
-    /// Serve on the session bus (on a thread of its own), calling
+    /// Serve `id` on the session bus (on a thread of its own), calling
     /// `notify` with what's asked, and `now` for the position. Without a
     /// bus it says so in the log.
     pub fn start(
+        id: Identity,
         notify: impl Fn(Action) + Send + Sync + 'static,
         now: impl Fn() -> f64 + Send + Sync + 'static,
     ) -> Mpris {
         let (updates, rx) = mpsc::channel::<State>();
         let notify: Notify = Arc::new(notify);
         let now: Now = Arc::new(now);
-        let _ = std::thread::Builder::new().name("utsushi-mpris".into()).spawn(move || {
+        let _ = std::thread::Builder::new().name(format!("{}-mpris", id.bus)).spawn(move || {
             // The first state goes up before the name is taken: clients
             // read everything at once when it appears.
             let Ok(first) = rx.recv() else { return };
             let state = Arc::new(Mutex::new(first));
-            let conn = match connect(state.clone(), notify, now) {
+            let conn = match connect(id.clone(), state.clone(), notify, now) {
                 Ok(c) => c,
                 Err(e) => {
                     log::warn!("no desktop media controls: {e}");
@@ -333,7 +394,7 @@ impl Mpris {
                     newest = newer;
                 }
                 let old = std::mem::replace(&mut *state.lock().unwrap_or_else(|e| e.into_inner()), newest.clone());
-                publish_changes(&conn, &old, &newest);
+                publish_changes(&id, &conn, &old, &newest);
             }
         });
         Mpris { updates }
@@ -344,7 +405,7 @@ impl Mpris {
     }
 }
 
-fn publish_changes(conn: &Connection, old: &State, new: &State) {
+fn publish_changes(id: &Identity, conn: &Connection, old: &State, new: &State) {
     let mut changed: HashMap<&str, OwnedValue> = HashMap::new();
     if old.status != new.status {
         changed.insert("PlaybackStatus", Str::from(new.status).into());
@@ -362,7 +423,7 @@ fn publish_changes(conn: &Connection, old: &State, new: &State) {
     if (old.item, &old.title, &old.artist, &old.album, &old.art, old.duration)
         != (new.item, &new.title, &new.artist, &new.album, &new.art, new.duration)
     {
-        if let Ok(v) = Value::from(metadata(new)).try_into() {
+        if let Ok(v) = Value::from(metadata(id, new)).try_into() {
             changed.insert("Metadata", v);
         }
         changed.insert("CanPlay", (!new.title.is_empty()).into());
@@ -390,10 +451,44 @@ fn publish_changes(conn: &Connection, old: &State, new: &State) {
     }
 }
 
-fn connect(state: Arc<Mutex<State>>, notify: Notify, now: Now) -> zbus::Result<Connection> {
+fn connect(id: Identity, state: Arc<Mutex<State>>, notify: Notify, now: Now) -> zbus::Result<Connection> {
     zbus::blocking::connection::Builder::session()?
-        .name("org.mpris.MediaPlayer2.utsushi")?
-        .serve_at(PATH, Root(notify.clone()))?
-        .serve_at(PATH, Transport { state, notify, now })?
+        .name(format!("org.mpris.MediaPlayer2.{}", id.bus))?
+        .serve_at(PATH, Root { id: id.clone(), notify: notify.clone() })?
+        .serve_at(PATH, Transport { id, state, notify, now })?
         .build()
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use super::*;
+
+    #[test]
+    fn what_plays_is_a_url_the_media_controls_can_read() {
+        let film = PathBuf::from("/home/u/My Film #2 (100%).mkv");
+        assert_eq!(url_of(&film), "file:///home/u/My%20Film%20%232%20(100%25).mkv");
+        assert_eq!(url_of(&PathBuf::from("/m/\u{6620}.flac")), "file:///m/%E6%98%A0.flac");
+        assert_eq!(url_of(&PathBuf::from("https://example.org/a.mp4")), "https://example.org/a.mp4");
+    }
+
+    #[test]
+    fn items_are_named_under_the_players_desktop_entry() {
+        let id = Identity {
+            bus: "chanoma",
+            name: "Chanoma",
+            desktop_entry: "org.aizome.Chanoma",
+            uri_schemes: &[],
+            mime_types: &[],
+            can_quit: false,
+            can_raise: true,
+            rates: (1.0, 1.0),
+        };
+        assert_eq!(id.item_path(3), "/org/aizome/Chanoma/item/3");
+        let state = State { item: 3, title: "Episode 1".into(), duration: 2.0, ..State::default() };
+        let m = metadata(&id, &state);
+        assert_eq!(m.len(), 3, "the track, its length and its title: {m:?}");
+        assert!(metadata(&id, &State::default()).is_empty(), "nothing plays: nothing to say");
+    }
 }

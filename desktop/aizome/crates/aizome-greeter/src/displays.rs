@@ -45,7 +45,7 @@ pub fn prepare(cfg: &Config) -> Option<SettingsFile> {
 fn prepare_inner(cfg: &Config) -> Result<Option<SettingsFile>, String> {
     let state = State::load(&cfg.state);
     let users = crate::users::find(&cfg.hidden_users);
-    let Some(user) = user(&state, &users) else { return Ok(None) };
+    let Some(user) = user(&state, &users.visible) else { return Ok(None) };
     let bus = aizome_sys::Bus::system().map_err(|e| e.to_string())?;
     let text = aizome_sys::users::display_scales(&bus, user.uid).map_err(|e| e.to_string())?;
     let scales = DisplayScales::from_toml(&text).ok_or("invalid display scales")?;
@@ -69,8 +69,8 @@ mod tests {
 
     #[test]
     fn uses_the_last_person_or_the_only_person() {
-        let alice = User { name: "alice".into(), uid: 1000, real_name: "Alice".into(), icon: None };
-        let bob = User { name: "bob".into(), uid: 1001, real_name: "Bob".into(), icon: None };
+        let alice = User { name: "alice".into(), uid: 1000, real_name: "Alice".into(), icon: None, tv: None };
+        let bob = User { name: "bob".into(), uid: 1001, real_name: "Bob".into(), icon: None, tv: None };
         let users = [alice, bob];
         assert!(user(&State::default(), &users).is_none());
         assert_eq!(user(&State::default(), &users[..1]).unwrap().uid, 1000);
