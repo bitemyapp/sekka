@@ -288,35 +288,57 @@
         inherit (inputs.yukimi.packages.${system}) yukimi;
         installed-lock = pkgs.writeText "sekka-installed-flake.lock" (builtins.toJSON installedLock);
         # An installed system for every desktop the media offers, one with all
-        # of those desktops together, and one with every free application in
-        # the catalog, with unfree packages refused.
+        # of those desktops together, one with every catalog application
+        # anyone may redistribute, and one with NVIDIA's driver for each
+        # kernel Genkan offers. All allow only the unfree packages whose
+        # licences let anyone redistribute them.
         # push-cache publishes their closures, so whatever Sekka's modules
-        # change (Hyprland, Hyprtoolkit and all that uses them) and
-        # whatever a catalog application needs downloads rather than compiles.
+        # change (Hyprland, Hyprtoolkit and all that uses them), whatever a
+        # catalog application needs, and whatever unfree but redistributable
+        # package cache.nixos.org leaves out (NVIDIA's driver, Steam,
+        # Chanoma's snes9x and Genesis Plus GX) downloads rather than
+        # compiles.
         installed-systems =
           let
+            inherit (pkgs) lib;
             reference =
-              desktops: applications:
-              import ./nix/reference-systems.nix {
-                inherit
-                  inputs
-                  applicationCatalog
-                  desktops
-                  applications
-                  ;
-                free = true;
-              };
-            desktops = reference installer.config.respin.referenceDesktops [ "firefox" ];
-            applications = reference [ "plasma" ] (
-              map (app: app.id) (builtins.filter (app: !(app.unfree or false)) applicationCatalog.catalog)
-            );
+              desktops: arguments:
+              import ./nix/reference-systems.nix (
+                {
+                  inherit inputs applicationCatalog desktops;
+                  redistributable = true;
+                }
+                // arguments
+              );
+            desktops = reference installer.config.respin.referenceDesktops { };
+            # The catalog's `unfree` flag says what is unfree: a package with
+            # no licence (Superluminal) tells nothing. An unfree application
+            # comes only when each of its packages names licences that all
+            # let anyone redistribute it (Steam; not Chrome or VS Code).
+            redistributes = import ./nix/redistributable.nix { inherit lib; };
+            redistributable =
+              app:
+              !(app.unfree or false)
+              || builtins.all (package: (package.meta.license or [ ]) != [ ] && redistributes package) (
+                applicationCatalog.packageList app
+              );
+            applications = reference [ "plasma" ] {
+              applications = map (app: app.id) (builtins.filter redistributable applicationCatalog.catalog);
+            };
+            first = builtins.head installer.config.respin.referenceDesktops;
+            nvidia =
+              kernel:
+              (reference [ first ] {
+                inherit kernel;
+                nvidia = true;
+              }).systems.${first};
           in
           pkgs.linkFarm "sekka-installed-systems" (
             map (desktop: {
               name = desktop;
               path = desktops.systems.${desktop}.config.system.build.toplevel;
             }) desktops.desktops
-            ++ pkgs.lib.optional (desktops.together != null) {
+            ++ lib.optional (desktops.together != null) {
               name = "together";
               path = desktops.together.config.system.build.toplevel;
             }
@@ -326,6 +348,16 @@
                 path = applications.systems.plasma.config.system.build.toplevel;
               }
             ]
+            ++
+              map
+                (kernel: {
+                  name = "nvidia-${kernel}";
+                  path = (nvidia kernel).config.system.build.toplevel;
+                })
+                [
+                  "latest"
+                  "lts"
+                ]
           );
         application-cache = applicationCatalog.cache;
         # sekka.computer and aizome.computer, ready to upload; the sites

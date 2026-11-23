@@ -38,7 +38,8 @@ from urllib.parse import unquote, urljoin, urlsplit
 from urllib.request import Request, urlopen
 
 # Not cache.nixos-cuda.org: only systems with NVIDIA's driver ask it
-# (binary-cache.nix), and the reference systems checked here have none.
+# (binary-cache.nix), and push-cache publishes what the reference ones with
+# the driver need, the driver itself included, to Sekka's own cache.
 CACHES = [
     'https://cache.nixos.org',
     'https://cache.sekka.computer',

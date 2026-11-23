@@ -226,15 +226,18 @@ let
   # its own profiles through CHANOMA_BROWSER above.
   withKeyring = import ../../../installer/genkan/rust/src/keyring.nix { inherit lib pkgs; };
   desktopBrowser = withKeyring { id = lib.getName cfg.chanoma.browser; } cfg.chanoma.browser;
+  # Whether this system's Nixpkgs takes an unfree package: every one where
+  # unfree packages are allowed, or those its predicate accepts (the systems
+  # Sekka's binary cache publishes take the redistributable ones).
+  allowsUnfree =
+    package:
+    pkgs.config.allowUnfree or false || (pkgs.config.allowUnfreePredicate or (_: false)) package;
   # Google Chrome, where this system can have it: it's unfree, and built
   # for x86-64 alone.
   chrome =
-    let
-      unfree =
-        pkgs.config.allowUnfree or false
-        || (pkgs.config.allowUnfreePredicate or (_: false)) pkgs.google-chrome;
-    in
-    if unfree && lib.meta.availableOn pkgs.stdenv.hostPlatform pkgs.google-chrome then
+    if
+      allowsUnfree pkgs.google-chrome && lib.meta.availableOn pkgs.stdenv.hostPlatform pkgs.google-chrome
+    then
       pkgs.google-chrome
     else
       null;
@@ -362,12 +365,13 @@ in
           # The PlayStation 2's with its BIOS, on x86-64 alone.
           ++ lib.optionals pkgs.stdenv.hostPlatform.isx86_64 [ pcsx2 ]
           # Faster for the Super NES, and the Mega Drive's only one here;
-          # both under licences that forbid selling them (unfree in Nixpkgs).
-          ++ lib.optionals (config.nixpkgs.config.allowUnfree or false) [
+          # both under licences that forbid selling them (unfree in Nixpkgs,
+          # though anyone may redistribute them).
+          ++ builtins.filter allowsUnfree [
             snes9x
             genesis-plus-gx
           ];
-        defaultText = lib.literalExpression "with pkgs.libretro; [ mesen bsnes mupen64plus gambatte mgba smsplus-gx beetle-pce-fast pcsx-rearmed stella handy beetle-ngp beetle-wswan beetle-saturn yabause flycast ] ++ [ play, with the system C++ runtime ] ++ (pcsx2 on x86-64) ++ (snes9x and genesis-plus-gx where unfree packages are allowed)";
+        defaultText = lib.literalExpression "with pkgs.libretro; [ mesen bsnes mupen64plus gambatte mgba smsplus-gx beetle-pce-fast pcsx-rearmed stella handy beetle-ngp beetle-wswan beetle-saturn yabause flycast ] ++ [ play, with the system C++ runtime ] ++ (pcsx2 on x86-64) ++ (snes9x and genesis-plus-gx where the system allows them, as unfree packages)";
         description = ''
           The libretro cores Chanoma plays games with. Cores that draw
           with OpenGL (the Nintendo 64's, Dreamcast's, PlayStation 2's) run on the

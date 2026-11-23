@@ -2,9 +2,10 @@
 # browser where the system may have Google Chrome, and its controllers
 # pairing again by themselves. Evaluated for Aizome's module alone (with
 # unfree packages allowed and refused), the live media, and the installed
-# Aizome system the media carries. The installed
-# system the binary cache publishes refuses unfree packages, and has no
-# Chrome. A configuration check: it builds and runs nothing of Chanoma.
+# Aizome system the media carries. The installed system the binary cache
+# publishes allows only unfree packages anyone may redistribute: it has the
+# snes9x and Genesis Plus GX cores, and no Chrome. A configuration check: it
+# builds and runs nothing of Chanoma.
 {
   pkgs,
   inputs,
@@ -42,7 +43,7 @@ let
     (import ./reference-systems.nix {
       inherit inputs applicationCatalog;
       desktops = [ "aizome" ];
-      free = true;
+      redistributable = true;
     }).systems.aizome.config;
 
   packages = config: builtins.filter builtins.isAttrs config.environment.systemPackages;
@@ -54,6 +55,17 @@ let
       map lib.getName (packages config)
     );
   bluetooth = config: config.hardware.bluetooth.settings.General or { };
+  # The two cores whose licences forbid selling them, which anyone may
+  # redistribute.
+  unfreeCores =
+    config:
+    builtins.filter (
+      name:
+      builtins.elem name [
+        "libretro-snes9x"
+        "libretro-genesis-plus-gx"
+      ]
+    ) (map lib.getName config.programs.aizome.chanoma.cores);
   summary = config: {
     chanoma = hasChanoma config;
     browsers = browsers config;
@@ -85,9 +97,16 @@ assert builtins.elem "aizome-tv-kiosk" on.services.openssh.settings.DenyGroups;
 assert on.systemd.services ? aizome-tv-drives && on.systemd.paths ? aizome-tv-drives;
 assert !(lib.any (lib.hasInfix "/run/media/tv") on.systemd.tmpfiles.rules);
 assert !(off.systemd.services ? aizome-tv-drives) && !(off.systemd.paths ? aizome-tv-drives);
-# Where unfree packages are refused it still comes, without the browser.
+# Where unfree packages are refused it still comes, without the browser
+# and those two cores.
 assert hasChanoma free;
 assert free.programs.aizome.chanoma.browser == null && browsers free == [ ];
+assert unfreeCores free == [ ];
+assert
+  unfreeCores on == [
+    "libretro-snes9x"
+    "libretro-genesis-plus-gx"
+  ];
 # Left out, all of it goes.
 assert !hasChanoma off && browsers off == [ ];
 assert !(bluetooth off ? JustWorksRepairing) && !(bluetooth off ? FastConnectable);
@@ -99,10 +118,12 @@ assert installer.config.nixpkgs.config.allowUnfree && media.nixpkgs.config.allow
 assert hasChanoma installer.config && browsers installer.config == [ "google-chrome" ];
 assert hasChanoma media && browsers media == [ "google-chrome" ];
 assert (bluetooth media).JustWorksRepairing == "always" && (bluetooth media).FastConnectable;
-# The published system refuses unfree packages: Chanoma, and no Chrome.
+# The published system allows only redistributable unfree packages:
+# Chanoma with both cores, which no other cache has, and no Chrome.
 assert !published.nixpkgs.config.allowUnfree;
 assert hasChanoma published;
 assert published.programs.aizome.chanoma.browser == null && browsers published == [ ];
+assert unfreeCores published == unfreeCores on;
 pkgs.writeText "aizome-chanoma-defaults.json" (
   builtins.toJSON {
     alone = summary on;
