@@ -12,8 +12,10 @@
   filesystem ? "ext4",
   swap ? true,
   tuning ? true,
-  # Allow unfree packages, as Genkan asks. The systems the binary cache
-  # publishes refuse them (nix/reference-systems.nix).
+  # Which unfree packages to allow: all of them (true), as Genkan asks;
+  # none (false); or those a predicate accepts, as the systems the binary
+  # cache publishes take only those anyone may redistribute
+  # (nix/reference-systems.nix).
   unfree ? true,
   stateVersion ? "26.11",
 }:
@@ -83,6 +85,7 @@
     ];
     hashedPasswordFile = "/etc/nixos-secrets/user-password.hash";
   };
-  nixpkgs.config.allowUnfree = unfree;
+  nixpkgs.config.allowUnfree = unfree == true;
+  nixpkgs.config.allowUnfreePredicate = if builtins.isFunction unfree then unfree else (_: false);
   system.stateVersion = stateVersion;
 }

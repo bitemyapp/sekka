@@ -1444,7 +1444,7 @@ real PipeWire and wf-recorder, single-source/no-audio recording, cancellation,
 startup failure, interrupted processes and recovery. The component fixture
 supplies the capture rectangle; it does not qualify the exact ISO's GUI journey.
 
-`nix/installed-lock.nix` extends that external lock with Sekka itself. A clean Git build pins its commit and source hash; a dirty development build pins the exact source copied into the Nix store. The source is included on the ISO. The installed flake follows `git+https://github.com/bitemyapp/sekka?ref=nightly&shallow=1` for subsequent updates: Nix keeps that one-commit clone (`~/.cache/nix/gitv3` of each account that fetches; which do is described below), so each update downloads only the objects that changed, where a `github:` address downloaded a tarball of the whole tree every time (GitHub generated the 344 MB tarball at about 450 KB/s when measured on 2026-11-07). The content hash is the same either way, so the ISO's source still serves the first build. Nix runs Git for that fetch and passes Git's progress on to Yukimi; only installations with a developer application have Git, so the helper's PATH ends with a `gitMinimal` of its own (`YUKIMI_HELPER_PATH`, set by `apps/yukimi/nix/helper.nix`). Without Git, Nix falls back to libgit2, which reports no progress and logs `executing "git"` errors. Every other input follows Sekka's own (`inputs.nixpkgs.follows = "sekka/nixpkgs"`, and likewise `determinate`, `fh`, `applications`, `ai-apps` and `omp`). Sekka's `superluminal`, `tracy` and `uta` inputs are the exception: only Sekka's own outputs use them, as catalog packages (`nix/components.nix`), so the installed flake doesn't name them and they stay locked beneath Sekka, where updating it moves them just the same. Updating Sekka therefore moves them together, and only to revisions the nightly workflow has checked and confirmed a fresh system downloads entirely: it moves `nightly` only then, so nothing upstream publishes reaches an installed system untested, and no update compiles. The exception is an unfree application such as Superluminal: Sekka's binary cache carries only free ones, so updates download it from its maker and build its small wrapper on the machine. The `tracy` input is bitemyapp's fork of Quince-Pie's flake, which nothing updates on its own: the nightly signs and publishes Tracy's build, so only upstream changes reviewed and pushed to the fork reach it. The `uta` input names its revision, so the nightly's input update never moves it: Sekka builds Uta against its own Aizome (`nix/uta.nix`), so a new Uta is a change to `flake.nix`, built with the Aizome it will run with.
+`nix/installed-lock.nix` extends that external lock with Sekka itself. A clean Git build pins its commit and source hash; a dirty development build pins the exact source copied into the Nix store. The source is included on the ISO. The installed flake follows `git+https://github.com/bitemyapp/sekka?ref=nightly&shallow=1` for subsequent updates: Nix keeps that one-commit clone (`~/.cache/nix/gitv3` of each account that fetches; which do is described below), so each update downloads only the objects that changed, where a `github:` address downloaded a tarball of the whole tree every time (GitHub generated the 344 MB tarball at about 450 KB/s when measured on 2026-11-07). The content hash is the same either way, so the ISO's source still serves the first build. Nix runs Git for that fetch and passes Git's progress on to Yukimi; only installations with a developer application have Git, so the helper's PATH ends with a `gitMinimal` of its own (`YUKIMI_HELPER_PATH`, set by `apps/yukimi/nix/helper.nix`). Without Git, Nix falls back to libgit2, which reports no progress and logs `executing "git"` errors. Every other input follows Sekka's own (`inputs.nixpkgs.follows = "sekka/nixpkgs"`, and likewise `determinate`, `fh`, `applications`, `ai-apps` and `omp`). Sekka's `superluminal`, `tracy` and `uta` inputs are the exception: only Sekka's own outputs use them, as catalog packages (`nix/components.nix`), so the installed flake doesn't name them and they stay locked beneath Sekka, where updating it moves them just the same. Updating Sekka therefore moves them together, and only to revisions the nightly workflow has checked and confirmed a fresh system downloads entirely: it moves `nightly` only then, so nothing upstream publishes reaches an installed system untested, and no update compiles. The exception is an unfree application whose licence forbids redistributing it, such as Superluminal: Sekka's binary cache carries only applications anyone may redistribute, so updates download it from its maker and build its small wrapper on the machine. The `tracy` input is bitemyapp's fork of Quince-Pie's flake, which nothing updates on its own: the nightly signs and publishes Tracy's build, so only upstream changes reviewed and pushed to the fork reach it. The `uta` input names its revision, so the nightly's input update never moves it: Sekka builds Uta against its own Aizome (`nix/uta.nix`), so a new Uta is a change to `flake.nix`, built with the Aizome it will run with.
 
 Update the distro through **Yukimi → Updates → Update** or `sekka-update`.
 The GUI checks flake updates before requesting administrator access. It copies
@@ -1815,9 +1815,10 @@ it, twice in the week before the cache was added. Three limits:
   give the store path the cache has; other `cudaCapabilities`, or an overlay
   under the package, give one it doesn't.
 - Nothing promises a build is there by the time a nightly locks its Nixpkgs.
-  The reference systems refuse unfree packages, so
+  The reference systems have no CUDA build, so
   `scripts/check_cache_coverage.py` neither lists this cache nor covers what
-  it serves; a build it lacks compiles as before.
+  it serves; a build it lacks compiles as before. (NVIDIA's driver itself
+  isn't a CUDA build: Sekka's cache publishes it.)
 - Its key is trusted for any path the earlier caches lack, as numtide's is.
   `?priority=60` makes Nix ask it last (its `nix-cache-info` says 50, as
   Sekka's does).
@@ -1841,12 +1842,15 @@ It builds `genkan`, `tatami`, `displays`, `wallpapers`, `yukimi`, `kakehashi`, `
 checks their runtime closures against the upstream caches and Sekka's cache
 before creating any archives. `installed-systems` is an
 installed system for each desktop the media offers (`respin.referenceDesktops`),
-one with all of those desktops together, and one with every free catalog
-application, so everything Sekka's modules
+one with all of those desktops together, one with every catalog
+application anyone may redistribute, and one with NVIDIA's driver for each
+kernel Genkan offers (latest and LTS). Each has what
+`templates/flake.nix.in` adds to every installed system beside Sekka's
+modules (FlakeHub's `fh`). So everything Sekka's modules
 change and every application one can choose is covered without a list to
 keep up:
 Hyprland and what uses its patched Hyprtoolkit (hyprlauncher among them),
-Elephant, the wallpapers. Only paths absent from cache.nixos.org, Determinate's
+Elephant, the wallpapers, `fh`. Only paths absent from cache.nixos.org, Determinate's
 cache, numtide's cache and Sekka's cache are exported and compressed. Existing
 Sekka archives are checked for availability and advertised size; missing or
 truncated archives are staged again. A published path that differs from the
@@ -1861,10 +1865,18 @@ assemble it from Determinate's download, and the separate coverage gate checks
 that fallback and affected cached ancestors need no compiler. Clients substitute each
 reference separately, so the shared libraries come from cache.nixos.org; the
 Sekka cache is incomplete on its own, and `nix copy --from` it alone fails.
-All of these are evaluated refusing unfree packages (`installed-systems`
-asks its reference configuration for it, which
-`checks.aizome-chanoma-defaults` holds it to), so NVIDIA's driver and other unfree packages are never published,
-and one added to a desktop makes the push fail rather than publish it.
+The packages are evaluated refusing unfree packages. `installed-systems`
+allows only those anyone may redistribute (`nix/redistributable.nix`: every
+licence a package names has Nixpkgs' `redistributable`), in the systems'
+own Nixpkgs and in the applications' (`redistributable` in
+`nix/reference-systems.nix`, which `checks.aizome-chanoma-defaults` holds it
+to). So the cache backfills what cache.nixos.org, which builds nothing
+unfree, leaves out: NVIDIA's driver for each kernel, Steam, and Chanoma's
+snes9x and Genesis Plus GX cores. Google Chrome, VS Code, Discord, Slack,
+Spotify, Obsidian, the AI desktop apps and Superluminal (whose package
+names no licence, so the catalog's `unfree` flag decides) forbid it, and
+are never published: one of those added to a desktop, or pulled in by an
+application, makes the push fail rather than publish it.
 Installed systems at the same lock use the identical store paths.
 The command also writes `nix-cache-info` with priority 50, so Nix asks
 cache.nixos.org (40) first.
@@ -2653,8 +2665,8 @@ reader's design are in [Shiori's notes](desktop/aizome/docs/shiori.md).
 Chanoma (`desktop/aizome/apps/chanoma`), the family television, comes
 with Aizome (`programs.aizome.chanoma.enable`, on unless turned off): the
 package builds it into a `chanoma` output of its own, and the module
-adds it with its libretro cores (unfree snes9x and Genesis Plus GX only
-where unfree packages are allowed), OpenBIOS, a free PlayStation BIOS
+adds it with its libretro cores (snes9x and Genesis Plus GX, unfree but
+redistributable, only where the system allows them), OpenBIOS, a free PlayStation BIOS
 built from source (`desktop/aizome/nix/openbios.nix`, the `psx-openbios`
 package), and libretro-database's game databases for its systems (CC
 BY-SA 4.0, fetched file by file at a pinned commit:
@@ -2676,11 +2688,11 @@ application cache, behind the catalog's keyring wrapper
 applications' Nixpkgs and Chanoma's from the system's, which are
 pinned apart: at one revision, as they mostly are, the media carry one
 Chrome, and when the two give different Chromes (7 and 8 November 2026:
-156 and 157) they carry both. No cache has Chrome or the two unfree
-cores, so such a system fetches Chrome from Google and compiles the two
-cores when an update changes them. The systems `push-cache` publishes refuse
-unfree packages (`free` in `nix/reference-systems.nix`) and have none
-of the three. BlueZ is set to connect quickly and to let
+156 and 157) they carry both. No cache has Chrome, so such a system
+fetches it from Google when an update changes it. The systems `push-cache`
+publishes allow only unfree packages anyone may redistribute
+(`redistributable` in `nix/reference-systems.nix`): they have the two
+cores, which cache.nixos.org doesn't build, and not Chrome. BlueZ is set to connect quickly and to let
 a device that forgot the computer pair again without anyone confirming,
 for Chanoma's controllers; BlueZ has one policy for every device, so
 this holds for all of them on every Aizome system. That is decided on
@@ -2689,7 +2701,7 @@ purpose, with its cost known, and is not to be removed as a fix
 `nix build .#checks.x86_64-linux.aizome-chanoma-defaults` holds Aizome's
 module alone (with unfree packages allowed and refused), the live media
 and the installed Aizome system the media carries to all of this, to
-the published system refusing unfree packages and having no Chrome,
+the published system having both unfree cores and no Chrome,
 and to nothing being started (`autostart`). It is a configuration check: it
 runs nothing of Chanoma. The television's own account is the one thing
 a grown-up turns on, in Settings. It reads controllers from
@@ -3669,16 +3681,16 @@ succeeded:
 1. `nix run .#push-cache` publishes Sekka's packages for that revision to
    cache.sekka.computer.
 2. `scripts/check_cache_coverage.py .#uta .#installed-systems` follows, from each
-   desktop's installed system, the one with every desktop and the free
-   catalog applications, everything
+   desktop's installed system, the one with every desktop, the one with the
+   redistributable catalog applications and those with NVIDIA's driver,
+   everything
    none of cache.nixos.org, Sekka's, numtide's and Determinate's caches has,
    as a system with an empty store would. It fails if any of it would be
    compiled rather than written locally (configuration), copied into place
    without a compiler (as Determinate Nixd is from its download) or fetched.
-   NVIDIA's driver and the unfree applications aren't covered: they can't be
-   published, so systems that have them build them (the driver for each
-   kernel, in minutes; the applications by repackaging their vendors'
-   downloads).
+   Unfree applications whose licences forbid redistribution (Chrome, VS
+   Code and the like) aren't covered: they can't be published, so systems
+   that have them repackage their vendors' downloads.
    Cached outputs are also checked independently: the gate follows their runtime
    references across all four caches. A reference missing from every cache must
    have a valid derivation for that exact output; it and its affected cached

@@ -24,8 +24,8 @@ services.displayManager.autoLogin = { enable = true; user = "tv"; };
 (the binary, its desktop entry and icon, and the TV account's session,
 kept out of Aizome's own output so a system without it doesn't list
 it), the cores (`programs.aizome.chanoma.cores`; snes9x and
-Genesis Plus GX, whose licences forbid selling them, only where unfree
-packages are allowed; PCSX2 only on x86-64) and a PlayStation BIOS
+Genesis Plus GX, whose licences forbid selling them, only where the system
+allows those unfree packages; PCSX2 only on x86-64) and a PlayStation BIOS
 (`programs.aizome.chanoma.bios`: OpenBIOS, below), exports
 `CHANOMA_CORES`, `CHANOMA_BIOS` and `CHANOMA_BROWSER` to the session,
 installs the browser (`programs.aizome.chanoma.browser`: Google Chrome
@@ -44,8 +44,9 @@ past Chanoma:
   packages, the installation media's among them, and shows among the
   apps with the same desktop keyring wrapper as the catalog browser.
   Chanoma launches its own browser profiles directly.
-  Sekka's cache publishes nothing unfree, so such a system
-  fetches Chrome from Google when an update changes it.
+  Chrome's licence forbids redistributing it, so no cache has it
+  and such a system fetches it from Google when an update changes it.
+  The two unfree cores may be redistributed: Sekka's cache has them.
 - **BlueZ has one pairing policy for every device**
   (`JustWorksRepairing = always`, `FastConnectable`): anything that
   takes a paired device's address pairs again unasked, a keyboard's as

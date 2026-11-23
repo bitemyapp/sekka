@@ -153,8 +153,18 @@ in
         message = "Rustup requires Development build tools.";
       }
       {
+        # All proprietary software allowed, or each unfree application's
+        # packages taken by Nixpkgs' predicate: the systems Sekka's binary
+        # cache publishes take those anyone may redistribute (Steam).
         assertion =
-          (config.nixpkgs.config.allowUnfree or false) || builtins.all (app: !(app.unfree or false)) selected;
+          let
+            accepts = config.nixpkgs.config.allowUnfreePredicate or (_: false);
+            accepted =
+              app:
+              builtins.all (name: accepts (sources.${app.source or "nixpkgs"} or applicationPkgs).${name}) app.packages;
+          in
+          (config.nixpkgs.config.allowUnfree or false)
+          || builtins.all (app: !(app.unfree or false) || accepted app) selected;
         message = "Selected applications require allowing proprietary software.";
       }
     ];

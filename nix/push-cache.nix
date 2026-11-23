@@ -39,10 +39,12 @@ pkgs.writeShellApplication {
       s3() { aws --profile "$profile" --region auto --endpoint-url "$endpoint" s3 "$@"; }
     fi
 
-    # Each of these is evaluated with Nixpkgs' default configuration, which
-    # refuses unfree packages, so nothing unfree is published.
-    # installed-systems is an installed system for every desktop, refusing
-    # unfree packages too: everything they need that cache.nixos.org lacks.
+    # The packages are evaluated with Nixpkgs' default configuration, which
+    # refuses unfree packages. installed-systems is an installed system for
+    # every desktop, the catalog's applications and NVIDIA's driver, which
+    # allow only unfree packages anyone may redistribute
+    # (nix/redistributable.nix): everything they need that the upstream
+    # caches lack, and nothing whose licence forbids publishing it.
     # Uta is an explicit publication root even though it is not preloaded on
     # the ISO. Its build is GPL-3.0-only, so uta.source, the exact sources it
     # was built from (nix/uta.nix), goes beside it. Keep a failed build from
