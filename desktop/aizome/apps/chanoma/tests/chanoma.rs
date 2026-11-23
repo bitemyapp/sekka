@@ -2764,6 +2764,88 @@ fn changing_the_pin_asks_for_the_pin_there_is_and_kids_mode_takes_a_pad_left_ope
     assert_eq!(h.program().lockout.failures, 0);
 }
 
+/// A new PIN that couldn't be written isn't the PIN: the pad says so and
+/// takes it again, and nothing says it changed. The PIN the file has still
+/// opens grown-up mode, here and after a restart. Other settings that
+/// couldn't be written are said too.
+#[test]
+fn a_pin_that_couldnt_be_saved_is_not_the_pin() {
+    let (dirs, cores) = household("pin-unsaved", |_| {});
+    let clock = ManualClock::at(2026, 10, 31, 17, 0);
+    let mut h = harness(config(dirs.clone(), cores, clock));
+    let said = |h: &Harness<Chanoma>| h.program().toast.as_ref().map(|(t, ..)| t.clone());
+    let in_file = || aizome_chanoma::store::read::<Settings>(&dirs.settings());
+    let choose = |h: &mut Harness<Chanoma>| {
+        for _ in 0..2 {
+            type_pin(h, "135790");
+            press(h, Button::South);
+        }
+    };
+    into_settings(&mut h);
+    to_section(&mut h, 6);
+    to_row(&mut h, "Change the PIN…");
+    input(&mut h, Input::Ok);
+    type_pin(&mut h, PIN);
+    until(&mut h, |a| matches!(&a.modal, Some(Modal::Pin { pin, .. }) if pin.new));
+
+    // The settings can't be written: the file they're written to before it
+    // takes the old one's place can't be made (as with a full disk).
+    let in_the_way = dirs.settings().with_file_name(".chanoma.json.tmp");
+    std::fs::create_dir(&in_the_way).unwrap();
+    choose(&mut h);
+    until(&mut h, |a| matches!(&a.modal, Some(Modal::Pin { pin, .. }) if !pin.checking && pin.error.is_some()));
+    let Some(aizome_chanoma::ui::Overlay::Pin(pad)) = h.program().overlay() else { panic!("no pad") };
+    assert_eq!(pad.error.as_deref(), Some("It couldn't be saved. Try again"));
+    assert_eq!(pad.title, "Choose a PIN", "the pad takes the new PIN again, from the start");
+    assert_ne!(said(&h).as_deref(), Some("The PIN is changed"));
+    for settings in [&h.program().settings, &in_file()] {
+        assert!(settings.pin.as_ref().is_some_and(|p| p.verify(PIN)), "the PIN is the one there was");
+        assert_eq!(settings.pin_length, Some(4));
+    }
+
+    // Writable again: the same pad takes it, and now it's changed.
+    std::fs::remove_dir(&in_the_way).unwrap();
+    choose(&mut h);
+    until(&mut h, |a| a.modal.is_none());
+    assert_eq!(said(&h).as_deref(), Some("The PIN is changed"));
+    for settings in [&h.program().settings, &in_file()] {
+        assert!(settings.pin.as_ref().is_some_and(|p| p.verify("135790")));
+        assert_eq!(settings.pin_length, Some(6));
+    }
+
+    // Any other setting that couldn't be written holds for now, and the
+    // grown-up is told it wasn't kept.
+    std::fs::create_dir(&in_the_way).unwrap();
+    let was = h.program().settings.one_of_each;
+    to_section(&mut h, 2);
+    to_row(&mut h, "One of each game");
+    input(&mut h, Input::Ok);
+    assert_eq!(h.program().settings.one_of_each, !was);
+    assert_eq!(in_file().one_of_each, was);
+    assert_eq!(said(&h).as_deref(), Some("Chanoma couldn't save what changed"));
+    std::fs::remove_dir(&in_the_way).unwrap();
+}
+
+/// Time played and wrong PINs fail to keep with the kids at the television:
+/// a grown-up is told when one is next here.
+#[test]
+fn records_that_couldnt_be_kept_are_said_to_the_next_grown_up() {
+    let (dirs, cores) = household("records-unsaved", |_| {});
+    let clock = ManualClock::at(2026, 10, 31, 17, 0);
+    let mut h = harness(config(dirs.clone(), cores, clock));
+    let said = |h: &Harness<Chanoma>| h.program().toast.as_ref().map(|(t, ..)| t.clone());
+    std::fs::create_dir_all(&dirs.state).unwrap();
+    let in_the_way = dirs.state.join(".usage.json.tmp");
+    std::fs::create_dir(&in_the_way).unwrap();
+    h.program_mut().usage.used += 60;
+    h.program_mut().save_usage();
+    h.send(Msg::Tick);
+    assert_ne!(said(&h).as_deref(), Some("Chanoma couldn't save what changed"), "it isn't said to the kids");
+    into_settings(&mut h);
+    assert_eq!(said(&h).as_deref(), Some("Chanoma couldn't save what changed"));
+    std::fs::remove_dir(&in_the_way).unwrap();
+}
+
 #[test]
 fn the_more_time_menu_put_away_is_kids_mode_again_whichever_button_did_it() {
     let (dirs, cores) = household("time-menu", |s| {

@@ -402,6 +402,10 @@ pub struct Chanoma {
     /// The settings file is there and couldn't be read: nothing opens, and
     /// nothing is written over it, until a grown-up sets Chanoma up again.
     pub unreadable: bool,
+    /// Something the rules stand on (the settings, the wrong PINs' count,
+    /// the time played) couldn't be written, and why: a grown-up is told
+    /// as soon as one is here ([`Chanoma::say_unsaved`]).
+    pub unsaved: Option<std::io::ErrorKind>,
     pub settings: Settings,
     pub usage: Usage,
     pub lockout: Lockout,
@@ -553,6 +557,7 @@ impl Chanoma {
         };
         Chanoma {
             unreadable,
+            unsaved: None,
             settings,
             usage,
             lockout,
@@ -642,21 +647,46 @@ impl Chanoma {
         self.config.clock.now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs()
     }
 
-    pub fn save_settings(&self) {
+    /// Keep the settings: whether the file has them now. Settings that
+    /// couldn't be written still hold until Chanoma closes, and a grown-up
+    /// is told they weren't kept ([`Chanoma::say_unsaved`]).
+    pub fn save_settings(&mut self) -> bool {
         // Never over settings that couldn't be read: what's here stands in
         // for them only until a grown-up has set Chanoma up again.
         if self.unreadable {
-            return;
+            return false;
         }
-        if let Err(e) = crate::store::write_kept(&self.config.dirs.settings(), &self.settings) {
-            log::warn!("chanoma: keeping the settings: {e}");
+        match crate::store::write_kept(&self.config.dirs.settings(), &self.settings) {
+            Ok(()) => true,
+            Err(e) => {
+                log::warn!("chanoma: keeping the settings: {e}");
+                self.unsaved = Some(e.kind());
+                false
+            }
         }
     }
 
-    pub fn save_lockout(&self) {
+    pub fn save_lockout(&mut self) {
         if let Err(e) = crate::store::write_kept(&self.config.dirs.state.join("lockout.json"), &self.lockout) {
             log::warn!("chanoma: keeping the wrong PINs' count: {e}");
+            self.unsaved = Some(e.kind());
         }
+    }
+
+    /// Tell a grown-up that something couldn't be written, once one is
+    /// here: what changed holds for now, and is gone when Chanoma next
+    /// starts. Wrong PINs and time played fail to keep with the kids at
+    /// the television, so that waits for grown-up mode.
+    fn say_unsaved(&mut self, cx: &mut Cx<Msg>) {
+        if !self.is_grownup() {
+            return;
+        }
+        let Some(kind) = self.unsaved.take() else { return };
+        let words = match unwritable(kind) {
+            Some(why) => format!("Chanoma couldn't save: {why}"),
+            None => "Chanoma couldn't save what changed".to_owned(),
+        };
+        self.toast_note(ui::Note::Drive, words, cx);
     }
 
     /// What shows while the settings can't be read, and how a grown-up
@@ -1551,9 +1581,23 @@ impl Chanoma {
             return;
         }
         let first_run = !self.settings.setup_done;
-        self.settings.pin = Some(hash);
-        self.settings.pin_length = Some(len);
-        self.save_settings();
+        let had = (self.settings.pin.replace(hash), self.settings.pin_length.replace(len));
+        if !self.save_settings() {
+            // Not kept: the PIN stays the one the file has (none, the
+            // first time), which is the one a restart would bring back.
+            // The pad says so and takes the new one again.
+            (self.settings.pin, self.settings.pin_length) = had;
+            let why = self.unsaved.take().and_then(unwritable);
+            if let Some(Modal::Pin { pin, .. }) = &mut self.modal {
+                let error = match why {
+                    Some(why) => format!("It wasn't saved: {why}"),
+                    None => "It couldn't be saved. Try again".to_owned(),
+                };
+                *pin = PinState { new: true, error: Some(error), ..PinState::default() };
+            }
+            self.sync_hud(cx);
+            return;
+        }
         self.modal = None;
         self.grownup = Some(Instant::now());
         if first_run {
@@ -2102,6 +2146,17 @@ impl Chanoma {
     }
 }
 
+/// Why a file couldn't be written, where a grown-up can do something about
+/// it: in the words that follow "Chanoma couldn't save:".
+fn unwritable(kind: std::io::ErrorKind) -> Option<&'static str> {
+    use std::io::ErrorKind;
+    match kind {
+        ErrorKind::StorageFull | ErrorKind::QuotaExceeded => Some("the disk is full"),
+        ErrorKind::ReadOnlyFilesystem => Some("the disk can't be written to"),
+        _ => None,
+    }
+}
+
 /// Before the first setup: the usual folders, where they're there (Games
 /// or ROMs, and Videos, in the home folder), so a grown-up needn't choose
 /// them.
@@ -2228,6 +2283,28 @@ impl Program for Chanoma {
     }
 
     fn update(&mut self, msg: Msg, cx: &mut Cx<Msg>) {
+        self.handle(msg, cx);
+        self.say_unsaved(cx);
+    }
+
+    fn view(&self, window: WindowKey) -> Element<Msg> {
+        if Some(window) == self.hud {
+            return self.hud_view();
+        }
+        if Some(window) == self.edge {
+            return self.edge_view();
+        }
+        if self.site.as_ref().is_some_and(|s| s.0 == window) {
+            return self.site_view();
+        }
+        self.main_view()
+    }
+}
+
+impl Chanoma {
+    /// Handle a message. [`Program::update`] does, and then says what
+    /// couldn't be saved while it did.
+    fn handle(&mut self, msg: Msg, cx: &mut Cx<Msg>) {
         match msg {
             Msg::Pad(e) => self.pad(e, cx),
             Msg::Input(i) => {
@@ -2396,21 +2473,6 @@ impl Program for Chanoma {
         }
     }
 
-    fn view(&self, window: WindowKey) -> Element<Msg> {
-        if Some(window) == self.hud {
-            return self.hud_view();
-        }
-        if Some(window) == self.edge {
-            return self.edge_view();
-        }
-        if self.site.as_ref().is_some_and(|s| s.0 == window) {
-            return self.site_view();
-        }
-        self.main_view()
-    }
-}
-
-impl Chanoma {
     /// Put away what's playing before going (Leave, or the window closed).
     pub fn shutdown(&mut self) {
         self.end_pairing();
@@ -2435,6 +2497,7 @@ impl Chanoma {
     pub fn save_usage(&mut self) {
         if let Err(e) = crate::store::write_kept(&self.config.dirs.state.join("usage.json"), &self.usage) {
             log::warn!("chanoma: keeping today's minutes: {e}");
+            self.unsaved = Some(e.kind());
         }
         self.dirty_usage = false;
         self.usage_saved = Some(Instant::now());

@@ -694,6 +694,14 @@ nothing and writes nothing over them. A grown-up sets it up again by
 signing in with the computer account's password (then a new PIN and the
 first setup), or on the TV account with Settings' *Forget Chanoma's PIN*.
 
+One of those files that can't be written (a full disk) isn't passed
+over. A new PIN that wasn't kept isn't the PIN: the pad says so and
+takes it again, and the one the file has still opens grown-up mode. Any
+other setting holds until Chanoma closes, and a grown-up is told it
+wasn't kept: at once, or, for the wrong PINs' count and the minutes,
+which fail with the kids at the television, when one is next in
+grown-up mode (`Chanoma::say_unsaved`).
+
 **Forgot it?** (Start on the pad, when the PIN is asked for) signs in
 with the password of the computer's account Chanoma runs as
 (`app/reset.rs`), typed on Chanoma's keyboard (dots in its box) or a
