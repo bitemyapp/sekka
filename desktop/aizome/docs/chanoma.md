@@ -453,7 +453,7 @@ it needs Google Chrome, where its own page would show an error code.
 cookies and saved passwords with a key it keeps in the desktop's keyring
 when it has one; `--password-store=basic` has it use its built-in key
 instead, so a service stays signed in from one evening to the next with
-no keyring daemon running, nothing to unlock and no prompt on the
+nothing kept in a keyring, nothing to unlock and no prompt on the
 television (checked in a real browser with no session bus, below). The
 profiles are as private as the account's home (0700), and as the disk's
 encryption makes them at rest. A keyring would add nothing for the TV
@@ -1133,8 +1133,13 @@ name from the record, and masks each unit `default.target`,
 `basic.target`, `sockets.target`, `timers.target` and `paths.target`
 pull in but those kept, in the generator's early directory, which comes
 before `/etc`. Services D-Bus starts when something asks (the portals)
-are as they were. No keyring runs: nothing in the session asks for one
-(the browser's sign-ins, under Services).
+are as they were. The keyring's daemon isn't a unit, so the generator
+doesn't reach it: where a system has gnome-keyring (Aizome's module turns
+it on), PAM starts it as the account logs in, as for every account.
+Nothing in the session asks it for anything (the browser's sign-ins,
+under Services), so it keeps nothing: after the session the account's
+home has no keyring in it, which the TV VM check looks for, and which an
+installed system showed on 2026-11-23.
 
 The drives the account opens every other account may read, but not
 change (`programs.aizome.chanoma.shareTvDrives`, on unless turned off).

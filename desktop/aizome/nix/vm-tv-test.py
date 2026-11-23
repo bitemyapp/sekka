@@ -279,6 +279,10 @@ with subtest("Log Out ends the session and the login screen comes back"):
     until("the TV account's session ended", lambda: machine.execute("pgrep -u tv -f aizome-chanoma")[0] != 0)
     until("the login screen again", greeter_up, timeout=60)
     until("no compositor of the TV's", lambda: machine.execute("pgrep -u tv -x aizome")[0] != 0)
+    # PAM may start a keyring's daemon for the account as for any other;
+    # nothing in its session keeps anything there.
+    machine.succeed("test -f /home/tv/.config/aizome/chanoma.json")
+    machine.fail("test -e /home/tv/.local/share/keyrings")
     # The stick stays open where the TV account opened it, and readable.
     machine.succeed("findmnt -n /run/media/tv/TVSTICK")
     alice_reads_the_stick()
