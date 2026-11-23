@@ -208,6 +208,10 @@ impl Kept {
             Whose::Apart(print) => {
                 let own = apart(save_ram, print);
                 Kept {
+                    // Decided on purpose (docs/chanoma.md, "Decided on
+                    // purpose"): with no battery save of its own yet, it
+                    // starts from the first file's, not from nothing. Do
+                    // not change that as a fix: raise it with the owner.
                     save_ram_from: if own.is_file() { own.clone() } else { older(save_ram) },
                     save_ram: own,
                     state: apart(state, print),
@@ -388,6 +392,9 @@ mod tests {
         assert_eq!(other.state, t.join(format!("states/abc-{print}.state")));
         assert_eq!(other.picture, t.join(format!("states/abc-{print}.png")));
         // It starts from the first's battery save, never from its place.
+        // The first is decided on purpose (docs/chanoma.md, "Decided on
+        // purpose"): a change that starts it from nothing is not a fix,
+        // and fails here.
         assert_eq!(other.save_ram_from, ram);
         assert_eq!(other.state_from, other.state);
         file(&other.save_ram, b"second's save");

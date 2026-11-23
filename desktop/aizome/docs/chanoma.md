@@ -1492,7 +1492,7 @@ each knowing what it costs. A change that reverses one is not a fix:
 raise it with the owner. Each is marked "Decided on purpose" where it
 is set, and a check fails when it is taken out:
 `checks.aizome-chanoma-defaults` (`nix/aizome-chanoma-defaults-test.nix`)
-for the first two, a test named with the third.
+for the first two, a test named with each of the others.
 
 - **A Bluetooth device that forgot the computer pairs again without
   anyone confirming** (`JustWorksRepairing = always`, in the module, on
@@ -1529,6 +1529,17 @@ for the first two, a test named with the third.
   saves (Saves, above). Decided on 2026-11-22, after a review raised it.
   `library::tests::the_same_path_in_two_folders_is_one_game` fails when
   the two get different keys.
+- **A different file played under a game's name starts from the first
+  file's battery save**, until it has one of its own (`saves.rs`). What
+  it costs: a different game is handed a save that isn't its own. It
+  treats it as it would a dead battery's and starts over; it never gets
+  the first's state, and writes only to its own files. Why it stays: a
+  game's file replaced by a better dump of the same game keeps its
+  progress. Starting from nothing would lose that with nothing said,
+  and nothing in Chanoma would bring it back. A review's suggested test
+  expected the second file to start from nothing. Decided on 2026-11-22.
+  `saves::tests::another_file_of_the_name_keeps_its_own_saves` fails
+  when it does.
 
 ## Limits
 
