@@ -1,10 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// Unsafe code lives in `sys` and NetworkManager's FFI (`wifi::nm`) only; the
+// helper's Nix check fails if any other module allows it.
+#![deny(unsafe_code)]
+// Programs start only in `process` (clippy.toml); the same check fails if
+// anything else allows the ban.
+#![deny(clippy::disallowed_methods)]
 pub mod applications;
 pub mod config;
 pub mod desktop;
-pub mod disk;
-pub mod encryption;
-pub mod filesystem;
+pub mod storage;
+mod sys;
+pub use storage::{disk, encryption, filesystem};
 pub mod github;
 pub mod graphics;
 pub mod install;

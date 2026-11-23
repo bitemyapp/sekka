@@ -50,6 +50,7 @@
   systemd,
   util-linux,
   cmake,
+  clippy,
   shaderc,
   openblas,
   vulkan-headers,
@@ -142,6 +143,31 @@ let
     export TZDIR=${tzdata}/share/zoneinfo
   '';
   test = "cargo test --offline --target ${target} --profile release-lto";
+  # The crates with a doctest that must not compile, whose error codes the
+  # package's check verifies (nix/checked-doctests.sh). Each is tested on
+  # its own, so the dependency build compiles what each one's tests need on
+  # its own too. The check stops if this list and the source disagree.
+  # Tansu's unit and integration tests run on their own as well, on what
+  # the dependency build compiles for it as one of these.
+  doctested = [
+    "aizome-hako"
+    "aizome-hotaru"
+    "aizome-kit"
+    "aizome-media"
+    "aizome-sys"
+    "aizome-tansu"
+    "aizome-typestate"
+  ];
+
+  # Prime Clippy's dependency metadata in the dependency build as well:
+  # the package must still compile only first-party code after restoring it.
+  # Lint production libraries/binaries. Clippy emits lib<test>.rmeta for
+  # integration targets, which are not dependencies and would confuse the
+  # cache guard; the normal test commands below still run those targets.
+  stateMachineLint = ''
+    ${cargo}/bin/cargo clippy --offline --locked --target ${target} --release --lib --bins \
+      -p aizome-hako -p aizome-tansu -p aizome-sys -- -A clippy::all
+  '';
 
   # Everything the build's commands see, the same for the dependency build
   # and the package's: any difference would make Cargo compile the
@@ -154,6 +180,7 @@ let
 
     nativeBuildInputs = [
       pkg-config
+      clippy
       makeWrapper
       ncurses
       jq
@@ -251,9 +278,11 @@ let
       checkPhase = ''
         runHook preCheck
         ${testEnvironment}
+        ${stateMachineLint}
         ${test} --no-run -p aizome-kit --lib
         ${test} --no-run -p aizome-sys -p aizome-shell -p aizome-hako --lib
         ${cargo}/bin/cargo test --offline --target ${target} --release --no-run -p aizome-comp-process-tests --lib
+        ${lib.concatMapStringsSep "\n        " (package: "${test} --no-run -p ${package} --lib") doctested}
         runHook postCheck
       '';
       installPhase = workspace.saveTarget;
@@ -275,6 +304,8 @@ rustPlatform.buildRustPackage (
     checkPhase = ''
       runHook preCheck
       ${testEnvironment}
+      source ${../../../nix/checked-state-matches.sh}
+      ${stateMachineLint}
       # The compositor this package installs, as built above: its process
       # tests need only the IPC client, so nothing rebuilds the core with
       # aizome-comp's test dependencies. Exercise the socket fixture with a
@@ -285,12 +316,36 @@ rustPlatform.buildRustPackage (
       TMPDIR="$sessionTestTmp" AIZOME_TEST_COMPOSITOR="$PWD/target/${target}/release/aizome" \
         ${cargo}/bin/cargo test --offline --target ${target} --release -p aizome-comp-process-tests -- --include-ignored
       ${test} -p aizome-kit --lib
+      # The tests that start a bus of their own pass without one, skipped.
+      if ! command -v dbus-daemon > /dev/null; then
+        echo "error: no dbus-daemon, so the bus tests would be skipped" >&2
+        exit 1
+      fi
       # A successful spawn is not a successful application launch. Gate the
       # shipped shell on process outcomes and its failure/details interface.
       # One run: dependencies built once for all three packages. The screen
       # saver that keeps the screen awake for a video answers real callers
-      # on a bus of the test's own, as Files' show-in-folder service does.
-      ${test} -p aizome-sys -p aizome-shell -p aizome-hako --lib --test file_manager --test screensaver
+      # on a bus of the test's own, as Files' show-in-folder service does,
+      # and the disks client's fake UDisks2 (which stick a confirmation
+      # names). Files' regressions from the typestate work run here too.
+      ${test} -p aizome-sys -p aizome-shell -p aizome-hako --lib --test file_manager --test screensaver \
+        --test disks --test repro_hako_05 --test repro_hako_06 --test repro_hako_08 --test repro_hako_09
+      # Tansu, on its own as its doctests are: its units, its sheets, plans
+      # and runs on in-memory disks, and plans through the disks client to a
+      # fake UDisks2 on a bus of the test's own. No block device is touched.
+      ${test} -p aizome-tansu --lib --test repro_tsh_25 --test confirmations --test resize --test udisks --test ui
+      # The doctests of every crate with one that must not compile, their
+      # error codes checked: what the typestate machines' types rule out.
+      source ${../../../nix/checked-doctests.sh}
+      found=$(compile_fail_packages crates apps | sort | tr '\n' ' ')
+      if [ "$found" != "${lib.concatStringsSep " " doctested} " ]; then
+        echo "error: the crates with compile_fail doctests are: $found" >&2
+        echo "       package.nix's doctested list says: ${toString doctested}" >&2
+        exit 1
+      fi
+      for package in ${toString doctested}; do
+        ${test} --doc -p "$package"
+      done
       runHook postCheck
     '';
 

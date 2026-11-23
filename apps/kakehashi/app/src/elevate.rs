@@ -2,20 +2,8 @@
 //! on Linux and UAC on Windows. On macOS the helper runs as the user and
 //! authorizes only the device open with authopen. The window never elevates.
 
+pub use kakehashi_core::job::Ran;
 use std::path::{Path, PathBuf};
-
-/// How a run of the helper ended.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Ran {
-    /// The helper ran and exited with this code; its progress file says how
-    /// the write went.
-    Exited(i32),
-    /// The person dismissed the prompt.
-    #[cfg_attr(target_os = "macos", allow(dead_code))]
-    Declined,
-    /// The helper could not be started.
-    Failed(String),
-}
 
 /// The helper beside this program: in the same directory, or in the same
 /// `Contents/MacOS` of the app bundle.
@@ -111,4 +99,16 @@ pub fn run(helper: &Path, plan: &Path, progress: &Path) -> Ran {
 #[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
 pub fn run(_helper: &Path, _plan: &Path, _progress: &Path) -> Ran {
     Ran::Failed("Kakehashi writes drives on Linux, macOS and Windows".into())
+}
+
+#[cfg(test)]
+mod tests {
+    /// The window starts the helper and never links its write step, which
+    /// would let it write a drive in its own process (on macOS the helper
+    /// runs as the person, so nothing else would stop it).
+    #[test]
+    fn the_window_does_not_depend_on_the_write_step() {
+        let manifest = include_str!("../Cargo.toml");
+        assert!(!manifest.contains("kakehashi-write"), "the window's Cargo.toml must not name kakehashi-write");
+    }
 }

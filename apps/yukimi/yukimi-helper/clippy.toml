@@ -1,0 +1,14 @@
+# The helper runs programs only through yukimi_helper::process, which names
+# the ones it may run (Program): the programs that change what a restore
+# point or the boot menu covers are named only in the steps that cover them.
+# Every way to start a program from the standard library or the shared
+# backend is denied here; process.rs allows itself the one Command::new.
+# libc's exec and spawn functions need unsafe code, which the helper forbids.
+disallowed-methods = [
+  { path = "std::process::Command::new", reason = "run programs through yukimi_helper::process::command" },
+  { path = "yukimi_system::nix::command", reason = "the unprivileged side's nix; the helper uses process::nix" },
+  { path = "yukimi_system::nix::stream", reason = "the unprivileged side's runner" },
+  { path = "yukimi_system::updates::lock_command", reason = "the unprivileged side's lock step" },
+  { path = "yukimi_system::updates::fetch_command", reason = "the unprivileged side's fetch step" },
+  { path = "std::os::unix::process::CommandExt::arg0", reason = "a multicall binary is another program under another name" },
+]

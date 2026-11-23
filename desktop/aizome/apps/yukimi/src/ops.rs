@@ -175,10 +175,19 @@ impl Operation {
             Operation::Rollback { generation } if report["left"].as_array().is_some_and(|l| !l.is_empty()) => {
                 format!("Generation {generation} is running. Files you changed by hand since were left as they are")
             }
-            Operation::Clean { .. } => match report["freed"].as_str() {
-                Some(freed) if !freed.is_empty() => format!("The store is tidy: {freed}"),
-                _ => self.done(),
-            },
+            Operation::Clean { .. } => {
+                let tidy = match report["freed"].as_str() {
+                    Some(freed) if !freed.is_empty() => format!("The store is tidy: {freed}"),
+                    _ => self.done(),
+                };
+                // A clean-up that deleted nothing collects even when the
+                // boot menu couldn't be written.
+                if report.get("menu_error").is_some() {
+                    format!("{tidy}. The boot menu couldn't be updated; it still lists every generation there is")
+                } else {
+                    tidy
+                }
+            }
             Operation::Delete { .. } => {
                 let done = self.done();
                 match (report["collected"].as_bool(), report["freed"].as_u64()) {
@@ -562,6 +571,19 @@ mod tests {
         assert_eq!(
             Operation::Clean { older_than_days: Some(30) }.helper_args(None),
             ["clean", "--older-than-days", "30"]
+        );
+        let clean = Operation::Clean { older_than_days: None };
+        assert_eq!(
+            clean.outcome(r#"{"ok":true,"freed":"12 store paths deleted, 3.40 MiB freed"}"#),
+            "The store is tidy: 12 store paths deleted, 3.40 MiB freed"
+        );
+        // Garbage was collected though the boot menu couldn't be written.
+        assert_eq!(
+            clean.outcome(
+                r#"{"ok":true,"freed":"12 store paths deleted, 3.40 MiB freed","menu_error":"Updating the boot menu failed"}"#
+            ),
+            "The store is tidy: 12 store paths deleted, 3.40 MiB freed. The boot menu couldn't be updated; it still \
+             lists every generation there is"
         );
         let delete = Operation::Delete { generations: vec![26], collect: true };
         assert_eq!(delete.helper_args(None), ["delete", "26", "--collect-garbage"]);

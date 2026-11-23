@@ -1,13 +1,11 @@
-//! Linux: drives from lsblk, written through the block device.
+//! Linux: drives from lsblk.
 
-use super::{Device, run};
+use super::sys::run;
 use crate::drive::Drive;
-use anyhow::{Context, Result, bail, ensure};
+use anyhow::Result;
 use serde_json::Value;
-use std::fs::{self, OpenOptions};
+use std::fs;
 use std::path::Path;
-
-pub(crate) type Held = ();
 
 /// Mount points the running system needs.
 const SYSTEM: [&str; 9] = ["/", "/boot", "/boot/efi", "/efi", "/home", "/nix", "/nix/store", "/usr", "/var"];
@@ -65,6 +63,7 @@ pub(crate) fn parse(json: &[u8]) -> Result<Vec<Drive>> {
             mounts: points,
             bus: if tran.is_empty() { String::new() } else { tran.to_uppercase() },
             name,
+            port: None,
         });
     }
     Ok(drives)
@@ -76,7 +75,24 @@ pub(crate) fn drives() -> Result<Vec<Drive>> {
     // only one.
     let out = run("lsblk", &["-J", "-b", "-o", &format!("{columns},MOUNTPOINTS")])
         .or_else(|_| run("lsblk", &["-J", "-b", "-o", &format!("{columns},MOUNTPOINT")]))?;
-    parse(&out)
+    let mut drives = parse(&out)?;
+    for drive in &mut drives {
+        drive.port = fs::canonicalize(Path::new("/sys/block").join(&drive.name)).ok().and_then(|p| usb_port(&p));
+    }
+    Ok(drives)
+}
+
+/// The USB port in a block device's sysfs path: the last USB device on the
+/// way to it, `2-1.3` in `…/usb2/2-1/2-1.3/2-1.3:1.0/host6/…/block/sdb`
+/// (bus 2, port 1, then port 3 of the hub there).
+fn usb_port(sysfs: &Path) -> Option<String> {
+    let is_port = |name: &&str| {
+        name.split_once('-').is_some_and(|(bus, ports)| {
+            let number = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
+            number(bus) && ports.split('.').all(number)
+        })
+    };
+    sysfs.components().filter_map(|c| c.as_os_str().to_str()).rfind(is_port).map(str::to_owned)
 }
 
 fn parent(device: &str) -> Option<String> {
@@ -90,63 +106,6 @@ pub(crate) fn image_drive(image: &Path) -> Option<String> {
     let line = String::from_utf8_lossy(&out).lines().nth(1)?.to_owned();
     let device = line.split_whitespace().next()?;
     device.starts_with("/dev/").then(|| parent(device)).flatten()
-}
-
-pub(crate) fn unmount(drive: &Drive) -> Result<()> {
-    for point in &drive.mounts {
-        if point == "[SWAP]" {
-            continue;
-        }
-        run("umount", &[point]).with_context(|| format!("could not unmount {point}"))?;
-    }
-    Ok(())
-}
-
-/// The block device, opened exclusively (which fails while anything on it
-/// is mounted), with its size and logical sector size.
-pub(crate) fn open(drive: &Drive) -> Result<Device> {
-    use std::os::unix::fs::{FileTypeExt, MetadataExt, OpenOptionsExt};
-    use std::os::unix::io::AsRawFd;
-    let path = format!("/dev/{}", drive.name);
-    let before = fs::symlink_metadata(&path)?;
-    ensure!(before.file_type().is_block_device(), "{path} is not a block device");
-    let file = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .custom_flags(libc::O_EXCL | libc::O_NOFOLLOW)
-        .open(&path)
-        .with_context(|| format!("could not open {path} exclusively (is something on it still in use?)"))?;
-    ensure!(file.metadata()?.rdev() == before.rdev(), "{path} changed while opening it");
-    let (mut bytes, mut sector) = (0u64, 0 as libc::c_int);
-    // BLKGETSIZE64 and BLKSSZGET.
-    // SAFETY: each ioctl writes one integer of the type passed.
-    unsafe {
-        ensure!(libc::ioctl(file.as_raw_fd(), 0x8008_1272_u64 as _, &mut bytes) == 0, "could not read the size");
-        ensure!(libc::ioctl(file.as_raw_fd(), 0x1268_u64 as _, &mut sector) == 0, "could not read the sector size");
-    }
-    ensure!(sector > 0 && (sector as u64).is_power_of_two(), "unexpected sector size {sector}");
-    Ok(Device { file, bytes, sector: sector as u64, held: () })
-}
-
-pub(crate) fn drop_cache(device: &Device) {
-    use std::os::unix::io::AsRawFd;
-    // BLKFLSBUF, then advise the kernel the cache is not needed.
-    // SAFETY: neither call touches memory.
-    unsafe {
-        libc::ioctl(device.file.as_raw_fd(), 0x1261_u64 as _, 0);
-        libc::posix_fadvise(device.file.as_raw_fd(), 0, 0, libc::POSIX_FADV_DONTNEED);
-    }
-}
-
-pub(crate) fn eject(drive: &Drive) -> Result<()> {
-    let device = format!("/dev/{}", drive.name);
-    if run("udisksctl", &["power-off", "--no-user-interaction", "-b", &device]).is_ok()
-        || run("eject", &[&device]).is_ok()
-    {
-        Ok(())
-    } else {
-        bail!("it could not be ejected, but it is written and synced, so you can unplug it")
-    }
 }
 
 #[cfg(test)]
@@ -173,5 +132,18 @@ mod tests {
         assert_eq!(stick.bus, "USB");
         assert_eq!(stick.mounts, vec!["/run/media/me/STICK"]);
         assert_eq!(stick.excluded(None, false), None);
+    }
+
+    #[test]
+    fn finds_the_usb_port_in_sysfs() {
+        let stick = Path::new(
+            "/sys/devices/pci0000:00/0000:00:14.0/usb2/2-1/2-1.3/2-1.3:1.0/host6/target6:0:0/6:0:0:0/block/sdb",
+        );
+        assert_eq!(usb_port(stick).as_deref(), Some("2-1.3"));
+        let direct =
+            Path::new("/sys/devices/pci0000:00/0000:00:14.0/usb3/3-4/3-4:1.0/host7/target7:0:0/7:0:0:0/block/sdc");
+        assert_eq!(usb_port(direct).as_deref(), Some("3-4"));
+        let ssd = Path::new("/sys/devices/pci0000:00/0000:00:1d.0/0000:3d:00.0/nvme/nvme0/nvme0n1");
+        assert_eq!(usb_port(ssd), None);
     }
 }

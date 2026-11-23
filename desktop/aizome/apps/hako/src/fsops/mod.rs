@@ -12,12 +12,15 @@
 //!   every file and folder made, then the rename into place and an
 //!   `fsync` of the folder it's in, and only then the deletion of the
 //!   source. An item whose copy skipped or failed anything stays where it
-//!   was.
+//!   was, and so does everything in a folder whose copy couldn't be
+//!   synced ([`place`]).
 //! - **Nothing is replaced unasked.** Renames refuse to overwrite
 //!   (`renameat2(RENAME_NOREPLACE)`); an existing name is a [`Conflict`]
 //!   the [`Asker`] answers (replace, skip, keep both, merge folders). A
-//!   replaced item is set aside and removed only after its replacement
-//!   is in place, and put back if that fails.
+//!   replaced item is set aside and goes only after its replacement is
+//!   in place, to the Trash (or, if the Trash refuses it, beside it as
+//!   “name (replaced)”), or is put back if its replacement doesn't come
+//!   ([`replace`]).
 //! - **Deleting is for the Trash.** [`delete`] removes items only as
 //!   [`trash`] lets it: what's in a trash, emptied or deleted from it.
 //!
@@ -30,6 +33,8 @@ pub mod archive;
 pub mod control;
 pub mod delete;
 pub mod names;
+pub mod place;
+pub mod replace;
 pub mod sys;
 pub mod transfer;
 pub mod trash;

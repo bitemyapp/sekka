@@ -5,7 +5,8 @@
 mod common;
 
 use aizome_sys::disks::{
-    Confirm, DeletePartition, Disks, Erase, Format, FormatSpec, NewPartitionTable, Repair, TableKind,
+    AsSeen, Confirm, CreatePartition, DeletePartition, Disks, Erase, Format, FormatSpec, Identity, NewPartitionTable,
+    Relabel, Repair, TableKind,
 };
 use aizome_sys::{Error, Wake};
 use common::{eventually, path};
@@ -155,6 +156,7 @@ struct FakeBlock {
     id_label: String,
     id_uuid: String,
     crypto_backing: Option<OwnedObjectPath>,
+    symlinks: Vec<String>,
     log: Shared,
 }
 
@@ -168,6 +170,7 @@ impl FakeBlock {
             id_label: label.into(),
             id_uuid: format!("uuid-{device}"),
             crypto_backing: None,
+            symlinks: Vec::new(),
             log,
         }
     }
@@ -210,6 +213,10 @@ impl FakeBlock {
     #[zbus(property)]
     fn crypto_backing_device(&self) -> OwnedObjectPath {
         self.crypto_backing.clone().unwrap_or_else(|| path("/"))
+    }
+    #[zbus(property)]
+    fn symlinks(&self) -> Vec<Vec<u8>> {
+        self.symlinks.iter().map(|s| bytes(s)).collect()
     }
 
     /// Format: with erase, a job shows progress for a moment first.
@@ -518,7 +525,13 @@ fn serve(bus: &common::TestBus) -> (zbus::blocking::Connection, Shared) {
         .unwrap()
         .serve_at(DRIVE, FakeDrive { log: log.clone() })
         .unwrap()
-        .serve_at(block_path("sdb"), FakeBlock::new("/dev/sdb", 8 * GIB, Some(DRIVE), "", "", log.clone()))
+        .serve_at(
+            block_path("sdb"),
+            FakeBlock {
+                symlinks: vec![port(2)],
+                ..FakeBlock::new("/dev/sdb", 8 * GIB, Some(DRIVE), "", "", log.clone())
+            },
+        )
         .unwrap()
         .serve_at(
             block_path("sdb"),
@@ -550,6 +563,16 @@ fn serve(bus: &common::TestBus) -> (zbus::blocking::Connection, Shared) {
 
 fn calls(log: &Shared) -> Vec<String> {
     log.lock().unwrap().calls.clone()
+}
+
+/// The device at `path` as the person sees it now.
+fn seen(disks: &Disks, path: &str) -> Identity {
+    disks.snapshot().identity(path).unwrap_or_else(|| panic!("{path}"))
+}
+
+/// A confirmation of the device as the test sees it (any brand will do).
+fn agree<Op: AsSeen>(seen: Identity) -> Confirm<Op, ()> {
+    Confirm::new(seen, ())
 }
 
 fn start(bus: &common::TestBus) -> Disks {
@@ -613,14 +636,12 @@ fn formatting_needs_a_fresh_confirmation_and_shows_progress() {
     let (_fake, log) = serve(&bus);
     let disks = start(&bus);
     let stick = disks.snapshot().block(&block_path("sdb1")).unwrap().clone();
+    let fat = seen(&disks, &stick.path);
 
     // Mounted: refused before UDisks is asked.
     disks.mount(&stick.path).wait().unwrap();
     assert!(eventually(|| disks.snapshot().in_use(&stick.path)));
-    let refused = disks.format(
-        Confirm::<Format>::new(&disks.snapshot().block(&stick.path).unwrap().clone()),
-        FormatSpec::new("ext4", "DATA"),
-    );
+    let refused = disks.format(agree::<Format>(seen(&disks, &stick.path)), FormatSpec::new("ext4", "DATA"));
     assert!(matches!(refused.wait(), Err(Error::InvalidArgument(m)) if m.contains("in use")));
     disks.unmount(&stick.path, false).wait().unwrap();
     assert!(eventually(|| !disks.snapshot().in_use(&stick.path)));
@@ -628,7 +649,7 @@ fn formatting_needs_a_fresh_confirmation_and_shows_progress() {
     // Erasing shows a job with progress while it runs.
     let mut spec = FormatSpec::new("ext4", "DATA");
     spec.erase = Erase::Zeros;
-    let task = disks.format(Confirm::<Format>::new(&stick), spec);
+    let task = disks.format(agree::<Format>(fat.clone()), spec);
     assert!(eventually(|| disks.snapshot().jobs_for(&stick.path).any(|j| j.progress == Some(0.5))));
     task.wait().unwrap();
     {
@@ -642,16 +663,16 @@ fn formatting_needs_a_fresh_confirmation_and_shows_progress() {
     assert!(eventually(|| disks.snapshot().block(&stick.path).is_some_and(|b| b.id_type == "ext4")));
 
     // The old confirmation was for the FAT filesystem that is gone.
-    let stale = Confirm::<Format>::new(&stick);
+    let stale = agree::<Format>(fat);
     assert!(
         matches!(disks.format(stale, FormatSpec::new("vfat", "X")).wait(), Err(Error::InvalidArgument(m)) if m.contains("changed"))
     );
     // A filesystem this system can't make is refused.
-    let now = disks.snapshot().block(&stick.path).unwrap().clone();
-    assert!(disks.format(Confirm::<Format>::new(&now), FormatSpec::new("zfs", "")).wait().is_err());
+    let now = seen(&disks, &stick.path);
+    assert!(disks.format(agree::<Format>(now.clone()), FormatSpec::new("zfs", "")).wait().is_err());
     // Repair needs its own confirmation.
-    assert!(disks.repair(Confirm::<Repair>::new(&now)).wait().unwrap());
-    assert!(disks.check(&now.path).wait().unwrap());
+    assert!(disks.repair(agree::<Repair>(now)).wait().unwrap());
+    assert!(disks.check(&stick.path).wait().unwrap());
 }
 
 #[test]
@@ -661,8 +682,13 @@ fn partitions_are_made_in_free_space_and_deleted_on_confirmation() {
     let disks = start(&bus);
     let disk = block_path("sdb");
     // Over an existing partition: refused without asking UDisks.
-    assert!(disks.create_partition(&disk, MIB, GIB, None, "", None).wait().is_err());
-    let made = disks.create_partition(&disk, 2 * GIB, GIB, None, "Data", None).wait().unwrap();
+    assert!(
+        disks.create_partition(agree::<CreatePartition>(seen(&disks, &disk)), MIB, GIB, None, "", None).wait().is_err()
+    );
+    let made = disks
+        .create_partition(agree::<CreatePartition>(seen(&disks, &disk)), 2 * GIB, GIB, None, "Data", None)
+        .wait()
+        .unwrap();
     assert_eq!(made, block_path("sdb2"));
     assert!(calls(&log).contains(&format!(
         "CreatePartition({}, {}, 0fc63daf-8483-4772-8e79-3d69d8477de4, Data)",
@@ -670,16 +696,14 @@ fn partitions_are_made_in_free_space_and_deleted_on_confirmation() {
         GIB
     )));
     assert!(eventually(|| disks.snapshot().partitions(&disk).len() == 3));
-    let new = disks.snapshot().block(&made).unwrap().clone();
-    disks.delete_partition(Confirm::<DeletePartition>::new(&new)).wait().unwrap();
+    disks.delete_partition(agree::<DeletePartition>(seen(&disks, &made))).wait().unwrap();
     assert!(eventually(|| disks.snapshot().partitions(&disk).len() == 2));
     // A new partition table on the whole disk.
-    let whole = disks.snapshot().block(&disk).unwrap().clone();
-    disks.create_partition_table(Confirm::<NewPartitionTable>::new(&whole), TableKind::Dos).wait().unwrap();
+    disks.create_partition_table(agree::<NewPartitionTable>(seen(&disks, &disk)), TableKind::Dos).wait().unwrap();
     assert!(calls(&log).contains(&format!("Format(dos) on {disk}")));
     // …but not on a partition.
-    let part = disks.snapshot().block(&block_path("sdb1")).unwrap().clone();
-    assert!(disks.create_partition_table(Confirm::<NewPartitionTable>::new(&part), TableKind::Gpt).wait().is_err());
+    let part = seen(&disks, &block_path("sdb1"));
+    assert!(disks.create_partition_table(agree::<NewPartitionTable>(part), TableKind::Gpt).wait().is_err());
 }
 
 #[test]
@@ -798,4 +822,52 @@ fn without_udisks() {
     std::thread::sleep(Duration::from_millis(200));
     assert!(!disks.available());
     assert!(disks.mount("/org/freedesktop/UDisks2/block_devices/sda1").wait().is_err());
+}
+
+/// The stick's whole-disk link in `/dev/disk/by-path`, in USB port `n`.
+fn port(n: u8) -> String {
+    format!("/dev/disk/by-path/pci-0000:00:14.0-usb-0:{n}:1.0-scsi-0:0:0:0")
+}
+
+/// udev names the stick's whole disk by another USB port.
+fn plug_into(fake: &zbus::blocking::Connection, links: Vec<String>) {
+    let iface = fake.object_server().interface::<_, FakeBlock>(block_path("sdb").as_str()).unwrap();
+    let mut b = iface.get_mut();
+    b.symlinks = links;
+    zbus::block_on(b.symlinks_changed(iface.signal_emitter())).unwrap();
+}
+
+#[test]
+fn a_stick_in_the_same_port_is_the_one_confirmed() {
+    let bus = test_bus!();
+    let (_fake, log) = serve(&bus);
+    let disks = start(&bus);
+    let stick = block_path("sdb1");
+    assert!(eventually(|| disks.snapshot().block(&block_path("sdb")).is_some_and(|b| b.symlinks == [port(2)])));
+    let in_port_2 = seen(&disks, &stick);
+    disks.set_label(agree::<Relabel>(in_port_2), "SAME").wait().unwrap();
+    assert!(calls(&log).contains(&"SetLabel(SAME)".to_owned()));
+}
+
+#[test]
+fn a_stick_in_another_port_is_another_stick() {
+    let bus = test_bus!();
+    let (fake, log) = serve(&bus);
+    let disks = start(&bus);
+    let stick = block_path("sdb1");
+    assert!(eventually(|| disks.snapshot().block(&block_path("sdb")).is_some_and(|b| b.symlinks == [port(2)])));
+    let in_port_2 = seen(&disks, &stick);
+    // Another stick alike in every other way, or this one moved: port 3.
+    plug_into(&fake, vec![port(3)]);
+    assert!(eventually(|| disks.snapshot().block(&block_path("sdb")).is_some_and(|b| b.symlinks == [port(3)])));
+    let refused = disks.set_label(agree::<Relabel>(in_port_2.clone()), "MOVED").wait();
+    assert!(matches!(&refused, Err(Error::InvalidArgument(m)) if m.contains("changed")), "{refused:?}");
+    let refused = disks.format(agree::<Format>(in_port_2.clone()), FormatSpec::new("ext4", "")).wait();
+    assert!(matches!(&refused, Err(Error::InvalidArgument(m)) if m.contains("changed")), "{refused:?}");
+    assert!(calls(&log).iter().all(|c| !c.starts_with("SetLabel") && !c.starts_with("Format")), "{:?}", calls(&log));
+    // udev between links (probing the disk again) lists none: nothing to
+    // compare, so the port doesn't refuse it.
+    plug_into(&fake, Vec::new());
+    assert!(eventually(|| disks.snapshot().block(&block_path("sdb")).is_some_and(|b| b.symlinks.is_empty())));
+    disks.set_label(agree::<Relabel>(in_port_2), "PROBED").wait().unwrap();
 }

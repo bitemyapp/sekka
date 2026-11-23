@@ -448,6 +448,8 @@
         native-installer = calamares;
         storage = calamares.storageTest;
         encrypted-storage = import ./installer/genkan/nix/encryption-test.nix { inherit pkgs; };
+        # The backend's ignored tests, which give it a fake disk in namespaces.
+        genkan-namespace = import ./installer/genkan/nix/namespace-test.nix { inherit pkgs; };
         encrypted-boot-splash = import ./installer/genkan/nix/encrypted-splash-test.nix { inherit pkgs; };
         applications = applicationCatalog.check;
         uta-installation = import ./nix/uta-installation-test.nix {
@@ -765,6 +767,9 @@
         };
         activity = self.packages.${system}.activity;
         kakehashi = self.packages.${system}.kakehashi;
+        # The window's start of a write through a fake pkexec: the tests a
+        # plain `cargo test` leaves ignored.
+        kakehashi-elevation = kakehashi.elevationTests;
         kakehashi-vm = import ./nix/kakehashi-vm-test.nix {
           inherit pkgs;
           kakehashi = self.packages.${system}.kakehashi;
@@ -920,6 +925,11 @@
               python3 ${./tests/test_yukimi_preflight.py} ${self.packages.${system}.yukimi.helper}/bin -v
               touch $out
             '';
+        # The helper's worker against stand-ins for Nix, in namespaces: the
+        # tests a plain `cargo test` leaves ignored.
+        yukimi-namespace = pkgs.callPackage ./apps/yukimi/nix/namespace-tests.nix {
+          inherit (self.packages.${system}.yukimi) helper;
+        };
         yukimi-x11 = import ./nix/yukimi-x11-test.nix {
           inherit pkgs;
           desktopsModule = inputs.calamares.nixosModules.desktops;

@@ -8,10 +8,12 @@ on:
   push:
     paths:
       - apps/kakehashi/**
+      - desktop/aizome/crates/aizome-typestate/**
       - .github/workflows/kakehashi.yml
   pull_request:
     paths:
       - apps/kakehashi/**
+      - desktop/aizome/crates/aizome-typestate/**
       - .github/workflows/kakehashi.yml
   workflow_dispatch:
 

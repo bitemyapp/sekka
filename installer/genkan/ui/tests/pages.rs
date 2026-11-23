@@ -275,7 +275,7 @@ fn a_failed_preparation_cannot_be_confirmed() {
 #[test]
 fn the_window_stays_open_while_installing() {
     let (mut h, w) = open("install");
-    assert_eq!(h.program().steps[3], StepState::Current);
+    assert_eq!(h.program().steps()[3], StepState::Current);
     h.request_close(w);
     assert_eq!(h.windows().len(), 1);
     assert!(says(
@@ -399,7 +399,7 @@ fn alt_beside_the_space_bar_is_swapped_with_super_unless_declined() {
 #[test]
 fn the_review_lists_the_modifier_keys() {
     let (h, _) = open("ready");
-    let review = h.program().review.as_ref().expect("the sample review");
+    let review = h.program().review().expect("the sample review");
     assert_eq!(review.super_key, SuperKey::SwapAlt);
     assert_eq!(
         Genkan::super_key_name(review.super_key),
