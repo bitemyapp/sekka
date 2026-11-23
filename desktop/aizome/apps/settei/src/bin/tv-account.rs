@@ -8,7 +8,8 @@
 //!   lets it in), then have it sign in with that. Its password is set as a
 //!   hash (no PAM stack runs), or emptied for none, which the login
 //!   screen's PAM service accepts (`nullok`).
-//! - `remove [--files]`: remove the account, its home folder too.
+//! - `remove [--files]`: remove the account, its home folder too, and the
+//!   group made with it, so it can be made again.
 //! - `forget-chanoma-pin`: forget the PIN of the account's Chanoma (its
 //!   grown-ups' PIN), as `aizome-chanoma --reset-pin` run as the account.
 //!
@@ -167,10 +168,45 @@ fn remove(files: bool) -> Result<(), String> {
         }
         run(cmd.arg(&record.user))?;
     }
+    // userdel leaves the group made with the account (`--user-group`)
+    // unless login.defs says USERGROUPS_ENAB, which NixOS's doesn't, and
+    // useradd won't make an account whose group is there already: left,
+    // the TV account could be removed once and never made again.
+    let read = |path: &str| std::fs::read_to_string(path).map_err(|e| format!("{path}: {e}"));
+    if nobodys_group(&read("/etc/group")?, &read("/etc/passwd")?, &record.user) {
+        run(Command::new(tool("groupdel")?).arg(&record.user))?;
+    }
     std::fs::remove_file(tv::PATH).map_err(|e| format!("{}: {e}", tv::PATH))
+}
+
+/// Whether `group` (the text of `/etc/group`) has a group `name` that
+/// nobody is in: no members, and no account in `passwd` has it for its own.
+fn nobodys_group(group: &str, passwd: &str, name: &str) -> bool {
+    let Some(line) = group.lines().find(|l| l.split(':').next() == Some(name)) else { return false };
+    let mut fields = line.split(':').skip(2);
+    let (Some(gid), members) = (fields.next(), fields.next().unwrap_or("")) else { return false };
+    members.trim().is_empty() && !passwd.lines().any(|l| l.split(':').nth(3) == Some(gid))
 }
 
 fn forget_chanoma_pin() -> Result<(), String> {
     let record = TvAccount::read().ok_or("There's no TV account")?;
     run(Command::new(tool("runuser")?).args(["-u", &record.user, "--"]).arg(tool("aizome-chanoma")?).arg("--reset-pin"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_group_left_by_the_removed_account_is_nobodys() {
+        let passwd = "root:x:0:0::/root:/bin/sh\nalice:x:1000:100:Alice:/home/alice:/bin/sh\n";
+        let group = "root:x:0:\nusers:x:100:\ntv:x:1001:\nwheel:x:1:alice\n";
+        assert!(nobodys_group(group, passwd, "tv"));
+        // Not one with a member, an account's own, or one that isn't there.
+        assert!(!nobodys_group(group, passwd, "wheel"));
+        assert!(!nobodys_group(group, passwd, "users"));
+        assert!(!nobodys_group(group, passwd, "television"));
+        assert!(!nobodys_group("tv:x:1001:alice\n", passwd, "tv"));
+        assert!(!nobodys_group(group, "tv:x:1001:1001:TV:/home/tv:/bin/nologin\n", "tv"));
+    }
 }

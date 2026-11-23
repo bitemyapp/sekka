@@ -1144,6 +1144,10 @@ greetd starts its session itself), the password set as a hash with
 has `nullok`), and its record `/var/lib/aizome/tv-account.toml` (the
 account, how it signs in, a PIN's length; nothing secret), which the
 login screen, Aizome's session and Settings read (`aizome_sys::tv`).
+Removing it removes the group made with it too: `userdel` leaves that
+group on NixOS, and `useradd` won't make an account whose group is
+already there, so the account could otherwise be removed once and never
+made again.
 
 ## Checking it
 

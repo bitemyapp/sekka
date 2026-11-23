@@ -110,6 +110,17 @@ with subtest("a failed record write leaves the new account locked and retryable"
     assert machine.succeed("passwd -S tv").split()[1] == "NP"
     assert 'auth = "none"' in machine.succeed(f"cat {record_path}")
 
+with subtest("a TV account that was removed can be made again"):
+    machine.succeed("/etc/tv-account-helper remove --files")
+    machine.fail("getent passwd tv")
+    # Its group went with it: userdel alone leaves the group, and useradd
+    # then refuses to make the account.
+    machine.fail("getent group tv")
+    machine.fail(f"test -e {record_path}")
+    machine.succeed("/etc/tv-account-helper set none </dev/null")
+    assert machine.succeed("id -gn tv").strip() == "tv"
+    assert "aizome-tv-kiosk" in machine.succeed("id -nG tv").split()
+
 with subtest("Settings' helper changes the TV account to a PIN"):
     machine.succeed(f"printf %s {TV_PIN} | /etc/tv-account-helper set pin")
     record = machine.succeed("cat /var/lib/aizome/tv-account.toml")
