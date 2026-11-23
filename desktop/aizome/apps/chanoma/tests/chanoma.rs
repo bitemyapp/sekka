@@ -1272,6 +1272,210 @@ fn idle_relock_ends_controller_pairing_and_discards_its_replies() {
     assert!(!h.program().pairing.as_ref().unwrap().pending.contains(device));
 }
 
+/// A BlueZ of the test's own, on a bus of the test's own: one adapter that
+/// is off, and switches on only when the test says so, as one behind a
+/// radio switch or a slow one does. It refuses to look while it is off, as
+/// BlueZ does.
+mod bluez {
+    use std::io::{BufRead, BufReader};
+    use std::process::{Child, Command, Stdio};
+    use std::sync::{Arc, Mutex};
+
+    pub const ADAPTER: &str = "/org/bluez/hci0";
+
+    /// A dbus-daemon of the test's own.
+    pub struct TestBus {
+        child: Child,
+        pub address: String,
+        dir: std::path::PathBuf,
+    }
+
+    impl TestBus {
+        pub fn start(tag: &str) -> Option<TestBus> {
+            let dir = std::env::temp_dir().join(format!("chanoma-bus-{}-{tag}", std::process::id()));
+            std::fs::create_dir_all(&dir).ok()?;
+            let config = dir.join("bus.conf");
+            std::fs::write(
+                &config,
+                format!(
+                    r#"<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
+<busconfig><type>session</type><listen>unix:dir={}</listen><auth>EXTERNAL</auth>
+<policy context="default"><allow send_destination="*" eavesdrop="true"/><allow eavesdrop="true"/><allow own="*"/></policy>
+</busconfig>"#,
+                    dir.display()
+                ),
+            )
+            .ok()?;
+            let mut child = match Command::new("dbus-daemon")
+                .arg(format!("--config-file={}", config.display()))
+                .args(["--print-address", "--nofork"])
+                .stdout(Stdio::piped())
+                .stderr(Stdio::null())
+                .spawn()
+            {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!("skipping: no dbus-daemon ({e})");
+                    return None;
+                }
+            };
+            let mut line = String::new();
+            BufReader::new(child.stdout.take()?).read_line(&mut line).ok()?;
+            Some(TestBus { child, address: line.trim().to_owned(), dir })
+        }
+    }
+
+    impl Drop for TestBus {
+        fn drop(&mut self) {
+            let _ = self.child.kill();
+            let _ = self.child.wait();
+            let _ = std::fs::remove_dir_all(&self.dir);
+        }
+    }
+
+    /// What the adapter was asked.
+    #[derive(Default)]
+    pub struct Asked {
+        pub switch_on: bool,
+        /// Searches refused because it was off.
+        pub refused: u32,
+        pub looking: bool,
+    }
+
+    pub struct Adapter {
+        pub powered: bool,
+        pub asked: Arc<Mutex<Asked>>,
+    }
+
+    #[derive(Debug, zbus::DBusError)]
+    #[zbus(prefix = "org.bluez.Error")]
+    pub enum Error {
+        NotReady(String),
+    }
+
+    #[zbus::interface(name = "org.bluez.Adapter1")]
+    impl Adapter {
+        #[zbus(property)]
+        fn address(&self) -> String {
+            "00:00:00:00:00:01".into()
+        }
+        #[zbus(property)]
+        pub fn powered(&self) -> bool {
+            self.powered
+        }
+        /// Asked to switch on, it is still off until the test switches it.
+        #[zbus(property)]
+        fn set_powered(&mut self, on: bool) {
+            self.asked.lock().unwrap().switch_on |= on;
+        }
+        #[zbus(property)]
+        fn power_state(&self) -> String {
+            if self.powered { "on" } else { "off" }.into()
+        }
+        #[zbus(property)]
+        fn discovering(&self) -> bool {
+            self.asked.lock().unwrap().looking
+        }
+        fn start_discovery(&self) -> Result<(), Error> {
+            let mut asked = self.asked.lock().unwrap();
+            if !self.powered {
+                asked.refused += 1;
+                return Err(Error::NotReady("Resource Not Ready".into()));
+            }
+            asked.looking = true;
+            Ok(())
+        }
+        fn stop_discovery(&self) {
+            self.asked.lock().unwrap().looking = false;
+        }
+    }
+
+    /// Serve it on the bus at `address`.
+    pub fn serve(address: &str) -> (zbus::blocking::Connection, Arc<Mutex<Asked>>) {
+        let asked = Arc::new(Mutex::new(Asked::default()));
+        let conn = zbus::blocking::connection::Builder::address(address)
+            .unwrap()
+            .name("org.bluez")
+            .unwrap()
+            .serve_at("/", zbus::fdo::ObjectManager)
+            .unwrap()
+            .serve_at(ADAPTER, Adapter { powered: false, asked: asked.clone() })
+            .unwrap()
+            .build()
+            .unwrap();
+        (conn, asked)
+    }
+
+    /// The adapter is on now, and says so.
+    pub fn switch_on(conn: &zbus::blocking::Connection) {
+        let iface = conn.object_server().interface::<_, Adapter>(ADAPTER).unwrap();
+        let mut adapter = iface.get_mut();
+        adapter.powered = true;
+        zbus::block_on(adapter.powered_changed(iface.signal_emitter())).unwrap();
+    }
+}
+
+/// With Bluetooth off, the pairing screen switches it on and looks for
+/// controllers once it is on. Asked to look while still off, BlueZ refuses,
+/// and the screen said "Looking…" over an adapter that never looked.
+#[test]
+fn pairing_waits_for_bluetooth_to_be_on_before_it_looks() {
+    use aizome_chanoma::app::grownups::Search;
+    // The pairing screen takes the system bus: a bus of the test's own, in a
+    // process of its own, so no other test's environment changes.
+    const MARK: &str = "CHANOMA_TEST_BLUEZ";
+    if std::env::var_os(MARK).is_none() {
+        let Some(bus) = bluez::TestBus::start("pairing-off") else { return };
+        let status = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "pairing_waits_for_bluetooth_to_be_on_before_it_looks", "--nocapture"])
+            .env("DBUS_SYSTEM_BUS_ADDRESS", &bus.address)
+            .env(MARK, "1")
+            .status()
+            .unwrap();
+        assert!(status.success());
+        return;
+    }
+    let (fake, asked) = bluez::serve(&std::env::var("DBUS_SYSTEM_BUS_ADDRESS").unwrap());
+    let (dirs, cores) = household("pairing-off", |_| {});
+    let mut h = harness(config(dirs, cores, ManualClock::at(2026, 10, 31, 17, 0)));
+    into_settings(&mut h);
+    to_section(&mut h, 5);
+    to_row(&mut h, "Pair a controller…");
+    input(&mut h, Input::Ok);
+    assert_eq!(h.program().screen, Screen::Pairing);
+    let search = |a: &Chanoma| a.pairing.as_ref().map(|p| p.search);
+    let lines = |h: &Harness<Chanoma>| h.program().pairing_message().lines;
+
+    // Found off: asked to switch on, and nothing else while it is off.
+    until(&mut h, |a| search(a) == Some(Search::SwitchingOn));
+    assert!(eventually(|| asked.lock().unwrap().switch_on), "the adapter is asked to switch on");
+    h.settle(Duration::from_millis(300), |_| false);
+    assert_eq!(search(h.program()), Some(Search::SwitchingOn));
+    assert_eq!(asked.lock().unwrap().refused, 0, "an adapter that is off is not asked to look");
+    assert_eq!(lines(&h), ["Switching Bluetooth on…"]);
+
+    // On: now it looks, and says so.
+    bluez::switch_on(&fake);
+    until(&mut h, |a| search(a) == Some(Search::Looking));
+    assert!(asked.lock().unwrap().looking, "the adapter is looking");
+    assert_eq!(asked.lock().unwrap().refused, 0);
+    assert_eq!(lines(&h), ["Looking…"]);
+}
+
+/// Wait up to 20 seconds for `condition` (another process answers in real
+/// time: generous on a loaded machine).
+fn eventually(condition: impl Fn() -> bool) -> bool {
+    let end = Instant::now() + Duration::from_secs(20);
+    while Instant::now() < end {
+        if condition() {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    condition()
+}
+
 /// A controller told to rumble does until it's told to stop: a game paused
 /// or ended stops it, whatever its core asked last.
 #[test]

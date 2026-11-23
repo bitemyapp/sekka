@@ -91,6 +91,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "ureq",
+ "zbus",
 ]
 
 [[package]]

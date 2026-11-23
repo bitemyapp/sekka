@@ -63,6 +63,11 @@ roxmltree = "0.21"
 # first sectors: CHD's codecs in Rust, the encoders left out.
 chd = { version = "0.4", default-features = false, features = ["std", "fast_lzma"] }
 
+[dev-dependencies]
+# A fake BlueZ on a private bus, for the pairing screen's test, which runs
+# aizome-sys's real client (already in aizome-sys's tree).
+zbus = { version = "5.19", default-features = false, features = ["async-io", "blocking-api"] }
+
 [build-dependencies]
 # The cores' log function, in C (src/retro/log.c).
 cc = "1"

@@ -227,6 +227,14 @@ apart from keyboards, touchpads and motion sensors by their capabilities.
 A controller that comes back (by its Bluetooth address or USB serial)
 keeps its player number.
 
+*Pair a controller…* (`app/grownups.rs`) talks to BlueZ through
+`aizome-sys`, as Settings does. An adapter found off is switched on
+first, and BlueZ is asked to look for controllers only once it says the
+adapter is on (`Search`): asked for both at once, the search could reach
+an adapter that was still off, be refused, and never be asked again,
+with the screen saying *Looking…* all the while. The screen says what
+the adapter is doing until it is looking.
+
 Buttons are named by position (`South` is the bottom face button). The
 mapping is, in order: one set up in Chanoma's settings for that model
 (`controllers.json`); SDL's community database (the package points
@@ -1441,9 +1449,10 @@ cargo run --release -p aizome-chanoma --example library -- FOLDER… \
 
 Not yet checked: a physical controller (Bluetooth pairing, and the
 mappings of real pads: Xbox, PlayStation, Switch Pro, 8BitDo), the
-Bluetooth pairing screen against BlueZ, DRM services (Netflix and the
-like) in Google Chrome, sound, the ISO, or a television. These need doing
-before calling any of it tested on hardware.
+Bluetooth pairing screen against BlueZ itself (its test's is a
+stand-in), DRM services (Netflix and the like) in Google Chrome, sound,
+the ISO, or a television. These need doing before calling any of it
+tested on hardware.
 
 ## Decided on purpose
 

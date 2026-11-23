@@ -201,6 +201,8 @@ fn cycle<T: PartialEq + Copy>(options: &[T], v: T, forward: bool) -> T {
 pub struct Pairing {
     pub bt: aizome_sys::bluetooth::Bluetooth,
     pub adapter: Option<String>,
+    /// How far the adapter has got towards looking for controllers.
+    pub search: Search,
     /// Devices whose Pair request has not yet completed.
     pub pending: HashSet<String>,
     /// Successful requests whose BlueZ snapshot may still say unpaired.
@@ -208,6 +210,48 @@ pub struct Pairing {
     /// What each found controller is doing, for the list.
     pub status: Vec<(String, String)>,
     pub connected: usize,
+}
+
+/// How far the pairing screen's adapter has got towards looking for
+/// controllers. BlueZ refuses to look with an adapter that is off, so an
+/// adapter found off is switched on first, and the search is asked for
+/// only once BlueZ says it is on ([`Chanoma::bluetooth_changed`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Search {
+    /// Nothing asked of the adapter yet.
+    Idle,
+    /// Found off and asked to switch on; BlueZ hasn't said it is on.
+    SwitchingOn,
+    /// Off: it wouldn't switch on, or something switched it off again.
+    /// Looked with as soon as it is on, and not switched on a second time.
+    Off,
+    /// On, and asked to look; BlueZ hasn't answered.
+    Asked,
+    Looking,
+    /// On, and BlueZ wouldn't look: asked again when BlueZ next changes.
+    Refused,
+}
+
+impl Search {
+    /// What an adapter that is on (`powered`) or off calls for next: where
+    /// the search stands then, and what to ask of BlueZ, if anything.
+    pub fn step(self, powered: bool) -> (Search, Option<Ask>) {
+        match (self, powered) {
+            (Search::Asked | Search::Looking, true) => (self, None),
+            (_, true) => (Search::Asked, Some(Ask::Look)),
+            (Search::Idle, false) => (Search::SwitchingOn, Some(Ask::SwitchOn)),
+            (Search::SwitchingOn, false) => (self, None),
+            // Whatever was looking stopped with the adapter.
+            (_, false) => (Search::Off, None),
+        }
+    }
+}
+
+/// What [`Search::step`] has the pairing screen ask of BlueZ.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Ask {
+    SwitchOn,
+    Look,
 }
 
 /// Setting a controller's buttons up: which it is and what's been pressed.
@@ -1166,6 +1210,7 @@ impl Chanoma {
         self.pairing = Some(Pairing {
             bt,
             adapter: None,
+            search: Search::Idle,
             pending: HashSet::new(),
             paired: HashSet::new(),
             status: Vec::new(),
@@ -1181,14 +1226,32 @@ impl Chanoma {
         }
         let Some(p) = &mut self.pairing else { return };
         let state = p.bt.snapshot();
-        if p.adapter.is_none()
-            && let Some(a) = state.default_adapter()
-        {
-            p.adapter = Some(a.path.clone());
-            if !a.powered {
-                drop(p.bt.set_powered(&a.path, true));
+        // An adapter that went away (unplugged, BlueZ restarted) took its
+        // search with it: the one found next starts from the beginning.
+        if p.adapter.as_deref().is_some_and(|path| state.adapter(path).is_none()) {
+            p.adapter = None;
+            p.search = Search::Idle;
+        }
+        if p.adapter.is_none() {
+            p.adapter = state.default_adapter().map(|a| a.path.clone());
+        }
+        // Switched on first, and looked with only once BlueZ says it is on.
+        // Asked for both at once, the search can reach an adapter that is
+        // still off, BlueZ refuses it, and nothing asks again.
+        if let Some(a) = p.adapter.as_deref().and_then(|path| state.adapter(path)) {
+            let (search, ask) = p.search.step(a.powered);
+            p.search = search;
+            match ask {
+                Some(Ask::SwitchOn) => {
+                    let task = p.bt.set_powered(&a.path, true);
+                    cx.spawn(move || Msg::SwitchedOn(session, task.wait().map_err(|e| e.to_string())));
+                }
+                Some(Ask::Look) => {
+                    let task = p.bt.start_discovery(&a.path);
+                    cx.spawn(move || Msg::Searching(session, task.wait().map_err(|e| e.to_string())));
+                }
+                None => {}
             }
-            drop(p.bt.start_discovery(&a.path));
         }
         let mut status = Vec::new();
         for d in state.devices.iter().filter(|d| d.kind == aizome_sys::bluetooth::DeviceKind::Gamepad) {
@@ -1208,6 +1271,40 @@ impl Chanoma {
             }
         }
         p.status = status;
+    }
+
+    /// BlueZ answered the request to switch the adapter on. Switched on, the
+    /// search still waits for BlueZ to say so
+    /// ([`Chanoma::bluetooth_changed`]).
+    pub fn switched_on(&mut self, session: u64, result: Result<(), String>) {
+        if session != self.pairing_session {
+            return;
+        }
+        let Some(p) = &mut self.pairing else { return };
+        if let Err(e) = result {
+            log::warn!("chanoma: switching Bluetooth on: {e}");
+            if p.search == Search::SwitchingOn {
+                p.search = Search::Off;
+            }
+        }
+    }
+
+    /// BlueZ answered the request to look for controllers.
+    pub fn searching(&mut self, session: u64, result: Result<(), String>) {
+        if session != self.pairing_session {
+            return;
+        }
+        let Some(p) = &mut self.pairing else { return };
+        if p.search != Search::Asked {
+            return;
+        }
+        p.search = match result {
+            Ok(()) => Search::Looking,
+            Err(e) => {
+                log::warn!("chanoma: looking for controllers: {e}");
+                Search::Refused
+            }
+        };
     }
 
     pub fn paired(&mut self, session: u64, device: String, result: Result<(), String>, cx: &mut Cx<Msg>) {
@@ -1242,11 +1339,22 @@ impl Chanoma {
             "Put it in pairing mode: hold Share and the PS button on a PlayStation controller, the pair button on top of an Xbox controller, or the sync button on a Switch Pro. It pairs by itself.",
         )
         .actions(&["Done"]);
-        match &self.pairing {
-            Some(p) if p.adapter.is_none() => m.lines.push("No Bluetooth here".into()),
-            Some(p) if p.status.is_empty() => m.lines.push("Looking…".into()),
-            Some(p) => m.lines = p.status.iter().map(|(n, s)| format!("{n}: {s}")).collect(),
-            None => {}
+        let Some(p) = &self.pairing else { return m };
+        if p.adapter.is_none() {
+            m.lines.push("No Bluetooth here".into());
+            return m;
+        }
+        // What the adapter is doing, while that isn't looking.
+        let radio = match p.search {
+            Search::Idle | Search::SwitchingOn => Some("Switching Bluetooth on…"),
+            Search::Off => Some("Bluetooth is off"),
+            Search::Refused => Some("Bluetooth isn't looking for controllers"),
+            Search::Asked | Search::Looking => None,
+        };
+        m.lines.extend(radio.map(str::to_owned));
+        m.lines.extend(p.status.iter().map(|(n, s)| format!("{n}: {s}")));
+        if m.lines.is_empty() {
+            m.lines.push("Looking…".into());
         }
         m
     }
@@ -1391,5 +1499,36 @@ fn same_input(a: &PadInput, b: &PadInput) -> bool {
     match (a, b) {
         (PadInput::Abs { code: x, .. }, PadInput::Abs { code: y, .. }) => x == y,
         _ => a == b,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The pairing screen's adapter is switched on once, looked with only
+    /// while it is on, and asked to look again after a refusal or after it
+    /// went off and came back.
+    #[test]
+    fn the_search_waits_for_an_adapter_that_is_on() {
+        use Search::*;
+        // Already on: looked with at once, and asked once.
+        assert_eq!(Idle.step(true), (Asked, Some(Ask::Look)));
+        assert_eq!(Asked.step(true), (Asked, None));
+        assert_eq!(Looking.step(true), (Looking, None));
+        // Off: switched on once, and not asked to look until it is on.
+        assert_eq!(Idle.step(false), (SwitchingOn, Some(Ask::SwitchOn)));
+        assert_eq!(SwitchingOn.step(false), (SwitchingOn, None));
+        assert_eq!(SwitchingOn.step(true), (Asked, Some(Ask::Look)));
+        // It wouldn't switch on: left off, and looked with if it comes on.
+        assert_eq!(Off.step(false), (Off, None));
+        assert_eq!(Off.step(true), (Asked, Some(Ask::Look)));
+        // Refused while on: asked again when BlueZ next changes.
+        assert_eq!(Refused.step(true), (Asked, Some(Ask::Look)));
+        // Switched off under a search: that search is over, and nothing
+        // switches it back on.
+        for was in [Asked, Looking, Refused] {
+            assert_eq!(was.step(false), (Off, None), "{was:?}");
+        }
     }
 }
