@@ -484,8 +484,18 @@ passes through (`Service::sites`: Google's sign-in for YouTube Kids,
 which goes through it as it opens, and for YouTube; `max.com` and
 `hbomax.com` for Max, whose address now leads to HBO Max). The lists
 come from following each address in Google Chrome 156 on 2026-11-01,
-signed out. A website a grown-up added stays on its own host's site.
-Everything else on the web is outside, including the rest of Google.
+signed out (YouTube TV's and Fubo's in Chromium 156 on 2026-11-23). A
+website a grown-up added stays on its own host's site. Everything else
+on the web is outside, including the rest of Google.
+
+YouTube TV's site is `tv.youtube.com` alone, so the rest of YouTube is
+outside it. Signed out, its address stays there; its *Sign in* goes
+through Google's sign-in and back through `m.youtube.com`, which
+grown-up mode doesn't refuse (below). Fubo's home leads to its own
+sign-in, on `fubo.tv`. Neither has been opened signed in: if a signed-in
+page of YouTube TV's turns out to pass through Google's sign-in as it
+opens, as YouTube Kids' does, kids' mode will say *That's outside …*
+until `Service::sites` names it.
 
 The browser starts blank with `--remote-debugging-pipe`, and
 `devtools.rs` steers it over the pipe on its descriptors 3 and 4, put
