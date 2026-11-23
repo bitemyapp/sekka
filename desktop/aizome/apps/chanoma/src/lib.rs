@@ -31,6 +31,7 @@ pub mod metadata;
 pub use aizome_gamepad as pad;
 pub mod retro;
 pub mod rules;
+pub mod saves;
 pub mod services;
 pub mod signals;
 pub mod store;

@@ -402,6 +402,21 @@ pausing, saving and leaving are Chanoma's.
   flattened filenames still load until the game writes a new one. If
   two games previously shared a filename, both can read that original
   and each writes its own progress from then on.
+  Two different files can still go by one key (Decided on purpose,
+  below), so a name's saves say which file they were made with
+  (`saves.rs`): a fingerprint of it, in `<name>.fingerprint` beside the
+  battery save. A zipped game's is its files' sizes and checksums, a
+  disc sheet's is that of the files it names, any other file's is its
+  size and first mebibyte. The first file played under a name has the
+  name's own files. A different file played under it writes its own
+  beside them (`<name>-<fingerprint>.srm`, `.state`, `.png`) and leaves
+  the first's as they were. It starts from the first's battery save
+  while it has none of its own, so a better dump of the same game keeps
+  its progress, and never from the first's state, which only the game
+  that made it can load. *Keep playing* finds its picture by the
+  fingerprint it was last played with (`recent.json`). Saves from before
+  fingerprints were written are the first file's that is played under
+  the name.
 - Callbacks have no context in libretro, so the running core's host is
   one process-wide pointer: one game at a time. Cores run in Chanoma's
   process; a core that crashes takes Chanoma with it, and the autostart
@@ -1475,8 +1490,9 @@ tested on hardware.
 These read as defects in a review and are not. The project's owner chose
 each knowing what it costs. A change that reverses one is not a fix:
 raise it with the owner. Each is marked "Decided on purpose" where it
-is set, and `checks.aizome-chanoma-defaults`
-(`nix/aizome-chanoma-defaults-test.nix`) fails when one is taken out.
+is set, and a check fails when it is taken out:
+`checks.aizome-chanoma-defaults` (`nix/aizome-chanoma-defaults-test.nix`)
+for the first two, a test named with the third.
 
 - **A Bluetooth device that forgot the computer pairs again without
   anyone confirming** (`JustWorksRepairing = always`, in the module, on
@@ -1497,6 +1513,22 @@ is set, and `checks.aizome-chanoma-defaults`
   these notes, and Chrome among the apps of someone who never opens
   Chanoma. Decided on 2026-11-22. `programs.aizome.chanoma.enable =
   false` leaves all of it out on one system.
+- **A game is its system and its path in its games folder**
+  (`Game::key`, in `library.rs`): not the folder too, and not what is
+  in its file. What it costs: two different files at the same path in
+  two folders added separately are one game to Chanoma. One shows, the
+  first folder's; the other folder says how many of its games are
+  "named as in another folder"; and what kids may play goes by the name,
+  for both. Why it stays: collections are laid out alike, so the same
+  path is nearly always the same game, and a collection moved to another
+  drive or copied to a stick keeps its saves and what kids may play.
+  With the folder in the key, the same game in two places would show
+  twice and be allowed twice, and a moved collection would lose both.
+  Telling games by their contents would mean reading every file before
+  it has a name. What is guarded all the same: each file keeps its own
+  saves (Saves, above). Decided on 2026-11-22, after a review raised it.
+  `library::tests::the_same_path_in_two_folders_is_one_game` fails when
+  the two get different keys.
 
 ## Limits
 

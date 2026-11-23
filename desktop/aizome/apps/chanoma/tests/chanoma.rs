@@ -54,6 +54,8 @@ static LOADED: AtomicBool = AtomicBool::new(false);
 /// (Mesen) lose them, or crash.
 static INITED: AtomicBool = AtomicBool::new(false);
 static mut SRAM: [u8; 32] = [0; 32];
+/// Frames in which Start was held: each wrote the count to the save RAM.
+static SAVED: AtomicU64 = AtomicU64::new(0);
 static OPTION: Mutex<String> = Mutex::new(String::new());
 /// A game whose bytes start `STUCK` or `SLOW` is still loading until the
 /// test lets it go: then a stuck one fails, a slow one starts.
@@ -146,6 +148,7 @@ unsafe extern "C" fn run() {
     if bits & (1 << RETRO_DEVICE_ID_JOYPAD_START) != 0 {
         let sram = std::ptr::addr_of_mut!(SRAM).cast::<u8>();
         unsafe { std::ptr::copy_nonoverlapping(n.to_le_bytes().as_ptr(), sram, 8) };
+        SAVED.fetch_add(1, Ordering::SeqCst);
     }
     let x = X.load(Ordering::SeqCst) as usize;
     let mut px = vec![if b { 0x0030_a050u32 } else { 0x0020_3080 }; 160 * 120];
@@ -722,6 +725,153 @@ fn a_game_plays_pauses_and_carries_on_where_it_was_left() {
     input(&mut h, Input::Dir(Dir::Down));
     input(&mut h, Input::Ok);
     assert!(exists(&state) && exists(&legacy));
+}
+
+/// Two different games that go by one name (the same path in two folders
+/// added separately) each keep their own saves. Played while the first's
+/// drive is away, the second doesn't carry on from the first's place or
+/// write over its save, and the first finds its own as it left them.
+#[test]
+fn two_games_of_one_name_each_keep_their_own_saves() {
+    use aizome_chanoma::retro::{CoreSource, Event, Launch, Session};
+    use aizome_chanoma::saves::{Print, Whose};
+    let _core = core_lock();
+    let here = temp("one-name");
+    let game = |folder: &str, bytes: &[u8]| {
+        let path = here.join(folder).join("gb/Demo.gb");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, bytes).unwrap();
+        path
+    };
+    let first = game("home", b"CHANOMA one game");
+    let second = game("stick", b"CHANOMA another game");
+    // What the one name gives them both.
+    let (ram, state, picture) = (here.join("saves/n.srm"), here.join("states/n.state"), here.join("states/n.png"));
+    // Play `game` a moment, saving in it (the test core's Start writes its
+    // frame count, which starts over with each game) once it is past frame
+    // `past`, and leave it: whether it carried on, and whose saves it had.
+    let play = |game: &Path, past: u64| {
+        let launch = Launch {
+            core: CoreSource::Api(test_core()),
+            game: game.to_owned(),
+            save_ram: ram.clone(),
+            legacy_key: None,
+            state: state.clone(),
+            picture: picture.clone(),
+            resume: true,
+            system_dir: here.join("system"),
+            bios: Vec::new(),
+            found_bios: Vec::new(),
+            save_dir: here.join("saves"),
+            players: 1,
+            prefer: Vec::new(),
+            screen_lines: 1080,
+            silent: true,
+            unpack_dir: here.join("unzipped"),
+            extensions: &[],
+        };
+        let pads = Arc::new(aizome_chanoma::pad::Shared::default());
+        let (tx, rx) = std::sync::mpsc::channel();
+        let session = Session::start(launch, None, pads.clone(), None, move |e| {
+            let _ = tx.send(e);
+        });
+        let Ok(Event::Started { resumed, whose, .. }) = rx.recv_timeout(Duration::from_secs(10)) else {
+            panic!("it didn't start")
+        };
+        // Held until the game has saved: a press takes a moment to reach it.
+        let saved = SAVED.load(Ordering::SeqCst);
+        pads.set(0, true, Button::Start.bit(), [0.0; 6]);
+        let end = Instant::now() + Duration::from_secs(10);
+        while SAVED.load(Ordering::SeqCst) == saved || FRAMES.load(Ordering::SeqCst) <= past {
+            assert!(Instant::now() < end, "Start didn't reach the game");
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        pads.set(0, true, 0, [0.0; 6]);
+        session.stop(true);
+        (resumed, whose)
+    };
+    let read = |p: &Path| std::fs::read(p).unwrap();
+
+    // The first played has the name's own files.
+    assert_eq!(play(&first, 0), (false, Whose::Own));
+    assert!(exists(&ram) && exists(&state) && exists(&picture));
+    let firsts = (read(&ram), read(&state), read(&picture));
+    let saved_at = u64::from_le_bytes(firsts.0[..8].try_into().unwrap());
+
+    // The second, with the first's drive away: not from the first's place,
+    // and into files of its own. (It saves later than the first did: a
+    // save the same as the one it started from isn't written again.)
+    let print = Print::of(&second).unwrap();
+    assert_eq!(play(&second, saved_at), (false, Whose::Apart(print.clone())));
+    let own = |p: &Path| aizome_chanoma::saves::apart(p, &print);
+    for kept in [&ram, &state, &picture] {
+        assert!(exists(&own(kept)), "{}", own(kept).display());
+    }
+    assert_ne!(read(&own(&ram)), firsts.0, "it saved its own progress");
+    assert_eq!((read(&ram), read(&state), read(&picture)), firsts, "the first's are as it left them");
+
+    // Each carries on from its own place.
+    let seconds = (read(&own(&ram)), read(&own(&state)));
+    assert_eq!(play(&first, 0), (true, Whose::Own));
+    assert_eq!((read(&own(&ram)), read(&own(&state))), seconds, "the second's are as it left them");
+    assert_eq!(play(&second, 0), (true, Whose::Apart(print)));
+}
+
+/// A game's file replaced by another of its name isn't carried on from
+/// where the first was left: Chanoma finds its saves and its picture
+/// beside the first's, which stay.
+#[test]
+fn a_file_replaced_under_a_games_name_starts_from_its_own_place() {
+    use aizome_chanoma::saves::Print;
+    let _core = core_lock();
+    let (dirs, cores) = household("replaced", |_| {});
+    let clock = ManualClock::at(2026, 10, 31, 17, 0);
+    let mut h = harness(config(dirs.clone(), cores, clock));
+    let stop = |h: &mut Harness<Chanoma>| {
+        press(h, Button::Guide);
+        input(h, Input::Dir(Dir::Down));
+        input(h, Input::Dir(Dir::Down));
+        input(h, Input::Ok);
+        assert_eq!(h.program().screen, Screen::Home);
+    };
+    let carried_on =
+        |h: &Harness<Chanoma>| h.program().toast.as_ref().is_some_and(|t| t.0 == "Carrying on where you left off");
+    let game = h.program().library.games.iter().find(|g| g.title == "Test Quest").unwrap().clone();
+    let file = game.file_key();
+    let state = dirs.states().join(format!("{file}.state"));
+    let picture = dirs.states().join(format!("{file}.png"));
+
+    // Games is the second shelf.
+    input(&mut h, Input::Dir(Dir::Down));
+    input(&mut h, Input::Ok);
+    until(&mut h, |a| a.screen == Screen::Playing);
+    stop(&mut h);
+    assert!(h.program().recent.apart.is_empty());
+    assert_eq!(h.program().left_picture(&game), picture);
+    let firsts = (std::fs::read(&state).unwrap(), std::fs::read(&picture).unwrap());
+
+    // Another game where the first was. It leads Home as the first did.
+    std::fs::write(&game.path, b"CHANOMA another game").unwrap();
+    let print = Print::of(&game.path).unwrap();
+    assert_eq!(h.program().home_view().shelves[0].title, "Keep playing");
+    input(&mut h, Input::Ok);
+    until(&mut h, |a| a.screen == Screen::Playing);
+    assert!(!carried_on(&h), "not from where the first was left");
+    assert_eq!(h.program().recent.apart.get(&game.key), Some(&print));
+    stop(&mut h);
+    let own = aizome_chanoma::saves::apart(&picture, &print);
+    assert!(exists(&own), "{}", own.display());
+    assert_eq!(h.program().left_picture(&game), own);
+    assert_eq!((std::fs::read(&state).unwrap(), std::fs::read(&picture).unwrap()), firsts);
+    // Kept between runs, with what was played.
+    let kept = aizome_chanoma::app::state::Recent::load(&dirs);
+    assert_eq!(kept.apart.get(&game.key), Some(&print));
+
+    // It carries on from its own place.
+    input(&mut h, Input::Ok);
+    until(&mut h, |a| a.screen == Screen::Playing);
+    assert!(carried_on(&h));
+    stop(&mut h);
 }
 
 /// Choose the tile called `label` at Home.

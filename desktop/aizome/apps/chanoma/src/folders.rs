@@ -389,6 +389,11 @@ pub fn held_word(h: &Held) -> String {
     let mut parts = Vec::new();
     if h.games > 0 {
         let mut s = format!("{} for {}", count(h.games, "game"), count(h.systems, "system"));
+        // One game to Chanoma with another folder's of the same name: it
+        // shows once, from that folder (library.rs).
+        if h.shared > 0 {
+            s.push_str(&format!(", {} of them named as in another folder", h.shared));
+        }
         if h.unplayable > 0 {
             s.push_str(&format!(", and {} without a game player here", h.unplayable));
         }
@@ -552,5 +557,13 @@ mod tests {
         assert_eq!(h(0, 0, 3, 0, 0), "3 games, for systems without a game player here");
         assert_eq!(h(0, 0, 0, 2, 1), "2 shows and 1 film");
         assert_eq!(h(6509, 31, 0, 0, 2), "6509 games for 31 systems · 2 films");
+        // Games another folder has by the same name show once, from there.
+        let shared =
+            |shared, unplayable| held_word(&Held { games: 12, systems: 3, shared, unplayable, ..Held::default() });
+        assert_eq!(shared(2, 0), "12 games for 3 systems, 2 of them named as in another folder");
+        assert_eq!(
+            shared(1, 4),
+            "12 games for 3 systems, 1 of them named as in another folder, and 4 without a game player here"
+        );
     }
 }

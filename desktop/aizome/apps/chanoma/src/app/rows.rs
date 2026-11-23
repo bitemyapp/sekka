@@ -82,13 +82,26 @@ impl Chanoma {
         (q != p && !self.art_missing.contains(&q)).then_some(q)
     }
 
+    /// Where the picture of where `g` was left is: its name's own, or its
+    /// own beside that where it was last played as another file than the
+    /// name's first ([`crate::saves`]).
+    pub fn left_picture(&self, g: &Game) -> PathBuf {
+        let own = self.config.dirs.states().join(format!("{}.png", g.file_key()));
+        match self.recent.apart.get(&g.key) {
+            Some(print) => crate::saves::apart(&own, print),
+            None => own,
+        }
+    }
+
     pub(crate) fn game_tile(&self, g: &Game, picture: bool) -> Tile {
-        let state = self.config.dirs.states().join(format!("{}.png", g.file_key()));
+        let state = self.left_picture(g);
         // On *Keep playing*, where it was left; else its box (beside it, or
         // fetched); else where it was left, if it was played; else none,
         // and the tile draws its sprite.
         let played = || self.recent.items.iter().any(|i| matches!(i, Item::Game { key } if *key == g.key));
-        let saved_picture = || crate::store::existing_game_file(&state, Some(&g.legacy_file_key()));
+        // An older version's picture is the name's own, not one kept apart.
+        let older = (!self.recent.apart.contains_key(&g.key)).then(|| g.legacy_file_key());
+        let saved_picture = || crate::store::existing_game_file(&state, older.as_deref());
         let recent_picture = picture.then(saved_picture).filter(|p| p.is_file());
         let (art, pixels) = if let Some(saved) = recent_picture {
             (Some(saved), true)

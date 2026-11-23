@@ -493,6 +493,9 @@ pub struct Held {
     pub systems: usize,
     /// Games for systems with no core here.
     pub unplayable: usize,
+    /// Of its games, those another folder has by the same name (system and
+    /// path): one game to Chanoma, shown once, from the other folder.
+    pub shared: usize,
     pub shows: usize,
     pub films: usize,
 }
@@ -661,7 +664,8 @@ const DISC_PARTS: &[&str] =
 
 /// The games in folders read, each counted in its folder's `held`.
 fn games_of(reads: &[(usize, Read)], cores: &Cores, held: &mut [Held], discs: Discs) -> (Vec<Game>, usize) {
-    let mut games = Vec::new();
+    // Each with its folder's place in `held`.
+    let mut found: Vec<(usize, Game)> = Vec::new();
     let mut unplayable = 0;
     for (i, read) in reads {
         let Read { root, files, pictures, .. } = read;
@@ -704,22 +708,43 @@ fn games_of(reads: &[(usize, Read)], cores: &Cores, held: &mut [Held], discs: Di
             }
             held[*i].games += 1;
             systems.insert(system.id);
+            // Decided on purpose (docs/chanoma.md, "Decided on purpose"): a
+            // game is its system and its path in its folder, not the
+            // folder too and not what is in the file, so the same
+            // collection on another drive is the same games, with their
+            // saves and what kids may play. Two different files can then
+            // go by one name: one shows, counted below, and each keeps its
+            // own saves (saves.rs). Do not change the key as a fix: raise
+            // it with the owner.
             let rel = path.strip_prefix(root).unwrap_or(path).to_string_lossy().into_owned();
-            games.push(Game {
-                key: format!("{}/{}", system.id, rel),
-                title: title_of(path),
-                art: listed_art.get(path).cloned().or_else(|| art_for(path, root, read)),
-                info: None,
-                known_as: None,
-                path: path.clone(),
-                system,
-            });
+            found.push((
+                *i,
+                Game {
+                    key: format!("{}/{}", system.id, rel),
+                    title: title_of(path),
+                    art: listed_art.get(path).cloned().or_else(|| art_for(path, root, read)),
+                    info: None,
+                    known_as: None,
+                    path: path.clone(),
+                    system,
+                },
+            ));
         }
         held[*i].systems = systems.len();
     }
     // Each title lowered once, not at each comparison.
-    games.sort_by_cached_key(|g| (g.title.to_lowercase(), g.key.clone()));
-    games.dedup_by(|a, b| a.key == b.key);
+    found.sort_by_cached_key(|(_, g)| (g.title.to_lowercase(), g.key.clone()));
+    // The same name in two folders is one game: the first read's shows
+    // (the sort keeps their order), and the others are counted in their
+    // folders, for the settings to say so.
+    let mut games: Vec<Game> = Vec::with_capacity(found.len());
+    for (i, game) in found {
+        if games.last().is_some_and(|shown| shown.key == game.key) {
+            held[i].shared += 1;
+        } else {
+            games.push(game);
+        }
+    }
     (games, unplayable)
 }
 
@@ -798,7 +823,7 @@ pub fn find_games(
 }
 
 /// The files a cue sheet or playlist names, beside it.
-fn referenced(sheet: &Path) -> Vec<PathBuf> {
+pub(crate) fn referenced(sheet: &Path) -> Vec<PathBuf> {
     let Ok(text) = std::fs::read_to_string(sheet) else { return Vec::new() };
     let dir = sheet.parent().unwrap_or(Path::new("."));
     let m3u = sheet.extension().is_some_and(|e| e.eq_ignore_ascii_case("m3u"));
@@ -1229,6 +1254,42 @@ mod tests {
         let zipped = lib.games.iter().find(|g| g.title == "Fourth").unwrap();
         let unpacked = crate::zip::unpack(&zipped.path, zipped.system.extensions, &d.join("unpacked"), 4).unwrap();
         assert_eq!(std::fs::read(unpacked).unwrap(), b"cartridge");
+        let _ = std::fs::remove_dir_all(d);
+    }
+
+    /// Decided on purpose (docs/chanoma.md, "Decided on purpose"): a game is
+    /// its system and its path in its folder. The same path in two folders
+    /// is one game, whatever is in the two files: it shows once, from the
+    /// first folder read, and the other folder counts its own as shared. A
+    /// change that gives the two different keys is not a fix, and fails here.
+    #[test]
+    fn the_same_path_in_two_folders_is_one_game() {
+        let d = tmp("same-path");
+        let cores = d.join("cores");
+        std::fs::create_dir_all(&cores).unwrap();
+        std::fs::write(cores.join("gambatte_libretro.so"), b"").unwrap();
+        let (home, stick) = (d.join("home/Games"), d.join("stick/roms"));
+        for (folder, bytes) in [(&home, &b"one game"[..]), (&stick, &b"another!"[..])] {
+            std::fs::create_dir_all(folder.join("gb")).unwrap();
+            std::fs::write(folder.join("gb/Demo.gb"), bytes).unwrap();
+        }
+        std::fs::write(stick.join("gb/Only Here.gb"), b"a third").unwrap();
+        let mut idx = index(&d);
+        let folders = [home.clone(), stick.clone()];
+        let lib = scan(&mut idx, &folders, &[cores], None, &mut Default::default(), true, &|_| {});
+        let keys: Vec<&str> = lib.games.iter().map(|g| g.key.as_str()).collect();
+        assert_eq!(keys, ["gb/gb/Demo.gb", "gb/gb/Only Here.gb"]);
+        assert_eq!(lib.games[0].path, home.join("gb/Demo.gb"), "the first folder's shows");
+        let held = |folder: &Path| lib.held.iter().find(|h| h.folder == folder).unwrap();
+        assert_eq!((held(&home).games, held(&home).shared), (1, 0));
+        assert_eq!((held(&stick).games, held(&stick).shared), (2, 1));
+        // With the first folder away, the other's goes by the same name.
+        std::fs::remove_dir_all(d.join("home")).unwrap();
+        let lib = scan(&mut idx, &folders, &[d.join("cores")], None, &mut Default::default(), true, &|_| {});
+        assert_eq!(lib.games[0].key, "gb/gb/Demo.gb");
+        assert_eq!(lib.games[0].path, stick.join("gb/Demo.gb"));
+        let held = |folder: &Path| lib.held.iter().find(|h| h.folder == folder).unwrap();
+        assert_eq!(held(&stick).shared, 0);
         let _ = std::fs::remove_dir_all(d);
     }
 

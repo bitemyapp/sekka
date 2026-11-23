@@ -101,6 +101,11 @@ pub struct Recent {
     /// The sound and subtitles chosen for a show (its folder) or a film
     /// (its file), kept for its next episodes and the next time.
     pub languages: BTreeMap<String, Languages>,
+    /// Games whose saves are kept apart from their name's own, by key,
+    /// with the fingerprint their files are named by: the file last
+    /// played under the name isn't the first that was ([`crate::saves`]).
+    /// Their picture of where they were left is found by it.
+    pub apart: BTreeMap<String, crate::saves::Print>,
 }
 
 impl Recent {

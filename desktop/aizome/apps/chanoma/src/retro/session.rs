@@ -38,7 +38,9 @@ pub enum CoreSource {
 pub struct Launch {
     pub core: CoreSource,
     pub game: PathBuf,
-    /// The game's battery-backed save.
+    /// The game's battery-backed save, as its name has it. Another file
+    /// played under the name keeps its own beside this, and so with
+    /// `state` and `picture` ([`crate::saves`]).
     pub save_ram: PathBuf,
     /// Older versions saved the same game under this name.
     pub legacy_key: Option<String>,
@@ -74,7 +76,13 @@ pub struct Launch {
 pub enum Event {
     /// It runs: its name, its picture's shape (width over height) and
     /// whether it carried on from where it was left.
-    Started { core: String, aspect: f64, resumed: bool },
+    Started {
+        core: String,
+        aspect: f64,
+        resumed: bool,
+        /// Whose its saves are, among those of its name (saves.rs).
+        whose: crate::saves::Whose,
+    },
     /// It couldn't start.
     Failed(String),
     /// A write to the game's save or resume state failed.
@@ -406,13 +414,21 @@ fn run(
     {
         threw = Some(why);
     }
-    let legacy = launch.legacy_key.as_deref();
-    load_save_ram(&api, &crate::store::existing_game_file(&launch.save_ram, legacy));
+    // Whose the saves of this game's name are: another file's are left
+    // as they were, and this one keeps its own (saves.rs).
+    let files = crate::saves::Kept::of(
+        &launch.game,
+        &launch.save_ram,
+        &launch.state,
+        &launch.picture,
+        launch.legacy_key.as_deref(),
+    );
+    load_save_ram(&api, &files.save_ram_from);
     let mut last_save = save_ram(&api);
     let mut resumed = false;
     if threw.is_none()
         && launch.resume
-        && let Ok(bytes) = std::fs::read(crate::store::existing_game_file(&launch.state, legacy))
+        && let Ok(bytes) = std::fs::read(&files.state_from)
     {
         // Mupen64Plus-Next creates its emulation coroutine in init, but
         // only starts it in retro_run. Until then retro_unserialize
@@ -434,7 +450,7 @@ fn run(
             }
         }
         if !resumed {
-            log::warn!("chanoma: {} couldn't carry on from {}", core_name, launch.state.display());
+            log::warn!("chanoma: {} couldn't carry on from {}", core_name, files.state_from.display());
         }
     }
     let speaker = if launch.silent {
@@ -447,7 +463,7 @@ fn run(
             })
     };
     let mut resampler = Resampler::new(av.timing.sample_rate.max(1.0));
-    events(Event::Started { core: core_name.clone(), aspect: aspect(&av), resumed });
+    events(Event::Started { core: core_name.clone(), aspect: aspect(&av), resumed, whose: files.whose.clone() });
 
     let mut frame_time = Duration::from_secs_f64(1.0 / av.timing.fps.clamp(1.0, 240.0));
     let mut next = Instant::now();
@@ -457,8 +473,8 @@ fn run(
         events(Event::SaveFailed(format!("Couldn't save game progress: {err}")));
     };
     let mut save_battery = || {
-        if let Err(e) = checkpoint(&launch.save_ram, &mut last_save, save_ram(&api)) {
-            save_failed(&launch.save_ram, e);
+        if let Err(e) = checkpoint(&files.save_ram, &mut last_save, save_ram(&api)) {
+            save_failed(&files.save_ram, e);
         }
     };
     let mut save_check = Instant::now() + Duration::from_secs(30);
@@ -547,14 +563,14 @@ fn run(
         && threw.is_none()
         && let Some(bytes) = state(&api)
     {
-        match crate::store::write_bytes(&launch.state, &bytes) {
+        match crate::store::write_bytes(&files.state, &bytes) {
             Ok(()) => kept = true,
-            Err(e) => save_failed(&launch.state, e),
+            Err(e) => save_failed(&files.state, e),
         }
         // SAFETY: not inside a core call.
         let h = unsafe { &*host_ptr };
         if let Some((w, hgt, rgba)) = h.last_rgba() {
-            let _ = save_picture(&launch.picture, w, hgt, &rgba, aspect(&h.av));
+            let _ = save_picture(&files.picture, w, hgt, &rgba, aspect(&h.av));
         }
     }
     // SAFETY: as above, in libretro's order: a core's OpenGL things go

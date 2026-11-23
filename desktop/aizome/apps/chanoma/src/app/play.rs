@@ -351,12 +351,17 @@ impl Chanoma {
                 }
             }
             _ if self.game.as_ref().is_none_or(|g| g.id != id) => {}
-            GameEvent::Started { aspect, resumed, .. } => {
+            GameEvent::Started { aspect, resumed, whose, .. } => {
                 self.done_waiting(cx);
                 if let Some(g) = &mut self.game {
                     g.aspect = aspect;
                     g.started = true;
                     self.recent.touch(Item::Game { key: g.key.clone() });
+                    // Which of its name's saves are its own, for its picture.
+                    match whose {
+                        crate::saves::Whose::Own => self.recent.apart.remove(&g.key),
+                        crate::saves::Whose::Apart(print) => self.recent.apart.insert(g.key.clone(), print),
+                    };
                     self.recent.save(&self.config.dirs);
                 }
                 self.go(Screen::Playing, cx);
@@ -423,9 +428,8 @@ impl Chanoma {
         if let Some(g) = self.game.take() {
             g.session.stop(keep);
             // Its picture of where it was left changed.
-            let file = self.library.games.iter().find(|x| x.key == g.key).map(|x| x.file_key());
-            if let Some(f) = file {
-                let pic = self.config.dirs.states().join(format!("{f}.png"));
+            let pic = self.library.games.iter().find(|x| x.key == g.key).map(|x| self.left_picture(x));
+            if let Some(pic) = pic {
                 std::rc::Rc::make_mut(&mut self.art).remove(&pic);
                 self.art_asked.remove(&pic);
                 self.art_rev += 1;
