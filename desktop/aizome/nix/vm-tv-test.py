@@ -97,6 +97,12 @@ with subtest("an existing ordinary account named tv keeps its own login policy")
 
     assert "tv" not in denied("denyusers"), sshd
     assert "aizome-tv-kiosk" in denied("denygroups"), sshd
+    # Nor are its drives every account's to read: the folder for that is
+    # the TV account's that Settings makes, and there's none. The service
+    # that makes it ran at boot, and made nothing.
+    assert machine.succeed("systemctl show -p Result --value aizome-tv-drives.service").strip() == "success"
+    machine.succeed("test -e /etc/systemd/system/multi-user.target.wants/aizome-tv-drives.service")
+    machine.fail("test -e /run/media/tv")
     machine.succeed("userdel tv")
 
 with subtest("a failed record write leaves the new account locked and retryable"):
@@ -105,6 +111,8 @@ with subtest("a failed record write leaves the new account locked and retryable"
     machine.fail("/etc/tv-account-helper set none </dev/null")
     assert machine.succeed("passwd -S tv").split()[1] == "L"
     assert "aizome-tv-kiosk" in machine.succeed("id -nG tv").split()
+    # An account without its record isn't the TV account yet.
+    machine.fail("test -e /run/media/tv")
     machine.succeed(f"rmdir {record_path}")
     machine.succeed("/etc/tv-account-helper set none </dev/null")
     assert machine.succeed("passwd -S tv").split()[1] == "NP"
@@ -120,6 +128,25 @@ with subtest("a TV account that was removed can be made again"):
     machine.succeed("/etc/tv-account-helper set none </dev/null")
     assert machine.succeed("id -gn tv").strip() == "tv"
     assert "aizome-tv-kiosk" in machine.succeed("id -nG tv").split()
+
+with subtest("the TV account's drives folder is every account's to look in, while there is a TV account"):
+    def shared():
+        return machine.succeed("stat -c '%a %U' /run/media/tv").strip() == "755 root"
+
+    # Made when Settings made the account.
+    until("the folder for the TV account's drives", shared)
+    # The service that runs at boot makes it too.
+    machine.succeed("rmdir /run/media/tv")
+    machine.succeed("systemctl start aizome-tv-drives.service")
+    assert shared()
+    # Gone with the account, and back with it.
+    machine.succeed("/etc/tv-account-helper remove --files")
+    until("the folder gone with the TV account", lambda: machine.execute("test -e /run/media/tv")[0] != 0)
+    machine.succeed("/etc/tv-account-helper set none </dev/null")
+    until("the folder back with the TV account", shared)
+    # The record has changed more often in these few seconds than systemd
+    # lets a unit start by default: the folder follows it all the same.
+    assert machine.succeed("systemctl show -p ActiveState --value aizome-tv-drives.path").strip() == "active"
 
 with subtest("Settings' helper changes the TV account to a PIN"):
     machine.succeed(f"printf %s {TV_PIN} | /etc/tv-account-helper set pin")
@@ -228,8 +255,8 @@ with subtest("the controller sets Chanoma up, and it's kids' mode"):
 
 
 def alice_reads_the_stick():
-    # Made at boot for every account to look in, not by UDisks for the TV
-    # account alone.
+    # Made for every account to look in, with the TV account, not by UDisks
+    # for the TV account alone.
     assert machine.succeed("stat -c %a /run/media/tv").strip() == "755"
     assert machine.succeed("runuser -u alice -- cat /run/media/tv/TVSTICK/hello.txt").strip() == "hello"
     machine.fail("runuser -u alice -- touch /run/media/tv/TVSTICK/alice.txt")

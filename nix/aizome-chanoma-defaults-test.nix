@@ -79,6 +79,12 @@ assert builtins.elem "CHANOMA_BROWSER=${lib.getExe on.programs.aizome.chanoma.br
 assert !(on.systemd.user.services ? aizome-chanoma);
 assert on.services.openssh.settings.DenyUsers == null;
 assert builtins.elem "aizome-tv-kiosk" on.services.openssh.settings.DenyGroups;
+# Nor are the drives of an ordinary account called tv every account's to
+# read: the folder for that is made by the TV account's helper, for the
+# account Settings made, and by no rule that goes by the name.
+assert on.systemd.services ? aizome-tv-drives && on.systemd.paths ? aizome-tv-drives;
+assert !(lib.any (lib.hasInfix "/run/media/tv") on.systemd.tmpfiles.rules);
+assert !(off.systemd.services ? aizome-tv-drives) && !(off.systemd.paths ? aizome-tv-drives);
 # Where unfree packages are refused it still comes, without the browser.
 assert hasChanoma free;
 assert free.programs.aizome.chanoma.browser == null && browsers free == [ ];

@@ -456,12 +456,13 @@ in
           without changing them. UDisks mounts an account's drives in
           `/run/media/USER`, which it makes for that account alone unless
           it's there already; the TV account's (`/run/media/tv`, the name
-          Settings gives it) is made at boot for every account to look
-          in. On a FAT, exFAT or NTFS drive every file is then the TV
-          account's, which others may read but not write; a Linux
-          filesystem's own owners and permissions apply as anywhere. A
-          drive still open from the TV account's last login can be read
-          from a grown-up's account without unplugging it.
+          Settings gives it) is made for every account to look in, while
+          there is a TV account Settings made: an ordinary account called
+          `tv` keeps its drives to itself. On a FAT, exFAT or NTFS drive
+          every file is then the TV account's, which others may read but
+          not write; a Linux filesystem's own owners and permissions apply
+          as anywhere. A drive still open from the TV account's last login
+          can be read from a grown-up's account without unplugging it.
         '';
       };
       autostart = lib.mkOption {
@@ -592,10 +593,29 @@ in
     # The TV account's drives, for every account to read
     # (chanoma.shareTvDrives): UDisks keeps to a /run/media/USER that's
     # there already, and makes one only its account may look in otherwise.
-    systemd.tmpfiles.rules = lib.mkIf (cfg.chanoma.enable && cfg.chanoma.shareTvDrives) [
-      "d /run/media 0755 root root -"
-      "d /run/media/tv 0755 root root -"
-    ];
+    # The account's helper makes it, for the account Settings made (the
+    # record names it) and no other, and takes it away with the account:
+    # an ordinary account that happens to be called tv keeps its drives to
+    # itself. At boot, before anyone can log in, and whenever the record
+    # changes.
+    systemd.services.aizome-tv-drives = lib.mkIf (cfg.chanoma.enable && cfg.chanoma.shareTvDrives) {
+      description = "The TV account's drives, for every account to read";
+      wantedBy = [ "multi-user.target" ];
+      before = [ "systemd-user-sessions.service" ];
+      # Started as often as the record changes. With systemd's usual limit,
+      # five changes in ten seconds would fail it and the path unit with
+      # it, and the folder would follow nothing more until a reboot.
+      startLimitIntervalSec = 0;
+      serviceConfig = {
+        Type = "oneshot";
+        ExecStart = "${cfg.package}/libexec/aizome-tv-account share-drives";
+      };
+    };
+    systemd.paths.aizome-tv-drives = lib.mkIf (cfg.chanoma.enable && cfg.chanoma.shareTvDrives) {
+      description = "The TV account made, changed or removed";
+      wantedBy = [ "paths.target" ];
+      pathConfig.PathChanged = "/var/lib/aizome/tv-account.toml";
+    };
     # A television: Chanoma with every session, and again after a crash.
     # Leaving it with the PIN ends it for the session.
     systemd.user.services.aizome-chanoma = lib.mkIf (cfg.chanoma.enable && cfg.chanoma.autostart) {

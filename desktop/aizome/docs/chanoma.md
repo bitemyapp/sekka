@@ -33,9 +33,9 @@ where unfree packages are allowed, as the services that protect their
 shows play only in it; none otherwise, and Chanoma looks on the PATH),
 keeps the TV account's own systemd to what it needs
 (`programs.aizome.chanoma.tvUnits`, under The TV account), makes
-`/run/media/tv` for its drives, has sshd refuse the managed account,
-and sets BlueZ to connect quickly and to let a controller that forgot
-the computer pair again without anyone confirming.
+`/run/media/tv` for the managed account's drives, has sshd refuse that
+account, and sets BlueZ to connect quickly and to let a controller that
+forgot the computer pair again without anyone confirming.
 
 Since it comes with every Aizome, so does each of those. Two reach
 past Chanoma:
@@ -1124,8 +1124,12 @@ are as they were. No keyring runs: nothing in the session asks for one
 The drives the account opens every other account may read, but not
 change (`programs.aizome.chanoma.shareTvDrives`, on unless turned off).
 UDisks mounts them in `/run/media/tv`, and makes that folder for its
-account alone unless it's there already: the module makes it at boot
-(systemd-tmpfiles) for every account to look in. On a FAT, exFAT or
+account alone unless it's there already: the account's helper makes it
+for every account to look in (`aizome-tv-account share-drives`, which
+systemd runs at boot and whenever the account's record changes), and
+takes it away again with the account. It does so for the account
+Settings made and no other: an ordinary account that happens to be
+called `tv` keeps its drives to itself. On a FAT, exFAT or
 NTFS drive, which has no owners of its own, every file is the TV
 account's, so others may read and not write; a Linux filesystem's own
 owners and permissions apply as they would anywhere. A drive stays open

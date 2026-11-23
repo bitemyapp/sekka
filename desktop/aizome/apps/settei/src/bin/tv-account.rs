@@ -12,6 +12,11 @@
 //!   group made with it, so it can be made again.
 //! - `forget-chanoma-pin`: forget the PIN of the account's Chanoma (its
 //!   grown-ups' PIN), as `aizome-chanoma --reset-pin` run as the account.
+//! - `share-drives`: have the folder the account's drives are mounted in
+//!   (`/run/media/tv`) there for every account to look in while there is a
+//!   TV account, and gone while there's none. systemd runs it, at boot and
+//!   whenever the record changes, where the drives are shared
+//!   (`programs.aizome.chanoma.shareTvDrives`); Settings doesn't.
 //!
 //! It runs only what's named here, found in the system's own folders, and
 //! keeps the account's record at `/var/lib/aizome/tv-account.toml`.
@@ -52,7 +57,11 @@ fn main() {
         ["remove"] => remove(false),
         ["remove", "--files"] => remove(true),
         ["forget-chanoma-pin"] => forget_chanoma_pin(),
-        _ => Err("usage: aizome-tv-account set none|pin|password | remove [--files] | forget-chanoma-pin".into()),
+        ["share-drives"] => share_drives(Path::new(MEDIA)),
+        _ => {
+            Err("usage: aizome-tv-account set none|pin|password | remove [--files] | forget-chanoma-pin | share-drives"
+                .into())
+        }
     };
     if let Err(e) = result {
         fail(&e);
@@ -188,6 +197,49 @@ fn nobodys_group(group: &str, passwd: &str, name: &str) -> bool {
     members.trim().is_empty() && !passwd.lines().any(|l| l.split(':').nth(3) == Some(gid))
 }
 
+/// Where UDisks mounts an account's drives, each account's in a folder of
+/// its name.
+const MEDIA: &str = "/run/media";
+
+/// The TV account's folder in `media`, there for every account to look in.
+/// UDisks keeps to a folder that's there already, and makes one only its
+/// account may open otherwise.
+///
+/// For the account in the record and no other: an ordinary account that
+/// happens to be called `tv` keeps its drives to itself. So with no TV
+/// account the folder made for one goes, unless something is still mounted
+/// in it.
+fn share_drives(media: &Path) -> Result<(), String> {
+    let account = match TvAccount::read() {
+        Some(record) if exists(&record.user)? => Some(record.user),
+        _ => None,
+    };
+    share_drives_of(media, account.as_deref())
+}
+
+fn share_drives_of(media: &Path, account: Option<&str>) -> Result<(), String> {
+    use std::io::ErrorKind;
+    use std::os::unix::fs::PermissionsExt;
+    let Some(user) = account else {
+        return match std::fs::remove_dir(media.join(tv::NAME)) {
+            Err(e) if !matches!(e.kind(), ErrorKind::NotFound | ErrorKind::DirectoryNotEmpty) => {
+                Err(format!("{}: {e}", media.join(tv::NAME).display()))
+            }
+            _ => Ok(()),
+        };
+    };
+    for dir in [media.to_owned(), media.join(user)] {
+        match std::fs::create_dir(&dir) {
+            Err(e) if e.kind() != ErrorKind::AlreadyExists => return Err(format!("{}: {e}", dir.display())),
+            _ => {}
+        }
+        // Whatever made it, and whatever this process's mask is.
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o755))
+            .map_err(|e| format!("{}: {e}", dir.display()))?;
+    }
+    Ok(())
+}
+
 fn forget_chanoma_pin() -> Result<(), String> {
     let record = TvAccount::read().ok_or("There's no TV account")?;
     run(Command::new(tool("runuser")?).args(["-u", &record.user, "--"]).arg(tool("aizome-chanoma")?).arg("--reset-pin"))
@@ -196,6 +248,32 @@ fn forget_chanoma_pin() -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::os::unix::fs::PermissionsExt;
+
+    #[test]
+    fn the_drives_folder_is_everyones_only_while_there_is_a_tv_account() {
+        let media = std::env::temp_dir().join(format!("tv-account-media-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&media);
+        let mode = |p: &Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o7777;
+        let tv = media.join(tv::NAME);
+        // No TV account: nothing is made.
+        share_drives_of(&media, None).unwrap();
+        assert!(!media.exists());
+        // One: its folder, for every account to look in, whatever made it.
+        share_drives_of(&media, Some(tv::NAME)).unwrap();
+        assert_eq!((mode(&media), mode(&tv)), (0o755, 0o755));
+        std::fs::set_permissions(&tv, std::fs::Permissions::from_mode(0o700)).unwrap();
+        share_drives_of(&media, Some(tv::NAME)).unwrap();
+        assert_eq!(mode(&tv), 0o755);
+        // None again: the folder goes, but not with a drive still in it.
+        std::fs::create_dir(tv.join("STICK")).unwrap();
+        share_drives_of(&media, None).unwrap();
+        assert!(tv.join("STICK").exists());
+        std::fs::remove_dir(tv.join("STICK")).unwrap();
+        share_drives_of(&media, None).unwrap();
+        assert!(!tv.exists() && media.exists());
+        std::fs::remove_dir_all(&media).unwrap();
+    }
 
     #[test]
     fn the_group_left_by_the_removed_account_is_nobodys() {
