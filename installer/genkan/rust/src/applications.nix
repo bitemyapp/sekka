@@ -161,7 +161,9 @@ in
             accepts = config.nixpkgs.config.allowUnfreePredicate or (_: false);
             accepted =
               app:
-              builtins.all (name: accepts (sources.${app.source or "nixpkgs"} or applicationPkgs).${name}) app.packages;
+              builtins.all (
+                name: accepts (sources.${app.source or "nixpkgs"} or applicationPkgs).${name}
+              ) app.packages;
           in
           (config.nixpkgs.config.allowUnfree or false)
           || builtins.all (app: !(app.unfree or false) || accepted app) selected;
