@@ -699,6 +699,10 @@ pub enum ToRender {
         /// See-through where it draws nothing (a transparent background):
         /// its buffers carry alpha, so what's under it shows there.
         transparent: bool,
+        /// A toplevel's tag (xdg-toplevel-tag v1, see `backend::tag`), sent
+        /// with the window's first commit: the compositor knows it before
+        /// it sizes and places the window.
+        tag: Option<String>,
     },
     /// A new title, with its text set in the title bar's font as drawing
     /// ops (top-left origin, `width` by `height` points) for client-side

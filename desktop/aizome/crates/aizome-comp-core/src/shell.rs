@@ -206,6 +206,7 @@ impl State {
         let surface = toplevel.wl_surface().clone();
         let (app_id, title) = toplevel_ids(&toplevel);
         let parent = toplevel.parent().and_then(|p| self.az.window_for_surface(&p));
+        let tag = crate::protocols::toplevel_tag::tag(&toplevel);
         let pid =
             self.az.dh.get_client(surface.id()).ok().and_then(|c| c.get_credentials(&self.az.dh).ok()).map(|c| c.pid);
         let ssd = toplevel.current_state().decoration_mode == Some(DecorationMode::ServerSide);
@@ -218,7 +219,7 @@ impl State {
         let committed = toplevel.current_state();
         let fullscreen = committed.states.contains(xdg_toplevel::State::Fullscreen);
         let fullscreen_output = committed.fullscreen_output.as_ref().and_then(Output::from_resource);
-        let info = MapInfo { app_id, title, pid, parent, ssd, size, fullscreen, fullscreen_output };
+        let info = MapInfo { app_id, title, pid, parent, tag, ssd, size, fullscreen, fullscreen_output };
         if self.lg.healthy() {
             self.lg_call((), |vt, st| (vt.window_mapped)(st, id, &info));
         } else {
@@ -243,8 +244,10 @@ impl State {
         let toplevel = m.toplevel().clone();
         let has_buffer = with_renderer_surface_state(toplevel.wl_surface(), |s| s.buffer().is_some()).unwrap_or(false);
         if !has_buffer {
-            // Unmapped: back to waiting for a first frame.
+            // Unmapped: back to waiting for a first frame, and without the
+            // tag it had, which was that mapping's.
             self.unmap_window(id);
+            crate::protocols::toplevel_tag::clear(&toplevel);
             self.az.unmapped.push(Unmapped { window, wants_csd: false });
             return;
         }
@@ -627,6 +630,8 @@ impl XdgShellHandler for State {
             crate::recovery::windows_changed(self);
         }
         self.az.unmapped.retain(|u| u.window.toplevel().is_some_and(|t| t != &surface));
+        // Its surface may get another toplevel, which isn't this one.
+        crate::protocols::toplevel_tag::clear(&surface);
     }
 
     fn popup_destroyed(&mut self, _surface: PopupSurface) {

@@ -53,6 +53,7 @@ mod primary;
 mod seat;
 mod selection;
 mod sheet;
+mod tag;
 mod textinput;
 mod tiles;
 mod video;
@@ -318,6 +319,7 @@ fn run(channel: Channel<ToRender>, to_main: MainSender) {
         viewporter,
         fractional,
         foreign: foreign::Foreign::new(&globals, &qh),
+        tags: tag::Tags::new(&globals, &qh),
         xdg,
         shm,
         pool,
@@ -399,6 +401,9 @@ pub struct State {
     fractional: Option<WpFractionalScaleManagerV1>,
     /// xdg-foreign v2, to keep windows over other programs' (see `foreign`).
     foreign: foreign::Foreign,
+    /// xdg-toplevel-tag v1, to tell the compositor which of the program's
+    /// windows a window is (see `tag`).
+    tags: tag::Tags,
     xdg: XdgShell,
     shm: Shm,
     pool: SlotPool,
@@ -1060,8 +1065,9 @@ impl State {
                 layer,
                 lock,
                 transparent,
+                tag,
             } => {
-                self.create_window(window, width, height, title, style, limits, popup, sheet_of, layer, lock);
+                self.create_window(window, width, height, title, style, limits, popup, sheet_of, layer, lock, tag);
                 if let Some(w) = self.windows.get_mut(&window) {
                     w.transparent = transparent;
                 }
@@ -1254,6 +1260,7 @@ impl State {
         sheet_of: Option<WindowId>,
         layer: Option<LayerPlacement>,
         lock: Option<u32>,
+        tag: Option<String>,
     ) {
         let mut scale = self.initial_scale();
         let sheet = match sheet_of {
@@ -1311,6 +1318,11 @@ impl State {
                 let w = self.xdg.create_window(frame.clone(), decorations, &self.qh);
                 w.set_title(title);
                 w.set_app_id(app_id());
+                // Before the first commit below, which the compositor
+                // answers with the window's first size.
+                if let Some(tag) = tag {
+                    self.tags.set(w.xdg_toplevel(), tag);
+                }
                 if let Some(token) = self.startup_token.take()
                     && let Some(activation) = &self.activation
                 {

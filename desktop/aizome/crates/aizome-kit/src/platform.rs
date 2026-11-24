@@ -31,9 +31,16 @@ pub enum Placement {
     Above,
 }
 
+/// What a utility window tells the compositor it is (its xdg-toplevel-tag).
+/// Aizome's compositor knows the tag (`Role::UTILITY_TAG` in its window
+/// model, the same string) and keeps such a window by itself: not a tab on
+/// the app's other windows, at its own size.
+pub(crate) const UTILITY_TAG: &str = "utility";
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum OpenKind {
-    /// A window of its own; a dialog is kept over `parent`.
+    /// A window of its own; a dialog is kept over `parent`, and a utility
+    /// window is tagged as one for the compositor ([`UTILITY_TAG`]).
     Toplevel { parent: Option<WinId>, utility: bool },
     /// A popup over `parent`, at `anchor` (the parent's coordinates).
     /// With `grab` it takes the keyboard and pointer while open. With `fit`

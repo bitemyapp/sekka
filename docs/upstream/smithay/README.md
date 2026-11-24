@@ -19,6 +19,7 @@ Checked on 2026-11-10 against Smithay's `master` at d09642cc (committed
 | [Drag sources never hear `target`](#drag-sources-never-hear-target) | None. The drag test can check `target` ([`tests/protocols.rs`](../../../desktop/aizome/crates/aizome-comp/tests/protocols.rs)) | Open, not reviewed: [Smithay#2267](https://github.com/Smithay/smithay/pull/2267), sent from Sekka. A maintainer cited the AI policy on its description and the unticked DCO box ([status](#sent-from-sekka)) |
 | [Stale input method commits are discarded](#stale-input-method-commits) | Aizome handles `zwp_input_method_v2.commit` itself ([`handlers.rs`](../../../desktop/aizome/crates/aizome-comp-core/src/handlers.rs)) | Open since 2026-10-13, not reviewed: [Smithay#2215](https://github.com/Smithay/smithay/pull/2215), from another compositor's author |
 | [xdg-toplevel-icon disconnects Chromium and Electron](#xdg-toplevel-icon) | Aizome's own xdg-toplevel-icon ([`protocols/toplevel_icon.rs`](../../../desktop/aizome/crates/aizome-comp-core/src/protocols/toplevel_icon.rs)) | Fixed on `master`: [Smithay#1963](https://github.com/Smithay/smithay/pull/1963) |
+| [A toplevel's description replaces its tag](#xdg-toplevel-tag) | Aizome keeps the tag from the handler ([`protocols/toplevel_tag.rs`](../../../desktop/aizome/crates/aizome-comp-core/src/protocols/toplevel_tag.rs)) | Fixed on `master`: [Smithay#2045](https://github.com/Smithay/smithay/pull/2045) |
 | [An input method's keyboard grab keeps its first keymap](#input-method-keymaps) | A documented limitation ([`docs/compositor.md`](../../../desktop/aizome/docs/compositor.md)) | Fixed on `master`: [Smithay#2213](https://github.com/Smithay/smithay/pull/2213) |
 | [Releasing an input method's grab ends a menu's](#input-method-grab-release) | Menus never replace the input method's grab ([`focus.rs`](../../../desktop/aizome/crates/aizome-comp-core/src/focus.rs), from bitemyapp/aizome#77 and bitemyapp/aizome#79) | Reported by a cosmic-comp user, with no reply: [Smithay#2263](https://github.com/Smithay/smithay/issues/2263) |
 | [GPU synchronization](#gpu-synchronization) | #281 and #317, both open | Not sent; [Smithay#2264](https://github.com/Smithay/smithay/pull/2264) was closed |
@@ -140,6 +141,19 @@ comparison on `master`; with it,
 [`desktop/aizome/crates/aizome-comp-core/src/protocols/toplevel_icon.rs`](../../../desktop/aizome/crates/aizome-comp-core/src/protocols/toplevel_icon.rs)
 can give way to Smithay's `XdgToplevelIconManager`, keeping
 [`desktop/aizome/crates/aizome-comp/tests/chromium.rs`](../../../desktop/aizome/crates/aizome-comp/tests/chromium.rs).
+
+### xdg-toplevel-tag
+
+In 0.7.0 `set_toplevel_description` stores the description where the tag is
+kept (`XdgToplevelTagSurfaceData`), so a window that sets both reads back its
+description as its tag. Aizome reads the tag to tell its apps' utility
+windows, and keeps its own copy from `XdgToplevelTagHandler::set_tag`, which
+is given the right string.
+[Smithay#2045](https://github.com/Smithay/smithay/pull/2045) stores the
+description in its own field (checked on 2026-11-22 against `master` at
+a38bb709); with it,
+[`desktop/aizome/crates/aizome-comp-core/src/protocols/toplevel_tag.rs`](../../../desktop/aizome/crates/aizome-comp-core/src/protocols/toplevel_tag.rs)
+can read Smithay's record and drop its own.
 
 ### Input method keymaps
 

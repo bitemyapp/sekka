@@ -430,6 +430,7 @@ impl State {
         let content_type = ContentTypeState::new::<State>(&dh);
         let tablet = TabletManagerState::new::<State>(&dh);
         crate::protocols::toplevel_icon::create_global(&dh);
+        crate::protocols::toplevel_tag::create_global(&dh);
         let system_bell = smithay::wayland::xdg_system_bell::XdgSystemBellState::new::<State>(&dh);
         let alpha_modifier = AlphaModifierState::new::<State>(&dh);
         let fifo = FifoManagerState::new::<State>(&dh);

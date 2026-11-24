@@ -241,6 +241,7 @@ mod linux {
                     let id = testing::render_id(w);
                     assert!(log.contains(&Seen::Cursor { window: id, name: "pointer".into() }), "{log:?}");
                     assert!(log.contains(&Seen::ForeignParent { window: id, handle: "exported-1".into() }), "{log:?}");
+                    assert!(log.contains(&Seen::Tag { window: id, tag: "main window".into() }), "{log:?}");
                     assert!(
                         log.iter().any(|s| matches!(s, Seen::Request { request, .. } if request.contains("Maximize")))
                     );
@@ -407,11 +408,13 @@ mod linux {
     impl Handler for Test {
         fn launched(&mut self, cx: &mut Cx) {
             self.started = Some(Instant::now());
-            // Kept over another program's window, as a portal's dialog is.
+            // Kept over another program's window, as a portal's dialog is,
+            // and named for the compositor.
             let options = WindowOptions::new("Headless")
                 .size(200.0, 100.0)
                 .background(Background::Color(GROUND))
-                .foreign_parent("exported-1");
+                .foreign_parent("exported-1")
+                .tag("main window");
             self.window = Some(cx.open_window(options));
             self.poll = Some(cx.set_repeating_timer(Duration::from_millis(2)));
         }
