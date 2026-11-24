@@ -2435,6 +2435,21 @@ libraries, and Lutris brings the x86-only libstrangle. An application whose
 package pulls in an unfree one is marked `unfree`, as Lutris is for Steam's
 runtime.
 
+Genkan's Steam is the one NixOS's `programs.steam` builds: that module takes
+the catalog's package, adds the system's fonts and graphics libraries to its
+root filesystem, and installs the result. The catalog's `steam` therefore
+resolves to the module's package (`fromPrograms` in Genkan's
+`applications.nix`, and in `nix/applications.nix` for the media's lists and
+offline cache), not to the plain package beside it. With both installed, the
+plain one won every file and the module's was assembled on each machine and
+linked nowhere, so no cache could have it and
+`scripts/check_cache_coverage.py` refused the system.
+`checks.x86_64-linux.applications` holds a system to one Steam. That root
+filesystem follows each system's fonts and graphics packages, so Sekka's
+cache has the published system's (Plasma, without NVIDIA's driver) and a
+system that differs assembles its own: it links files and compiles nothing,
+in 4 s on the builder.
+
 Genkan's entries with a `source` (the AI assistants, oh-my-pi, Superluminal,
 Tracy, Uta and Kakehashi) are decided by their `platforms` lists alone, which
 Genkan's tests require. All but Kakehashi, Sekka's own, come from other
