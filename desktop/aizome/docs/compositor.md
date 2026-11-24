@@ -244,7 +244,10 @@ Notes for client authors:
   window. Aizome's kit tags the windows opened with `.utility()`: Hako's
   Operations, Myaku's Energy Meters, Fusen's stickies. The tag is read
   when the window opens: changing it afterwards changes nothing until the
-  window opens again. Other tags mean nothing to Aizome.
+  window opens again, across a reload of the logic too. It lasts for that
+  mapping: a toplevel that is unmapped, or a surface given another
+  toplevel, is untagged until its client tags it again. Other tags mean
+  nothing to Aizome.
 - Layer surfaces: `aizome-deskbar` is placed around (new windows open clear
   of it). Exclusive keyboard interactivity on the top and overlay layers
   takes the keyboard while mapped; on-demand takes it on a click; a

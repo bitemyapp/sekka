@@ -221,10 +221,11 @@ pub enum WindowKind {
     /// Kept over `parent` (a dialog of its own).
     Dialog { parent: WindowKey },
     /// A small window beside the app's others (a palette, an inspector, a
-    /// progress window), which can't be minimised. The compositor is told
-    /// (the window's tag is `utility`), and Aizome's keeps it by itself:
-    /// it opens at its own size, not at the size the app's windows last
-    /// had, and not as a tab on the app's window with the focus.
+    /// progress window). It has no minimise button, though the compositor
+    /// can still minimise it. The compositor is told (the window's tag is
+    /// `utility`), and Aizome's keeps it by itself: it opens at its own
+    /// size, not at the size the app's windows last had, and not as a tab
+    /// on the app's window with the focus.
     Utility,
     /// A desktop surface (wlr-layer-shell): a panel, a menu bar, a
     /// wallpaper, an on-screen display. Its size is the spec's, a side of 0

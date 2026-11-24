@@ -984,6 +984,11 @@ pub fn first_configure(st: &mut State, toplevel: &ToplevelSurface) {
         if let Some(r) = remembered {
             let r = usable.map(|u| crate::wm::fit_into(r, u, i)).unwrap_or(r);
             s.size = Some((r.w, r.h).into());
+        } else if role == Role::Utility {
+            // A utility window chooses its size. A toplevel shown before
+            // (unmapped, and mapping again) still holds the size of its
+            // last configure, which would be sent again.
+            s.size = None;
         }
     });
 }
@@ -1254,17 +1259,20 @@ pub fn adopt_windows(st: &mut State) {
             .and_then(|c| c.get_credentials(&st.az.dh).ok())
             .map(|c| c.pid);
         let parent = toplevel.parent().and_then(|p| st.az.window_for_surface(&p));
-        let role = Role::from_tag(aizome_comp_core::protocols::toplevel_tag::tag(&toplevel).as_deref());
         let l = st.lg.m();
         l.wins.entry(id).or_default();
         if let Some(w) = l.wm.get_mut(id) {
-            // Known: what it is now (titles change).
+            // Known: what it is now (titles change). Its role is the one
+            // it opened with, which the model kept: a tag changed since
+            // means nothing until the window opens again.
             w.title = title;
             w.app_id = app_id;
             w.ssd = ssd;
-            w.role = role;
             continue;
         }
+        // New to the model (it opened while there was no logic): its tag
+        // as it is now is all there is to go by.
+        let role = Role::from_tag(aizome_comp_core::protocols::toplevel_tag::tag(&toplevel).as_deref());
         let size = (geo.size.w.max(1), geo.size.h.max(1));
         let rect = if view.rect.is_empty() { Rect::new(0, 0, size.0, size.1) } else { view.rect };
         l.wm.insert_as(id, &app_id, &title, pid, rect, parent);

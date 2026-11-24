@@ -244,8 +244,10 @@ impl State {
         let toplevel = m.toplevel().clone();
         let has_buffer = with_renderer_surface_state(toplevel.wl_surface(), |s| s.buffer().is_some()).unwrap_or(false);
         if !has_buffer {
-            // Unmapped: back to waiting for a first frame.
+            // Unmapped: back to waiting for a first frame, and without the
+            // tag it had, which was that mapping's.
             self.unmap_window(id);
+            crate::protocols::toplevel_tag::clear(&toplevel);
             self.az.unmapped.push(Unmapped { window, wants_csd: false });
             return;
         }
@@ -628,6 +630,8 @@ impl XdgShellHandler for State {
             crate::recovery::windows_changed(self);
         }
         self.az.unmapped.retain(|u| u.window.toplevel().is_some_and(|t| t != &surface));
+        // Its surface may get another toplevel, which isn't this one.
+        crate::protocols::toplevel_tag::clear(&surface);
     }
 
     fn popup_destroyed(&mut self, _surface: PopupSurface) {

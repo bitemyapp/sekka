@@ -787,6 +787,77 @@ fn a_utility_window_neither_takes_nor_leaves_its_apps_place() {
 }
 
 #[test]
+fn an_unmapped_toplevel_forgets_its_tag() {
+    let c = Compositor::start(opts(None));
+    let _main = c.client(Spec::new("test.notes", 0x2222cc).title("Notes").size(500, 320));
+    let main = c.wait_window("test.notes");
+    let palette = c.client(Spec::new("test.notes", 0xcc22cc).title("Palette").size(200, 120).tag("utility"));
+    let ws = opened(&c, "Palette");
+    assert!(ws.iter().all(|w| w.group.is_none()), "a palette by itself: {ws:?}");
+    let unmap = || {
+        palette.send(Cmd::Unmap);
+        c.wait_windows("the palette unmapped", |ws| ws.iter().all(|w| w.title != "Palette"));
+        c.ok(Request::Focus { id: main.id });
+        c.wait_windows("the main window focused", |ws| titled(ws, "Notes").focused);
+    };
+    // Unmapped, a toplevel is as it was when made: the tag was that
+    // mapping's. Mapped again with none, it is an ordinary window of the
+    // app, and opens as a tab on the app's focused window.
+    unmap();
+    palette.send(Cmd::Remap { tag: None, size: (500, 320) });
+    let ws = opened(&c, "Palette");
+    let again = titled(&ws, "Palette");
+    assert!(again.group.is_some() && again.group == titled(&ws, "Notes").group, "untagged now, it joins: {ws:?}");
+    // Tagged as it maps once more, it is by itself again, at its own size
+    // (not the size it had as a tab).
+    unmap();
+    palette.send(Cmd::Remap { tag: Some("utility".into()), size: (200, 120) });
+    let ws = opened(&c, "Palette");
+    let again = titled(&ws, "Palette");
+    assert!(ws.iter().all(|w| w.group.is_none()), "tagged again, it is by itself: {ws:?}");
+    assert_eq!((again.geometry.w, again.geometry.h), (200, 120), "{again:?}");
+}
+
+#[test]
+fn a_new_toplevel_on_a_surface_starts_untagged() {
+    let c = Compositor::start(opts(None));
+    let _main = c.client(Spec::new("test.notes", 0x2222cc).title("Notes").size(500, 320));
+    c.wait_window("test.notes");
+    // A palette's toplevel, tagged, goes before it draws, and its surface
+    // gets a document's toplevel with no tag. (Nothing is unmapped here:
+    // the tag has to go with the toplevel.)
+    let reused =
+        c.client(Spec::new("test.notes", 0xcc22cc).title("Palette").size(200, 120).tag("utility").defer_mapping());
+    reused.wait_seen("the palette's first configure", |s| s.configures >= 1);
+    reused.send(Cmd::Renew { title: "Document".into(), tag: None, size: (500, 320) });
+    reused.send(Cmd::Map);
+    let ws = opened(&c, "Document");
+    let document = titled(&ws, "Document");
+    assert!(
+        document.group.is_some() && document.group == titled(&ws, "Notes").group,
+        "the document is an ordinary window, a tab on the app's focused one: {ws:?}"
+    );
+}
+
+#[test]
+fn a_toplevel_mapped_again_as_a_utility_window_takes_its_own_size() {
+    let c = Compositor::start(opts(None));
+    // A document, left at a size of the user's choosing, then unmapped.
+    let a = c.client(Spec::new("test.meters", 0x2222cc).title("Meters").size(400, 300));
+    let w = c.wait_window("test.meters");
+    c.ok(Request::Resize { id: Some(w.id), rect: aizome_ipc::Rect::new(77, 99, 650, 475) });
+    c.wait_windows("resized", |ws| (ws[0].geometry.w, ws[0].geometry.h) == (650, 475));
+    a.send(Cmd::Unmap);
+    c.wait_windows("unmapped", |ws| ws.is_empty());
+    // The same toplevel maps again as a utility window: at the size it
+    // draws, not the size its last configure as a document named.
+    a.send(Cmd::Remap { tag: Some("utility".into()), size: (211, 177) });
+    let ws = opened(&c, "Meters");
+    let g = ws[0].geometry;
+    assert_eq!((g.w, g.h), (211, 177), "{ws:?}");
+}
+
+#[test]
 fn the_screenshot_chord_saves_and_announces() {
     let c = Compositor::start(opts(None));
     let _a = c.client(Spec::new("test.a", 0x2222cc));

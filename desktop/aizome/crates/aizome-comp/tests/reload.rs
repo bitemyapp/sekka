@@ -360,6 +360,47 @@ fn without_a_logic_windows_still_show_and_a_reload_brings_it() {
 }
 
 #[test]
+fn a_reload_keeps_the_role_a_window_opened_with() {
+    let b = build();
+    let c =
+        Compositor::start(Options { exe: Some(&b.aizome), logic: Some(&b.base), settings: "", ..Default::default() });
+    // An app's window and its palette, by itself as a utility window is.
+    let _main = c.client(Spec::new("test.notes", 0x2222cc).title("Notes").size(500, 320));
+    c.wait_window("test.notes");
+    let palette = c.client(Spec::new("test.notes", 0xcc22cc).title("Palette").size(200, 120).tag("utility"));
+    c.wait_windows("the palette, focused", |ws| ws.iter().any(|w| w.title == "Palette" && w.focused));
+    // Its tag changes while it's open, which means nothing until it opens
+    // again. (The title follows the tag on the wire: once the compositor
+    // shows the title it has the tag.)
+    palette.send(Cmd::Tag("main window".into()));
+    palette.send(Cmd::Title("Palette, retagged".into()));
+    c.wait_windows("the palette's new title", |ws| ws.iter().any(|w| w.title == "Palette, retagged"));
+
+    match c.request(Request::Reload {
+        logic: true,
+        shell: false,
+        from: Some(b.red.to_string_lossy().into()),
+        shell_from: None,
+        check: false,
+    }) {
+        Response::Reload { report } => assert_eq!(report.logic.action, "reloaded", "{report:?}\n{}", c.log_text()),
+        r => panic!("{r:?}"),
+    }
+    c.settle();
+    c.wait_windows("the palette, focused still", |ws| {
+        ws.iter().any(|w| w.title == "Palette, retagged" && w.focused && w.group.is_none())
+    });
+
+    // The new logic took the palette in as what it opened as: the app's
+    // next window is no tab on it.
+    let _second = c.client(Spec::new("test.notes", 0x22cc22).title("Second").size(500, 320));
+    c.wait_windows("the second window", |ws| ws.iter().any(|w| w.title == "Second"));
+    c.settle();
+    let ws = c.windows();
+    assert!(ws.iter().all(|w| w.group.is_none()), "a utility window is one after a reload: {ws:?}");
+}
+
+#[test]
 fn recovery_retracts_a_fullscreen_grant_when_logic_fails_before_mapping() {
     let b = build();
     let c = Compositor::start(Options {

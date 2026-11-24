@@ -523,6 +523,21 @@ pub enum Cmd {
     /// player does while it plays, or lets it go (false), as it does
     /// paused.
     InhibitIdle(bool),
+    /// Gives the window's toplevel this tag now (xdg-toplevel-tag), as an
+    /// app may at any time.
+    Tag(String),
+    /// Unmaps the window (a commit with no buffer). Its toplevel stays,
+    /// and nothing is drawn until `Remap`, or `Renew` and `Map`.
+    Unmap,
+    /// Maps an unmapped window's toplevel again: the tag if any, the
+    /// commit that asks for a configure, and a frame once that comes, of
+    /// this size unless the compositor names one.
+    Remap { tag: Option<String>, size: (i32, i32) },
+    /// Gives the window's surface a new toplevel (and `xdg_surface`) in
+    /// place of the one it has, which is destroyed: this title, the tag if
+    /// any, and the commit that asks for a configure. A surface that has
+    /// drawn must be unmapped first.
+    Renew { title: String, tag: Option<String>, size: (i32, i32) },
     Quit,
 }
 
@@ -588,6 +603,8 @@ struct App {
     dialog: Option<(wl_surface::WlSurface, xdg_surface::XdgSurface, xdg_toplevel::XdgToplevel)>,
     exported: Option<zxdg_exported_v2::ZxdgExportedV2>,
     inhibitor: Option<zwp_idle_inhibitor_v1::ZwpIdleInhibitorV1>,
+    /// The toplevel's decoration object, which must go before it does.
+    decoration: Option<zxdg_toplevel_decoration_v1::ZxdgToplevelDecorationV1>,
     pending_size: Option<(i32, i32)>,
     size: (i32, i32),
     needs_draw: bool,
@@ -629,6 +646,7 @@ fn run_client(stream: UnixStream, spec: Spec, rx: Receiver<Cmd>, seen: Arc<Mutex
         dialog: None,
         exported: None,
         inhibitor: None,
+        decoration: None,
         pending_size: None,
         needs_draw: false,
         configured: false,
@@ -649,17 +667,24 @@ fn run_client(stream: UnixStream, spec: Spec, rx: Receiver<Cmd>, seen: Arc<Mutex
     if let Some((w, h)) = spec.min_size {
         tl.set_min_size(w, h);
     }
-    if let Some(d) = &deco {
-        let td = d.get_toplevel_decoration(&tl, &qh, ());
-        td.set_mode(zxdg_toplevel_decoration_v1::Mode::ServerSide);
-    }
+    let decorate = |tl: &xdg_toplevel::XdgToplevel| {
+        deco.as_ref().map(|d| {
+            let td = d.get_toplevel_decoration(tl, &qh, ());
+            td.set_mode(zxdg_toplevel_decoration_v1::Mode::ServerSide);
+            td
+        })
+    };
+    let set_tag = |tl: &xdg_toplevel::XdgToplevel, tag: String| {
+        let tags: xdg_toplevel_tag_manager_v1::XdgToplevelTagManagerV1 =
+            globals.bind(&qh, 1..=1, ()).expect("xdg_toplevel_tag_manager_v1");
+        tags.set_toplevel_tag(tl, tag);
+    };
+    app.decoration = decorate(&tl);
     if spec.fullscreen {
         tl.set_fullscreen(spec.fullscreen_output.and_then(|i| outputs.get(i)));
     }
     if let Some(tag) = &spec.tag {
-        let tags: xdg_toplevel_tag_manager_v1::XdgToplevelTagManagerV1 =
-            globals.bind(&qh, 1..=1, ()).expect("xdg_toplevel_tag_manager_v1");
-        tags.set_toplevel_tag(&tl, tag.clone());
+        set_tag(&tl, tag.clone());
     }
     surface.commit();
     app.surface = Some(surface);
@@ -710,6 +735,55 @@ fn run_client(stream: UnixStream, spec: Spec, rx: Receiver<Cmd>, seen: Arc<Mutex
                     if let Some(inhibitor) = app.inhibitor.take() {
                         inhibitor.destroy();
                     }
+                }
+                Cmd::Tag(tag) => set_tag(app.toplevel.as_ref().unwrap(), tag),
+                Cmd::Unmap => {
+                    let s = app.surface.as_ref().unwrap();
+                    s.attach(None, 0, 0);
+                    s.commit();
+                    // No frame until it's asked for and configured again:
+                    // a configure sent before this arrived asks for none.
+                    app.spec.defer_mapping = true;
+                    app.configured = false;
+                    app.needs_draw = false;
+                }
+                Cmd::Remap { tag, size } => {
+                    if let Some(tag) = tag {
+                        set_tag(app.toplevel.as_ref().unwrap(), tag);
+                    }
+                    app.size = size;
+                    app.pending_size = None;
+                    app.spec.defer_mapping = false;
+                    app.configured = false;
+                    app.needs_draw = false;
+                    app.surface.as_ref().unwrap().commit();
+                }
+                Cmd::Renew { title, tag, size } => {
+                    if let Some(td) = app.decoration.take() {
+                        td.destroy();
+                    }
+                    if let Some(t) = app.toplevel.take() {
+                        t.destroy();
+                    }
+                    if let Some(x) = app.xdg_surface.take() {
+                        x.destroy();
+                    }
+                    let s = app.surface.clone().unwrap();
+                    let xs = wm.get_xdg_surface(&s, &qh, ());
+                    let tl = xs.get_toplevel(&qh, ());
+                    tl.set_app_id(app.spec.app_id.clone());
+                    tl.set_title(title);
+                    app.decoration = decorate(&tl);
+                    if let Some(tag) = tag {
+                        set_tag(&tl, tag);
+                    }
+                    app.size = size;
+                    app.pending_size = None;
+                    app.configured = false;
+                    app.needs_draw = false;
+                    s.commit();
+                    app.xdg_surface = Some(xs);
+                    app.toplevel = Some(tl);
                 }
                 Cmd::Quit => app.quit = true,
             }
