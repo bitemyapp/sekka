@@ -3688,7 +3688,12 @@ Every other check runs even after one fails, and the failed ones
 run once more, so a VM test losing a timing race once doesn't hold back
 upstream security fixes; a check that fails twice, or fails to evaluate, stops
 the update. The first attempt's passing checks stay rooted, and the second
-attempt builds only the failures nix-fast-build reported. The run's warning
+attempt builds only the checks that still have no result.
+`scripts/ci-retain.py --retry-failed` finds those itself after a failed first
+attempt: it evaluates the checks once more and asks the store which of their
+outputs are valid, then builds the rest by derivation. It reads no report from
+the first attempt, so the retry is the same with nix-fast-build and on a runner
+image without it (see [The builder](#the-builder)). The run's warning
 names the checks that needed the retry: they are flaky, and need fixing like
 any failure. Then, in this order and only if each step
 succeeded:
@@ -3964,8 +3969,16 @@ Together they peaked at 25.6 GiB with eight workers and 48.6 GiB with sixteen.
 Builds go through the job's Determinate client, sixteen `nix build` processes
 of one build each: the 16 at a time the image allows each of the builder's two
 slots (`max-jobs = 16`, above). On a runner image
-without nix-fast-build the wrapper runs `nix flake check` instead. The nightly
-still evaluates every output, with `nix flake check --no-build`.
+without nix-fast-build the wrapper runs `nix flake check` instead, and says so
+in a warning. wx-workstation's image is one, as of 2026-11-24: it was built on
+2026-11-08, the day before nix-fast-build joined `nix/runner.nix`, and gets it
+with the next image update ([Setting up the builder](#setting-up-the-builder)).
+The nightly still evaluates every output, with `nix flake check --no-build`.
+
+The nightly's second attempt costs one more evaluation of the checks, and only
+after a first attempt that failed: 31 seconds and 36.5 GiB at its peak for
+main's 111 checks, with the job's 32 GiB starting heap and eight evaluator
+threads (wx-workstation, 2026-11-24).
 
 Emulating pull request jobs on wx-workstation on 2026-11-03 with PR #269's
 branch (these changes and Aizome's dependency split together), alternating
@@ -4056,8 +4069,12 @@ failed `--keep-going` run and of a failed nix-fast-build run. It also reuses
 checks with builds disabled and their recorded inputs without querying Nix,
 checks failure propagation and the plain-Nix fallback, drops PR roots when space is
 low, and verifies that paths become collectable after removing the roots.
+Last it runs the nightly's second attempt, with nix-fast-build and without it:
+a check that fails once is built once more, alone, and the run passes; one
+that fails twice, or does not evaluate, fails the run.
 `checks.x86_64-linux.pr-ci` exercises the wrapper with stand-ins for Nix,
-retention expiry, locks that refuse links and FIFOs, and clean Git checkouts.
+the same second attempt, retention expiry, locks that refuse links and FIFOs,
+and clean Git checkouts.
 
 The live-media guard fixture puts its mounts in a private guest mount namespace;
 systemd must not race the fixture by tearing down the VM's own `/nix/store`.

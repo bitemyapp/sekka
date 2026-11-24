@@ -12,6 +12,7 @@ import contextlib
 import errno
 import fcntl
 import gzip
+import json
 import os
 from pathlib import Path
 import re
@@ -39,6 +40,10 @@ KEEP = {"main": (2, 1), "pr": (4, 2)}
 # each: the 16 concurrent builds the image's NIX_CONFIG allows a slot, two of
 # which share the builder. A workflow's own options come later and win.
 FAST_BUILD = ["--eval-workers", "12", "--eval-max-memory-size", "4096", "-j", "16", "--option", "max-jobs", "1"]
+# What `--retry-failed` asks of each check: the derivation to build again, and
+# the output whose validity in the store says the check has passed. Not under
+# the name outPath: Nix prints a set that has one as that string alone.
+CHECKS = "checks: builtins.mapAttrs (_: check: { derivation = check.drvPath; output = check.outPath; }) checks"
 # Below this much free store space, keep only each group's newest successful
 # main generation, so the daemon's own collection (scripts/runner-host-setup.sh:
 # from 100 GiB free until 200 GiB are) can reclaim the rest.
@@ -184,13 +189,38 @@ def retain_dependencies(generation):
           f" (queried {queried} of {len(derivers)} derivations)", file=sys.stderr)
 
 
+def flake_argument(command):
+    """The flake and attribute a `fast-build` command names, if it names one."""
+    return next((b for a, b in zip(command, command[1:]) if a in ("-f", "--flake")), None)
+
+
+def failed_checks(flake):
+    """The checks under `flake` that have no valid output, each with its derivation.
+
+    Asked of the store after a failed attempt, not of whatever made the
+    attempt: only nix-fast-build can report its failures in a file, and the
+    `nix flake check` that stands in for it must get the same second attempt.
+    Whether an output's path exists does not answer it: a failed build's
+    output is moved out of the sandbox for inspection and stays in the store,
+    never registered. Returns None when the checks do not evaluate.
+    """
+    evaluation = subprocess.run(["nix", "eval", "--json", "--no-update-lock-file", flake, "--apply", CHECKS],
+                                stdout=subprocess.PIPE, text=True)
+    if evaluation.returncode:
+        return None
+    checks = json.loads(evaluation.stdout)
+    invalid = set(nix_lines("nix-store", "--check-validity", "--print-invalid",
+                            *(check["output"] for check in checks.values())))
+    return {attr: check["derivation"] for attr, check in sorted(checks.items()) if check["output"] in invalid}
+
+
 def run(command, out_link=None, tmp=None):
     """Run Nix, or nix-fast-build for `fast-build`, linking results under out_link."""
     env = None
     if command[0] == "fast-build" and not shutil.which("nix-fast-build"):
         # A runner image from before nix-fast-build: check the same flake the
         # slower way, evaluating it all before building.
-        flake = next((b for a, b in zip(command, command[1:]) if a in ("-f", "--flake")), ".")
+        flake = flake_argument(command) or "."
         print("::warning::nix-fast-build is missing from this runner; running nix flake check.", file=sys.stderr)
         command = ["flake", "check", flake.split("#")[0] or ".", "--keep-going", "--print-build-logs"]
     if command[0] == "fast-build":
@@ -218,18 +248,8 @@ def exit_status(code):
     return code if code >= 0 else 128 - code
 
 
-def main(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("scope", choices=("main", "pr", "prune"))
-    parser.add_argument("label", nargs="?", choices=("uta", "checks", "packages", "iso"))
-    parser.add_argument("command", nargs=argparse.REMAINDER)
-    args = parser.parse_args(argv)
-    command = args.command[1:] if args.command[:1] == ["--"] else args.command
-    if args.scope != "prune":
-        if not args.label or not (command[:1] in (["build"], ["fast-build"]) or command[:2] == ["flake", "check"]):
-            parser.error("expected LABEL followed by build, fast-build or flake check arguments")
-        if any(a in ("--no-link", "--out-link", "-o") or a.startswith("--out-link=") for a in command):
-            parser.error("ci-retain manages the out-link")
+def attempt(parser, args, command):
+    """Run one command, in a generation of its own when the roots are mounted."""
     root_env = os.environ.get("SEKKA_CI_ROOTS")
     if not root_env:
         if args.scope == "prune":
@@ -237,7 +257,7 @@ def main(argv=None):
         # A runner without the roots mount, or a maintainer's machine: the same
         # build and status as plain Nix, kept by nothing after the job.
         print("::warning::No persistent CI roots mounted; results are not retained between jobs.", file=sys.stderr)
-        return exit_status(run(command))
+        return run(command)
     root = Path(root_env)
     if not root.is_absolute() or root.is_symlink() or not root.is_dir():
         parser.error("SEKKA_CI_ROOTS must be an existing absolute directory")
@@ -268,6 +288,44 @@ def main(argv=None):
         os.close(build_lock)
     with locked(root / ".lock"):
         prune(root)
+    return returncode
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--retry-failed", action="store_true",
+                        help="after a failed fast-build, build the checks that have no result once more")
+    parser.add_argument("scope", choices=("main", "pr", "prune"))
+    parser.add_argument("label", nargs="?", choices=("uta", "checks", "packages", "iso"))
+    parser.add_argument("command", nargs=argparse.REMAINDER)
+    args = parser.parse_args(argv)
+    command = args.command[1:] if args.command[:1] == ["--"] else args.command
+    if args.scope != "prune":
+        if not args.label or not (command[:1] in (["build"], ["fast-build"]) or command[:2] == ["flake", "check"]):
+            parser.error("expected LABEL followed by build, fast-build or flake check arguments")
+        if any(a in ("--no-link", "--out-link", "-o") or a.startswith("--out-link=") for a in command):
+            parser.error("ci-retain manages the out-link")
+        if args.retry_failed and (command[0] != "fast-build" or "#" not in (flake_argument(command) or "")):
+            parser.error("--retry-failed needs fast-build with --flake naming the checks, such as .#checks.x86_64-linux")
+    returncode = attempt(parser, args, command)
+    if returncode and args.retry_failed:
+        # The first attempt's generation keeps the checks that passed; the
+        # second builds the rest by derivation, in a generation of its own.
+        try:
+            failed = failed_checks(flake_argument(command))
+        except (OSError, ValueError, subprocess.CalledProcessError) as error:
+            print(f"::error::Cannot tell which checks failed, so none runs again: {error}", file=sys.stderr)
+            return exit_status(returncode)
+        if failed is None:
+            print("::error::A check failed to evaluate; running it again cannot help.", file=sys.stderr)
+        elif not failed:
+            print("::error::Every check has its result, so there is none to run again:"
+                  " the failure above is not a check's build.", file=sys.stderr)
+        else:
+            print(f"::warning::Running failed checks once more: {' '.join(failed)}."
+                  " One that passes now is flaky; fix it.", file=sys.stderr)
+            returncode = attempt(parser, args, ["build", "--keep-going", "--print-build-logs",
+                                                *(f"{derivation}^*" for derivation in failed.values())])
     return exit_status(returncode)
 
 
