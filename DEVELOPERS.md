@@ -969,21 +969,11 @@ previous package and profile defaults without undoing user preferences.
 
 The root lock retains distinct base-system and application Nixpkgs inputs, plus Determinate Nix, FlakeHub CLI, AI applications, and upstream oh-my-pi. First-party code comes directly from this checkout.
 
-The `omp` input normally tracks upstream oh-my-pi's `main` branch, including
-unreleased changes. The nightly's existing `nix flake update` advances its
-locked revision; a release-tag URL would remain on that release. To update only
-this input, run `nix flake update omp`. The nightly publishes the resulting lock
-only after its checks and cache gates pass; installed systems continue to follow
-`sekka/omp`.
-
-Since 24 November 2026 the input is pinned to `e4fe878`, the revision the lock
-held and the last one that built. Upstream's `main` fails to bundle its binary
-from `7784896` on (two files named `input.ts` get one chunk name), upstream's
-own CI fails the same way, and the nightly's update to it failed
-`checks.applications` and `checks.application-cache`, so nothing was published
-that night. While the pin is there the nightly leaves omp where it is. To lift
-it, check that `nix build github:can1357/oh-my-pi#omp` succeeds, put `main`
-back in `flake.nix`, and run `nix flake update omp`.
+The `omp` input tracks upstream oh-my-pi's `main` branch, including unreleased
+changes. The nightly's existing `nix flake update` advances its locked revision;
+a release-tag URL would remain on that release. To update only this input, run
+`nix flake update omp`. The nightly publishes the resulting lock only after its
+checks and cache gates pass; installed systems continue to follow `sekka/omp`.
 
 Plasma Login Manager's generic X11 startup script bypasses NixOS's session
 wrapper. Xfce can then run while `graphical-session.target` remains inactive,
