@@ -586,8 +586,8 @@
       },
       "original": {
         "owner": "can1357",
-        "ref": "main",
         "repo": "oh-my-pi",
+        "rev": "e4fe8782978e19c5de8b8830d050b95e63fc89ca",
         "type": "github"
       }
     },
