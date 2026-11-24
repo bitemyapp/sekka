@@ -138,6 +138,24 @@ def alive(pids):
         assert "State:\tT" not in status and "State:\tZ" not in status, status
 
 
+def file_manager_run():
+    """The run of the session's show-in-folder service, which must be active.
+
+    Its unit restarts on failure, so "active" alone doesn't say the service
+    is the one that was running before: systemd gives each run its own
+    InvocationID.
+    """
+    shown = dict(
+        line.split("=", 1)
+        for line in user(
+            "systemctl --user show -p ActiveState -p InvocationID aizome-file-manager.service"
+        ).splitlines()
+        if "=" in line
+    )
+    assert shown.get("ActiveState") == "active" and shown.get("InvocationID"), shown
+    return shown["InvocationID"]
+
+
 machine.start()
 machine.wait_until_succeeds("pgrep -u alice -x aizome-shell", timeout=120)
 try:
@@ -225,13 +243,14 @@ try:
         alive([hako, sumi, firefox, myaku])
         click_element(button("Quit"))
         until("Quit confirmation again", lambda: button("Cancel"))
+        service_run = file_manager_run()
         input_("key Return")
         until("only Hako exits", lambda: window("org.aizome.Hako") is None)
         machine.wait_until_fails(f"test -d /proc/{hako}")
         alive([sumi, firefox, myaku])
         # Quit took the launch alone: the session's show-in-folder service,
-        # the other group named Hako, still answers.
-        user("systemctl --user is-active aizome-file-manager.service")
+        # the other group named Hako, is still the run it was before Quit.
+        assert file_manager_run() == service_run, "Quit restarted aizome-file-manager.service"
         machine.screenshot("07-hako-exited-others-survive")
         observations.append({"after": windows()})
     machine.fail("coredumpctl --no-pager list aizome-myaku")
