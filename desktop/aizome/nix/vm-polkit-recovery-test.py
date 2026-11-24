@@ -100,8 +100,12 @@ machine.wait_until_succeeds("test -x /run/current-system/sw/bin/qa-first-package
 until("polkit restarted by the system package change", lambda:
       machine.succeed("systemctl show polkit -p MainPID --value").strip() not in ["0", polkit])
 assert machine.succeed("pgrep -u alice -x aizome-shell").strip() == shell
-# A GUI launch must not have acquired a terminal for authentication.
-yukimi_pid = machine.succeed("pgrep -u alice -x aizome-yukimi").strip()
+# A GUI launch must not have acquired a terminal for authentication. The
+# window's process is the app itself: `aizome-yukimi` is a launcher script,
+# and the program it starts runs under a wrapper's name.
+yukimi_pids = {w["pid"] for w in json.loads(user("aizomectl --json windows"))["windows"] if w["app_id"] == APP}
+assert len(yukimi_pids) == 1, yukimi_pids
+yukimi_pid = yukimi_pids.pop()
 assert machine.succeed(f"awk '{{print $7}}' /proc/{yukimi_pid}/stat").strip() == "0"
 # The second install must work in this same shell and Yukimi session.
 propose("second")

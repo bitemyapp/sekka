@@ -437,6 +437,9 @@ impl Actions for State {
         let l = self.lg.m();
         let Some(w) = l.wm.get(id) else { return false };
         let rect = w.rect;
+        // Asked before it leaves: one tab leaving two ends the group, and the
+        // window left alone has changed too.
+        let group = l.wm.group_members(id);
         if !l.wm.unstack(id) {
             return false;
         }
@@ -446,11 +449,9 @@ impl Actions for State {
             w.tab_offset = 0;
             w.home = None;
         }
-        let members = l.wm.group_members(rect_owner(&l.wm, id, rect));
-        for m in members {
+        for m in group {
             l.window_changed(m);
         }
-        l.window_changed(id);
         self.az.queue_redraw_rect(rect);
         self.redraw_window(id);
         self.az.window_outputs_dirty = true;
@@ -810,11 +811,6 @@ pub fn adopt_screen(st: &mut State, id: WinId) {
     } else {
         st.emit_desks();
     }
-}
-
-/// Some member of the group the window was in (for change events).
-fn rect_owner(wm: &crate::wm::Model, id: WinId, rect: Rect) -> WinId {
-    wm.windows().find(|w| w.id != id && w.rect == rect && w.group.is_some()).map(|w| w.id).unwrap_or(id)
 }
 
 impl Logic {

@@ -21,7 +21,9 @@ pkgs.testers.runNixOSTest {
     };
     # Upgraded from before Hotaru: foot was chosen in Settei, which wrote it
     # to the terminal list and, for ❖Return, to the settings file. The
-    # first session moves it to Hotaru.
+    # first session moves it to Hotaru. The arguments hold real newlines:
+    # NixOS escapes them for tmpfiles, so a written-out `\n` would reach
+    # the files as a backslash and an n.
     systemd.tmpfiles.settings."10-before-hotaru" =
       let
         alice = {
@@ -38,11 +40,11 @@ pkgs.testers.runNixOSTest {
         };
         "/home/alice/.config/aizome/settings.toml".f = alice // {
           mode = "0644";
-          argument = ''[keys]\nterminal = ["foot"]\n'';
+          argument = "[keys]\nterminal = [\"foot\"]\n";
         };
         "/home/alice/.config/xdg-terminals.list".f = alice // {
           mode = "0644";
-          argument = ''foot.desktop\n'';
+          argument = "foot.desktop\n";
         };
       };
     services.greetd = {
