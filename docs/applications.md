@@ -23,7 +23,7 @@ pins were selected on 2026-10-04:
 | --- | --- | --- |
 | [NixOS/nixpkgs](https://github.com/NixOS/nixpkgs) | `a7868a727837f3c09cee2ce0ca671c76b1589fed` | Browsers, editors, terminals, developer tools, productivity, communication and media |
 | [Numtide llm-agents.nix](https://github.com/numtide/llm-agents.nix) | `372f0337e8170e55ff0c017cd43ab73b02a062ad` | Codex, ChatGPT, Claude Code, Claude Desktop, OpenCode and T3 Code |
-| [oh-my-pi upstream](https://github.com/can1357/oh-my-pi) | Normally tracks `main`; held at `e4fe878` since 2026-11-24, while upstream's `main` does not build | oh-my-pi |
+| [oh-my-pi upstream](https://github.com/can1357/oh-my-pi) | Tracks `main`; exact revision in `flake.lock` | oh-my-pi |
 | [bitemyapp/superluminal-nix-linux](https://github.com/bitemyapp/superluminal-nix-linux) | `eacbc06314c5c590e2cc74d95d082911759b59f0` (1.0.7705.679-alpha), added 2026-10-16 | Superluminal |
 | [bitemyapp/tracy-flake](https://github.com/bitemyapp/tracy-flake), forked from [Quince-Pie/tracy-flake](https://github.com/Quince-Pie/tracy-flake) | `1f0bf6eaee8e965848274caa7f4ab6d2ff877f97` (0.14.1), added 2026-10-16 | Tracy Profiler |
 | [bitemyapp/uta](https://github.com/bitemyapp/uta) | `6281c579fa213294327afc8be5fdb6711b528925`, updated 2026-11-05 | Uta for YouTube Music, with RustyPipe |
@@ -32,13 +32,10 @@ The AI definitions use upstream release artifacts or source and adapt them for
 NixOS. The ChatGPT and Claude entries package their official Linux applications;
 they are not unofficial web wrappers. Their vendor-supported Linux distributions
 and this community NixOS packaging have different support scopes. Account login
-is performed by the user after installation. oh-my-pi normally follows upstream
-`main`, including unreleased changes, so the nightly's `nix flake update`
-advances it without manually selecting release tags. The lock still pins every
-build to an exact revision; publication retains the nightly's checks and cache
-gates. Since 24 November 2026 it is held at one revision because upstream's
-`main` stopped building; DEVELOPERS.md ("Sources and installed-system updates")
-says why and how to lift that.
+is performed by the user after installation. oh-my-pi follows upstream `main`,
+including unreleased changes, so the nightly's `nix flake update` advances it
+without manually selecting release tags. The lock still pins every build to
+an exact revision; publication retains the nightly's checks and cache gates.
 
 OrbStack is macOS-only. At the user's request its Linux replacement is Docker
 Engine + Compose. Thunderbird, KeePassXC and Gemini CLI are absent.
