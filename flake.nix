@@ -8,8 +8,15 @@
   # Application updates are independent of the already-tested base system.
   inputs.applications.url = "github:NixOS/nixpkgs/nixos-unstable";
   inputs.ai-apps.url = "github:numtide/llm-agents.nix";
-  # Track upstream development so the nightly's flake update advances omp.
-  inputs.omp.url = "github:can1357/oh-my-pi/main";
+  # Normally `.../oh-my-pi/main`, so the nightly's flake update advances omp.
+  # Pinned on 24 November 2026 to the revision the lock already held:
+  # upstream's main stopped building at 7784896, where two files named
+  # input.ts get one chunk name in the compiled bundle ("Multiple files share
+  # the same output path"), and the nightly's update to it failed
+  # checks.applications and checks.application-cache. Put `main` back once
+  # `nix build github:can1357/oh-my-pi#omp` succeeds (DEVELOPERS.md, "Sources
+  # and installed-system updates").
+  inputs.omp.url = "github:can1357/oh-my-pi/e4fe8782978e19c5de8b8830d050b95e63fc89ca";
   # Catalog applications packaged by other flakes, from forks under bitemyapp:
   # only commits there reach the nightly. Sekka builds them with the
   # applications' Nixpkgs and gives them to the catalog as its own packages
