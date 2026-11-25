@@ -497,6 +497,24 @@ page of YouTube TV's turns out to pass through Google's sign-in as it
 opens, as YouTube Kids' does, kids' mode will say *That's outside …*
 until `Service::sites` names it.
 
+Under a service that needs an account and isn't made for kids, the
+Watch settings say what it has for them (`Service::for_kids`). Most
+say *choose a kids' profile in it*. The two live television services
+have none, and say so:
+
+- **YouTube TV** has a filter by rating (its *Settings › Filter*), which
+  its help says is set for each account on each device. Its row says
+  *set its ratings filter in it, on this computer*: one set on a phone
+  doesn't hold here.
+- **Fubo**'s profiles are each person's favourite channels, series and
+  recordings, and its help names no filter or lock. Its row says *has
+  no kids' profile, so kids see all of it*.
+
+Both were read from the providers' help pages on 2026-11-25. Neither
+line makes anything safe by itself: a filter set in a service can be
+turned off in it. The other services' rows are as they were, and
+weren't checked against their providers.
+
 The browser starts blank with `--remote-debugging-pipe`, and
 `devtools.rs` steers it over the pipe on its descriptors 3 and 4, put
 there before it starts. Only Chanoma holds the other ends. There's no

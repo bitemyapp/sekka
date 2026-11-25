@@ -22,7 +22,7 @@ use crate::clock::minute_label;
 use crate::pad::mapping::{Input as PadInput, Mapping, Output, Source};
 use crate::pad::{Axis, Button, Dir};
 use crate::rules::{Bedtime, Confirm, CustomService, NewGames};
-use crate::services::CATALOG;
+use crate::services::{CATALOG, ForKids};
 use crate::ui::Focus;
 use crate::ui::screens::{Art, Message};
 use crate::ui::settings::{Do, Page, Row, Value};
@@ -357,7 +357,12 @@ impl Chanoma {
                         (true, false) => "Made for kids, free",
                         (true, true) => "Made for kids; needs an account",
                         (false, false) => "Free; not made for kids",
-                        (false, true) => "Needs an account; choose a kids' profile in it",
+                        (false, true) => match svc.for_kids {
+                            ForKids::Profile => "Needs an account; choose a kids' profile in it",
+                            // Set anywhere else, it doesn't hold here.
+                            ForKids::Filter => "Needs an account; set its ratings filter in it, on this computer",
+                            ForKids::Nothing => "Needs an account; has no kids' profile, so kids see all of it",
+                        },
                     };
                     rows.push((Row::new(svc.name, Value::Switch(on)).detail(detail), Act::Service(svc.id)));
                 }
