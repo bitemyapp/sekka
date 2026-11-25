@@ -29,6 +29,7 @@ pub struct Request {
 pub struct Report {
     pub source: String,
     pub lock: PathBuf,
+    /// The planned builds that compile, by name (`build_names`).
     pub builds: Vec<String>,
 }
 
@@ -44,7 +45,7 @@ impl Report {
         Some(format!(
             "These packages need local builds for this update:\n\n{}\n\n\
              Yukimi checked the proposed configuration, but has not built these packages. \
-             They may fail to compile, which would stop the update. A missing download does not \
+             They may fail to build, which would stop the update. A missing download does not \
              mean a package is incompatible.\n\nContinue with the update and build them?",
             names.join("\n")
         ))
@@ -331,41 +332,161 @@ pub fn planned_builds(stderr: &str) -> Result<Vec<String>, String> {
     Ok(builds.into_iter().collect())
 }
 
-/// Small generated configuration derivations and fixed-output downloads are
-/// expected. Warn about other uncached derivations; this deliberately errs
-/// toward review and does not attempt to predict compiler errors.
-pub fn build_names(value: &serde_json::Value) -> Result<Vec<String>, String> {
-    let derivations =
-        value.get("derivations").unwrap_or(value).as_object().ok_or("Nix's derivations could not be read")?;
-    let mut names = BTreeSet::new();
-    for (path, info) in derivations {
+/// What building a derivation on this computer amounts to. The nightly's
+/// coverage gate sorts what a fresh system would build the same way (`kind`
+/// in `scripts/check_cache_coverage.py`), and moves `nightly` only when none
+/// of it compiles. `data/build-kinds.json` holds the two to one rule: both
+/// run its cases.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum BuildKind {
+    /// Meant to be built where it is used (`preferLocalBuild`, or
+    /// `allowSubstitutes` off), such as a configuration file.
+    Local,
+    /// A fixed-output derivation, which fetches its source.
+    Download,
+    /// Put together without a C compiler (`stdenvNoCC`) or any other compiler
+    /// or build tool among its inputs: an initrd, Determinate Nixd from its
+    /// download.
+    Copy,
+    /// Everything else.
+    Compile,
+}
+
+/// Inputs that mean a derivation compiles, by name without the hash.
+const COMPILERS: [&str; 15] = [
+    "rustc-",
+    "cargo-",
+    "go-",
+    "gcc-",
+    "clang-",
+    "llvm-",
+    "cmake-",
+    "meson-",
+    "ninja-",
+    "ghc-",
+    "zig-",
+    "openjdk-",
+    "jdk-",
+    "nodejs-",
+    "stdenv-linux.drv",
+];
+
+/// The outputs that hold a compiler's runtime libraries and not the compiler.
+/// GCC keeps libstdc++ in `lib` and libgcc_s in `libgcc`, and a program built
+/// elsewhere is packaged beside them: Chrome from its maker's download, the
+/// runtime root Steam runs in. Decided on purpose: an input wanted for these
+/// alone compiles nothing, so it does not make its derivation a compile.
+const RUNTIME_LIBRARIES: [&str; 2] = ["lib", "libgcc"];
+
+/// A derivation's settings, wherever its format keeps them. Current Nix
+/// prints a derivation's structured attributes beside `env`, as
+/// `structuredAttrs`, where older Nix put them inside it as `__json`. Nixpkgs
+/// now builds most derivations that way, and their `env` then holds only the
+/// output paths: read from `env` alone, every generated configuration file
+/// would be named as a package to build.
+struct Settings<'a> {
+    env: &'a serde_json::Map<String, serde_json::Value>,
+    json: serde_json::Value,
+    attributes: Option<&'a serde_json::Value>,
+}
+
+impl<'a> Settings<'a> {
+    fn of(info: &'a serde_json::Value) -> Result<Self, String> {
         let env = info["env"].as_object().ok_or("Nix's derivation settings could not be read")?;
-        let structured: serde_json::Value = env
+        let json = env
             .get("__json")
             .and_then(|s| s.as_str())
             .map(serde_json::from_str)
             .transpose()
             .map_err(|e| format!("Invalid derivation settings: {e}"))?
             .unwrap_or(serde_json::Value::Null);
-        // Current Nix prints a derivation's structured attributes beside
-        // `env`, as `structuredAttrs`, where older Nix put them inside it as
-        // `__json`. Nixpkgs now builds most derivations that way, and their
-        // `env` then holds only the output paths: without this, every
-        // generated configuration file would be named as a package to build.
-        let attributes = info.get("structuredAttrs").filter(|attributes| attributes.is_object());
-        let setting = |name: &str| {
-            attributes.and_then(|a| a.get(name)).or_else(|| structured.get(name)).or_else(|| env.get(name))
-        };
-        let yes = |v: Option<&serde_json::Value>| v.is_some_and(|v| v == "1" || v == true);
-        let fixed = info["outputs"]
-            .as_object()
-            .ok_or("Nix's derivation outputs could not be read")?
-            .values()
-            .any(|out| out.get("hash").is_some());
-        if fixed || yes(setting("preferLocalBuild")) {
+        Ok(Self { env, json, attributes: info.get("structuredAttrs").filter(|attributes| attributes.is_object()) })
+    }
+
+    fn get(&self, name: &str) -> Option<&serde_json::Value> {
+        self.attributes.and_then(|a| a.get(name)).or_else(|| self.json.get(name)).or_else(|| self.env.get(name))
+    }
+}
+
+/// One of the derivations another is built from.
+struct Input<'a> {
+    /// Its name, without the hash.
+    name: &'a str,
+    /// The outputs of it that are wanted, as Nix names them.
+    outputs: &'a [serde_json::Value],
+}
+
+impl Input<'_> {
+    /// Whether this is a compiler or build tool, wanted for more than its
+    /// runtime libraries. An input that names no outputs says nothing about
+    /// what is wanted of it, so it counts.
+    fn is_compiler(&self) -> bool {
+        let libraries_alone = !self.outputs.is_empty()
+            && self
+                .outputs
+                .iter()
+                .all(|output| output.as_str().is_some_and(|output| RUNTIME_LIBRARIES.contains(&output)));
+        COMPILERS.iter().any(|compiler| self.name.starts_with(compiler)) && !libraries_alone
+    }
+}
+
+/// The derivations this one is built from. Current Nix lists them under
+/// `inputs.drvs`, older Nix under `inputDrvs`, as store paths or as their
+/// names in the store, each with the outputs wanted: under `outputs`, or as
+/// the list itself.
+fn inputs(info: &serde_json::Value) -> impl Iterator<Item = Input<'_>> {
+    info.pointer("/inputs/drvs")
+        .or_else(|| info.get("inputDrvs"))
+        .and_then(|drvs| drvs.as_object())
+        .into_iter()
+        .flatten()
+        .filter_map(|(path, wanted)| {
+            let name = path.rsplit('/').next()?.get(33..)?;
+            let outputs = wanted.get("outputs").unwrap_or(wanted).as_array().map_or(&[][..], Vec::as_slice);
+            Some(Input { name, outputs })
+        })
+}
+
+fn kind(info: &serde_json::Value, settings: &Settings<'_>) -> Result<BuildKind, String> {
+    let fixed = info["outputs"]
+        .as_object()
+        .ok_or("Nix's derivation outputs could not be read")?
+        .values()
+        .any(|out| out.get("hash").is_some());
+    if fixed {
+        return Ok(BuildKind::Download);
+    }
+    // Nix writes a setting as text in `env` ("1" and "") and as itself among
+    // structured attributes.
+    let local = settings.get("preferLocalBuild").is_some_and(|v| v == "1" || v == true || v == 1);
+    let no_substitutes = settings.get("allowSubstitutes").is_some_and(|v| v == "" || v == "0" || v == false || v == 0);
+    if local || no_substitutes {
+        return Ok(BuildKind::Local);
+    }
+    // A derivation that names no inputs at all says nothing about how it is
+    // built, so it counts as compiling.
+    let without_compiler = inputs(info).any(|input| input.name.starts_with("stdenv-linux-no-cc"))
+        && !inputs(info).any(|input| input.is_compiler());
+    Ok(if without_compiler { BuildKind::Copy } else { BuildKind::Compile })
+}
+
+/// The planned builds worth asking about: those that compile. Generated
+/// configuration, fixed-output downloads and what is put together without a
+/// compiler are expected on every update (a new kernel's initrd) and finish
+/// quickly. This does not attempt to predict compiler errors, and it still
+/// names what compiles nothing but looks as if it might: a package that
+/// unpacks its maker's download with Nixpkgs' full `stdenv`.
+pub fn build_names(value: &serde_json::Value) -> Result<Vec<String>, String> {
+    let derivations =
+        value.get("derivations").unwrap_or(value).as_object().ok_or("Nix's derivations could not be read")?;
+    let mut names = BTreeSet::new();
+    for (path, info) in derivations {
+        let settings = Settings::of(info)?;
+        if kind(info, &settings)? != BuildKind::Compile {
             continue;
         }
-        let name = setting("name")
+        let name = settings
+            .get("name")
             .and_then(|v| v.as_str())
             .map(str::to_owned)
             .or_else(|| path.rsplit('/').next()?.get(33..)?.strip_suffix(".drv").map(str::to_owned))
@@ -667,6 +788,102 @@ mod tests {
         let hello = &mut drvs["derivations"]["0mvzg2dqivqc8ndvy2dxsh1zx9385ysn-hello-2.12.3.drv"];
         hello["structuredAttrs"].as_object_mut().unwrap().remove("name");
         assert_eq!(build_names(&drvs).unwrap(), ["aizome-0.1.0", "hello-2.12.3"]);
+    }
+
+    /// The cases the nightly's coverage gate runs too
+    /// (`tests/test_cache_coverage.py`), so that Yukimi asks about an update
+    /// exactly when the gate would have kept it off `nightly`.
+    #[test]
+    fn sorts_builds_as_the_coverage_gate_does() {
+        let shared: serde_json::Value = serde_json::from_str(include_str!("../data/build-kinds.json")).unwrap();
+        let cases = shared["cases"].as_array().unwrap();
+        for case in cases {
+            let info = &case["derivation"];
+            let expected = match case["kind"].as_str().unwrap() {
+                "local" => BuildKind::Local,
+                "downloads" => BuildKind::Download,
+                "copies" => BuildKind::Copy,
+                "compiles" => BuildKind::Compile,
+                other => panic!("unknown kind {other}"),
+            };
+            assert_eq!(kind(info, &Settings::of(info).unwrap()), Ok(expected), "{}", case["what"]);
+        }
+        // Every compiler known here decides a case, which the gate then has
+        // to agree with: neither list grows alone.
+        for compiler in COMPILERS {
+            let decides = |case: &serde_json::Value| {
+                case["kind"] == "compiles"
+                    && inputs(&case["derivation"]).any(|input| input.name.starts_with("stdenv-linux-no-cc"))
+                    && inputs(&case["derivation"]).any(|input| input.name.starts_with(compiler) && input.is_compiler())
+            };
+            assert!(cases.iter().any(decides), "no case for {compiler}");
+        }
+        // And so does every output that holds runtime libraries: a build that
+        // copies only because that is all that is wanted of a compiler.
+        for output in RUNTIME_LIBRARIES {
+            let decides = |case: &serde_json::Value| {
+                case["kind"] == "copies"
+                    && inputs(&case["derivation"]).any(|input| {
+                        COMPILERS.iter().any(|compiler| input.name.starts_with(compiler)) && input.outputs == [output]
+                    })
+            };
+            assert!(cases.iter().any(decides), "no case for {output}");
+        }
+    }
+
+    /// The shared cases taken from a real Sekka system's update on
+    /// 2026-11-24, for which Yukimi named 17 packages to build. It no longer
+    /// names that system's initrd, Determinate Nixd or the SSH server's
+    /// checked configuration, nor Chrome and Steam's runtime root, which have
+    /// only GCC's runtime libraries among their inputs. It still names VS
+    /// Code, unpacked with Nixpkgs' full `stdenv`. The made-up cases have a
+    /// hash of zeros.
+    #[test]
+    fn names_only_what_compiles() {
+        let shared: serde_json::Value = serde_json::from_str(include_str!("../data/build-kinds.json")).unwrap();
+        let made_up = |info: &serde_json::Value| {
+            info["outputs"]["out"]["path"].as_str().is_some_and(|path| path.contains(&"0".repeat(32)))
+        };
+        let derivations: serde_json::Map<String, serde_json::Value> = shared["cases"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|case| &case["derivation"])
+            .filter(|info| !made_up(info))
+            .map(|info| (format!("{}.drv", info["name"].as_str().unwrap()), info.clone()))
+            .collect();
+        for name in [
+            "initrd-linux-7.3.5.drv",
+            "determinate-nixd-3.24.3.drv",
+            "google-chrome-158.0.8127.36.drv",
+            "steam-1.0.0.87-fhsenv-rootfs.drv",
+        ] {
+            assert!(derivations.contains_key(name), "{name}");
+        }
+        assert_eq!(build_names(&json!({"version": 4, "derivations": derivations})).unwrap(), ["vscode-1.147.0"]);
+    }
+
+    /// Nix before the derivation format's version 4 lists a derivation's
+    /// inputs as `inputDrvs`, by store path.
+    #[test]
+    fn reads_inputs_where_older_nix_keeps_them() {
+        let input = |name: &str| {
+            let path = format!("/nix/store/00000000000000000000000000000000-{name}.drv");
+            json!({ path: {"dynamicOutputs": {}, "outputs": ["out"]} })
+        };
+        let drvs = json!({
+            "/nix/store/d7k7vlc5vcxgqfcd003y6nisf814caf7-initrd-linux-7.3.5.drv": {
+                "env": {"name": "initrd-linux-7.3.5"},
+                "inputDrvs": input("stdenv-linux-no-cc"),
+                "outputs": {"out": {"path": "/nix/store/65hd4h647rz0wvz1x80c6zxxy7w41gcb-initrd-linux-7.3.5"}}
+            },
+            "/nix/store/fgfi6fq5l3gbb8s7irwhzfl5avbdq1fl-vscode-1.147.0.drv": {
+                "env": {"name": "vscode-1.147.0"},
+                "inputDrvs": input("stdenv-linux"),
+                "outputs": {"out": {"path": "/nix/store/fh5q1rp538hi1jcncz6ryx8x9bksm8xn-vscode-1.147.0"}}
+            }
+        });
+        assert_eq!(build_names(&drvs).unwrap(), ["vscode-1.147.0"]);
     }
 
     #[test]

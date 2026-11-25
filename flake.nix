@@ -704,9 +704,12 @@
               TEST_SHELL = "${pkgs.pkgsStatic.busybox}/bin/busybox";
             }
             ''
-              mkdir -p scripts tests
+              mkdir -p scripts tests apps/yukimi/crates/yukimi-system/data
               cp ${./scripts/check_cache_coverage.py} scripts/check_cache_coverage.py
               cp ${./tests/test_cache_coverage.py} tests/test_cache_coverage.py
+              # The cases Yukimi's update check sorts the same way.
+              cp ${./apps/yukimi/crates/yukimi-system/data/build-kinds.json} \
+                apps/yukimi/crates/yukimi-system/data/build-kinds.json
               python3 -m unittest discover -s tests -p test_cache_coverage.py -v
               touch $out
             '';

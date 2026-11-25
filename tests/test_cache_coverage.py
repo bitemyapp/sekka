@@ -298,5 +298,52 @@ class CacheCoverage(unittest.TestCase):
                             '--cache', self.first.as_uri(), '--allow', 'fixture', 'fixture']), 0)
 
 
+class Kinds(unittest.TestCase):
+    """The cases Yukimi's update check runs too.
+
+    It asks before an update that compiles (`kind` in
+    apps/yukimi/crates/yukimi-system/src/preflight.rs, whose test
+    `sorts_builds_as_the_coverage_gate_does` reads the same file), so it has
+    to sort builds exactly as the gate that keeps such an update off `nightly`.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        shared = Path(__file__).resolve().parents[1] / 'apps/yukimi/crates/yukimi-system/data/build-kinds.json'
+        cls.cases = json.loads(shared.read_text())['cases']
+
+    def test_builds_are_sorted_as_yukimi_sorts_them(self):
+        for case in self.cases:
+            with self.subTest(case['what']):
+                self.assertEqual(coverage.kind(case['derivation']), case['kind'])
+
+    @staticmethod
+    def inputs(case):
+        """Each input's name without the hash, and what is wanted of it."""
+        return [(name.removeprefix(coverage.STORE)[33:], want)
+                for name, want in case['derivation']['inputs']['drvs'].items()]
+
+    def test_every_compiler_decides_a_case(self):
+        # Yukimi's test asks the same of its own list, so neither grows alone.
+        for compiler in coverage.COMPILERS:
+            with self.subTest(compiler):
+                self.assertTrue(any(
+                    case['kind'] == 'compiles'
+                    and any(name.startswith('stdenv-linux-no-cc') for name, _ in self.inputs(case))
+                    and any(name.startswith(compiler) and coverage.compiler(name, want)
+                            for name, want in self.inputs(case))
+                    for case in self.cases))
+
+    def test_every_runtime_library_output_decides_a_case(self):
+        # A build that copies only because one of these is all that is wanted
+        # of a compiler. Yukimi's test asks the same of its own list.
+        def alone(case, output):
+            return any(name.startswith(coverage.COMPILERS) and want['outputs'] == [output]
+                       for name, want in self.inputs(case) if isinstance(want, dict))
+        for output in coverage.RUNTIME_LIBRARIES:
+            with self.subTest(output):
+                self.assertTrue(any(case['kind'] == 'copies' and alone(case, output) for case in self.cases))
+
+
 if __name__ == '__main__':
     unittest.main()
