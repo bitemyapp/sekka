@@ -162,6 +162,27 @@ fn activating_a_stack_tab_announces_the_previous_tabs_state() {
 }
 
 #[test]
+fn unstacking_one_of_two_tabs_announces_the_window_left_alone() {
+    use aizome_ipc::Event;
+    let c = Compositor::start(opts(None));
+    let _a = c.client(Spec::new("test.a", 0x2222cc));
+    let a = c.wait_window("test.a");
+    let _b = c.client(Spec::new("test.b", 0x22cc22));
+    let b = c.wait_window("test.b");
+    c.ok(Request::Stack { a: a.id, b: b.id });
+    c.wait_windows("stacked", |ws| ws.iter().all(|w| w.group.is_some()));
+    let events = aizome_ipc::Client::connect_to(&c.ipc).unwrap().events().unwrap();
+    events.stream().set_read_timeout(Some(std::time::Duration::from_secs(2))).unwrap();
+    c.ok(Request::Unstack { id: Some(b.id) });
+    assert!(
+        events.map_while(Result::ok).any(|event| {
+            matches!(event, Event::WindowChanged { window } if window.id == a.id && window.group.is_none())
+        }),
+        "the shell must hear that the window left alone is no longer in a stack"
+    );
+}
+
+#[test]
 fn stacks_share_a_frame_and_switch() {
     let c = Compositor::start(opts(None));
     let _a = c.client(Spec::new("test.a", 0x2222cc).title("Alpha"));
