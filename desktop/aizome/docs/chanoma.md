@@ -382,7 +382,13 @@ pausing, saving and leaving are Chanoma's.
   their cores' stand-ins. Flycast's memory cards and settings are in the
   system folder, so the Dreamcast's saves are kept apart in this mode. Flycast draws at twice the console's 640 by 480
   (`reicast_internal_resolution`: its options keep Reicast's names), for
-  a television.
+  a television. It sorts translucent polygons a pixel at a time
+  (`reicast_alpha_sorting`), as the console does, not by the triangle,
+  its default: only that renderer has the console's second accumulation
+  buffer, which bump-mapped games draw through. Without it the Doom 64
+  port's guns are flat boxes. It asks for OpenGL 4.3, and where Chanoma
+  can't make that, the core goes back to OpenGL 3 and sorting by the
+  triangle, as before.
 - **Picture**: each frame is converted to XRGB8888 and enlarged by a whole
   number with nearest-neighbour into a memfd of three frames, then shown
   through the window's video sink (`docs/kit.md`, Video); the compositor

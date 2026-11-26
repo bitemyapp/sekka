@@ -197,8 +197,13 @@ pub const SYSTEMS: &[System] = &[
         cores: &["flycast"],
         color: 0xd6601e,
         players: 4,
-        // Twice the console's 640 by 480, for a television.
-        prefer: &[("reicast_internal_resolution", "1280x960")],
+        // Twice the console's 640 by 480, for a television. Translucent
+        // polygons sorted a pixel at a time, as the console does: only that
+        // renderer has the console's second accumulation buffer, which
+        // bump-mapped games draw through (the Doom 64 port's guns are flat
+        // boxes without it). It asks for OpenGL 4.3; where that can't be
+        // made, the core goes back to OpenGL 3 and sorting per triangle.
+        prefer: &[("reicast_internal_resolution", "1280x960"), ("reicast_alpha_sorting", "per-pixel (accurate)")],
     },
     System {
         id: "ps2",
