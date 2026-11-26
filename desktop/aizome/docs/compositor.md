@@ -180,8 +180,10 @@ inside a security context.
 
 Notes for client authors:
 
-- Outputs use integer scales (2 for panels over ~180 dpi) unless the
-  settings give a fractional one.
+- Outputs use integer scales unless the settings give a fractional one:
+  2 for panels over ~180 dpi, and a television (16:9-ish, 39" or more
+  across, or a display that doesn't say its size) one step to each 1080
+  lines, so 2 for 4K, as its own menus are laid out.
 - Every surface hears its output's scale and transform, and hears them
   again when they change or the window moves to another output:
   wp_fractional_scale's preferred_scale, and wl_surface 6's

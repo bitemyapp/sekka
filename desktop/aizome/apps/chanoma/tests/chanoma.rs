@@ -1383,6 +1383,35 @@ fn incomplete_controller_setup_keeps_the_previous_layout() {
     assert_eq!(load_layouts(&dirs), layouts);
 }
 
+/// Holding Home is how a controller switches off: Chanoma stays where it
+/// was. Home pressed and let go goes home.
+#[test]
+fn home_held_to_switch_a_controller_off_leaves_chanoma_where_it_was() {
+    let (dirs, cores) = household("home-held", |_| {});
+    let mut h = harness(config(dirs, cores, ManualClock::at(2026, 10, 31, 17, 0)));
+    into_settings(&mut h);
+    let home = |h: &mut Harness<Chanoma>, pressed| {
+        h.send(Msg::Pad(PadEvent::Button { id: 1, slot: 0, button: Button::Guide, pressed }));
+    };
+    // Held, and it switches off: never let go.
+    home(&mut h, true);
+    assert_eq!(h.program().screen, Screen::GrownUps, "Home acts as it's let go");
+    h.send(Msg::Pad(PadEvent::Disconnected { id: 1, slot: 0 }));
+    assert_eq!(h.program().screen, Screen::GrownUps);
+    assert!(h.program().home_down.is_none());
+    // Held as long as switching off takes, and let go.
+    home(&mut h, true);
+    h.program_mut().home_down.as_mut().unwrap().1 -= Duration::from_secs(3);
+    home(&mut h, false);
+    assert_eq!(h.program().screen, Screen::GrownUps, "a long hold isn't Home");
+    // Let go without a press seen (pressed to wake the screen, say).
+    home(&mut h, false);
+    assert_eq!(h.program().screen, Screen::GrownUps);
+    // Pressed and let go: home.
+    press(&mut h, Button::Guide);
+    assert_eq!(h.program().screen, Screen::Home);
+}
+
 #[test]
 fn idle_relock_ends_controller_pairing_and_discards_its_replies() {
     // Run the real pairing screen without access to the workstation's Bluetooth.

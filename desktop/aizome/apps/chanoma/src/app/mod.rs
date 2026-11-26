@@ -80,6 +80,9 @@ const HUD: &str = "hud";
 const BAR_SHOWS: Duration = Duration::from_secs(3);
 /// And over a page, with the pointer resting in it.
 const BAR_SHOWS_OVER_PAGE: Duration = Duration::from_secs(8);
+/// Home held this long is a controller being switched off (an Xbox, an
+/// 8BitDo or a PlayStation controller switches off so), not Home.
+const HOME_HELD: Duration = Duration::from_secs(1);
 /// How long what a look through the folders found stays in the header:
 /// longer than a toast, which may cover it.
 pub const LOOK_SAID: Duration = Duration::from_secs(8);
@@ -447,6 +450,9 @@ pub struct Chanoma {
     pub family: Family,
     /// And which one it was, for the buttons it has.
     pub in_hand: Option<u32>,
+    /// The controller whose Home is down, and since when: Home acts as
+    /// it's let go.
+    pub home_down: Option<(u32, Instant)>,
     /// Each controller's shift on the PIN pad, for the digits a pad
     /// short of buttons presses as chords.
     pub chords: ui::pinpad::Chords,
@@ -607,6 +613,7 @@ impl Chanoma {
             controllers: Vec::new(),
             family: Family::Generic,
             in_hand: None,
+            home_down: None,
             chords: ui::pinpad::Chords::default(),
             window: WindowKey::default(),
             hud: None,
@@ -1051,6 +1058,10 @@ impl Chanoma {
                 let marks = self.home_marks();
                 self.controllers.retain(|p| p.id != id);
                 self.chords.forget(id);
+                // Held as it switched off: never let go.
+                if self.home_down.is_some_and(|(pad, _)| pad == id) {
+                    self.home_down = None;
+                }
                 // Its page goes with it.
                 if self.grownups.sub == Some(grownups::Sub::Pad(id)) && self.setup.is_none() {
                     self.grownups.sub = None;
@@ -1129,7 +1140,17 @@ impl Chanoma {
                         ui::pinpad::Chorded::Nothing => {}
                     };
                 }
-                if !pressed {
+                // Home acts as it's let go, after a press: held, it's the
+                // controller being switched off, which takes no one home.
+                if button == Button::Guide {
+                    if pressed {
+                        self.home_down = Some((id, Instant::now()));
+                        return;
+                    }
+                    if !self.home_down.take().is_some_and(|(pad, at)| pad == id && at.elapsed() < HOME_HELD) {
+                        return;
+                    }
+                } else if !pressed {
                     return;
                 }
                 match (self.screen.clone(), self.button_input(button, family)) {

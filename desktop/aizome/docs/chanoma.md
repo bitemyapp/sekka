@@ -285,7 +285,10 @@ Which button says yes follows the controller (Nintendo's right-hand A,
 others' bottom button) unless a grown-up sets it. Menus get a direction
 from the arrows or the left stick (with hysteresis), repeating after
 420 ms every 130 ms, quickening to 75 ms. Select and Start held for a
-second is Home on controllers without one. The pointer hides while a
+second is Home on controllers without one. A controller's Home acts as
+it's let go, after a press: held a second or more, it's the controller
+being switched off (an Xbox, an 8BitDo or a PlayStation controller
+switches off so), which leaves Chanoma where it was. The pointer hides while a
 controller is in hand (until the mouse moves), as on a console, and the TV
 account's Chanoma starts without one.
 
@@ -1163,6 +1166,17 @@ settings show and lets it go as they're left, so nothing follows the
 sound server during a game or a film; started `--silent`, the section
 says so. Inputs, each app's volume and the alert sound stay the
 desktop's.
+
+### The size of things
+
+Chanoma draws a 1920 × 1080 stage scaled to the screen, whatever the
+screen's scale. What else shows on the television (the login screen, a
+service's page in the browser, the desktop) goes by the compositor's
+scale, and a television's is by its lines until one is chosen: 2 for 4K
+(docs/compositor.md). By its density, as a desk monitor's is, a 4K
+television would be at 1, its text a desk monitor's size seen from the
+sofa, and every service but YouTube's (which has a television's page)
+unreadable.
 
 ### The TV account
 
