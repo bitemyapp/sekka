@@ -27,20 +27,8 @@ let
   lib = pkgs.lib;
   # A test value: the passphrase of the simulated access point.
   wifiPassphrase = "aizome-wifi-test-7";
-  # BlueZ's virtual controller (btvirt), which nixpkgs' BlueZ doesn't
-  # install: BlueZ built with its testing tools, keeping only btvirt.
-  btvirt =
-    let
-      bluez = pkgs.bluez.overrideAttrs (old: {
-        pname = "bluez-testing";
-        configureFlags = old.configureFlags ++ [ "--enable-testing" ];
-        doCheck = false;
-        postInstall = old.postInstall + ''
-          install -Dm755 emulator/btvirt $out/bin/btvirt
-        '';
-      });
-    in
-    pkgs.runCommand "btvirt" { } "install -Dm755 ${bluez}/bin/btvirt $out/bin/btvirt";
+  # BlueZ's virtual controller.
+  btvirt = import ./btvirt.nix { inherit pkgs; };
 in
 pkgs.testers.runNixOSTest {
   name = "aizome-settings";

@@ -4,12 +4,18 @@
 //! pane shows, the computer is discoverable and looks for devices, as
 //! macOS's Bluetooth settings do, and answers pairing: a code to compare,
 //! one to type in, or one to show, in a sheet.
+//!
+//! And LE privacy (`aizome_sys::bluetooth::privacy`), which Xbox
+//! controllers need: a switch, and Restart Bluetooth when what bluetoothd
+//! runs with isn't what it would start with (the switch changed, or an
+//! update changed its settings). Bluetooth restarts only from that button.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 use aizome_kit::prelude::*;
 use aizome_kit::{column, row};
+use aizome_sys::bluetooth::privacy::{self, Choice, Restart, Running, Status, Why};
 use aizome_sys::bluetooth::{
     Adapter, Bluetooth as Bluez, BluetoothState, Device, DeviceKind, PairingPrompt, PairingRequest, PairingResponse,
     Responder,
@@ -241,6 +247,13 @@ pub enum Msg {
     Done(String, String, Result<(), Error>),
     /// The pairing agent was registered, or not.
     Agent(Result<(), Error>),
+    /// The privacy switch.
+    Privacy(bool),
+    /// The choice kept, or not.
+    PrivacySet(Choice, Result<(), Error>),
+    /// Restart Bluetooth (its button).
+    Restart,
+    Restarted(Result<(), Error>),
 }
 
 pub struct Bluetooth {
@@ -265,6 +278,15 @@ pub struct Bluetooth {
     /// another, still on, would take its place (the default is the first
     /// powered one) and the switch would spring back on.
     pinned: Option<String>,
+    /// LE privacy; none where Aizome doesn't choose it. The sample's
+    /// changes only here.
+    privacy: Option<Status>,
+    /// The switch's change is being kept.
+    privacy_busy: bool,
+    /// Bluetooth is restarting from here.
+    restarting: bool,
+    /// Whether BlueZ ran when last seen: back means it restarted.
+    was_available: bool,
 }
 
 impl Default for Bluetooth {
@@ -283,6 +305,10 @@ impl Default for Bluetooth {
             agent: false,
             showing: false,
             looking: false,
+            privacy: None,
+            privacy_busy: false,
+            restarting: false,
+            was_available: false,
         }
     }
 }
@@ -313,6 +339,53 @@ impl Bluetooth {
         let t = b.start_discovery(&a.path);
         cx.wait(t, |_| Msg::Done(String::new(), String::new(), Ok(())));
         self.looking = true;
+    }
+
+    /// Answer pairing while the pane shows: register the agent, unless it is.
+    fn register_agent(&mut self, cx: &mut PaneCx<Msg>) {
+        let Bt::Live(b) = &self.bt else { return };
+        if self.agent {
+            return;
+        }
+        let tx = cx.stream();
+        let responders = self.responders.clone();
+        let counter = Arc::new(std::sync::atomic::AtomicU64::new(1_000));
+        // On the agent's own thread: BlueZ can take seconds to answer,
+        // and the window must keep moving and drawing meanwhile.
+        let registered = b.register_agent(move |p: PairingPrompt| {
+            let id = counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            responders.lock().unwrap_or_else(|e| e.into_inner()).insert(id, p.responder);
+            tx.send(Msg::Prompted(Prompt {
+                id,
+                device: p.device,
+                name: p.name,
+                request: p.request,
+                typed: String::new(),
+            }));
+        });
+        self.agent = true;
+        cx.wait(registered, Msg::Agent);
+    }
+
+    /// LE privacy as the system has it now (the sample's stays as changed).
+    fn read_privacy(&mut self) {
+        if let Bt::Live(_) = self.bt {
+            self.privacy = Status::read();
+        }
+    }
+
+    /// BlueZ started again (from here, or elsewhere): it forgot the agent,
+    /// what it was looking for and being found as.
+    fn bluez_back(&mut self, cx: &mut PaneCx<Msg>) {
+        self.read_privacy();
+        if !self.showing {
+            return;
+        }
+        self.agent = false;
+        self.looking = false;
+        self.made_discoverable = false;
+        self.register_agent(cx);
+        self.look(cx, false);
     }
 
     /// Close the question showing, if it's about `device` (any device for
@@ -409,6 +482,14 @@ impl Pane for Bluetooth {
                 "battery",
             ]),
             SettingEntry::new("nearby", "Nearby Devices").keywords(&["pair", "add", "discover", "scan"]),
+            SettingEntry::new("privacy", "Privacy").keywords(&[
+                "xbox",
+                "controller",
+                "gamepad",
+                "address",
+                "identity",
+                "restart bluetooth",
+            ]),
         ]
     }
 
@@ -430,33 +511,24 @@ impl Pane for Bluetooth {
             } else {
                 Bt::Live(Bluez::new(wake))
             };
+            if let Bt::Sample(_) = self.bt {
+                self.privacy = Some(sample_privacy());
+            }
         }
-        if let Bt::Live(b) = &self.bt
-            && !self.agent
-        {
-            let tx = cx.stream();
-            let responders = self.responders.clone();
-            let counter = Arc::new(std::sync::atomic::AtomicU64::new(1_000));
-            // On the agent's own thread: BlueZ can take seconds to answer,
-            // and the window must keep moving and drawing meanwhile.
-            let registered = b.register_agent(move |p: PairingPrompt| {
-                let id = counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                responders.lock().unwrap_or_else(|e| e.into_inner()).insert(id, p.responder);
-                tx.send(Msg::Prompted(Prompt {
-                    id,
-                    device: p.device,
-                    name: p.name,
-                    request: p.request,
-                    typed: String::new(),
-                }));
-            });
-            self.agent = true;
-            cx.wait(registered, Msg::Agent);
-        }
+        self.was_available = self.bt.snapshot().available;
+        self.read_privacy();
+        self.register_agent(cx);
         self.look(cx, false);
     }
 
     fn system_changed(&mut self, cx: &mut PaneCx<Msg>) {
+        let available = self.bt.snapshot().available;
+        if available != self.was_available {
+            self.was_available = available;
+            if available {
+                self.bluez_back(cx);
+            }
+        }
         // BlueZ's adapter may only be known a moment after the pane shows.
         if self.showing && !self.looking {
             self.look(cx, false);
@@ -621,6 +693,54 @@ impl Pane for Bluetooth {
                     self.agent = false;
                 }
             }
+            Msg::Privacy(on) => {
+                let choice = if on { Choice::On } else { Choice::Off };
+                self.privacy_busy = true;
+                let t = match &self.bt {
+                    Bt::Live(_) => privacy::change(&cx.wake(), privacy::Change::Set(choice)),
+                    _ => Task::ready(Ok(())),
+                };
+                cx.wait(t, move |r| Msg::PrivacySet(choice, r));
+            }
+            Msg::PrivacySet(choice, result) => {
+                self.privacy_busy = false;
+                match result {
+                    Ok(()) if matches!(self.bt, Bt::Live(_)) => self.read_privacy(),
+                    Ok(()) => {
+                        if let Some(s) = self.privacy.take() {
+                            self.privacy = Some(Status::new(s.running, choice, s.system, None));
+                        }
+                    }
+                    // The password asked for, dismissed.
+                    Err(Error::Cancelled) => {}
+                    Err(e) => cx.failed("Couldn't change Bluetooth privacy", e),
+                }
+            }
+            Msg::Restart => {
+                self.restarting = true;
+                let t = match &self.bt {
+                    Bt::Live(_) => privacy::change(&cx.wake(), privacy::Change::Restart),
+                    _ => Task::ready(Ok(())),
+                };
+                cx.wait(t, Msg::Restarted);
+            }
+            Msg::Restarted(result) => {
+                self.restarting = false;
+                match result {
+                    Ok(()) if matches!(self.bt, Bt::Live(_)) => self.bluez_back(cx),
+                    Ok(()) => {
+                        // The sample starts with what's chosen.
+                        if let Some(s) = self.privacy.take() {
+                            let next = s.next().unwrap_or(true);
+                            let why = if s.choice == Choice::Automatic { Why::NoPairings } else { Why::Chosen };
+                            let running = Running { privacy: next, why, choice: s.choice, main_conf: String::new() };
+                            self.privacy = Some(Status::new(Some(running), s.choice, s.system, None));
+                        }
+                    }
+                    Err(Error::Cancelled) => {}
+                    Err(e) => cx.failed("Couldn't restart Bluetooth", e),
+                }
+            }
             Msg::Done(what, device, result) => {
                 if !device.is_empty() {
                     self.busy.remove(&device);
@@ -646,6 +766,9 @@ impl Pane for Bluetooth {
 
     fn view(&self, vcx: &ViewCx) -> Element<Msg> {
         let state = self.bt.snapshot();
+        if matches!(self.bt, Bt::Live(_)) && !state.available && self.restarting {
+            return form::page(vec![form::heading("Restarting Bluetooth…", "Devices reconnect in a moment.")]);
+        }
         if matches!(self.bt, Bt::Live(_)) && !state.available {
             return form::page(vec![
                 form::heading("Bluetooth isn't available", "BlueZ, the Bluetooth service, isn't running."),
@@ -670,26 +793,30 @@ impl Pane for Bluetooth {
             format!("On, as “{}”", adapter.alias)
         };
         let name = self.name.clone().unwrap_or_else(|| adapter.alias.clone());
-        sections.push(vcx.section(
-            "",
-            vec![
-                    form::row("Bluetooth", toggle(on).on_toggle(Msg::Power))
-                        .leading(tile(Icon::Bluetooth, Tile::Ai, 24.0))
-                        .detail(detail)
-                        .entry("bluetooth"),
-                    form::row(
-                        "Name",
-                        text_field(&name)
-                            .on_change(Msg::NameText)
-                            .on_submit(Msg::Rename)
-                            .on_blur(Msg::Rename)
-                            .width(200.0)
-                            .id("bluetooth-name"),
-                    )
-                    .help("What other devices see when they look for this computer")
-                    .entry("name"),
-                ],
-        ));
+        if let Some(why) = self.privacy.as_ref().and_then(|s| s.restart) {
+            sections.push(vcx.section("", vec![restart_card(self, why)]));
+        }
+        let mut rows = vec![
+            form::row("Bluetooth", toggle(on).on_toggle(Msg::Power))
+                .leading(tile(Icon::Bluetooth, Tile::Ai, 24.0))
+                .detail(detail)
+                .entry("bluetooth"),
+            form::row(
+                "Name",
+                text_field(&name)
+                    .on_change(Msg::NameText)
+                    .on_submit(Msg::Rename)
+                    .on_blur(Msg::Rename)
+                    .width(200.0)
+                    .id("bluetooth-name"),
+            )
+            .help("What other devices see when they look for this computer")
+            .entry("name"),
+        ];
+        if let Some(s) = &self.privacy {
+            rows.push(privacy_row(self, s));
+        }
+        sections.push(vcx.section("", rows));
         if !on {
             return form::page(sections);
         }
@@ -777,6 +904,71 @@ fn reason(e: &Error) -> String {
         }
         other => other.to_string(),
     }
+}
+
+/// What the privacy switch does, briefly.
+const PRIVACY: &str = "A changing address, and a key for devices to recognize it by when they pair. Xbox \
+                       controllers need it. Devices paired while it was off may need to be paired again.";
+
+fn privacy_row(p: &Bluetooth, s: &Status) -> Row<Msg> {
+    if let Some(on) = s.system {
+        return form::managed(
+            "Privacy",
+            if on { "On" } else { "Off" },
+            "Change hardware.bluetooth.settings.General.Privacy in the system configuration.",
+        )
+        .entry("privacy");
+    }
+    let on = s.next().or(s.running.as_ref().map(|r| r.privacy)).unwrap_or(false);
+    let mut r = form::row("Privacy", toggle(on).on_toggle(Msg::Privacy).enabled(!p.privacy_busy && !p.restarting))
+        .help(PRIVACY)
+        .entry("privacy");
+    // Off by itself: why, since a controller won't pair.
+    if s.choice == Choice::Automatic && s.running.as_ref().is_some_and(|r| r.why == Why::EarlierPairings) {
+        r = r.detail("Off, so that devices paired before keep connecting");
+    }
+    r
+}
+
+/// Restart Bluetooth, for what it would start with: as Yukimi offers a
+/// restart, to do now or leave for later.
+fn restart_card(p: &Bluetooth, why: Restart) -> Row<Msg> {
+    let (title, body) = match why {
+        Restart::Choice => (
+            "Restart Bluetooth to change its privacy",
+            "Privacy changes when Bluetooth restarts. Connected devices disconnect for a moment, then reconnect.",
+        ),
+        Restart::Update => (
+            "Restart Bluetooth to finish updating",
+            "Bluetooth's settings changed with an update, and apply when it restarts. Connected devices \
+             disconnect for a moment, then reconnect.",
+        ),
+    };
+    let action: Element<Msg> = if p.restarting {
+        spinner(14.0)
+    } else {
+        button("Restart Bluetooth")
+            .primary()
+            .on_press(Msg::Restart)
+            .tooltip("You can also leave this until the computer restarts.")
+            .into()
+    };
+    form::whole(
+        container(
+            row![
+                icon(Icon::RotateCw).size(20.0).role(Role::Warning),
+                column![text(title).weight(650.0), text(body).wrap().size(12.0).role(Role::Text2)]
+                    .spacing(3.0)
+                    .width(Fill),
+                action,
+            ]
+            .spacing(12.0)
+            .align(Align::Center)
+            .width(Fill),
+        )
+        .padding([10.0, 12.0])
+        .width(Fill),
+    )
 }
 
 fn status(d: &Device) -> String {
@@ -1034,6 +1226,12 @@ pub fn sample() -> BluetoothState {
     }
 }
 
+/// The sample's privacy: chosen for it, on, as bluetoothd started.
+fn sample_privacy() -> Status {
+    let running = Running { privacy: true, why: Why::NoPairings, choice: Choice::Automatic, main_conf: String::new() };
+    Status::new(Some(running), Choice::Automatic, None, None)
+}
+
 /// The adapter the pane shows: the one pinned (last switched here) while
 /// it's there, else BlueZ's default.
 fn shown_adapter(state: &aizome_sys::bluetooth::BluetoothState, pinned: Option<&str>) -> Option<Adapter> {
@@ -1141,6 +1339,35 @@ mod sheets {
         assert!(has(&h, "Pair with “JBL Flip 6”?"));
         ask(&mut h, 5, "", PairingRequest::Cancelled);
         assert!(!has(&h, "Pair with “JBL Flip 6”?"));
+    }
+
+    /// Until `check` holds, as the window's tasks finish.
+    fn until(h: &mut Harness<Settei>, check: impl Fn(&Harness<Settei>) -> bool) -> bool {
+        for _ in 0..200 {
+            if check(h) {
+                return true;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+            h.send(AppMsg::Nothing);
+        }
+        check(h)
+    }
+
+    #[test]
+    fn privacy_changes_with_a_restart_asked_for() {
+        const CARD: &str = "Restart Bluetooth to change its privacy";
+        let mut h = open("privacy");
+        assert!(has(&h, "Privacy") && !has(&h, CARD), "{:?}", h.texts(h.window()));
+        send(&mut h, Msg::Privacy(false));
+        assert!(until(&mut h, |h| has(h, CARD)), "no restart offered: {:?}", h.texts(h.window()));
+        // On again before restarting: nothing to restart for.
+        send(&mut h, Msg::Privacy(true));
+        assert!(until(&mut h, |h| !has(h, CARD)));
+        send(&mut h, Msg::Privacy(false));
+        assert!(until(&mut h, |h| has(h, CARD)));
+        // Only the button restarts it; then there's nothing left to do.
+        send(&mut h, Msg::Restart);
+        assert!(until(&mut h, |h| !has(h, CARD)), "{:?}", h.texts(h.window()));
     }
 
     #[test]

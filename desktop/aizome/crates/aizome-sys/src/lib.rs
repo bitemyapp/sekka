@@ -32,7 +32,7 @@
 //! | Module | What | Through | NixOS needs |
 //! |---|---|---|---|
 //! | [`network`] | devices, Wi-Fi, VPNs, airplane mode, hotspot | NetworkManager; `/dev/rfkill` | `networking.networkmanager.enable` |
-//! | [`bluetooth`] | adapters, devices, pairing agent | BlueZ | `hardware.bluetooth.enable` |
+//! | [`bluetooth`] | adapters, devices, pairing agent | BlueZ; LE privacy through `aizome-bluetooth` and pkexec | `hardware.bluetooth.enable` |
 //! | [`audio`] | outputs, inputs, streams, volume keys | PipeWire through pipewire-pulse | `services.pipewire.pulse.enable` |
 //! | [`power`] | batteries, profiles, suspend and power off, lock before sleep, brightness | UPower, power-profiles-daemon, logind, sysfs | `services.upower.enable`, `services.power-profiles-daemon.enable` |
 //! | [`datetime`] | time zone, network time, locale, hostname; the time zone list | timedated, localed, hostnamed; tzdata | `time.timeZone = null` to let Settings change it |

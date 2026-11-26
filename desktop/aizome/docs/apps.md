@@ -89,6 +89,13 @@ palette. Search filters the sidebar and highlights options.
   `aizome-sys::network`.
 - **Bluetooth**: on/off, discoverable name, nearby and paired devices,
   pairing with passkey confirmation, connect, disconnect, forget, battery.
+  LE privacy, which Xbox Series controllers need: chosen for the computer
+  each time bluetoothd starts (on, unless devices were paired over LE
+  while it was off), and a switch, through `aizome-bluetooth` and pkexec.
+  When what bluetoothd runs with isn't what it would start with (the
+  switch changed, or an update changed its settings), the pane offers
+  Restart Bluetooth, as Yukimi offers a restart; nothing restarts it
+  otherwise. `aizome-sys::bluetooth::privacy` says why.
 - **Sound**: output and input devices with volume, balance and mute, level
   meter for input, per-app volumes, alert sound and volume.
 - **Notifications**: Do Not Disturb with schedule, per-app allow/banners/
@@ -248,7 +255,10 @@ As built, beyond the above:
   BlueZ's adapters off, and those back on after.
 - **Bluetooth**: a pairing sheet closes when BlueZ cancels it, when our
   pairing ends (a code only shown included), and a device that asked to
-  pair (Authorize) leaves no spinner once answered.
+  pair (Authorize) leaves no spinner once answered. Privacy switched waits
+  for Restart Bluetooth, which is offered only while it would change
+  something. `aizome-checks.bluetooth-privacy` runs the helper through
+  polkit and pkexec on BlueZ's virtual controllers.
 - **Displays** previews mirroring live under "Keep these display
   settings?" as it does the other risky changes, and follows `[[outputs]]`
   changed elsewhere while it's open (panes hear when `settings.toml`

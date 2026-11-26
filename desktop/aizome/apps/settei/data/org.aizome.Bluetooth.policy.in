@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: MIT OR Apache-2.0 -->
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+  "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+  <vendor>Aizome</vendor>
+  <vendor_url>https://github.com/bitemyapp/sekka/tree/main/desktop/aizome</vendor_url>
+  <icon_name>bluetooth</icon_name>
+  <!-- bluetoothd's LE privacy as root: it keeps the choice for
+       bluetoothd's next start, or restarts bluetoothd, and nothing else. -->
+  <action id="org.aizome.Settei.bluetooth">
+    <description>Change Bluetooth privacy</description>
+    <message>Settings needs an administrator's password to change Bluetooth privacy or restart Bluetooth</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">@helper@</annotate>
+  </action>
+</policyconfig>

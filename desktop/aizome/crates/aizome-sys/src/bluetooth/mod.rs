@@ -13,8 +13,12 @@
 //!
 //! Needs BlueZ on the system bus (`hardware.bluetooth.enable`). With no
 //! BlueZ, [`Bluetooth::available`] is false and the snapshot is empty.
+//!
+//! [`privacy`] is bluetoothd's LE privacy, which Aizome chooses each time it
+//! starts, and which Settings changes through `aizome-bluetooth`.
 
 pub mod agent;
+pub mod privacy;
 
 pub use agent::{PairingPrompt, PairingRequest, PairingResponse, Responder};
 

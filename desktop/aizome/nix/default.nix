@@ -234,6 +234,10 @@ let
       # Nisshi's reader through real polkit and pkexec: your own journal,
       # the system's once polkit says yes, refused without (vm-nisshi-test.nix).
       nisshi = import ./vm-nisshi-test.nix { inherit pkgs self; };
+      # Bluetooth LE privacy chosen for the computer when bluetoothd starts,
+      # and changed through pkexec from its next start
+      # (vm-bluetooth-privacy-test.nix).
+      bluetooth-privacy = import ./vm-bluetooth-privacy-test.nix { inherit pkgs self; };
       # Koe set up from its window, and its service on, off and at the
       # next start (vm-koe-test.nix).
       koe = import ./vm-koe-test.nix { inherit pkgs self; };
