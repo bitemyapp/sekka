@@ -1676,7 +1676,10 @@ for the first two, a test named with each of the others.
   another kind sometimes go by (`.gb`, `.gen`, `.gg`, `.ws`, `.bs`,
   `.fig`, `.sms`) count by name everywhere. So does a system's file, or
   a zip, in a folder that happens to go by the system's name (`md`,
-  `gb`, `nintendo`, `atari`), where the search lists even one.
+  `gb`, `nintendo`, `atari`), where the search lists even one. The
+  picker's own counts take any disc image (`.iso`, `.cue`, `.chd`,
+  `.m3u`) as a game unread, so *Suggested* can offer a folder of three
+  installers; the search reads what's on each.
 - Zips are read only in a folder named for their system, stored or
   deflated, under 4 GiB; 7-Zip and RAR aren't read, nor zipped discs.
   Only the NES's header is taken off for a CRC: a renamed game in
