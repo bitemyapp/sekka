@@ -1,0 +1,20 @@
+--- a/net/bluetooth/hci_core.c
++++ b/net/bluetooth/hci_core.c
+@@ -1117,6 +1117,17 @@
+ 	if (conn->type == LE_LINK)
+ 		return true;
+ 
++	/* A game controller keeps its key, whatever it asked: some (8BitDo's
++	 * in Switch mode) ask not to bond, then reconnect expecting the key,
++	 * as a games console keeps it. Class of device: peripheral, joystick
++	 * or gamepad.
++	 */
++	if (hci_dev_test_flag(hdev, HCI_BONDABLE) &&
++	    (conn->dev_class[1] & 0x1f) == 0x05 &&
++	    ((conn->dev_class[0] >> 2) & 0x0f) >= 0x01 &&
++	    ((conn->dev_class[0] >> 2) & 0x0f) <= 0x02)
++		return true;
++
+ 	/* Neither local nor remote side had no-bonding as requirement */
+ 	if (conn->auth_type > 0x01 && conn->remote_auth > 0x01)
+ 		return true;

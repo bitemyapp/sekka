@@ -84,6 +84,10 @@ assert (bluetooth on).JustWorksRepairing == "always" && (bluetooth on).FastConne
 # So does a controller that pairs without bonding (8BitDo's Switch-only
 # pads): decided on purpose too, and fails here if taken out.
 assert !(bondedOnly on);
+# And it reconnects once switched off: its key kept by Linux's bluetooth
+# module, rebuilt alone with chanoma-bluetooth-keys.patch.
+assert lib.any (p: lib.hasPrefix "linux-bluetooth-controller-keys" p.name) on.boot.extraModulePackages;
+assert off.boot.extraModulePackages == [ ];
 # The desktop entry uses the catalog's keyring wrapper. The TV keeps
 # its own browser profiles and receives the raw executable by store path.
 assert lib.all (p: toString p != toString on.programs.aizome.chanoma.browser) (packages on);

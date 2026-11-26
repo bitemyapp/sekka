@@ -245,6 +245,19 @@ row untouched end it with what was pressed (a pad with no sticks or
 triggers finishes that way too). Stopped with nothing pressed, its
 buttons stay as they were.
 
+A Bluetooth controller that asks not to bond (8BitDo's in Switch mode,
+as a "Pro Controller") still has its pairing key kept, so it reconnects
+when switched on again: Linux otherwise goes along with the request
+(`hci_get_auth_req`), marks the key not to keep (`hci_persistent_key`)
+and forgets it when the controller switches off, and the controller,
+which a Switch would have remembered, blinks for a computer that no
+longer knows it. `nix/chanoma-bluetooth-keys.patch` keeps the key of
+any joystick or gamepad (by its class of device) while the computer is
+bondable; `nix/chanoma-bluetooth.nix` builds Linux's `bluetooth` module
+alone with it, from the kernel's own source and configuration, into
+`updates`, which depmod searches first (`chanoma.keepControllerKeys`,
+on by default). It takes effect from the next boot.
+
 *Pair a controller…* (`app/grownups.rs`) talks to BlueZ through
 `aizome-sys`, as Settings does. An adapter found off is switched on
 first, and BlueZ is asked to look for controllers only once it says the

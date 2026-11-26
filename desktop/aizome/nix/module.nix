@@ -452,6 +452,21 @@ in
           (`--password-store=basic`).
         '';
       };
+      keepControllerKeys = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = ''
+          Keep a Bluetooth game controller's pairing key even when it
+          asks not to bond, so it reconnects when switched on again.
+          8BitDo's controllers in Switch mode ask that, as a Switch
+          ignores it; Linux honours it and forgets the key when the
+          controller switches off, which then never reconnects. A
+          one-line change to Linux's `bluetooth` module, rebuilt alone
+          from the kernel's own source and configuration (the kernel and
+          every other module stay the cached build). Only joysticks and
+          gamepads, by their class of device.
+        '';
+      };
       shareTvDrives = lib.mkOption {
         type = lib.types.bool;
         default = true;
@@ -610,6 +625,11 @@ in
     hardware.bluetooth.input.General = lib.mkIf cfg.chanoma.enable {
       ClassicBondedOnly = lib.mkDefault false;
     };
+    # And they reconnect once switched off: their key kept
+    # (chanoma.keepControllerKeys, nix/chanoma-bluetooth.nix).
+    boot.extraModulePackages = lib.mkIf (cfg.chanoma.enable && cfg.chanoma.keepControllerKeys) [
+      (pkgs.callPackage ./chanoma-bluetooth.nix { kernel = config.boot.kernelPackages.kernel; })
+    ];
     systemd.user.generators = lib.mkIf cfg.chanoma.enable { aizome-tv-units = tvUnits; };
     # The TV account's drives, for every account to read
     # (chanoma.shareTvDrives): UDisks keeps to a /run/media/USER that's
