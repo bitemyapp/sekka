@@ -15,6 +15,10 @@
 //! their names. Other discs (a Mega-CD's, a PC Engine CD's, a PSP's,
 //! music, a computer's) are none of these. What a disc is, is worked out
 //! once and kept in the files index beside it ([`seen`]).
+//!
+//! A cartridge whose extension other files go by too (a Mega Drive's
+//! `.md` is Markdown's) is told from them the same way, by its header
+//! ([`shared`]), where games are looked for across a whole drive.
 
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
@@ -69,7 +73,8 @@ pub fn seen(facts: &mut Facts, path: &Path, read: bool) -> Option<Seen> {
 }
 
 /// Look at `path`'s disc: a cue sheet's, a CloneCD image's, an ISO, a
-/// CHD, a GDI's, or a playlist's first disc.
+/// CHD, a GDI's, or a playlist's first disc. Or at its header, for a
+/// cartridge's extension that other files go by too ([`shared`]).
 pub fn look(path: &Path) -> Seen {
     look_at(path, 0)
 }
@@ -88,8 +93,41 @@ fn look_at(path: &Path, depth: u8) -> Seen {
         "cdi" => Seen::of("dreamcast", None),
         "cso" => Cso::open(path).map(|mut t| identify(&mut t)).unwrap_or_default(),
         "pbp" => Seen::of("psx", None),
+        _ if shared(&ext) => cartridge(path, &ext),
         _ => Seen::default(),
     }
+}
+
+/// Cartridges whose extension files of other kinds go by too, and far
+/// more of them: Markdown is `.md`, a Mac's disk image `.dmg`. Each with
+/// its system, and what a cartridge says where its console looks before
+/// starting it: (extension, system, where, what).
+const CARTRIDGES: &[(&str, &str, usize, &[u8])] = &[
+    // The console's name ("SEGA MEGA DRIVE", "SEGA GENESIS"), for a few a
+    // byte later.
+    ("md", "genesis", 0x100, b"SEGA"),
+    ("md", "genesis", 0x101, b"SEGA"),
+    // Nintendo's logo.
+    ("dmg", "gb", 0x104, &[0xce, 0xed, 0x66, 0x66]),
+];
+
+/// Whether files of other kinds go by `ext` (lower case) too: a file
+/// with it is a game's only if it says so itself ([`look`]).
+pub fn shared(ext: &str) -> bool {
+    CARTRIDGES.iter().any(|c| c.0 == ext)
+}
+
+/// What a cartridge's header says it is: nothing, for a file of another
+/// kind. Its first 272 bytes are read.
+fn cartridge(path: &Path, ext: &str) -> Seen {
+    let mut head = Vec::new();
+    if std::fs::File::open(path).and_then(|f| f.take(0x110).read_to_end(&mut head)).is_err() {
+        return Seen::default();
+    }
+    CARTRIDGES
+        .iter()
+        .find(|(e, _, at, says)| *e == ext && head.get(*at..*at + says.len()) == Some(*says))
+        .map_or_else(Seen::default, |(_, system, ..)| Seen::of(system, None))
 }
 
 /// A playlist's first disc, beside it.
