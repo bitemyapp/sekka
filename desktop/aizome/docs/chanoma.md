@@ -1099,6 +1099,27 @@ controller: X takes a letter back, Y types a space); Start or Back puts
 the keyboard away to go through them, up from their first line brings
 it back, and Back from them goes back where search was opened.
 
+### Screensaver
+
+Left alone for five minutes off a game, a film or a page, Chanoma goes
+dark but for the time and its mark, small and dim, somewhere else on the
+screen each minute so nothing stays put on a television
+(`app/saver.rs`). Any button, key, click or move of the mouse brings it
+back as it was, and does nothing else; a controller switched on brings it
+back and is counted as ever.
+
+The compositor can't see a controller: Chanoma reads it itself. So
+Chanoma tells the compositor of a controller's presses (aizome-ipc's
+`activity`, at most every ten seconds), which counts them as input, as it
+counts keys and the mouse: the idle timers start again, and displays off
+for idleness come back on. On the desktop the session's own locking and
+its displays going off then follow controllers too. On the TV account,
+whose session is Chanoma alone, Chanoma holds the display awake for as
+long as it runs (`keep-awake`, held on a connection it keeps): a
+television whose picture went off would look broken, and only a keyboard
+or a mouse could wake it. The television's own power settings still
+apply.
+
 ### Sound
 
 *Settings › Sound* chooses where sound comes out and how loud, as

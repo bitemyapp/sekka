@@ -310,6 +310,9 @@ fn config(dirs: Dirs, cores: PathBuf, clock: ManualClock) -> Config {
         drives: false,
         tv: false,
         after_crash: None,
+        compositor: false,
+        // Never in these flows but the screensaver's own.
+        saver_after: Duration::from_secs(24 * 3600),
     }
 }
 
@@ -3186,4 +3189,47 @@ fn a_lock_kept_from_a_clock_that_ran_ahead_lasts_no_longer_than_the_longest() {
     assert_eq!(h.program().lockout.wait(now), Some(MAX_LOCK_SECS));
     let saved: Lockout = aizome_chanoma::store::read(&dirs.state.join("lockout.json"));
     assert_eq!((saved.failures, saved.until), (3, now + MAX_LOCK_SECS));
+}
+
+#[test]
+fn left_alone_chanoma_shows_its_screensaver_and_the_press_that_ends_it_does_nothing_else() {
+    let (dirs, cores) = household("saver", |_| {});
+    let mut c = config(dirs, cores, ManualClock::at(2026, 10, 31, 17, 0));
+    c.saver_after = Duration::ZERO;
+    let mut h = harness(c);
+    h.send(Msg::Tick);
+    let saver = h.program().saver_view().expect("the screensaver, left alone");
+    assert_eq!(saver.clock, "17:00");
+    shot(&mut h, "60-screensaver");
+    // Each minute somewhere else on the screen.
+    let moved = aizome_chanoma::ui::Saver { place: saver.place + 1, ..saver.clone() };
+    assert_ne!(saver.at(), moved.at());
+
+    let (screen, focus) = (h.program().screen.clone(), h.program().focus);
+    press(&mut h, Button::South);
+    assert!(h.program().saver.is_none(), "a press ends it");
+    assert_eq!((h.program().screen.clone(), h.program().focus), (screen.clone(), focus), "and does nothing else");
+    // A key, a click and a controller switched on end it too; the
+    // controller is still counted.
+    h.send(Msg::Tick);
+    assert!(h.program().saver.is_some());
+    input(&mut h, Input::Ok);
+    assert!(h.program().saver.is_none());
+    assert_eq!(h.program().screen, screen, "the key did nothing else");
+    h.send(Msg::Tick);
+    let pad = PadInfo {
+        id: 2,
+        slot: 1,
+        name: "Xbox Wireless Controller".into(),
+        family: Family::Xbox,
+        bluetooth: true,
+        guid: String::new(),
+        battery: Some((80, false)),
+        source: aizome_chanoma::pad::mapping::Source::Database,
+        rumble: true,
+        buttons: aizome_chanoma::pad::Button::all_bits(),
+    };
+    h.send(Msg::Pad(PadEvent::Connected(pad)));
+    assert!(h.program().saver.is_none(), "a controller switched on ends it");
+    assert!(h.program().controllers.iter().any(|p| p.id == 2), "and is counted");
 }

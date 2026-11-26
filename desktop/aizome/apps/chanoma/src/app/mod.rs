@@ -19,6 +19,7 @@ pub mod picker;
 pub mod play;
 pub mod reset;
 pub mod rows;
+pub mod saver;
 pub mod search;
 pub mod splash;
 pub mod state;
@@ -355,6 +356,12 @@ pub struct Config {
     pub tv: bool,
     /// Started again after a crash (`watch`): what happened, shown first.
     pub after_crash: Option<String>,
+    /// Talk to the compositor about idleness: tell it of controller
+    /// presses, which it can't see, and on the TV account hold the
+    /// display awake for the screensaver ([`saver`]).
+    pub compositor: bool,
+    /// Untouched this long, the screensaver comes.
+    pub saver_after: Duration,
 }
 
 impl Config {
@@ -397,6 +404,8 @@ impl Config {
             drives: true,
             tv: false,
             after_crash: None,
+            compositor: true,
+            saver_after: saver::AFTER,
         }
     }
 }
@@ -423,6 +432,12 @@ pub struct Chanoma {
     pub scan_generation: u64,
     /// Starting, Chanoma's name up until Home has its games.
     pub splash: Option<splash::Splash>,
+    /// The screensaver: since when it shows, if it does.
+    pub saver: Option<Instant>,
+    /// The last press, click or move of anyone's.
+    pub last_input: Instant,
+    /// When the compositor was last told of a controller's presses.
+    pub activity_told: Option<Instant>,
     pub pads: Option<Pads>,
     pub shared: Arc<Shared>,
     pub controllers: Vec<PadInfo>,
@@ -575,6 +590,9 @@ impl Chanoma {
             scanned: false,
             scan_generation: 0,
             splash: None,
+            saver: None,
+            last_input: Instant::now(),
+            activity_told: None,
             pads: None,
             shared: Arc::new(Shared::default()),
             controllers: Vec::new(),
@@ -1939,7 +1957,7 @@ impl Chanoma {
                 WEvent::Key(k) => Chanoma::key(k).map(Msg::Input),
                 WEvent::PointerDown { pos, .. } => s.hit(size, *pos).map(Msg::Click),
                 // Over a game or a film: the bar comes down.
-                WEvent::PointerMove { pos, .. } if s.view == View::Clear => {
+                WEvent::PointerMove { pos, .. } if matches!(s.view, View::Clear | View::Saver(_)) => {
                     Some(Msg::Moved { in_bar: ui::in_top_bar(size, *pos) })
                 }
                 _ => None,
@@ -1951,6 +1969,10 @@ impl Chanoma {
     }
 
     fn main_view(&self) -> Element<Msg> {
+        if let Some(s) = self.saver_view() {
+            let scene = Scene::new(View::Saver(s), None, None, Focus::default(), 0, self.art.clone(), self.art_rev);
+            return self.stage(scene);
+        }
         let none = self.hints("Choose", Some("Back"));
         match &self.screen {
             Screen::Playing => {
@@ -2251,6 +2273,7 @@ impl Program for Chanoma {
         if self.config.drives {
             self.drives.watch(tx.clone());
         }
+        self.keep_awake();
         self.outputs_changed(cx);
         self.start_splash(cx);
         if self.config.scan {
@@ -2313,6 +2336,9 @@ impl Chanoma {
     /// Handle a message. [`Program::update`] does, and then says what
     /// couldn't be saved while it did.
     fn handle(&mut self, msg: Msg, cx: &mut Cx<Msg>) {
+        if self.input_seen(&msg, cx) {
+            return;
+        }
         match msg {
             Msg::Pad(e) => self.pad(e, cx),
             Msg::Input(i) => {

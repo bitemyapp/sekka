@@ -160,6 +160,33 @@ pub enum View {
     Message(screens::Message),
     /// Nothing but the overlay, over a picture (a game, a film, a page).
     Clear,
+    /// The screensaver (`app::saver`).
+    Saver(Saver),
+}
+
+/// The screensaver: the time and Chanoma's mark, small and quiet on
+/// black, in another place each minute.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Saver {
+    pub clock: String,
+    /// Which place it's in (the minutes it has shown).
+    pub place: u32,
+}
+
+impl Saver {
+    /// The middle of its place: anywhere on the screen but its edges.
+    pub fn at(&self) -> Point {
+        let h = u64::from(self.place).wrapping_add(1).wrapping_mul(0x9E37_79B9_7F4A_7C15);
+        let (fx, fy) = (((h >> 16) % 1000) as f64 / 999.0, ((h >> 40) % 1000) as f64 / 999.0);
+        let (mx, my) = (300.0, 200.0);
+        Point::new(mx + fx * (W - 2.0 * mx), my + fy * (H - 2.0 * my))
+    }
+
+    fn paint(&self, c: &mut Canvas, theme: &Theme) {
+        let at = self.at();
+        mark(c, theme, Point::new(at.x - 24.0, at.y - 70.0), 12.0);
+        text_centred(c, theme, &self.clock, Point::new(at.x, at.y + 40.0), font(HEADLINE, MEDIUM), theme.text3());
+    }
 }
 
 /// Where the controller is on the screen: left out of the scene's hash.
@@ -279,14 +306,16 @@ impl Scene {
             View::Picker(p) => p.hit(self.focus, d),
             View::Message(m) => m.hit(d).map(Target::Item),
             View::SignIn(_) => None,
-            View::Clear => Some(Target::Picture),
+            View::Clear | View::Saver(_) => Some(Target::Picture),
         }
     }
 
     pub fn paint(&self, c: &mut Canvas, b: Rect, theme: &Theme) {
         let fit = Fit::new(b);
         let clear = matches!(self.view, View::Clear);
-        if !clear {
+        if matches!(self.view, View::Saver(_)) {
+            c.fill_rect(b, Color::BLACK);
+        } else if !clear {
             backdrop(c, theme, b);
         }
         c.saved(|c| {
@@ -298,6 +327,7 @@ impl Scene {
                 View::Picker(p) => p.paint(c, theme, self.focus),
                 View::Message(m) => m.paint(c, theme, self.focus),
                 View::SignIn(s) => s.paint(c, theme),
+                View::Saver(s) => s.paint(c, theme),
                 View::Clear => {}
             }
             if let Some(ch) = &self.chrome {

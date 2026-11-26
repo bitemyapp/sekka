@@ -310,3 +310,19 @@ ignore!(
     zwp_idle_inhibit_manager_v1::ZwpIdleInhibitManagerV1,
     zwp_idle_inhibitor_v1::ZwpIdleInhibitorV1
 );
+
+#[test]
+fn a_controllers_presses_told_by_its_app_light_the_displays_again() {
+    let c = start();
+    let heard = Listener::start(&c);
+    left_alone_for(&c, 2);
+    assert!(!displays_on(&c), "nothing held, and the displays stayed on");
+    wait("word that they went off", || heard.idle().iter().any(|kind| kind == "monitors-off"));
+    // Chanoma reads the controller itself, so it says so.
+    let mut app = Client::connect_to(&c.ipc).expect("IPC connect");
+    assert_eq!(app.request(&Request::Activity).expect("activity"), Response::Ok);
+    wait("the displays lit again", || displays_on(&c));
+    // And the timer starts again from it.
+    left_alone_for(&c, 1);
+    assert!(displays_on(&c), "the displays went off before their time");
+}
