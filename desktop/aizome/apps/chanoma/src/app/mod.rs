@@ -150,6 +150,10 @@ pub enum Msg {
     CueTick,
     /// The desktop's media controls (a media key) ask something of the film.
     Mpris(aizome_mpris::Action),
+    /// The sound server changed (the grown-ups' Sound section).
+    Sound,
+    /// What the sound server said to a change asked of it.
+    SoundDone(&'static str, Result<(), String>),
     Bluetooth(u64),
     /// BlueZ's answer to switching the pairing screen's adapter on.
     SwitchedOn(u64, Result<(), String>),
@@ -492,6 +496,9 @@ pub struct Chanoma {
     pub art_agent: Option<ureq::Agent>,
     pub sender: Option<MsgSender<Msg>>,
     pub pairing: Option<grownups::Pairing>,
+    /// The sound server, for the grown-ups' Sound section: connected while
+    /// the settings show.
+    pub audio: Option<aizome_sys::audio::Audio>,
     pairing_session: u64,
     /// Choosing a folder.
     pub picker: Option<picker::Picker>,
@@ -618,6 +625,7 @@ impl Chanoma {
             art_agent: None,
             sender: None,
             pairing: None,
+            audio: None,
             pairing_session: 0,
             picker: None,
             search: None,
@@ -2385,6 +2393,8 @@ impl Chanoma {
             Msg::Film(e) => self.film_event(e, cx),
             Msg::CueTick => self.schedule_cues(cx),
             Msg::Mpris(a) => self.on_mpris(a, cx),
+            Msg::Sound => {}
+            Msg::SoundDone(what, result) => self.sound_done(what, result, cx),
             Msg::Bluetooth(session) => self.bluetooth_changed(session, cx),
             Msg::SwitchedOn(session, r) => self.switched_on(session, r),
             Msg::Searching(session, r) => self.searching(session, r),

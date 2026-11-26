@@ -27,15 +27,16 @@ use crate::ui::Focus;
 use crate::ui::screens::{Art, Message};
 use crate::ui::settings::{Do, Page, Row, Value};
 
-pub const SECTIONS: [&str; 8] =
-    ["Time", "Watch", "Games", "Films and shows", "Folders", "Controllers", "PIN and lock", "Chanoma"];
+pub const SECTIONS: [&str; 9] =
+    ["Time", "Watch", "Games", "Films and shows", "Folders", "Controllers", "PIN and lock", "Sound", "Chanoma"];
 /// The sections opened by number.
 pub const FOLDERS: usize = 4;
 pub const CONTROLLERS: usize = 5;
+pub const SOUND: usize = 7;
 
 /// Each section's icon and the colour of its square, as Settei's side list
 /// has them.
-const SECTION_ICONS: [(aizome_kit::Icon, aizome_kit::theme::Role); 8] = {
+const SECTION_ICONS: [(aizome_kit::Icon, aizome_kit::theme::Role); 9] = {
     use aizome_kit::Icon;
     use aizome_kit::theme::Role;
     [
@@ -46,6 +47,7 @@ const SECTION_ICONS: [(aizome_kit::Icon, aizome_kit::theme::Role); 8] = {
         (Icon::FolderOpen, Role::Warning),
         (Icon::Bluetooth, Role::Accent),
         (Icon::Lock, Role::Success),
+        (Icon::Volume2, Role::Danger),
         (Icon::Settings, Role::Text3),
     ]
 };
@@ -160,6 +162,10 @@ enum Act {
     ChangePin,
     Relock,
     Lock,
+    /// The sound's output, by its name.
+    Output(String),
+    Volume,
+    Mute,
     Leave,
 }
 
@@ -179,6 +185,8 @@ const BEDTIMES: [Option<u16>; 10] = [
 ];
 const WAKES: [u16; 8] = [5 * 60 + 30, 6 * 60, 6 * 60 + 30, 7 * 60, 7 * 60 + 30, 8 * 60, 8 * 60 + 30, 9 * 60];
 const RELOCKS: [u32; 5] = [5, 10, 15, 30, 60];
+/// The volume's step, left or right.
+const VOLUME_STEP: f32 = 0.05;
 
 fn limit_label(l: Option<u32>) -> String {
     match l {
@@ -295,6 +303,7 @@ impl Chanoma {
         if let Some(s) = section {
             self.grownups = State { section: s, ..State::default() };
         }
+        self.connect_sound();
         self.go(Screen::GrownUps, cx);
         self.focus = self.grownups.focus();
     }
@@ -302,6 +311,7 @@ impl Chanoma {
     /// Leaving the settings: the first setup is done, and the folders are
     /// read again.
     pub fn leave_grownups(&mut self, cx: &mut Cx<Msg>) {
+        self.audio = None;
         let first = !self.settings.setup_done;
         if first {
             self.settings.setup_done = true;
@@ -554,6 +564,7 @@ impl Chanoma {
                 ));
                 rows.push((Row::new("Lock now", Value::Do(Do::Lock)).detail("Back to kids' mode"), Act::Lock));
             }
+            SOUND => self.sound_rows(&mut rows),
             _ => {
                 let leave = if self.config.tv {
                     Row::new("Log Out", Value::Do(Do::LogOut)).detail("Back to the login screen")
@@ -910,6 +921,10 @@ impl Chanoma {
                     cycle(&[Confirm::Auto, Confirm::Bottom, Confirm::Right], self.settings.confirm, forward);
             }
             Act::Relock => self.settings.relock_minutes = cycle(&RELOCKS, self.settings.relock_minutes, forward),
+            Act::Volume => {
+                self.step_volume(forward, cx);
+                return;
+            }
             _ => return,
         }
         self.save_settings();
@@ -1079,6 +1094,25 @@ impl Chanoma {
             // be enough to take the PIN over.
             Act::ChangePin => self.ask_pin(super::AfterPin::NewPin, cx),
             Act::Lock => self.lock(cx),
+            Act::Output(name) => {
+                if let Some(a) = &self.audio {
+                    let task = a.set_default_sink(&name);
+                    cx.spawn(move || {
+                        Msg::SoundDone("Couldn't change where sound comes out", task.wait().map_err(|e| e.to_string()))
+                    });
+                }
+            }
+            Act::Volume => self.step_volume(true, cx),
+            Act::Mute => {
+                if let Some(a) = &self.audio
+                    && let Some(d) = a.snapshot().default_output()
+                {
+                    let task = a.set_sink_mute(d.index, !d.muted);
+                    cx.spawn(move || {
+                        Msg::SoundDone("Couldn't mute it", task.wait().map(|_| ()).map_err(|e| e.to_string()))
+                    });
+                }
+            }
             Act::Leave => {
                 self.leave_grownups(cx);
                 self.shutdown();
@@ -1150,6 +1184,80 @@ impl Chanoma {
         }
         self.grownups.first = self.grownups_page().first;
         self.focus = self.grownups.focus();
+    }
+
+    // Sound: where it comes out, and how loud. Through the session's
+    // PipeWire (pipewire-pulse), as Settings' Sound has it; connected while
+    // the settings show, so nothing listens to the sound server during a
+    // game or a film.
+
+    /// Connect to the sound server, unless Chanoma plays without sound.
+    fn connect_sound(&mut self) {
+        if self.audio.is_some() || self.config.silent {
+            return;
+        }
+        let tx = self.sender.clone();
+        self.audio = Some(aizome_sys::audio::Audio::new(aizome_sys::Wake::new(move || {
+            if let Some(t) = &tx {
+                t.send(Msg::Sound);
+            }
+        })));
+    }
+
+    fn sound_rows(&self, rows: &mut Vec<(Row, Act)>) {
+        use aizome_sys::audio::{AudioDevice, bus_words, device_name};
+        let state = self.audio.as_ref().map(|a| a.snapshot());
+        let Some(state) = state.filter(|s| s.available) else {
+            let why =
+                if self.config.silent { "Chanoma was started without sound" } else { "Waiting for the sound server" };
+            rows.push((Row::new("Sound", Value::Note("Not connected".into())).detail(why), Act::None));
+            return;
+        };
+        let outputs: Vec<&AudioDevice> = state.sinks.iter().filter(|d| !d.is_monitor).collect();
+        rows.push((Row::heading("Sound comes out of"), Act::None));
+        if outputs.is_empty() {
+            rows.push((
+                Row::new("Nothing to play sound through", Value::Note(String::new()))
+                    .detail("Is the TV on, and its cable in?"),
+                Act::None,
+            ));
+        }
+        for d in &outputs {
+            let mut parts: Vec<&str> = Vec::new();
+            let bus = bus_words(d);
+            if !bus.is_empty() {
+                parts.push(bus);
+            }
+            if !d.ports.is_empty() && d.ports.iter().all(|p| p.available == Some(false)) {
+                parts.push("Nothing plugged in");
+            }
+            rows.push((
+                Row::new(device_name(d, &outputs), Value::Picked(d.is_default)).detail(parts.join(" · ")),
+                Act::Output(d.name.clone()),
+            ));
+        }
+        if let Some(d) = state.default_output() {
+            rows.push((Row::heading("How loud"), Act::None));
+            rows.push((Row::new("Volume", Value::Choice(format!("{:.0}%", d.volume * 100.0))), Act::Volume));
+            rows.push((Row::new("Mute", Value::Switch(d.muted)), Act::Mute));
+        }
+    }
+
+    /// The output's volume a step up or down, up to its full volume.
+    fn step_volume(&mut self, up: bool, cx: &mut Cx<Msg>) {
+        let Some(a) = &self.audio else { return };
+        let Some(d) = a.snapshot().default_output().cloned() else { return };
+        let step = if up { VOLUME_STEP } else { -VOLUME_STEP };
+        let v = ((d.volume + step) / VOLUME_STEP).round() * VOLUME_STEP;
+        let task = a.set_sink_volume(d.index, v.clamp(0.0, 1.0));
+        cx.spawn(move || Msg::SoundDone("Couldn't change the volume", task.wait().map_err(|e| e.to_string())));
+    }
+
+    pub fn sound_done(&mut self, what: &'static str, result: Result<(), String>, cx: &mut Cx<Msg>) {
+        if let Err(e) = result {
+            log::warn!("chanoma: {what}: {e}");
+            self.toast(what, cx);
+        }
     }
 
     /// Games' and Films' way to the folders: which, and adding one.

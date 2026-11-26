@@ -620,6 +620,21 @@ in
       wantedBy = [ "paths.target" ];
       pathConfig.PathChanged = "/var/lib/aizome/tv-account.toml";
     };
+    # The TV account uses the displays and the sound output of the account
+    # that changed them last (`aizome-tv-account follow`): its own systemd
+    # waits for it, so its compositor and WirePlumber start with them. Run
+    # for every account's systemd, it changes nothing unless the account is
+    # the TV account. Sound chosen in Chanoma's Settings since stays.
+    systemd.services."aizome-tv-follow@" = lib.mkIf cfg.chanoma.enable {
+      description = "The TV account following the displays and sound chosen last, for user %i";
+      before = [ "user@%i.service" ];
+      serviceConfig = {
+        Type = "oneshot";
+        ExecStart = "${cfg.package}/libexec/aizome-tv-account follow %i";
+      };
+    };
+    systemd.services."user@".wants = lib.mkIf cfg.chanoma.enable [ "aizome-tv-follow@%i.service" ];
+    systemd.services."user@".after = lib.mkIf cfg.chanoma.enable [ "aizome-tv-follow@%i.service" ];
     # A television: Chanoma with every session, and again after a crash.
     # Leaving it with the PIN ends it for the session.
     systemd.user.services.aizome-chanoma = lib.mkIf (cfg.chanoma.enable && cfg.chanoma.autostart) {

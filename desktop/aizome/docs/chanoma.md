@@ -1099,6 +1099,20 @@ controller: X takes a letter back, Y types a space); Start or Back puts
 the keyboard away to go through them, up from their first line brings
 it back, and Back from them goes back where search was opened.
 
+### Sound
+
+*Settings › Sound* chooses where sound comes out and how loud, as
+Settings' Sound does on the desktop: every output the session's PipeWire
+has (through pipewire-pulse, `aizome_sys::audio`), named as people say
+them (a TV over HDMI by its own name), with a check on the one in use;
+the confirm button uses another. Volume steps by 5% up to full with left
+and right, and Mute switches. WirePlumber keeps the choice for the
+account, as for any. Chanoma connects to the sound server while the
+settings show and lets it go as they're left, so nothing follows the
+sound server during a game or a film; started `--silent`, the section
+says so. Inputs, each app's volume and the alert sound stay the
+desktop's.
+
 ### The TV account
 
 A grown-up can give the television an account of its own (Settings,
@@ -1141,6 +1155,24 @@ Nothing in the session asks it for anything (the browser's sign-ins,
 under Services), so it keeps nothing: after the session the account's
 home has no keyring in it, which the TV VM check looks for, and which an
 installed system showed on 2026-11-23.
+
+The account uses the displays and the sound output of whichever account
+changed them last, so a grown-up who sets up the television in their own
+account (Settings' Displays and Sound) has set it up for the TV account
+too. Before the account's own systemd starts, systemd runs
+`aizome-tv-account follow UID` as root (`aizome-tv-follow@UID`, which
+every account's `user@UID` waits for; for any other account it does
+nothing). Its displays become the `outputs` of the account whose
+`settings.toml` changed last among those that have any; the rest of its
+own settings stay. Its sound becomes WirePlumber's choices
+(`~/.local/state/wireplumber`: `default-nodes`, `default-profile`,
+`default-routes`, each kept with its date) of the account that changed
+its own last, unless the TV account's changed since (in Chanoma's
+Sound). Each app's volume stays its own. The helper reads each account's
+files and writes the TV account's with that account's own file-system
+identity, never through a link. A TV account still logged in (its
+systemd still running, as for a few seconds after logging out) follows
+at its next login.
 
 The drives the account opens every other account may read, but not
 change (`programs.aizome.chanoma.shareTvDrives`, on unless turned off).

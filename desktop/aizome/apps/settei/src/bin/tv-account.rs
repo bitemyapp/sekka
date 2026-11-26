@@ -17,6 +17,10 @@
 //!   TV account, and gone while there's none. systemd runs it, at boot and
 //!   whenever the record changes, where the drives are shared
 //!   (`programs.aizome.chanoma.shareTvDrives`); Settings doesn't.
+//! - `follow UID`: as the account with that user id starts, if it's the TV
+//!   account, have it use the displays and the sound output of the account
+//!   that changed them last. systemd runs it before the account's own
+//!   systemd (`programs.aizome.chanoma.enable`); Settings doesn't.
 //!
 //! It runs only what's named here, found in the system's own folders, and
 //! keeps the account's record at `/var/lib/aizome/tv-account.toml`.
@@ -58,8 +62,9 @@ fn main() {
         ["remove", "--files"] => remove(true),
         ["forget-chanoma-pin"] => forget_chanoma_pin(),
         ["share-drives"] => share_drives(Path::new(MEDIA)),
+        ["follow", uid] => follow(uid),
         _ => {
-            Err("usage: aizome-tv-account set none|pin|password | remove [--files] | forget-chanoma-pin | share-drives"
+            Err("usage: aizome-tv-account set none|pin|password | remove [--files] | forget-chanoma-pin | share-drives | follow UID"
                 .into())
         }
     };
@@ -245,6 +250,182 @@ fn forget_chanoma_pin() -> Result<(), String> {
     run(Command::new(tool("runuser")?).args(["-u", &record.user, "--"]).arg(tool("aizome-chanoma")?).arg("--reset-pin"))
 }
 
+// The TV account following another's displays and sound.
+
+/// An account in /etc/passwd.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct Account {
+    name: String,
+    uid: u32,
+    gid: u32,
+    home: PathBuf,
+}
+
+/// The people's accounts in `passwd` (user ids 1000 to 59999, as
+/// useradd gives them).
+fn accounts(passwd: &str) -> Vec<Account> {
+    passwd
+        .lines()
+        .filter_map(|l| {
+            let f: Vec<&str> = l.split(':').collect();
+            let (uid, gid) = (f.get(2)?.parse::<u32>().ok()?, f.get(3)?.parse::<u32>().ok()?);
+            ((1000..60000).contains(&uid) && !f.get(5)?.is_empty()).then(|| Account {
+                name: f[0].to_owned(),
+                uid,
+                gid,
+                home: PathBuf::from(f[5]),
+            })
+        })
+        .collect()
+}
+
+/// `work` done with `a`'s file-system identity: what it opens, it opens as
+/// the account would, so a link it made leads nowhere it couldn't go
+/// itself, and what it makes is its own.
+fn as_account<T>(a: &Account, work: impl FnOnce() -> T) -> T {
+    // SAFETY: setfsuid and setfsgid take any id and change only this
+    // thread's file-system identity (this helper has one thread).
+    unsafe {
+        libc::setfsgid(a.gid);
+        libc::setfsuid(a.uid);
+    }
+    let out = work();
+    // SAFETY: as above; back to root's (a no-op where it isn't root).
+    unsafe {
+        libc::setfsuid(0);
+        libc::setfsgid(0);
+    }
+    out
+}
+
+/// A file read as it is: a regular file, never through a link, and not a
+/// large one.
+fn read_plain(path: &Path) -> Option<(Vec<u8>, std::time::SystemTime)> {
+    let file = File::options().read(true).custom_flags(libc::O_NOFOLLOW).open(path).ok()?;
+    let meta = file.metadata().ok()?;
+    if !meta.is_file() || meta.len() > 1 << 20 {
+        return None;
+    }
+    let mut bytes = Vec::new();
+    file.take(1 << 20).read_to_end(&mut bytes).ok()?;
+    Some((bytes, meta.modified().ok()?))
+}
+
+/// When the file was changed, if it's a regular file.
+fn changed(path: &Path) -> Option<std::time::SystemTime> {
+    let meta = std::fs::symlink_metadata(path).ok()?;
+    meta.is_file().then(|| meta.modified().ok()).flatten()
+}
+
+/// `bytes` written to `path` in place of what's there (its folders made),
+/// dated `when` if given.
+fn write_plain(path: &Path, bytes: &[u8], when: Option<std::time::SystemTime>) -> Result<(), String> {
+    use std::os::unix::fs::DirBuilderExt;
+    let err = |e: std::io::Error| format!("{}: {e}", path.display());
+    let dir = path.parent().ok_or("no folder")?;
+    std::fs::DirBuilder::new().recursive(true).mode(0o700).create(dir).map_err(err)?;
+    let tmp = dir.join(format!(".{}.aizome-tv", path.file_name().and_then(|n| n.to_str()).unwrap_or("file")));
+    let _ = std::fs::remove_file(&tmp);
+    let mut f = File::options()
+        .write(true)
+        .create_new(true)
+        .mode(0o644)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(&tmp)
+        .map_err(err)?;
+    f.write_all(bytes).map_err(err)?;
+    if let Some(t) = when {
+        f.set_modified(t).map_err(err)?;
+    }
+    drop(f);
+    std::fs::rename(&tmp, path).map_err(err)
+}
+
+/// Where WirePlumber keeps an account's sound settings, and the files of
+/// them: the output and input chosen, each sound card's profile, each
+/// device's port and volume. Not each app's volume.
+const SOUND_DIR: &str = ".local/state/wireplumber";
+const SOUND_FILES: [&str; 3] = ["default-nodes", "default-profile", "default-routes"];
+/// An account's Aizome settings, whose `outputs` are its displays'.
+const SETTINGS: &str = ".config/aizome/settings.toml";
+
+/// `follow UID`: as the account of that user id starts (systemd runs this
+/// before its own systemd), if it's the TV account: its sound settings
+/// become those of the account that changed its own last, if that was
+/// after the TV account's own changed (in Chanoma's Sound); and its
+/// displays those of the account whose settings changed last. Nothing of
+/// any other account changes.
+fn follow(uid: &str) -> Result<(), String> {
+    let Some(record) = TvAccount::read() else { return Ok(()) };
+    let passwd = std::fs::read_to_string("/etc/passwd").map_err(|e| format!("/etc/passwd: {e}"))?;
+    let all = accounts(&passwd);
+    let Some(tv) = all.iter().find(|a| a.name == record.user) else { return Ok(()) };
+    if uid.parse::<u32>().ok() != Some(tv.uid) {
+        return Ok(());
+    }
+    // Nothing of root's own groups.
+    // SAFETY: setgroups with no groups; this helper has one thread.
+    unsafe { libc::setgroups(0, std::ptr::null()) };
+    let others: Vec<&Account> = all.iter().filter(|a| a.uid != tv.uid).collect();
+    let sound = follow_sound(tv, &others);
+    let displays = follow_displays(tv, &others);
+    sound.and(displays)
+}
+
+/// The newest change to any of an account's sound files.
+fn sound_changed(a: &Account) -> Option<std::time::SystemTime> {
+    as_account(a, || SOUND_FILES.iter().filter_map(|f| changed(&a.home.join(SOUND_DIR).join(f))).max())
+}
+
+fn follow_sound(tv: &Account, others: &[&Account]) -> Result<(), String> {
+    let Some((from, when)) = others.iter().filter_map(|a| Some((*a, sound_changed(a)?))).max_by_key(|(_, t)| *t) else {
+        return Ok(());
+    };
+    if sound_changed(tv).is_some_and(|own| own >= when) {
+        return Ok(());
+    }
+    for name in SOUND_FILES {
+        let read = as_account(from, || read_plain(&from.home.join(SOUND_DIR).join(name)));
+        let to = tv.home.join(SOUND_DIR).join(name);
+        as_account(tv, || match read {
+            // Its date kept: the TV account's is as new as it, no newer.
+            Some((bytes, t)) => write_plain(&to, &bytes, Some(t)),
+            None => match std::fs::remove_file(&to) {
+                Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(format!("{}: {e}", to.display())),
+                _ => Ok(()),
+            },
+        })?;
+    }
+    eprintln!("aizome-tv-account: {} follows the sound {} chose", tv.name, from.name);
+    Ok(())
+}
+
+/// An account's settings, if it has any.
+fn settings_of(a: &Account) -> Option<(toml::Table, std::time::SystemTime)> {
+    let (bytes, t) = as_account(a, || read_plain(&a.home.join(SETTINGS)))?;
+    Some((std::str::from_utf8(&bytes).ok()?.parse::<toml::Table>().ok()?, t))
+}
+
+fn follow_displays(tv: &Account, others: &[&Account]) -> Result<(), String> {
+    let newest = others
+        .iter()
+        .filter_map(|a| {
+            let (table, t) = settings_of(a)?;
+            let outputs = table.get("outputs")?.as_array().filter(|o| !o.is_empty())?.clone();
+            Some((*a, outputs, t))
+        })
+        .max_by_key(|(_, _, t)| *t);
+    let Some((from, outputs, _)) = newest else { return Ok(()) };
+    let mut own = settings_of(tv).map(|(t, _)| t).unwrap_or_default();
+    if own.get("outputs").and_then(|o| o.as_array()) == Some(&outputs) {
+        return Ok(());
+    }
+    own.insert("outputs".into(), toml::Value::Array(outputs));
+    let text = toml::to_string(&own).map_err(|e| e.to_string())?;
+    as_account(tv, || write_plain(&tv.home.join(SETTINGS), text.as_bytes(), None))?;
+    eprintln!("aizome-tv-account: {} follows the displays {} set up", tv.name, from.name);
+    Ok(())
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -275,6 +456,59 @@ mod tests {
         std::fs::remove_dir_all(&media).unwrap();
     }
 
+    #[test]
+    fn the_tv_account_follows_the_displays_and_sound_chosen_last() {
+        use std::time::{Duration, SystemTime};
+        let root = std::env::temp_dir().join(format!("tv-account-follow-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        // SAFETY: getuid and getgid have no preconditions.
+        let (uid, gid) = unsafe { (libc::getuid(), libc::getgid()) };
+        let account = |name: &str| Account { name: name.into(), uid, gid, home: root.join(name) };
+        let (tv, alice, bob) = (account("tv"), account("alice"), account("bob"));
+        let at = |secs: u64| Some(SystemTime::UNIX_EPOCH + Duration::from_secs(1_800_000_000 + secs));
+        let sound = |a: &Account, name: &str| a.home.join(SOUND_DIR).join(name);
+        write_plain(&sound(&alice, "default-nodes"), b"[default-nodes]\nsink=analog\n", at(10)).unwrap();
+        write_plain(&sound(&bob, "default-nodes"), b"[default-nodes]\nsink=hdmi\n", at(20)).unwrap();
+        write_plain(&sound(&bob, "default-profile"), b"[default-profile]\n", at(5)).unwrap();
+        write_plain(&sound(&tv, "default-routes"), b"[default-routes]\n", at(1)).unwrap();
+        let settings = |outputs: &str| format!("[appearance]\ntheme = \"night\"\n{outputs}");
+        let tv_output = "[[outputs]]\nmake = \"GSM\"\nmodel = \"LG TV SSCR2\"\nscale = 2.0\n";
+        write_plain(&alice.home.join(SETTINGS), settings(tv_output).as_bytes(), at(30)).unwrap();
+        write_plain(&bob.home.join(SETTINGS), settings("").as_bytes(), at(40)).unwrap();
+        write_plain(&tv.home.join(SETTINGS), b"[appearance]\ntheme = \"day\"\n", at(0)).unwrap();
+
+        follow_sound(&tv, &[&alice, &bob]).unwrap();
+        follow_displays(&tv, &[&alice, &bob]).unwrap();
+        // Bob's sound, changed last; its files alone, dated as his.
+        assert_eq!(std::fs::read(sound(&tv, "default-nodes")).unwrap(), b"[default-nodes]\nsink=hdmi\n");
+        assert!(sound(&tv, "default-profile").exists() && !sound(&tv, "default-routes").exists());
+        assert_eq!(changed(&sound(&tv, "default-nodes")), at(20));
+        // Alice's displays: Bob's settings are newer but set none up. The
+        // TV account's own settings stay.
+        let own: toml::Table = std::fs::read_to_string(tv.home.join(SETTINGS)).unwrap().parse().unwrap();
+        assert_eq!(own["appearance"]["theme"].as_str(), Some("day"));
+        assert_eq!(own["outputs"][0]["model"].as_str(), Some("LG TV SSCR2"));
+
+        // Chosen in Chanoma since: the TV account's own stays.
+        write_plain(&sound(&tv, "default-nodes"), b"[default-nodes]\nsink=usb\n", at(50)).unwrap();
+        follow_sound(&tv, &[&alice, &bob]).unwrap();
+        assert_eq!(std::fs::read(sound(&tv, "default-nodes")).unwrap(), b"[default-nodes]\nsink=usb\n");
+        // A link in an account's files is never followed.
+        std::fs::remove_file(sound(&bob, "default-nodes")).unwrap();
+        std::os::unix::fs::symlink("/etc/passwd", sound(&bob, "default-nodes")).unwrap();
+        write_plain(&sound(&bob, "default-profile"), b"[default-profile]\n", at(60)).unwrap();
+        follow_sound(&tv, &[&alice, &bob]).unwrap();
+        assert!(!sound(&tv, "default-nodes").exists());
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn the_accounts_are_the_peoples() {
+        let passwd = "root:x:0:0::/root:/bin/sh\nalice:x:1000:100:Alice:/home/alice:/bin/sh\n\
+                      tv:x:1001:1001:TV:/home/tv:/sbin/nologin\nnobody:x:65534:65534::/var/empty:/bin/false\n";
+        let names: Vec<String> = accounts(passwd).into_iter().map(|a| a.name).collect();
+        assert_eq!(names, ["alice", "tv"]);
+    }
     #[test]
     fn the_group_left_by_the_removed_account_is_nobodys() {
         let passwd = "root:x:0:0::/root:/bin/sh\nalice:x:1000:100:Alice:/home/alice:/bin/sh\n";
