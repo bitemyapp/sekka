@@ -1014,7 +1014,8 @@ in
     # (xpadneo's troubleshooting notes; SteamOS ships it on). Devices
     # paired over LE while it was off never got the key, though, and some
     # then stop reconnecting until they're paired again. So it's on unless
-    # devices were paired over LE while it was off, and Settings ›
+    # a device paired over LE may not have the key (prepare keeps which
+    # have it in /var/lib/aizome/bluetooth-pairings.toml), and Settings ›
     # Bluetooth turns it on or off, and restarts bluetoothd for it when the
     # person says so (NixOS doesn't restart bluetoothd on a switch).
     # aizome-sys's bluetooth::privacy says more. bluetoothd reads the

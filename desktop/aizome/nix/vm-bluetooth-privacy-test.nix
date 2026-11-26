@@ -33,6 +33,9 @@ pkgs.testers.runNixOSTest {
         }
       });
     '';
+    # The script restarts bluetoothd more often than systemd's start limit
+    # (five in ten seconds) allows.
+    systemd.services.bluetooth.startLimitIntervalSec = 0;
     boot.kernelModules = [ "hci_vhci" ];
     systemd.services.aizome-test-btvirt = {
       description = "Virtual Bluetooth controllers";
