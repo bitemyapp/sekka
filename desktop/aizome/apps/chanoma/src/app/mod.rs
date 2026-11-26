@@ -151,10 +151,10 @@ pub enum Msg {
     CueTick,
     /// The desktop's media controls (a media key) ask something of the film.
     Mpris(aizome_mpris::Action),
-    /// The sound server changed (the grown-ups' Sound section).
-    Sound,
-    /// What the sound server said to a change asked of it.
-    SoundDone(&'static str, Result<(), String>),
+    /// The sound server or BlueZ changed (the grown-ups' settings).
+    Services,
+    /// What the sound server or BlueZ said to a change asked of it.
+    ServiceDone(&'static str, Result<(), String>),
     Bluetooth(u64),
     /// BlueZ's answer to switching the pairing screen's adapter on.
     SwitchedOn(u64, Result<(), String>),
@@ -297,6 +297,8 @@ pub enum Removal {
     Folder(usize),
     /// A website added, by its place.
     Site(usize),
+    /// The Bluetooth controller being forgotten (`Chanoma::forget`).
+    Controller,
 }
 
 /// What the program runs with: real devices, or a test's stand-ins.
@@ -514,6 +516,13 @@ pub struct Chanoma {
     /// The sound server, for the grown-ups' Sound section: connected while
     /// the settings show.
     pub audio: Option<aizome_sys::audio::Audio>,
+    /// BlueZ, for the controllers paired: connected while the settings
+    /// show.
+    pub bt: Option<aizome_sys::bluetooth::Bluetooth>,
+    /// The Bluetooth controller asked about forgetting (its path, its name).
+    pub forget: Option<(String, String)>,
+    /// When the controllers were last asked to sit as players 1, 2, …
+    seat_asked: Option<Instant>,
     pairing_session: u64,
     /// Choosing a folder.
     pub picker: Option<picker::Picker>,
@@ -644,6 +653,9 @@ impl Chanoma {
             sender: None,
             pairing: None,
             audio: None,
+            bt: None,
+            forget: None,
+            seat_asked: None,
             pairing_session: 0,
             picker: None,
             search: None,
@@ -1039,6 +1051,12 @@ impl Chanoma {
                 let marks = self.home_marks();
                 self.controllers.retain(|p| p.id != id);
                 self.chords.forget(id);
+                // Its page goes with it.
+                if self.grownups.sub == Some(grownups::Sub::Pad(id)) && self.setup.is_none() {
+                    self.grownups.sub = None;
+                    self.grownups.row = self.grownups.back_to;
+                    self.grownups.first = 0;
+                }
                 if self.setup.as_ref().is_some_and(|s| s.pad == id) {
                     self.cancel_setup(cx);
                     self.toast_note(ui::Note::Controller, "Controller disconnected. Its layout was kept.", cx);
@@ -1053,6 +1071,13 @@ impl Chanoma {
                 if let Some(p) = self.controllers.iter_mut().find(|p| p.id == id) {
                     p.battery = battery;
                 }
+            }
+            PadEvent::Seated { id, slot } => {
+                if let Some(p) = self.controllers.iter_mut().find(|p| p.id == id) {
+                    p.slot = slot;
+                }
+                self.controllers.sort_by_key(|p| p.slot);
+                self.seat_asked = None;
             }
             PadEvent::Raw { id, input } => self.setup_raw(id, input, cx),
             PadEvent::Nav { id, dir, .. } => {
@@ -1272,8 +1297,14 @@ impl Chanoma {
                     .with_subtitle("Turn it on again to carry on")
             }
             // Keeping it comes first: a press too many keeps it.
+            MenuKind::Remove(Removal::Controller) => {
+                let name = self.forget.as_ref().map(|(_, n)| n.clone()).unwrap_or_default();
+                Menu::new(format!("Forget {name}?"), &["Keep it", "Forget it"])
+                    .with_subtitle("To use it again, pair it again")
+            }
             MenuKind::Remove(what) => {
                 let (name, note) = match what {
+                    Removal::Controller => (String::new(), ""),
                     Removal::Folder(i) => {
                         (self.settings.folders.get(i).map(|f| self.said(f).0).unwrap_or_default(), "Files stay put")
                     }
@@ -2419,8 +2450,8 @@ impl Chanoma {
             Msg::Film(e) => self.film_event(e, cx),
             Msg::CueTick => self.schedule_cues(cx),
             Msg::Mpris(a) => self.on_mpris(a, cx),
-            Msg::Sound => {}
-            Msg::SoundDone(what, result) => self.sound_done(what, result, cx),
+            Msg::Services => {}
+            Msg::ServiceDone(what, result) => self.service_done(what, result, cx),
             Msg::Bluetooth(session) => self.bluetooth_changed(session, cx),
             Msg::SwitchedOn(session, r) => self.switched_on(session, r),
             Msg::Searching(session, r) => self.searching(session, r),

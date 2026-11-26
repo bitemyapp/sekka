@@ -56,6 +56,12 @@ pub enum Do {
     Pair,
     /// A controller's buttons.
     SetUp,
+    /// A controller, rumbling.
+    Find,
+    /// Back as it was.
+    Reset,
+    /// A Bluetooth controller unpaired, after asking.
+    Forget,
     ChangePin,
     Lock,
     LogOut,
@@ -73,6 +79,9 @@ impl Do {
             Do::KeepFromKids => Icon::EyeOff,
             Do::Pair => Icon::Bluetooth,
             Do::SetUp => Icon::SlidersHorizontal,
+            Do::Find => Icon::LocateFixed,
+            Do::Reset => Icon::RotateCcw,
+            Do::Forget => Icon::Trash,
             Do::ChangePin => Icon::KeyRound,
             Do::Lock => Icon::Lock,
             Do::LogOut | Do::Leave => Icon::LogOut,
@@ -90,6 +99,9 @@ impl Do {
             Do::KeepFromKids => "Keep from kids",
             Do::Pair => "Pair",
             Do::SetUp => "Set up",
+            Do::Find => "Find",
+            Do::Reset => "Reset",
+            Do::Forget => "Forget",
             Do::ChangePin => "Change",
             Do::Lock => "Lock",
             Do::LogOut => "Log out",
@@ -102,7 +114,7 @@ impl Do {
     fn ink(self, theme: &Theme) -> aizome_kit::Color {
         match self {
             Do::Add | Do::Allow => theme.role(Role::Success),
-            Do::Remove => theme.role(Role::Danger),
+            Do::Remove | Do::Forget => theme.role(Role::Danger),
             _ => theme.text(),
         }
     }

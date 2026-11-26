@@ -330,6 +330,7 @@ fn harness(config: Config) -> Harness<Chanoma> {
         battery: Some((80, false)),
         source: aizome_chanoma::pad::mapping::Source::Database,
         rumble: true,
+        address: String::new(),
         buttons: aizome_chanoma::pad::Button::all_bits(),
     };
     h.send(Msg::Pad(PadEvent::Connected(pad)));
@@ -526,6 +527,7 @@ fn a_pin_is_the_same_presses_on_any_controller() {
         battery: None,
         source: aizome_chanoma::pad::mapping::Source::Database,
         rumble: false,
+        address: String::new(),
         buttons: aizome_chanoma::pad::Button::all_bits(),
     };
     h.send(Msg::Pad(PadEvent::Connected(switch)));
@@ -584,6 +586,7 @@ fn a_pad_without_triggers_presses_nine_and_zero_as_chords() {
         battery: None,
         source: aizome_chanoma::pad::mapping::Source::Database,
         rumble: false,
+        address: String::new(),
         buttons: snes.iter().fold(0, |b, x| b | x.bit()),
     };
     h.send(Msg::Pad(PadEvent::Connected(pad)));
@@ -1363,20 +1366,17 @@ fn incomplete_controller_setup_keeps_the_previous_layout() {
     let clock = ManualClock::at(2026, 10, 31, 17, 0);
     let mut h = harness(config(dirs.clone(), cores, clock));
     into_settings(&mut h);
-    to_section(&mut h, 5);
-    to_row(&mut h, "Player 1: Xbox Wireless Controller");
-    input(&mut h, Input::Ok);
-    assert_eq!(h.program().screen, Screen::SetUpPad);
-    for _ in 0..19 {
+    set_up_buttons(&mut h);
+    // Untouched: three steps go by, and it stops.
+    for _ in 0..3 {
         h.program_mut().setup.as_mut().unwrap().since = Instant::now() - Duration::from_secs(9);
         h.send(Msg::Tick);
     }
+    assert!(h.program().setup.is_none(), "untouched for three, it stops");
     assert_eq!(h.program().screen, Screen::GrownUps);
     assert_eq!(h.program().layouts, layouts);
     assert_eq!(load_layouts(&dirs), layouts);
-    to_section(&mut h, 5);
-    to_row(&mut h, "Player 1: Xbox Wireless Controller");
-    input(&mut h, Input::Ok);
+    set_up_buttons(&mut h);
     h.send(Msg::Pad(PadEvent::Disconnected { id: 1, slot: 0 }));
     assert_eq!(h.program().screen, Screen::GrownUps);
     assert!(h.program().setup.is_none());
@@ -2256,6 +2256,7 @@ fn games_say_what_the_databases_know_and_two_controllers_bring_their_games() {
         battery: Some((60, false)),
         source: aizome_chanoma::pad::mapping::Source::Database,
         rumble: true,
+        address: String::new(),
         buttons: aizome_chanoma::pad::Button::all_bits(),
     };
     h.send(Msg::Pad(PadEvent::Connected(second)));
@@ -3227,9 +3228,77 @@ fn left_alone_chanoma_shows_its_screensaver_and_the_press_that_ends_it_does_noth
         battery: Some((80, false)),
         source: aizome_chanoma::pad::mapping::Source::Database,
         rumble: true,
+        address: String::new(),
         buttons: aizome_chanoma::pad::Button::all_bits(),
     };
     h.send(Msg::Pad(PadEvent::Connected(pad)));
     assert!(h.program().saver.is_none(), "a controller switched on ends it");
     assert!(h.program().controllers.iter().any(|p| p.id == 2), "and is counted");
+}
+
+/// From the settings: the first controller's page, and Set up its buttons.
+fn set_up_buttons(h: &mut Harness<Chanoma>) {
+    to_section(h, 5);
+    to_row(h, "Player 1: Xbox Wireless Controller");
+    input(h, Input::Ok);
+    assert_eq!(h.program().grownups_page().title, "Controllers › Xbox Wireless Controller");
+    to_row(h, "Set up its buttons…");
+    input(h, Input::Ok);
+    assert_eq!(h.program().screen, Screen::SetUpPad);
+}
+
+#[test]
+fn a_controllers_page_has_its_player_and_setting_its_buttons_up_stops_however_asked() {
+    let (dirs, cores) = household("pad-page", |_| {});
+    let mut h = harness(config(dirs, cores, ManualClock::at(2026, 10, 31, 17, 0)));
+    let second = PadInfo {
+        id: 2,
+        slot: 1,
+        name: "Pro Controller".into(),
+        family: Family::Nintendo,
+        bluetooth: true,
+        guid: String::new(),
+        battery: Some((80, false)),
+        source: aizome_chanoma::pad::mapping::Source::Database,
+        rumble: true,
+        buttons: aizome_chanoma::pad::Button::all_bits(),
+        address: "E4:17:D8:8C:B6:D5".into(),
+    };
+    h.send(Msg::Pad(PadEvent::Connected(second)));
+    into_settings(&mut h);
+
+    // A controller's row opens its page; it doesn't start anything.
+    set_up_buttons(&mut h);
+    // Stopped by Esc (Back), a click on Stop, or another controller's Back:
+    // back on its page, its buttons as they were.
+    input(&mut h, Input::Back);
+    assert_eq!(h.program().screen, Screen::GrownUps);
+    assert_eq!(h.program().grownups_page().title, "Controllers › Xbox Wireless Controller");
+    to_row(&mut h, "Set up its buttons…");
+    input(&mut h, Input::Ok);
+    h.send(Msg::Click(aizome_chanoma::ui::Target::Item(1)));
+    assert_eq!(h.program().screen, Screen::GrownUps, "a click on Stop stops");
+    to_row(&mut h, "Set up its buttons…");
+    input(&mut h, Input::Ok);
+    // B on a Nintendo controller: Back.
+    press_on(&mut h, 2, Button::South);
+    assert_eq!(h.program().screen, Screen::GrownUps, "another controller's Back stops");
+    shot(&mut h, "61-controller-page");
+
+    // Its player, swapped with whoever was.
+    to_row(&mut h, "Plays as");
+    assert_eq!(row_on(&h).value, Value::Choice("Player 1".into()));
+    input(&mut h, Input::Dir(Dir::Right));
+    let players: Vec<(u32, usize)> = h.program().controllers.iter().map(|p| (p.id, p.slot)).collect();
+    assert_eq!(players, [(2, 0), (1, 1)]);
+    assert_eq!(row_on(&h).value, Value::Choice("Player 2".into()));
+
+    // Player 1 switched off: off a game, the other is player 1 at once.
+    h.send(Msg::Pad(PadEvent::Disconnected { id: 2, slot: 0 }));
+    h.send(Msg::Tick);
+    let players: Vec<(u32, usize)> = h.program().controllers.iter().map(|p| (p.id, p.slot)).collect();
+    assert_eq!(players, [(1, 0)]);
+    to_section(&mut h, 5);
+    to_row(&mut h, "Player 1: Xbox Wireless Controller");
+    shot(&mut h, "62-controllers");
 }

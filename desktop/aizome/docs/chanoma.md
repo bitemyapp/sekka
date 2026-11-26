@@ -226,7 +226,24 @@ act on presses Chanoma turns into keys. Devices are found with inotify on
 `/dev/input`, retried when logind's ACL arrives (`IN_ATTRIB`), and told
 apart from keyboards, touchpads and motion sensors by their capabilities.
 A controller that comes back (by its Bluetooth address or USB serial)
-keeps its player number.
+keeps its player number while its seat is free. Off a game the players
+close up: switch player 1's controller off and player 2's is player 1
+within a second (`seat_players`, the thread's `Pads::seat`); during a game
+nobody moves, so a controller dropping out doesn't swap the others.
+
+*Settings › Controllers* lists the players, each opening a page of its
+own (never anything more at a press): *Plays as* (left and right, swapping
+with whoever that player was), *Find it* (it rumbles), how it's connected
+and its battery, how its buttons are known (*Known*, *Set up here*, *As
+Linux says*), *Set up its buttons…*, *Back to its usual buttons* where
+they were set up here, and *Forget this controller* for a Bluetooth one
+(BlueZ's `RemoveDevice`, after asking). Below the players, Bluetooth
+controllers paired but not on now can be forgotten too. Setting buttons
+up asks for one at a time and always has a way out: Esc, a click on
+*Stop*, another controller's Back, or leaving it, since three steps in a
+row untouched end it with what was pressed (a pad with no sticks or
+triggers finishes that way too). Stopped with nothing pressed, its
+buttons stay as they were.
 
 *Pair a controller…* (`app/grownups.rs`) talks to BlueZ through
 `aizome-sys`, as Settings does. An adapter found off is switched on

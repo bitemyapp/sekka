@@ -143,6 +143,12 @@ impl Greeter {
                     p.battery = battery;
                 }
             }
+            PadEvent::Seated { id, slot } => {
+                if let Some(p) = self.couch.pads.iter_mut().find(|p| p.id == id) {
+                    p.slot = slot;
+                }
+                self.couch.pads.sort_by_key(|p| p.slot);
+            }
             PadEvent::Raw { .. } => {}
             PadEvent::Nav { id, dir, .. } => {
                 self.couch.in_hand = Some(id);
