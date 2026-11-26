@@ -589,10 +589,15 @@ in
     # (docs/chanoma.md, "Decided on purpose"), and Sekka's
     # nix/aizome-chanoma-defaults-test.nix fails without it. One system
     # sets either back with hardware.bluetooth.settings.General.
-    hardware.bluetooth.settings.General = lib.mkIf cfg.chanoma.enable {
-      FastConnectable = lib.mkDefault true;
-      JustWorksRepairing = lib.mkDefault "always";
-    };
+    hardware.bluetooth.settings.General = lib.mkMerge [
+      (lib.mkIf cfg.chanoma.enable {
+        FastConnectable = lib.mkDefault true;
+        JustWorksRepairing = lib.mkDefault "always";
+      })
+      # With or without Chanoma: Xbox controllers need LE privacy. Why is
+      # with hardware.bluetooth.settings.LE, by hardware.bluetooth.enable.
+      { Privacy = lib.mkDefault "device"; }
+    ];
     systemd.user.generators = lib.mkIf cfg.chanoma.enable { aizome-tv-units = tvUnits; };
     # The TV account's drives, for every account to read
     # (chanoma.shareTvDrives): UDisks keeps to a /run/media/USER that's
@@ -1004,6 +1009,24 @@ in
     # What Settings, the Deskbar's widgets and the apps talk to.
     networking.networkmanager.enable = lib.mkDefault true;
     hardware.bluetooth.enable = lib.mkDefault true;
+    # Xbox Series controllers (Bluetooth LE firmware 5.x) pair, connect and
+    # then keep blinking without sending input: after about two and a half
+    # minutes they drop the link and forget the key, and every reconnect is
+    # refused ("PIN or Key Missing"). xpadneo's troubleshooting notes trace
+    # it to BlueZ handing over the computer's identity key only with LE
+    # privacy on (General.Privacy, set with Chanoma's General settings),
+    # and fix it with that and these. SteamOS ships the same (Bazzite's
+    # deck images carry its main.conf), less the supervision timeout. The
+    # short connection interval is a controller's latency. The cost: the
+    # adapter advertises a resolvable random address, and xpadneo notes a
+    # few devices then won't pair. One system sets these back with
+    # hardware.bluetooth.settings.
+    hardware.bluetooth.settings.LE = {
+      MinConnectionInterval = lib.mkDefault 7;
+      MaxConnectionInterval = lib.mkDefault 9;
+      ConnectionLatency = lib.mkDefault 0;
+      ConnectionSupervisionTimeout = lib.mkDefault 200;
+    };
     services.upower.enable = lib.mkDefault true;
     services.power-profiles-daemon.enable = lib.mkDefault true;
     services.udisks2.enable = lib.mkDefault true;

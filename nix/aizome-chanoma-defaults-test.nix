@@ -4,8 +4,9 @@
 # unfree packages allowed and refused), the live media, and the installed
 # Aizome system the media carries. The installed system the binary cache
 # publishes allows only unfree packages anyone may redistribute: it has the
-# snes9x and Genesis Plus GX cores, and no Chrome. A configuration check: it
-# builds and runs nothing of Chanoma.
+# snes9x and Genesis Plus GX cores, and no Chrome. The Bluetooth settings
+# Xbox controllers need come with Aizome either way. A configuration check:
+# it builds and runs nothing of Chanoma.
 {
   pkgs,
   inputs,
@@ -55,6 +56,18 @@ let
       map lib.getName (packages config)
     );
   bluetooth = config: config.hardware.bluetooth.settings.General or { };
+  # What Xbox Series controllers need over Bluetooth LE, set by Aizome's
+  # module with or without Chanoma (its comment says why).
+  xboxReady =
+    config:
+    (bluetooth config).Privacy or null == "device"
+    &&
+      (config.hardware.bluetooth.settings.LE or { }) == {
+        MinConnectionInterval = 7;
+        MaxConnectionInterval = 9;
+        ConnectionLatency = 0;
+        ConnectionSupervisionTimeout = 200;
+      };
   # The two cores whose licences forbid selling them, which anyone may
   # redistribute.
   unfreeCores =
@@ -71,6 +84,7 @@ let
     browsers = browsers config;
     unfree = config.nixpkgs.config.allowUnfree;
     pairsAgain = (bluetooth config).JustWorksRepairing or null;
+    xbox = xboxReady config;
   };
 in
 # With Aizome, and with what its services and controllers need.
@@ -80,6 +94,9 @@ assert browsers on == [ "google-chrome" ];
 # decided on purpose (desktop/aizome/docs/chanoma.md, "Decided on
 # purpose"): a change that takes it out is not a fix, and fails here.
 assert (bluetooth on).JustWorksRepairing == "always" && (bluetooth on).FastConnectable;
+# Xbox controllers pair whether Chanoma comes or not, on the media too.
+assert xboxReady on && xboxReady off && xboxReady free;
+assert xboxReady installer.config && xboxReady media && xboxReady published;
 # The desktop entry uses the catalog's keyring wrapper. The TV keeps
 # its own browser profiles and receives the raw executable by store path.
 assert lib.all (p: toString p != toString on.programs.aizome.chanoma.browser) (packages on);
