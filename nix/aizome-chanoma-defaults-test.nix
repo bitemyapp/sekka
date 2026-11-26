@@ -55,6 +55,7 @@ let
       map lib.getName (packages config)
     );
   bluetooth = config: config.hardware.bluetooth.settings.General or { };
+  bondedOnly = config: (config.hardware.bluetooth.input.General or { }).ClassicBondedOnly or true;
   # The two cores whose licences forbid selling them, which anyone may
   # redistribute.
   unfreeCores =
@@ -80,6 +81,9 @@ assert browsers on == [ "google-chrome" ];
 # decided on purpose (desktop/aizome/docs/chanoma.md, "Decided on
 # purpose"): a change that takes it out is not a fix, and fails here.
 assert (bluetooth on).JustWorksRepairing == "always" && (bluetooth on).FastConnectable;
+# So does a controller that pairs without bonding (8BitDo's Switch-only
+# pads): decided on purpose too, and fails here if taken out.
+assert !(bondedOnly on);
 # The desktop entry uses the catalog's keyring wrapper. The TV keeps
 # its own browser profiles and receives the raw executable by store path.
 assert lib.all (p: toString p != toString on.programs.aizome.chanoma.browser) (packages on);
@@ -110,6 +114,7 @@ assert
 # Left out, all of it goes.
 assert !hasChanoma off && browsers off == [ ];
 assert !(bluetooth off ? JustWorksRepairing) && !(bluetooth off ? FastConnectable);
+assert bondedOnly off;
 assert off.services.openssh.settings.DenyUsers == null;
 assert builtins.elem "aizome-tv-kiosk" off.services.openssh.settings.DenyGroups;
 # The live media and the installed system it carries are as the module
@@ -118,6 +123,7 @@ assert installer.config.nixpkgs.config.allowUnfree && media.nixpkgs.config.allow
 assert hasChanoma installer.config && browsers installer.config == [ "google-chrome" ];
 assert hasChanoma media && browsers media == [ "google-chrome" ];
 assert (bluetooth media).JustWorksRepairing == "always" && (bluetooth media).FastConnectable;
+assert !(bondedOnly media);
 # The published system allows only redistributable unfree packages:
 # Chanoma with both cores, which no other cache has, and no Chrome.
 assert !published.nixpkgs.config.allowUnfree;

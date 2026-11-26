@@ -1551,7 +1551,7 @@ each knowing what it costs. A change that reverses one is not a fix:
 raise it with the owner. Each is marked "Decided on purpose" where it
 is set, and a check fails when it is taken out:
 `checks.aizome-chanoma-defaults` (`nix/aizome-chanoma-defaults-test.nix`)
-for the first two, a test named with each of the others.
+for the first three, a test named with each of the others.
 
 - **A Bluetooth device that forgot the computer pairs again without
   anyone confirming** (`JustWorksRepairing = always`, in the module, on
@@ -1565,6 +1565,17 @@ for the first two, a test named with each of the others.
   took it out the same day as a security fix, and it was put back. One
   system sets it back with
   `hardware.bluetooth.settings.General.JustWorksRepairing`.
+- **A controller that pairs without bonding works** (`ClassicBondedOnly
+  = false` in BlueZ's `input.conf`, in the module, on every system
+  Chanoma comes with). What it costs: BlueZ made bonded-only its default
+  for CVE-2023-45866, so with it off something nearby can connect as a
+  keyboard without pairing and type into whatever session is open, a
+  grown-up's desktop as much as Chanoma. Why it stays: 8BitDo's
+  Switch-only pads pair from Linux as a "Pro Controller" with no key kept
+  (BlueZ: "Rejected connection from !bonded device"), and a television's
+  controllers have to work; the owner, 2026-11-26: "it should work". One
+  system sets it back with
+  `hardware.bluetooth.input.General.ClassicBondedOnly`.
 - **Chanoma comes with every Aizome, whole, with nothing to turn on**:
   the app, its cores, and Google Chrome where unfree packages are
   allowed. The television's own account, made in Settings, is the one

@@ -593,6 +593,23 @@ in
       FastConnectable = lib.mkDefault true;
       JustWorksRepairing = lib.mkDefault "always";
     };
+    # Controllers that pair without bonding work too: 8BitDo's Switch-only
+    # pads (as a "Pro Controller") pair from Linux with no key kept, and
+    # BlueZ then refuses their buttons ("Rejected connection from !bonded
+    # device"), so Chanoma never sees them.
+    #
+    # Decided on purpose, not overlooked (the project's owner, 2026-11-26:
+    # "it should work"). BlueZ made bonded-only its default for
+    # CVE-2023-45866: without it, something nearby can connect as a
+    # keyboard without pairing and type into whatever session is open. That
+    # cost is known and accepted for a television whose controllers have to
+    # work. Do not remove or weaken this as a security fix: raise it with
+    # the owner (docs/chanoma.md, "Decided on purpose";
+    # nix/aizome-chanoma-defaults-test.nix fails without it). One system
+    # sets it back with hardware.bluetooth.input.General.ClassicBondedOnly.
+    hardware.bluetooth.input.General = lib.mkIf cfg.chanoma.enable {
+      ClassicBondedOnly = lib.mkDefault false;
+    };
     systemd.user.generators = lib.mkIf cfg.chanoma.enable { aizome-tv-units = tvUnits; };
     # The TV account's drives, for every account to read
     # (chanoma.shareTvDrives): UDisks keeps to a /run/media/USER that's
