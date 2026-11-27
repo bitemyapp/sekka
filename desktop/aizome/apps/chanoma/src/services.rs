@@ -19,6 +19,22 @@ pub enum Drive {
     Pointer,
 }
 
+/// What a service that needs an account and isn't made for kids has for
+/// them. The Watch settings say it under the service's name, so a
+/// grown-up knows what to set up before turning it on, or that there's
+/// nothing to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum ForKids {
+    /// A kids' profile, chosen in the account.
+    Profile,
+    /// A filter by rating in its own settings, which holds only where it
+    /// was set: YouTube TV's is for each account on each device.
+    Filter,
+    /// Nothing: its profiles keep each person's own channels and
+    /// recordings, and show everyone the same (Fubo's).
+    Nothing,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Service {
     pub id: &'static str,
@@ -36,6 +52,9 @@ pub struct Service {
     pub kids: bool,
     /// Needs an account.
     pub account: bool,
+    /// What it has for kids, read where it needs an account and isn't
+    /// made for them.
+    pub for_kids: ForKids,
     /// Protects its shows (Widevine), which only Google Chrome plays here.
     pub drm: bool,
     pub drive: Drive,
@@ -61,6 +80,10 @@ const fn service(id: &'static str, name: &'static str, url: &'static str, color:
         ink,
         kids: false,
         account: true,
+        // What the Watch settings have said of every such service since
+        // Chanoma's first. Only YouTube TV's and Fubo's, below, were read
+        // from the provider's own help (2026-11-25).
+        for_kids: ForKids::Profile,
         // The paid services do, and Plex's and Kanopy's free films;
         // PBS KIDS and YouTube don't, below.
         drm: true,
@@ -109,6 +132,17 @@ pub const CATALOG: &[Service] = &[
     service("apple-tv", "Apple TV", "https://tv.apple.com", 0x000000, 0xffffff),
     service("paramount-plus", "Paramount+", "https://www.paramountplus.com", 0x0064ff, 0xffffff),
     service("peacock", "Peacock", "https://www.peacocktv.com/watch/home", 0x000000, 0xffffff),
+    // Live television. YouTube TV is a page for a pointer, at an address
+    // of its own: its site is `tv.youtube.com`, not the rest of YouTube.
+    // It has no kids' profile: its Settings › Filter shows only what's
+    // rated for an age or younger, set for each account on each device.
+    Service {
+        for_kids: ForKids::Filter,
+        ..service("youtube-tv", "YouTube TV", "https://tv.youtube.com", 0xffffff, 0xff0033)
+    },
+    // Signed out, Fubo's home is its sign-in. Its profiles are each
+    // person's favourite channels, series and recordings, no more.
+    Service { for_kids: ForKids::Nothing, ..service("fubo", "Fubo", "https://www.fubo.tv/home", 0x16161a, 0xfa4616) },
     service("crunchyroll", "Crunchyroll", "https://www.crunchyroll.com", 0xf47521, 0xffffff),
     Service { kids: true, ..service("kanopy-kids", "Kanopy Kids", "https://www.kanopy.com/kids", 0x6a3fd8, 0xffffff) },
     service("plex", "Plex", "https://app.plex.tv", 0x1f2326, 0xe5a00d),
@@ -255,6 +289,44 @@ mod tests {
         assert_eq!(host("https://kid@Example.COM.:8443/x?y#z").as_deref(), Some("example.com"));
         assert_eq!(host("http://[::1]:8000/").as_deref(), Some("::1"));
         assert_eq!(host("ftp://example.com/"), None);
+    }
+
+    #[test]
+    fn live_television_stays_on_its_own_site() {
+        // YouTube TV is at a subdomain of YouTube's, and its site is that
+        // subdomain: the rest of YouTube, and of Google, is outside.
+        let tv = by_id("youtube-tv").unwrap();
+        assert!(tv.account && tv.drm && !tv.kids && !tv.tv_agent);
+        let s = Sites::of(tv);
+        assert_eq!(s.to_string(), "tv.youtube.com");
+        assert!(s.allows("https://tv.youtube.com/welcome/"));
+        assert!(s.allows("https://tv.youtube.com/watch/x"));
+        for url in [
+            "https://www.youtube.com/watch?v=x",
+            "https://m.youtube.com/",
+            "https://youtube.com/",
+            "https://accounts.google.com/AccountChooser?service=youtube",
+            "https://nottv.youtube.com/",
+            "https://tv.youtube.com.example.net/",
+        ] {
+            assert!(!s.allows(url), "{url}");
+        }
+        // It and YouTube are told apart by more than a letter.
+        let youtube = by_id("youtube").unwrap();
+        assert_ne!((tv.color, tv.ink), (youtube.color, youtube.ink));
+        assert_ne!(tv.short, youtube.short);
+
+        let fubo = by_id("fubo").unwrap();
+        assert!(fubo.account && fubo.drm && !fubo.kids);
+        let s = Sites::of(fubo);
+        assert_eq!(s.to_string(), "fubo.tv");
+        assert!(s.allows("https://www.fubo.tv/signin"));
+        assert!(s.allows("https://fubo.tv/"));
+        assert!(!s.allows("https://fubo.tv.example.net/"));
+
+        // Neither has a kids' profile for a grown-up to choose, and the
+        // Watch settings mustn't say one does.
+        assert_eq!((tv.for_kids, fubo.for_kids), (ForKids::Filter, ForKids::Nothing));
     }
 
     #[test]

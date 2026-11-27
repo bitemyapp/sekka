@@ -2059,6 +2059,18 @@ fn every_settings_row_says_what_pressing_it_does() {
     assert_eq!(ok_hint(&h), None, "a note does nothing");
     shot(&mut h, "34-rows-time");
 
+    // Watch: a service that needs an account says what it has for kids.
+    // Live television has no kids' profile to choose, so it doesn't say
+    // to choose one.
+    to_section(&mut h, 1);
+    to_row(&mut h, "Peacock");
+    assert_eq!(row_on(&h).detail, "Needs an account; choose a kids' profile in it");
+    to_row(&mut h, "YouTube TV");
+    assert_eq!(row_on(&h).detail, "Needs an account; set its ratings filter in it, on this computer");
+    to_row(&mut h, "Fubo");
+    assert_eq!(row_on(&h).detail, "Needs an account; has no kids' profile, so kids see all of it");
+    shot(&mut h, "34-rows-watch");
+
     // Games: a page opened with right, the way its chevron points, and
     // left back to its row.
     to_section(&mut h, 2);
