@@ -71,7 +71,22 @@ fn announce(mut stream: UnixStream, timeout: Duration) -> io::Result<UnixStream>
     stream.set_write_timeout(Some(timeout))?;
     stream.write_all(b"{\"request\":\"native-command-keys\"}\n")?;
     let mut reply = Vec::new();
-    BufReader::new(&stream).take(1024).read_until(b'\n', &mut reply)?;
+    match BufReader::new(&stream).take(1024).read_until(b'\n', &mut reply) {
+        // A compositor busy past the timeout (apps started at login, a
+        // mode set) still has the request, and takes it when it catches
+        // up. It registers this connection then and decides translation
+        // at each key, so the app's ❖ shortcuts work from that moment. The
+        // connection is kept for that: dropped, it would reach the
+        // compositor as the request and its end together, and nothing
+        // would ever register the app.
+        Err(e) if matches!(e.kind(), io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut) => {
+            log::debug!("native command-key announcement unanswered after {timeout:?}; kept for the compositor");
+            return Ok(stream);
+        }
+        result => {
+            result?;
+        }
+    }
     if reply.last() != Some(&b'\n') {
         return Err(io::Error::new(io::ErrorKind::InvalidData, "incomplete compositor reply"));
     }
@@ -173,11 +188,40 @@ mod tests {
     }
 
     #[test]
-    fn older_or_unresponsive_compositors_do_not_hold_up_startup() {
-        for reply in [b"{\"response\":\"error\",\"message\":\"unknown request\"}\n".as_slice(), b"not JSON\n", b""] {
+    fn older_compositors_do_not_hold_up_startup() {
+        for reply in [b"{\"response\":\"error\",\"message\":\"unknown request\"}\n".as_slice(), b"not JSON\n"] {
             let (client, mut server) = UnixStream::pair().unwrap();
             server.write_all(reply).unwrap();
             assert!(announce(client, Duration::from_millis(20)).is_err());
+        }
+        // One that ends the connection without an answer.
+        let (client, server) = UnixStream::pair().unwrap();
+        drop(server);
+        assert!(announce(client, Duration::from_millis(20)).is_err());
+    }
+
+    #[test]
+    fn a_compositor_slow_to_answer_still_gets_the_request_and_keeps_the_connection() {
+        let (client, server) = UnixStream::pair().unwrap();
+        let started = std::time::Instant::now();
+        let connection = announce(client, Duration::from_millis(20)).expect("kept while the compositor is busy");
+        assert!(started.elapsed() < Duration::from_secs(1), "startup waits only for the timeout");
+        // The compositor catches up: the request is there to read, and the
+        // connection it registers stays open until the app finishes.
+        let mut request = String::new();
+        BufReader::new(&server).read_line(&mut request).unwrap();
+        assert_eq!(request, "{\"request\":\"native-command-keys\"}\n");
+        (&server).write_all(b"{\"response\":\"ok\"}\n").unwrap();
+        server.set_nonblocking(true).unwrap();
+        assert_eq!((&server).read(&mut [0]).unwrap_err().kind(), io::ErrorKind::WouldBlock);
+        drop(connection);
+        // The app's end reaches the compositor, which forgets the
+        // registration on a read error as on an end. With the late answer
+        // still unread on the app's side, Linux reports a reset.
+        match (&server).read(&mut [0]) {
+            Ok(0) => {}
+            Err(e) if e.kind() == io::ErrorKind::ConnectionReset => {}
+            other => panic!("the connection must end with the app: {other:?}"),
         }
     }
 }
