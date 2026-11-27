@@ -12,35 +12,31 @@
 #              and one that carries both
 #
 # The VPN profiles are wg-quick files imported with nmcli, as Settings and
-# Network import them. The test checks that sekka-vpn-guard, run by
-# NetworkManager's dispatcher,
+# Network import them. Sekka's NetworkManager adds, for the family a full
+# tunnel does not carry, its own auto-default-route rule pair with
+# "unreachable" in place of the tunnel's table. The test checks that it
 #
 # - blocks IPv6 while the IPv4-only tunnel is up and IPv4 while the IPv6-only
-#   one is, from the tunnel's pre-up, before NetworkManager reports it up,
-#   and at once rather than after a timeout, so that a site with both kinds
-#   of address is reached through the tunnel without a wait;
-# - preserves private and link-local access and permits a public LAN address
-#   only when the configuration explicitly trusts it;
+#   one is, as soon as `nmcli connection up` returns, with ENETUNREACH, so
+#   that address selection puts the blocked family last and a site with both
+#   kinds of address is reached through the tunnel without a wait;
+# - follows routes more specific than a default in the blocked family, as
+#   NetworkManager does for the carried one: the LAN, private and global, and
+#   routes added by hand; and reaches a trusted prefix through the router;
 # - keeps a tunnel whose far end is in the blocked family working through a
-#   fresh handshake, with NixOS's reverse-path filter on, by the mark
-#   NetworkManager gives the tunnel or, for a tunnel with none, by the
-#   server address in its profile;
-# - treats a profile that leaves out only private ranges and its own server
-#   as the full tunnel it is, and a profile set never to be the default as
-#   the split tunnel it is, once NetworkManager has applied that setting;
-# - reads an AllowedIPs address given without a prefix length as one host,
-#   so such a split profile neither stops the guard nor holds a block;
-# - keeps an installed block when NetworkManager does not answer, and puts
-#   it back after NixOS's nftables service flushes the whole ruleset to
-#   start, reload or stop an administrator's own;
-# - lifts the block when the tunnel goes down, and never sets it for a
-#   tunnel that carries both families;
-# - survives a live switch to an updated policy and is removed by a switch
-#   to a generation with the option disabled.
+#   fresh handshake, by the mark NetworkManager gives every tunnel's packets,
+#   with two tunnels that carry one family each up at once;
+# - counts a tunnel as full only when its AllowedIPs has a /0, as
+#   NetworkManager's default route does, and follows a profile edit once
+#   NetworkManager applies it;
+# - lifts the block when the tunnel goes down or fails after its pre-up, and
+#   never sets it for a tunnel that carries both families;
+# - is untouched by NixOS's nftables service flushing the whole ruleset, by
+#   `nft flush ruleset`, and by NetworkManager pausing;
+# - survives a live switch, a NetworkManager restart, and a switch to a
+#   generation with the option disabled and back.
 #
-# The guard reads NetworkManager's applied profiles and nothing from the
-# kernel's routing, so a tunnel made outside NetworkManager is not covered
-# and not tested here.
+# A tunnel made outside NetworkManager is not covered and not tested here.
 #
 # Component evidence only: wired interfaces, no real provider, and QEMU's
 # user network (eth0) kept out of NetworkManager's hands so that eth1 is the
@@ -78,8 +74,14 @@ let
       calamares.defaultDesktop = "aizome";
       calamares.applications = [ ];
       calamares.installUser = "demo";
+      # A web address with both an AAAA and an A record, for address selection.
+      networking.hosts = {
+        "2001:db8:ffff::10" = [ "whoami.test" ];
+        "203.0.113.10" = [ "whoami.test" ];
+      };
       specialisation.trusted.configuration = {
-        calamares.vpnGuard.trustedLanPrefixes = [ "2001:db8:1::1/128" ];
+        # The VPN server's IPv6 address, reached through the home router.
+        calamares.vpnGuard.trustedLanPrefixes = [ "2001:db8:ffff::20/128" ];
         # switch-to-configuration has stopped the old units by the time
         # activation runs, and has yet to start the new ones. Inspect the
         # kernel policy at this point while the tunnel stays connected.
@@ -87,7 +89,7 @@ let
           deps = [ "etc" ];
           text = ''
             if test -e /run/observe-vpn-switch; then
-              if ${pkgs.nftables}/bin/nft list table inet sekka_vpn_guard >/dev/null &&
+              if ${pkgs.iproute2}/bin/ip -6 rule show priority 31801 | ${pkgs.gnugrep}/bin/grep -q unreachable &&
                  ! ${pkgs.curl}/bin/curl -g -6 -fsS --max-time 3 'http://[2001:db8:ffff::10]/' >/dev/null; then
                 echo blocked > /run/vpn-during-switch
               else
@@ -132,6 +134,10 @@ let
       hardware.graphics.enable = true;
       # Fixture only: QEMU's user network would be a second way out.
       networking.networkmanager.unmanaged = [ "interface-name:eth0" ];
+      # Fixture only: name what NixOS's reverse-path filter drops.
+      networking.firewall.logReversePathDrops = true;
+      # Fixture only: a broken OpenVPN secondary fails a tunnel after its pre-up.
+      networking.networkmanager.plugins = [ pkgs.networkmanager-openvpn ];
       # Fixture tools for WireGuard and checking the installed kernel policy.
       environment.systemPackages = [
         pkgs.wireguard-tools

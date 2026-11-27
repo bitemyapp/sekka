@@ -2993,110 +2993,99 @@ not qualification of an ISO or physical network hardware.
 NetworkManager and WireGuard route each address family independently. A
 single-family full tunnel can leave applications using the physical connection
 for the other family. Sekka enables `calamares.vpnGuard.enable` by default on
-NetworkManager systems. The guard protects locally generated traffic while
-the tunnel is connected. Split tunnels retain their ordinary routing.
+NetworkManager systems. Split tunnels retain their ordinary routing.
 Disconnecting restores normal internet access.
 
-The Rust helper in `installer/genkan/rust/system/vpn-guard` decides from
-NetworkManager alone. Over D-Bus it reads the profile NetworkManager has
-applied to each WireGuard device that is active, or activating and at its
-pre-up or later (`IP_CHECK`, where its routes are in place), and that
-device's transport mark. It reads nothing from the kernel's routing tables.
-A profile carries a family when its peers' AllowedIPs add up to the whole
-family once the addresses that are not the public internet and the profile's
-own server addresses are counted in. An entry without a prefix length is one
-host, as WireGuard reads it. A default qualifies. So do complementary
-halves, and a list written to leave out private ranges or the server. A list
-that leaves out any other public address is a split tunnel. When the active
-profiles carry one family and not the other, the other is blocked. An edit
-to a connected profile counts once NetworkManager applies it.
+The block lives in NetworkManager. The module in
+`installer/genkan/rust/system/vpn-guard` sets
+`networking.networkmanager.package` to NetworkManager with
+`networkmanager-block-uncarried-family.patch`, a change to its WireGuard
+device, and refuses to build a system whose NetworkManager package lacks it.
 
-The helper leaves alone what a profile does not tell it:
+For each family whose AllowedIPs include a /0, and whose
+`wireguard.ip4-auto-default-route` / `ip6-auto-default-route` and
+`ipv4.never-default` / `ipv6.never-default` leave it on, NetworkManager
+already puts the tunnel's default route in a table of its own and adds two
+routing rules at an even priority P from 30768 to 31766: `lookup main
+suppress_prefixlength 0`, then at P+1 `not fwmark F lookup F`, where F also
+marks the tunnel's own encrypted packets. The patch adds, for a family left
+at its defaults with no /0 while the other family has that pair:
 
-- a tunnel made outside NetworkManager, with `wg-quick` or by hand;
-- a profile that routes through its own table, routing rules or gateway,
-  that is set never to be the default, or whose automatic default route is
-  switched off;
-- a tunnel with no mark whose server the profile gives by host name, because
-  its own packets could not be told from the traffic a block refuses;
-- routes changed by hand under a connected profile, which neither set a
-  block nor lift one.
+```
+31800:  from all lookup main suppress_prefixlength 0
+31801:  from all fwmark 0 unreachable
+```
 
-For a single-family full tunnel the helper installs an `inet` nftables output
-chain. Routing still selects the outgoing device. A more-specific public
-route on the physical interface is subject to the same filter as the default.
-Traffic routed into a tunnel device of any kind passes. A tunnel's own
-encrypted UDP packets pass by the device's nonzero mark, which NetworkManager
-sets on every tunnel it gives the default route and which holds as the
-server's address changes. A tunnel with no mark gets an exception for each
-server address and UDP port in its profile. TCP receives a reset and other
-blocked traffic gets an ICMP rejection so applications can try the available
-family promptly.
+and the same `nm-wg-<iface>` nftables table NetworkManager gives the carried
+family, which copies the tunnel's mark into conntrack on the way out and back
+onto replies.
 
-Loopback, private IPv4, IPv6 ULA, link-local addresses and local multicast
-remain available. A LAN device addressed by global IPv6 needs an explicit
-destination exception in the blocked family.
-For example, `calamares.vpnGuard.trustedLanPrefixes = [ "2001:db8:1::40/128" ];`
-permits that address outside the tunnel on every network. The prefix list
-is validated while building the system. Choose exceptions accordingly.
+What follows from that:
 
-The `sekka_vpn_guard` table carries an owner comment. The helper refuses to
-touch a same-named table with a different owner. It replaces the observed
-table by handle and creates the new policy in a single nftables transaction,
-then checks the installed chain and ordered rules. It leaves routing tables
-alone. A root-only lock serializes NetworkManager events with service changes.
-Unprivileged `sekka-vpn-guard status` reports the last verified policy for
-both families from an atomically published file in `/run/sekka-vpn-guard`.
+- A tunnel counts as full in a family exactly when NetworkManager gives it
+  that family's default route. Halves (`0.0.0.0/1, 128.0.0.0/1`) and lists
+  that leave out private ranges are split tunnels. Setting a family's
+  auto-default-route to `no`, or its never-default, keeps that family on the
+  physical network.
+- Routes more specific than a default still apply in the blocked family, as
+  they do in the carried one: the LAN's on-link prefixes, private or global,
+  VM and container bridges, other tunnels, and routes added by hand or by the
+  network (DHCP option 121, router advertisement route options). The last
+  are the injected-route exposure the carried family already has.
+- Marked packets pass: every WireGuard tunnel's own, so two tunnels that each
+  carry one family work together, and a tunnel's server can be reached over
+  the family it does not carry. Replies to those packets get the mark back
+  from conntrack, and the module sets `net.ipv4.conf.all.src_valid_mark = 1`,
+  as wg-quick does, so the kernel's reverse-path check looks their source up
+  with it. Without that, a reply to an IPv6-only tunnel's IPv4 packets meets
+  `fwmark 0 unreachable` and is dropped.
+- Everything else fails at once with ENETUNREACH. getaddrinfo's destination
+  probe fails too, so address selection puts the blocked family last and a
+  dual-stack name is tried in the carried family first.
+- The rules have no `iif` selector, so forwarded traffic (containers, VMs,
+  a hotspot) goes through them as well. The VM test does not cover that yet.
+- 64:ff9b::/96 and other NAT64 destinations reached through the default
+  route are blocked with the rest of IPv6.
 
-The service arms the guard before NetworkManager starts. Pre-up and regular
-dispatcher events reconcile it. No timer does, because NetworkManager reports
-every change to the state the helper reads. An enabled-to-enabled NixOS
-switch reloads the policy in place. Stopping the service disarms the
-dispatcher before clearing the owned table. This also lets an option removal
-clean up a live connection even if an earlier dispatcher event is queued.
+NetworkManager owns the lifecycle. It adds the pair in activation stage 2,
+before IP configuration and the dispatcher's pre-up, so the block is in place
+when `nmcli connection up` returns. It removes the pair in its device cleanup:
+when the tunnel goes down, when it is stopped while still activating, and when
+activation fails. The VM test stops one and fails one after pre-up, the cases
+in which the dispatcher sends no down event; an earlier failure goes through
+the same cleanup. It resyncs the pair on
+`nmcli device reapply`. The patch also fixes an abort the VM test found: a
+reapply that turns a tunnel's default route on (never-default `yes` to `no`)
+kept a mark of 0 and built a rule for table 0. The code that does this is
+unchanged from stock 1.58.1, but the abort was only seen with the patch. Routing rules are not nftables, so `nft flush
+ruleset` and NixOS's nftables service leave them alone. A NetworkManager that
+is paused, or restarted with the tunnel up, keeps the block; on restart it
+takes the tunnel back with its rules and removes them when the tunnel goes
+down. A stock NetworkManager does not know the pair, so the module clears
+priorities 31800 and 31801 before NetworkManager starts in a generation with
+the guard off. NetworkManager's source notes that rules a restarted
+NetworkManager does not take back stay in place; a tunnel deleted while
+NetworkManager is stopped would leave its pair until the next boot. That case
+is not tested.
 
-While NetworkManager is not on the bus, before it starts at boot and across
-its restart, the helper leaves the installed policy as it is. When
-NetworkManager is running and does not answer, the helper also changes
-nothing, reports degraded status and exits with an error, and the next
-dispatcher event runs it again. A read that fails while a first tunnel comes
-up leaves that tunnel unguarded until then. An nftables transaction failure
-preserves the previous rules.
+`calamares.vpnGuard.trustedLanPrefixes` adds `to <prefix> lookup main` at
+priority 31799 for each prefix, from `sekka-vpn-guard-trusted.service`. It is
+needed only for a destination reached through a router; an on-link LAN host
+passes on its own. The list is validated while building the system.
 
-A tunnel counts from its pre-up because NetworkManager sends no down event
-for an activation that fails before the device is up. One that fails
-earlier, waiting for secrets for example, never sets a block. One that fails
-after its pre-up, when a secondary connection fails or a gateway ping set in
-the profile times out, leaves its block until the next dispatcher event.
+Not covered: tunnels made outside NetworkManager (`wg-quick`, systemd-networkd)
+and NetworkManager's VPN plugins (OpenVPN, IPsec and so on). DNS server
+choice is a separate policy.
 
-The scope is host egress for the unsupported family. Forwarding for routed
-VMs, containers and hotspots follows the host's forwarding policy. DNS
-server choice, direct-route exceptions in the carried family, and traffic
-after disconnect are separate policies. NetworkManager activation and
-firewall installation are separate operations. A second VPN of another kind
-does not count as carrying a family: traffic routed into it passes, and its
-own connection to a server in the blocked family needs a trusted prefix.
-
-NixOS's nftables service flushes the whole ruleset when it carries one of
-the administrator's own (`networking.nftables.ruleset` or `rulesetFile`): as
-it starts, at each reload, which a switch that changes the ruleset makes,
-and as it stops. Where nftables is enabled, the guard adds a reconciliation
-after each of the three to that service. It does nothing before the guard is
-armed, and a failure never fails the firewall. Anything else that flushes
-the ruleset, `nft flush ruleset` by hand for example, removes the guard until
-the next reconciliation.
-
-From the root flake, run
-`nix build .#checks.x86_64-linux.vpn-guard .#checks.x86_64-linux.vpn-guard-vm`.
-The component VM imports real NetworkManager profiles, checks the address a
-dual-stack web server sees, exercises fresh authenticated handshakes for
-marked and unmarked tunnels, edits a connected profile, connects a split
-profile that lists an address without a prefix length, stops NetworkManager
-from answering, and switches a connected client between enabled, configured
-and disabled NixOS generations and into and out of one with an nftables
-ruleset of its own, which it also reloads and restarts. It checks the block
-is in place when `nmcli connection up` returns. It uses disposable wired
-guests and a local test VPN.
+From the root flake, run `nix build .#checks.x86_64-linux.vpn-guard-vm`. The
+component VM imports real NetworkManager profiles and checks the address a
+dual-stack web server sees and the order getaddrinfo returns. It runs fresh
+handshakes at two endpoints, two single-family tunnels at once, a profile
+edit applied by reconnecting and by reapply, and a stopped and a failed
+activation after pre-up. It covers nftables flushes, a paused and a restarted
+NetworkManager, and switches between enabled, trusted, disabled and nftables
+generations with a tunnel connected. It uses disposable wired guests and a
+local test VPN.
 
 ## Simulated Wi-Fi
 

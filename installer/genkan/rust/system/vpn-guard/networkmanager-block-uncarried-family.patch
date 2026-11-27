@@ -1,0 +1,197 @@
+--- a/src/core/devices/nm-device-wireguard.c	2026-11-26 22:30:36.839054049 -0600
++++ b/src/core/devices/nm-device-wireguard.c	2026-11-26 23:01:19.459205788 -0600
+@@ -136,6 +136,8 @@
+ 
+     bool auto_default_route_enabled_4 : 1;
+     bool auto_default_route_enabled_6 : 1;
++    bool auto_default_route_block_4 : 1;
++    bool auto_default_route_block_6 : 1;
+     bool auto_default_route_initialized : 1;
+     bool auto_default_route_refresh : 1;
+     bool auto_default_route_priority_initialized : 1;
+@@ -182,7 +184,9 @@
+ _auto_default_route_get_enabled(NMSettingWireGuard *s_wg,
+                                 NMConnection       *connection,
+                                 gboolean           *out_enabled_v4,
+-                                gboolean           *out_enabled_v6)
++                                gboolean           *out_enabled_v6,
++                                gboolean           *out_block_v4,
++                                gboolean           *out_block_v6)
+ {
+     NMTernary enabled_v4;
+     NMTernary enabled_v6;
+@@ -245,6 +249,15 @@
+ 
+     *out_enabled_v4 = (enabled_v4 == TRUE);
+     *out_enabled_v6 = (enabled_v6 == TRUE);
++
++    /* A family still at its default here has no /0 in AllowedIPs, no
++     * explicit auto-default-route and no never-default: the tunnel does not
++     * carry it. When the tunnel takes the other family's default route, the
++     * uncarried family is refused outside the tunnel instead of leaving on
++     * the physical network. Setting the family's auto-default-route to "no",
++     * or its never-default, keeps it on the physical network. */
++    *out_block_v4 = (enabled_v4 == NM_TERNARY_DEFAULT && enabled_v6 == TRUE);
++    *out_block_v6 = (enabled_v6 == NM_TERNARY_DEFAULT && enabled_v4 == TRUE);
+ }
+ 
+ #define AUTO_RANDOM_RANGE 500u
+@@ -288,6 +301,9 @@
+ 
+ #define PRIO_WIDTH 2u
+ 
++/* The routing-rule pair that refuses an uncarried family; see get_extra_rules(). */
++#define BLOCK_PRIORITY 31800u
++
+ static guint32
+ _auto_default_route_get_auto_priority(const char *uuid)
+ {
+@@ -331,6 +347,8 @@
+     NMConnection             *connection;
+     gboolean                  enabled_v4 = FALSE;
+     gboolean                  enabled_v6 = FALSE;
++    gboolean                  block_v4   = FALSE;
++    gboolean                  block_v6   = FALSE;
+     gboolean                  refreshing_only;
+     guint32                   new_fwmark = 0;
+     guint32                   old_fwmark;
+@@ -351,11 +369,20 @@
+ 
+         new_fwmark = nm_setting_wireguard_get_fwmark(s_wg);
+ 
+-        _auto_default_route_get_enabled(s_wg, connection, &enabled_v4, &enabled_v6);
++        _auto_default_route_get_enabled(s_wg,
++                                        connection,
++                                        &enabled_v4,
++                                        &enabled_v6,
++                                        &block_v4,
++                                        &block_v6);
+     }
+ 
+     if ((enabled_v4 || enabled_v6) && new_fwmark == 0u) {
+-        if (refreshing_only)
++        /* A reapply that turns the default route on for a device that had
++         * none (never-default "yes" to "no") has no mark to keep. Keeping 0
++         * would make a rule "lookup table 0", which the platform asserts
++         * against, and NetworkManager aborts. */
++        if (refreshing_only && old_fwmark != 0u)
+             new_fwmark = old_fwmark;
+         else
+             new_fwmark = _auto_default_route_get_auto_fwmark(nm_connection_get_uuid(connection));
+@@ -365,8 +392,16 @@
+     priv->auto_default_route_fwmark      = new_fwmark;
+     priv->auto_default_route_enabled_4   = enabled_v4;
+     priv->auto_default_route_enabled_6   = enabled_v6;
++    priv->auto_default_route_block_4     = block_v4;
++    priv->auto_default_route_block_6     = block_v6;
+     priv->auto_default_route_initialized = TRUE;
+ 
++    if (connection && (block_v4 || block_v6)) {
++        _LOGT(LOGD_DEVICE,
++              "auto-default-route: refusing %s outside the tunnel",
++              block_v4 ? "IPv4" : "IPv6");
++    }
++
+     if (connection) {
+         _LOGT(LOGD_DEVICE,
+               "auto-default-route is %s for IPv4 and %s for IPv6%s",
+@@ -452,6 +487,58 @@
+                                        })));
+     }
+ 
++    /* The family the tunnel does not carry gets a pair like the one above,
++     * with "unreachable" in place of the tunnel's table: routes more
++     * specific than a default still apply (the LAN, other tunnels), and
++     * other unmarked packets fail at once with ENETUNREACH. Marked packets
++     * pass: this tunnel's own, and those of any other tunnel that carries
++     * the other family, whose server can be reached over this one. The
++     * pair is the same for every device, so several share it. It sits
++     * above every auto-default-route priority (at most 31767), so a tunnel
++     * that carries this family is reached first, and below the main table's
++     * rule at 32766. */
++    for (is_ipv4 = 0; is_ipv4 < 2; is_ipv4++) {
++        NMSettingIPConfig *s_ip;
++        int                addr_family = is_ipv4 ? AF_INET : AF_INET6;
++        guint32            table_main  = 0;
++
++        if (is_ipv4) {
++            if (!priv->auto_default_route_block_4)
++                continue;
++        } else {
++            if (!priv->auto_default_route_block_6)
++                continue;
++        }
++
++        if (!extra_rules)
++            extra_rules = g_ptr_array_new_with_free_func((GDestroyNotify) nmp_object_unref);
++
++        s_ip = nm_connection_get_setting_ip_config(connection, addr_family);
++        if (s_ip)
++            table_main = nm_setting_ip_config_get_route_table(s_ip);
++        if (table_main == 0)
++            table_main = RT_TABLE_MAIN;
++        g_ptr_array_add(extra_rules,
++                        nmp_object_new(NMP_OBJECT_TYPE_ROUTING_RULE,
++                                       &((const NMPlatformRoutingRule) {
++                                           .priority                   = BLOCK_PRIORITY,
++                                           .addr_family                = addr_family,
++                                           .action                     = FR_ACT_TO_TBL,
++                                           .table                      = table_main,
++                                           .suppress_prefixlen_inverse = ~((guint32) 0u),
++                                       })));
++        g_ptr_array_add(extra_rules,
++                        nmp_object_new(NMP_OBJECT_TYPE_ROUTING_RULE,
++                                       &((const NMPlatformRoutingRule) {
++                                           .priority    = BLOCK_PRIORITY + 1u,
++                                           .addr_family = addr_family,
++                                           .action      = FR_ACT_UNREACHABLE,
++                                           /* "fwmark 0/0xffffffff": unmarked only. */
++                                           .fwmark = 0u,
++                                           .fwmask = 0xFFFFFFFFu,
++                                       })));
++    }
++
+     return g_steal_pointer(&extra_rules);
+ }
+ 
+@@ -1219,15 +1306,19 @@
+ 
+     nm_assert(ip_iface);
+ 
++    /* A family the tunnel does not carry gets the same marking: the tunnel's
++     * own packets to its server can travel in it, and replies to them must
++     * carry the mark that lets them past its "fwmark 0" rule, for a
++     * reverse-path filter as for the carried family. */
+     switch (addr_family) {
+     case AF_INET:
+-        if (!priv->auto_default_route_enabled_4)
++        if (!priv->auto_default_route_enabled_4 && !priv->auto_default_route_block_4)
+             return;
+ 
+         ip_config = nm_connection_get_setting_ip4_config(connection);
+         break;
+     case AF_INET6:
+-        if (!priv->auto_default_route_enabled_6)
++        if (!priv->auto_default_route_enabled_6 && !priv->auto_default_route_block_6)
+             return;
+ 
+         ip_config = nm_connection_get_setting_ip6_config(connection);
+@@ -1872,6 +1963,18 @@
+                         nm_device_get_applied_connection(device),
+                         addr_family,
+                         TRUE);
++    /* The family the tunnel does not carry can have no IP configuration of
++     * its own to run this; set it up with the carried one. Repeating it is
++     * harmless: the table is flushed and filled again. */
++    if (NM_DEVICE_WIREGUARD_GET_PRIVATE(device)->auto_default_route_block_4
++        || NM_DEVICE_WIREGUARD_GET_PRIVATE(device)->auto_default_route_block_6) {
++        _configure_firewall(NM_DEVICE_WIREGUARD(device),
++                            nm_device_get_applied_connection(device),
++                            NM_DEVICE_WIREGUARD_GET_PRIVATE(device)->auto_default_route_block_4
++                                ? AF_INET
++                                : AF_INET6,
++                            TRUE);
++    }
+     nm_device_devip_set_state(device, addr_family, NM_DEVICE_IP_STATE_READY, l3cd);
+ }
+ 
