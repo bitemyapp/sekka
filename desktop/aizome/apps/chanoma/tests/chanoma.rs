@@ -313,6 +313,7 @@ fn config(dirs: Dirs, cores: PathBuf, clock: ManualClock) -> Config {
         compositor: false,
         // Never in these flows but the screensaver's own.
         saver_after: Duration::from_secs(24 * 3600),
+        display_settings: root.join("home/.config/aizome/settings.toml"),
     }
 }
 
@@ -1381,6 +1382,98 @@ fn incomplete_controller_setup_keeps_the_previous_layout() {
     assert_eq!(h.program().screen, Screen::GrownUps);
     assert!(h.program().setup.is_none());
     assert_eq!(load_layouts(&dirs), layouts);
+}
+
+/// Settings › Display: the size of things applies at once and is kept in
+/// Aizome's settings. A new resolution asks to be kept, and unanswered (a
+/// television gone dark), or answered with Back, goes back by itself.
+#[test]
+fn display_settings_go_back_unless_a_new_resolution_is_kept() {
+    use aizome_chanoma::app::grownups::DISPLAY;
+    use aizome_chanoma::app::{MenuKind, Modal};
+    use aizome_ipc::{Mode, OutputInfo, Request};
+    let mode = |width, height, hz: i32, preferred| Mode { width, height, refresh: hz * 1000, preferred };
+    let tv = OutputInfo {
+        name: "HDMI-A-1".into(),
+        make: "GSM".into(),
+        model: "LG TV SSCR2".into(),
+        enabled: true,
+        current_mode: Some(mode(3840, 2160, 60, true)),
+        modes: vec![mode(3840, 2160, 60, true), mode(3840, 2160, 120, false), mode(1920, 1080, 60, false)],
+        scale: 2.0,
+        ..OutputInfo::default()
+    };
+    let (dirs, cores) = household("display", |_| {});
+    let cfg = config(dirs, cores, ManualClock::at(2026, 10, 31, 17, 0));
+    let file = cfg.display_settings.clone();
+    let mut h = harness(cfg);
+    h.send(Msg::Displays(Ok(vec![tv])));
+    into_settings(&mut h);
+    to_section(&mut h, DISPLAY);
+    let value = |h: &Harness<Chanoma>, label: &str| {
+        let page = h.program().grownups_page();
+        let row = page.rows.iter().find(|r| r.label == label).unwrap_or_else(|| panic!("no row {label}"));
+        format!("{:?}", row.value)
+    };
+    let asked = |h: &Harness<Chanoma>| h.program().displays.asked.last().cloned();
+    let saved = |file: &std::path::Path| {
+        aizome_config::Settings::load_from(file).unwrap().outputs.first().map(|e| (e.mode.clone(), e.scale))
+    };
+    let keeping =
+        |h: &Harness<Chanoma>| matches!(h.program().modal, Some(Modal::Menu { kind: MenuKind::KeepDisplay, .. }));
+    assert!(h.program().grownups_page().rows.iter().any(|r| r.heading && r.label == "LG TV SSCR2"));
+    assert!(value(&h, "Size of things").contains("2× · as 1920 × 1080"));
+    assert!(value(&h, "Resolution").contains("3840 × 2160 · its own"));
+    assert!(value(&h, "Refresh rate").contains("60 Hz"));
+
+    // Things larger: at once, and kept.
+    to_row(&mut h, "Size of things");
+    input(&mut h, Input::Dir(Dir::Right));
+    assert!(matches!(asked(&h), Some(Request::OutputConfig { scale: Some(2.5), mode: None, .. })), "{:?}", asked(&h));
+    assert!(!keeping(&h));
+    assert_eq!(saved(&file), Some((Some("3840x2160@60".into()), Some(2.5))));
+    input(&mut h, Input::Dir(Dir::Left));
+    assert_eq!(saved(&file), Some((Some("3840x2160@60".into()), Some(2.0))));
+
+    // A smaller resolution, things as big: asked to be kept, and unanswered, back.
+    to_row(&mut h, "Resolution");
+    input(&mut h, Input::Dir(Dir::Left));
+    assert!(
+        matches!(asked(&h), Some(Request::OutputConfig { mode: Some(m), scale: Some(1.0), .. }) if m == "1920x1080@60"),
+        "{:?}",
+        asked(&h)
+    );
+    assert!(keeping(&h));
+    assert!(value(&h, "Resolution").contains("1920 × 1080"));
+    input(&mut h, Input::Dir(Dir::Right));
+    assert!(keeping(&h), "the question stays");
+    h.program_mut().displays.keep.as_mut().unwrap().since -= Duration::from_secs(16);
+    h.send(Msg::Tick);
+    assert!(!keeping(&h));
+    assert!(
+        matches!(asked(&h), Some(Request::OutputConfig { mode: Some(m), scale: Some(2.0), .. }) if m == "3840x2160@60")
+    );
+    assert!(value(&h, "Resolution").contains("3840 × 2160"));
+    assert_eq!(saved(&file), Some((Some("3840x2160@60".into()), Some(2.0))), "never kept: the settings say as before");
+
+    // Back is going back too.
+    input(&mut h, Input::Dir(Dir::Left));
+    assert!(keeping(&h));
+    input(&mut h, Input::Back);
+    assert!(!keeping(&h));
+    assert!(value(&h, "Resolution").contains("3840 × 2160"));
+
+    // Kept: in the settings.
+    to_row(&mut h, "Refresh rate");
+    input(&mut h, Input::Dir(Dir::Right));
+    assert!(keeping(&h));
+    assert_eq!(h.program().modal_focus, 0, "going back comes first");
+    input(&mut h, Input::Dir(Dir::Down));
+    input(&mut h, Input::Ok);
+    assert!(!keeping(&h));
+    assert!(h.program().displays.keep.is_none());
+    assert!(value(&h, "Refresh rate").contains("120 Hz"));
+    assert_eq!(saved(&file), Some((Some("3840x2160@120".into()), Some(2.0))));
 }
 
 /// Holding Home is how a controller switches off: Chanoma stays where it

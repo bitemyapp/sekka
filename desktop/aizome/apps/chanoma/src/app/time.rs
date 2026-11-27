@@ -24,6 +24,7 @@ impl Chanoma {
         self.picker_tick(cx);
         self.saver_tick();
         self.seat_players();
+        self.display_tick(cx);
         let now = Instant::now();
         let elapsed = self.last_tick.map_or(0.0, |t| now.duration_since(t).as_secs_f64().min(5.0));
         self.last_tick = Some(now);

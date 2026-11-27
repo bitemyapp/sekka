@@ -416,16 +416,29 @@ fn follow_displays(tv: &Account, others: &[&Account]) -> Result<(), String> {
         })
         .max_by_key(|(_, _, t)| *t);
     let Some((from, outputs, _)) = newest else { return Ok(()) };
-    let mut own = settings_of(tv).map(|(t, _)| t).unwrap_or_default();
-    if own.get("outputs").and_then(|o| o.as_array()) == Some(&outputs) {
+    // Set up as they were when last followed: what the TV account chose
+    // since (Chanoma's Settings › Display) stays.
+    let followed = as_account(tv, || read_plain(&tv.home.join(FOLLOWED)))
+        .and_then(|(bytes, _)| String::from_utf8(bytes).ok()?.parse::<toml::Table>().ok())
+        .and_then(|t| t.get("outputs")?.as_array().cloned());
+    if followed.as_ref() == Some(&outputs) {
         return Ok(());
     }
-    own.insert("outputs".into(), toml::Value::Array(outputs));
-    let text = toml::to_string(&own).map_err(|e| e.to_string())?;
-    as_account(tv, || write_plain(&tv.home.join(SETTINGS), text.as_bytes(), None))?;
-    eprintln!("aizome-tv-account: {} follows the displays {} set up", tv.name, from.name);
-    Ok(())
+    let mut own = settings_of(tv).map(|(t, _)| t).unwrap_or_default();
+    if own.get("outputs").and_then(|o| o.as_array()) != Some(&outputs) {
+        own.insert("outputs".into(), toml::Value::Array(outputs.clone()));
+        let text = toml::to_string(&own).map_err(|e| e.to_string())?;
+        as_account(tv, || write_plain(&tv.home.join(SETTINGS), text.as_bytes(), None))?;
+        eprintln!("aizome-tv-account: {} follows the displays {} set up", tv.name, from.name);
+    }
+    let record = toml::to_string(&toml::Table::from_iter([("outputs".to_owned(), toml::Value::Array(outputs))]))
+        .map_err(|e| e.to_string())?;
+    as_account(tv, || write_plain(&tv.home.join(FOLLOWED), record.as_bytes(), None))
 }
+
+/// The displays the TV account followed last, as a regular account set
+/// them up.
+const FOLLOWED: &str = ".local/state/aizome/tv-followed-outputs.toml";
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -488,6 +501,26 @@ mod tests {
         let own: toml::Table = std::fs::read_to_string(tv.home.join(SETTINGS)).unwrap().parse().unwrap();
         assert_eq!(own["appearance"]["theme"].as_str(), Some("day"));
         assert_eq!(own["outputs"][0]["model"].as_str(), Some("LG TV SSCR2"));
+        // Chosen in Chanoma since, and Alice's set up as they were: the TV
+        // account's own stay, whatever else of Alice's changed.
+        let chosen = |scale: &str| format!("[[outputs]]\nmake = \"GSM\"\nmodel = \"LG TV SSCR2\"\nscale = {scale}\n");
+        let outputs_of = |a: &Account| {
+            let t: toml::Table = std::fs::read_to_string(a.home.join(SETTINGS)).unwrap().parse().unwrap();
+            t["outputs"][0]["scale"].as_float()
+        };
+        write_plain(&tv.home.join(SETTINGS), chosen("1.5").as_bytes(), at(45)).unwrap();
+        write_plain(
+            &alice.home.join(SETTINGS),
+            format!("[appearance]\ntheme = \"day\"\n{tv_output}").as_bytes(),
+            at(46),
+        )
+        .unwrap();
+        follow_displays(&tv, &[&alice, &bob]).unwrap();
+        assert_eq!(outputs_of(&tv), Some(1.5));
+        // Alice sets them up anew: hers again.
+        write_plain(&alice.home.join(SETTINGS), settings(&chosen("3.0")).as_bytes(), at(47)).unwrap();
+        follow_displays(&tv, &[&alice, &bob]).unwrap();
+        assert_eq!(outputs_of(&tv), Some(3.0));
 
         // Chosen in Chanoma since: the TV account's own stays.
         write_plain(&sound(&tv, "default-nodes"), b"[default-nodes]\nsink=usb\n", at(50)).unwrap();

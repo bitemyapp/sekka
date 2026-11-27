@@ -27,16 +27,27 @@ use crate::ui::Focus;
 use crate::ui::screens::{Art, Message};
 use crate::ui::settings::{Do, Page, Row, Value};
 
-pub const SECTIONS: [&str; 9] =
-    ["Time", "Watch", "Games", "Films and shows", "Folders", "Controllers", "PIN and lock", "Sound", "Chanoma"];
+pub const SECTIONS: [&str; 10] = [
+    "Time",
+    "Watch",
+    "Games",
+    "Films and shows",
+    "Folders",
+    "Controllers",
+    "PIN and lock",
+    "Display",
+    "Sound",
+    "Chanoma",
+];
 /// The sections opened by number.
 pub const FOLDERS: usize = 4;
 pub const CONTROLLERS: usize = 5;
-pub const SOUND: usize = 7;
+pub const DISPLAY: usize = 7;
+pub const SOUND: usize = 8;
 
 /// Each section's icon and the colour of its square, as Settei's side list
 /// has them.
-const SECTION_ICONS: [(aizome_kit::Icon, aizome_kit::theme::Role); 9] = {
+const SECTION_ICONS: [(aizome_kit::Icon, aizome_kit::theme::Role); 10] = {
     use aizome_kit::Icon;
     use aizome_kit::theme::Role;
     [
@@ -47,6 +58,7 @@ const SECTION_ICONS: [(aizome_kit::Icon, aizome_kit::theme::Role); 9] = {
         (Icon::FolderOpen, Role::Warning),
         (Icon::Bluetooth, Role::Accent),
         (Icon::Lock, Role::Success),
+        (Icon::Monitor, Role::Accent),
         (Icon::Volume2, Role::Danger),
         (Icon::Settings, Role::Text3),
     ]
@@ -167,6 +179,9 @@ enum Act {
     Lock,
     /// Which player a controller is (left and right).
     Player(u32),
+    /// A display's size of things, resolution or refresh rate (left and
+    /// right).
+    Display(String, super::display::Setting),
     /// Rumble a controller to find it.
     Find(u32),
     /// A controller's buttons as they were before being set up here (its
@@ -343,6 +358,7 @@ impl Chanoma {
             self.grownups = State { section: s, ..State::default() };
         }
         self.connect_sound();
+        self.list_displays(cx);
         self.go(Screen::GrownUps, cx);
         self.focus = self.grownups.focus();
     }
@@ -619,6 +635,7 @@ impl Chanoma {
                 ));
                 rows.push((Row::new("Lock now", Value::Do(Do::Lock)).detail("Back to kids' mode"), Act::Lock));
             }
+            DISPLAY => self.display_rows(&mut rows),
             SOUND => self.sound_rows(&mut rows),
             _ => {
                 let leave = if self.config.tv {
@@ -1041,6 +1058,10 @@ impl Chanoma {
                 self.next_player(id, forward, cx);
                 return;
             }
+            Act::Display(name, what) => {
+                self.step_display(&name, what, forward, cx);
+                return;
+            }
             _ => return,
         }
         self.save_settings();
@@ -1223,6 +1244,7 @@ impl Chanoma {
             }
             Act::Volume => self.step_volume(true, cx),
             Act::Player(id) => self.next_player(id, true, cx),
+            Act::Display(name, what) => self.step_display(&name, what, true, cx),
             Act::Find(id) => self.find_pad(id, cx),
             Act::UsualButtons(guid) => {
                 if self.layouts.remove(&guid).is_some() {
@@ -1485,6 +1507,40 @@ impl Chanoma {
             rows.push((Row::new("Volume", Value::Choice(format!("{:.0}%", d.volume * 100.0))), Act::Volume));
             rows.push((Row::new("Mute", Value::Switch(d.muted)), Act::Mute));
         }
+    }
+
+    /// Each display on: its size of things, resolution and refresh rate.
+    fn display_rows(&self, rows: &mut Vec<(Row, Act)>) {
+        use super::display::{self, Setting};
+        let why = match &self.displays.listed {
+            Some(Ok(list)) => {
+                let on: Vec<&aizome_ipc::OutputInfo> =
+                    list.iter().filter(|o| o.enabled && o.mirror.is_none() && o.current_mode.is_some()).collect();
+                for o in &on {
+                    let Some(m) = &o.current_mode else { continue };
+                    let act = |what| Act::Display(o.name.clone(), what);
+                    rows.push((Row::heading(display::title(o)), Act::None));
+                    rows.push((
+                        Row::new("Size of things", Value::Choice(display::scale_words(o.scale, m)))
+                            .detail("Larger to see from the sofa; Chanoma's own screens stay as they are"),
+                        act(Setting::Size),
+                    ));
+                    rows.push((
+                        Row::new("Resolution", Value::Choice(display::size_words(o, m))),
+                        act(Setting::Resolution),
+                    ));
+                    rows.push((Row::new("Refresh rate", Value::Choice(display::hz(m.refresh))), act(Setting::Refresh)));
+                }
+                if !on.is_empty() {
+                    return;
+                }
+                ("No display on", "Is the TV on, and its cable in?")
+            }
+            Some(Err(_)) => ("Not connected", "The compositor didn't answer"),
+            None if self.config.compositor => ("Asking…", ""),
+            None => ("Not connected", "Chanoma isn't talking to the compositor"),
+        };
+        rows.push((Row::new("Displays", Value::Note(why.0.into())).detail(why.1), Act::None));
     }
 
     /// The output's volume a step up or down, up to its full volume.

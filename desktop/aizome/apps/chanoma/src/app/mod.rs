@@ -13,6 +13,7 @@
 //! counts, and the settings open. It locks again by itself after a while
 //! untouched (not in the middle of a film), or when asked.
 
+pub mod display;
 pub mod drives;
 pub mod grownups;
 pub mod picker;
@@ -158,6 +159,10 @@ pub enum Msg {
     Services,
     /// What the sound server or BlueZ said to a change asked of it.
     ServiceDone(&'static str, Result<(), String>),
+    /// The compositor's displays (Settings › Display).
+    Displays(Result<Vec<aizome_ipc::OutputInfo>, String>),
+    /// Its answer to a display change, and its displays after.
+    DisplayChanged(display::Change, String, Result<Vec<aizome_ipc::OutputInfo>, String>),
     Bluetooth(u64),
     /// BlueZ's answer to switching the pairing screen's adapter on.
     SwitchedOn(u64, Result<(), String>),
@@ -267,7 +272,7 @@ impl Modal {
     fn grown_ups(&self) -> bool {
         match self {
             Modal::Pin { pin, after } => pin.new || *after == AfterPin::NewPin,
-            Modal::Menu { kind, .. } => matches!(kind, MenuKind::Time | MenuKind::Remove(_)),
+            Modal::Menu { kind, .. } => matches!(kind, MenuKind::Time | MenuKind::Remove(_) | MenuKind::KeepDisplay),
         }
     }
 }
@@ -291,6 +296,9 @@ pub enum MenuKind {
     Remove(Removal),
     /// A game is taking a long time to start: stop it, or keep waiting.
     Slow,
+    /// A display's new resolution or refresh rate: keep it, or go back
+    /// (by itself, unanswered).
+    KeepDisplay,
 }
 
 /// What a grown-up may remove from the settings.
@@ -367,6 +375,9 @@ pub struct Config {
     pub compositor: bool,
     /// Untouched this long, the screensaver comes.
     pub saver_after: Duration,
+    /// Aizome's settings, where the displays chosen in Settings › Display
+    /// are kept.
+    pub display_settings: PathBuf,
 }
 
 impl Config {
@@ -411,6 +422,7 @@ impl Config {
             after_crash: None,
             compositor: true,
             saver_after: saver::AFTER,
+            display_settings: aizome_config::Settings::path(),
         }
     }
 }
@@ -529,6 +541,8 @@ pub struct Chanoma {
     pub forget: Option<(String, String)>,
     /// When the controllers were last asked to sit as players 1, 2, …
     seat_asked: Option<Instant>,
+    /// Settings › Display: the compositor's displays, and a change to keep.
+    pub displays: display::Displays,
     pairing_session: u64,
     /// Choosing a folder.
     pub picker: Option<picker::Picker>,
@@ -663,6 +677,7 @@ impl Chanoma {
             bt: None,
             forget: None,
             seat_asked: None,
+            displays: display::Displays::default(),
             pairing_session: 0,
             picker: None,
             search: None,
@@ -1346,6 +1361,10 @@ impl Chanoma {
                     if self.starts.behind() { "The game before is stuck" } else { "Taking a long time to start" };
                 Menu::new(title, &["Stop it now", "Keep waiting"]).with_subtitle(name)
             }
+            // Going back comes first: presses on a television gone dark
+            // go back.
+            MenuKind::KeepDisplay => Menu::new("Keep this display setting?", &["Go back", "Keep it"])
+                .with_subtitle(display::back_in(display::KEEP_FOR)),
         };
         log::info!("chanoma: the {kind:?} menu");
         self.modal = Some(Modal::Menu { menu, kind });
@@ -1385,6 +1404,8 @@ impl Chanoma {
                     Input::Back if matches!(kind, MenuKind::Subtitles | MenuKind::Audio) => {
                         self.open_menu(MenuKind::Film, cx);
                     }
+                    // Not keeping a display setting is going back.
+                    Input::Back | Input::Home if kind == MenuKind::KeepDisplay => self.display_back(cx),
                     Input::Back | Input::Home => self.close_modal(cx),
                     Input::Ok => {
                         let choice = self.modal_focus;
@@ -1400,7 +1421,7 @@ impl Chanoma {
     fn menu_chosen(&mut self, kind: MenuKind, choice: usize, cx: &mut Cx<Msg>) {
         // A grown-up's menu answers to a grown-up only, however it came to
         // be showing.
-        if matches!(kind, MenuKind::Time | MenuKind::Remove(_)) && !self.is_grownup() {
+        if matches!(kind, MenuKind::Time | MenuKind::Remove(_) | MenuKind::KeepDisplay) && !self.is_grownup() {
             return self.close_modal(cx);
         }
         match (kind, choice) {
@@ -1430,6 +1451,15 @@ impl Chanoma {
                 self.stop_starting(cx);
             }
             (MenuKind::Slow, _) => self.close_modal(cx),
+            (MenuKind::KeepDisplay, 1) => {
+                self.close_modal(cx);
+                self.keep_display();
+                self.focus = self.grownups.focus();
+            }
+            (MenuKind::KeepDisplay, _) => {
+                self.display_back(cx);
+                self.focus = self.grownups.focus();
+            }
             (MenuKind::Film, c) => self.film_menu_chosen(c, cx),
             (MenuKind::Subtitles, c) => self.track_chosen(true, c, cx),
             (MenuKind::Audio, c) => self.track_chosen(false, c, cx),
@@ -2473,6 +2503,8 @@ impl Chanoma {
             Msg::Mpris(a) => self.on_mpris(a, cx),
             Msg::Services => {}
             Msg::ServiceDone(what, result) => self.service_done(what, result, cx),
+            Msg::Displays(result) => self.displays_listed(result),
+            Msg::DisplayChanged(change, name, result) => self.display_changed(change, name, result, cx),
             Msg::Bluetooth(session) => self.bluetooth_changed(session, cx),
             Msg::SwitchedOn(session, r) => self.switched_on(session, r),
             Msg::Searching(session, r) => self.searching(session, r),

@@ -1178,6 +1178,26 @@ television would be at 1, its text a desk monitor's size seen from the
 sofa, and every service but YouTube's (which has a television's page)
 unreadable.
 
+### Display
+
+*Settings › Display* has each display that's on, by its name (its
+model): the size of things (its scale, said with the room it leaves:
+"2× · as 1920 × 1080"; from 1× to 4×, by halves to 3×, none leaving
+fewer than 540 lines), its resolution (its own marked) and its refresh
+rate, each stepped with left and right, more to the right (`app/display.rs`,
+through the compositor's `outputs` and `output-config`, as Settings'
+Displays does on the desktop). A smaller resolution keeps things as big,
+its scale going down with it, at the refresh rate nearest the one before.
+
+The size of things applies at once. A resolution or refresh rate asks
+"Keep this display setting?", going back by itself after 15 seconds
+unanswered: a television that can't show it is dark, and no one can
+answer. *Go back* comes first, so presses on a dark screen go back, as
+Back and Home do. What's kept goes in Aizome's settings
+(`~/.config/aizome/settings.toml`'s `[[outputs]]`, by make, model and
+serial, as Settings writes them), which the compositor starts with next
+time.
+
 ### The TV account
 
 A grown-up can give the television an account of its own (Settings,
@@ -1228,8 +1248,11 @@ too. Before the account's own systemd starts, systemd runs
 `aizome-tv-account follow UID` as root (`aizome-tv-follow@UID`, which
 every account's `user@UID` waits for; for any other account it does
 nothing). Its displays become the `outputs` of the account whose
-`settings.toml` changed last among those that have any; the rest of its
-own settings stay. Its sound becomes WirePlumber's choices
+`settings.toml` changed last among those that have any, when they're set
+up otherwise than they were when the TV account last followed them
+(`~/.local/state/aizome/tv-followed-outputs.toml`): until a grown-up's
+account sets the displays up anew, what was chosen in Chanoma's
+Settings › Display stays. The rest of its own settings stay. Its sound becomes WirePlumber's choices
 (`~/.local/state/wireplumber`: `default-nodes`, `default-profile`,
 `default-routes`, each kept with its date) of the account that changed
 its own last, unless the TV account's changed since (in Chanoma's
