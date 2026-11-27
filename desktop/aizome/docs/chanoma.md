@@ -869,7 +869,10 @@ wants a pointer and a keyboard. It's laid out as the settings are:
   more than 400). A folder is looked through to the bottom once it's
   added, in the background, and nothing goes into the files index for a
   folder passed by. Before, the choice counted what Chanoma would find,
-  which read all of a drive just to show its top.
+  which read all of a drive just to show its top. Of the files
+  themselves, only the header of one whose extension other files go by
+  too is read (a `.md`, to tell a Mega Drive cartridge from Markdown:
+  *A big collection*, below).
 - **Adding** a folder inside one already is refused, with a toast saying
   which holds it. One holding some already is added beside them, and a
   file in both is the nearer folder's (`library::read_all` reads the
@@ -964,6 +967,22 @@ drive beside its backups. Games' settings handle that a system at a time
   switch: on adds it as a folder, off takes it away. Files are counted
   by name, so a disc both in a playlist and on its own counts twice here
   (not on Home).
+- **A folder of notes isn't a folder of games.** Some cartridges'
+  extensions are other files' too, and far more of them: Markdown is
+  `.md`, a Mega Drive's; a Mac's disk image is `.dmg`, a Game Boy's.
+  Before, the search listed every folder of three Markdown files as Sega
+  Genesis games (a package's `docs`, folder after folder: issue 437), and
+  the picker counted them as games and suggested the folder. Now, where
+  games are looked for rather than chosen (the search, the picker's
+  counts and *Suggested*: `library::system_found`), such a file outside a
+  folder named for its system is a game only if its header says so
+  (`disc::CARTRIDGES`, the first 272 bytes): `SEGA` at 0x100 or a byte
+  later, where the console looks before starting a cartridge; Nintendo's
+  logo at 0x104. The search reads it on its refreshing look and keeps it
+  in the files index as a disc's is (`chanoma.disc`); the picker reads it
+  each time. In a folder named for the system (`roms/Mega Drive`) a file
+  counts by its name as before, and so does every file in a folder that
+  was added: a cartridge that says nothing still plays there.
 - **Which games show**, before kids' rules, from the tags No-Intro's and
   Redump's names carry (`(USA)`, `(Rev 1)`, `(Beta)`, `[!]`), so a
   well-named set needs no database:
@@ -1683,6 +1702,18 @@ for the first two, a test named with each of the others.
   No-Intro or Redump name them (or a game renamed by hand) shows each
   file as a game of its own, and a name that doesn't say its region is
   ranked after those that do.
+- A folder that was added still takes every `.md` in it as a Mega Drive
+  game and every `.dmg` as a Game Boy's, outside a folder named for
+  another system: a `README.md` beside the games shows as one, and the
+  picker's "as of the last look" counts them so. Only the search and the
+  picker's own counts read the header. Other extensions that files of
+  another kind sometimes go by (`.gb`, `.gen`, `.gg`, `.ws`, `.bs`,
+  `.fig`, `.sms`) count by name everywhere. So does a system's file, or
+  a zip, in a folder that happens to go by the system's name (`md`,
+  `gb`, `nintendo`, `atari`), where the search lists even one. The
+  picker's own counts take any disc image (`.iso`, `.cue`, `.chd`,
+  `.m3u`) as a game unread, so *Suggested* can offer a folder of three
+  installers; the search reads what's on each.
 - Zips are read only in a folder named for their system, stored or
   deflated, under 4 GiB; 7-Zip and RAR aren't read, nor zipped discs.
   Only the NES's header is taken off for a CRC: a renamed game in

@@ -314,11 +314,29 @@ fn folder_system(path: &Path, root: &Path) -> Option<&'static System> {
         .find_map(|d| d.file_name().and_then(|n| system_named(&n.to_string_lossy())))
 }
 
-/// Whether `path` may be a game, without reading it: one [`system_of`]
-/// would find, or a disc of one.
+/// The system a file is for where games are looked for rather than chosen
+/// (every drive searched, a folder's games counted in the picker): as
+/// [`system_of`], except that outside a system's folder an extension other
+/// files go by too ([`crate::disc::shared`]: Markdown's `.md`) isn't
+/// enough, and `discs` says whether it's a cartridge. A folder of notes
+/// isn't a Mega Drive collection. A folder someone chose keeps every file
+/// its extension names ([`system_of`]).
+fn system_found(path: &Path, root: &Path, discs: Discs) -> Option<&'static System> {
+    let system = system_of(path, root, discs)?;
+    let ext = path.extension()?.to_string_lossy().to_ascii_lowercase();
+    let told = !crate::disc::shared(&ext) || folder_system(path, root).is_some() || discs(path) == Some(system.id);
+    told.then_some(system)
+}
+
+/// Whether `path` may be a game: one [`system_found`] would find, or a
+/// disc of one. Nothing is read for it but the header of a file whose
+/// extension other files go by too.
 pub fn is_game_file(path: &Path, root: &Path) -> bool {
-    system_of(path, root, &mut |p| {
+    system_found(path, root, &mut |p| {
         let ext = p.extension()?.to_string_lossy().to_ascii_lowercase();
+        if crate::disc::shared(&ext) {
+            return crate::disc::look(p).system;
+        }
         SYSTEMS.iter().find(|s| s.extensions.contains(&ext.as_str())).map(|s| s.id)
     })
     .is_some()
@@ -785,7 +803,10 @@ pub struct FoundFolder {
 /// place and how many folders so far). A system's games are counted at
 /// the folder named for it (`roms/psx`, holding a folder a disc); others
 /// at their own folder, if it holds a few: a stray `.bin` isn't a
-/// collection.
+/// collection. Nor is a folder of Markdown a Mega Drive's: outside a
+/// system's folder, a file whose extension other files go by too counts
+/// by what its header says ([`system_found`]), read on the refreshing
+/// look and kept in the index as a disc's is.
 pub fn find_games(
     index: &mut Index,
     places: &[(String, PathBuf)],
@@ -806,7 +827,7 @@ pub fn find_games(
         let mut discs = |p: &Path| crate::disc::seen(&mut facts, p, refresh)?.system;
         let mut counts: std::collections::BTreeMap<(PathBuf, &'static str), (usize, bool)> = Default::default();
         for f in &files {
-            let Some(system) = system_of(f, &root, &mut discs) else { continue };
+            let Some(system) = system_found(f, &root, &mut discs) else { continue };
             // The nearest folder named for the system, else the game's own.
             let named = f.ancestors().skip(1).take_while(|d| d.starts_with(&root)).find(|d| {
                 d.file_name().is_some_and(|n| system.folders.contains(&folder_key(&n.to_string_lossy()).as_str()))
@@ -1296,6 +1317,86 @@ mod tests {
         let held = |folder: &Path| lib.held.iter().find(|h| h.folder == folder).unwrap();
         assert_eq!(held(&stick).shared, 0);
         let _ = std::fs::remove_dir_all(d);
+    }
+
+    /// Issue 437: *Search every drive for games* listed a package's notes
+    /// as Sega Genesis games, folder after folder. Markdown goes by a Mega
+    /// Drive cartridge's extension, and a Mac's disk image by a Game Boy's.
+    #[test]
+    fn notes_arent_games_where_every_drive_is_searched() {
+        let d = tmp("notes");
+        let home = d.join("home");
+        let put = |file: &str, bytes: &[u8]| {
+            let p = home.join(file);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(p, bytes).unwrap();
+        };
+        // Longer than a cartridge's header, and shorter.
+        let notes = "# Building\n\nSee the backend's own page.\n".repeat(12);
+        for f in ["README.md", "docs/build.md", "docs/install.md", "docs/docker.md", "docs/backend/CUDA.md"] {
+            put(&format!("modelrun/cpp-cuda/{f}"), notes.as_bytes());
+        }
+        for f in ["a.md", "b.md", "c.md"] {
+            put(&format!("modelrun/cpp-cuda/docs/development/{f}"), b"- [ ] write this\n");
+        }
+        for f in ["One.dmg", "Two.dmg", "Three.dmg"] {
+            put(&format!("Installers/{f}"), &[0u8; 0x200]);
+        }
+        // Cartridges in a folder that names no system say what they are,
+        // where their console looks: a few a byte later.
+        let cartridge = |at: usize| {
+            let mut rom = vec![0u8; 0x200];
+            rom[at..at + 15].copy_from_slice(b"SEGA MEGA DRIVE");
+            rom
+        };
+        put("Sega - Mega Drive - Genesis/Columns (World).md", &cartridge(0x100));
+        put("Sega - Mega Drive - Genesis/Sonic (World).md", &cartridge(0x100));
+        put("Sega - Mega Drive - Genesis/Streets of Rage (World).md", &cartridge(0x101));
+        let mut game_boy = vec![0u8; 0x200];
+        game_boy[0x104..0x108].copy_from_slice(&[0xce, 0xed, 0x66, 0x66]);
+        put("Dumps/Tetris.dmg", &game_boy);
+        // In a folder named for their system, nothing is read to know.
+        put("roms/Mega Drive/Homebrew.md", b"x");
+        // One that says nothing, in no system's folder.
+        put("Hacks/Headerless.md", b"x");
+
+        let mut idx = index(&d);
+        let places = [("Home".to_owned(), home.clone())];
+        let found = |idx: &mut Index, refresh: bool| -> Vec<(String, &'static str, usize)> {
+            find_games(idx, &places, refresh, &|_, _| {})
+                .iter()
+                .map(|f| (f.folder.strip_prefix(&home).unwrap().display().to_string(), f.system.id, f.games))
+                .collect()
+        };
+        let folders =
+            [("Sega - Mega Drive - Genesis".to_owned(), "genesis", 3), ("roms/Mega Drive".to_owned(), "genesis", 1)];
+        assert_eq!(found(&mut idx, true), folders);
+
+        // The picker's counts go by the same.
+        let game = |file: &str| is_game_file(&home.join(file), &home);
+        assert!(!game("modelrun/cpp-cuda/README.md") && !game("modelrun/cpp-cuda/docs/development/a.md"));
+        assert!(!game("Installers/One.dmg") && !game("Hacks/Headerless.md"));
+        assert!(game("Sega - Mega Drive - Genesis/Sonic (World).md"));
+        assert!(game("Sega - Mega Drive - Genesis/Streets of Rage (World).md"));
+        assert!(game("Dumps/Tetris.dmg") && game("roms/Mega Drive/Homebrew.md"));
+
+        // What each file said is kept: the look at what the index knows
+        // reads none of them again.
+        put("Sega - Mega Drive - Genesis/Sonic (World).md", notes.as_bytes());
+        assert_eq!(found(&mut idx, false), folders);
+        // A file that changed is read again: two loose games aren't a
+        // collection.
+        assert_eq!(found(&mut idx, true), folders[1..]);
+
+        // A folder someone chose keeps every file its extension names, as
+        // before: a cartridge that says nothing still plays.
+        let cores = d.join("cores");
+        std::fs::create_dir_all(&cores).unwrap();
+        std::fs::write(cores.join("genesis_plus_gx_libretro.so"), b"").unwrap();
+        let (games, _) = scan_games(&mut idx, &[home.join("Hacks")], &Cores::scan(&[cores]), true);
+        let keys: Vec<&str> = games.iter().map(|g| g.key.as_str()).collect();
+        assert_eq!(keys, ["genesis/Headerless.md"]);
+        let _ = std::fs::remove_dir_all(&d);
     }
 
     #[test]

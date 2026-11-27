@@ -235,7 +235,10 @@ pub fn list(dir: &Path) -> Result<Vec<Entry>, String> {
     Ok(out)
 }
 
-/// What's directly in `dir`: one listing, nothing deeper.
+/// What's directly in `dir`: one listing, nothing deeper. A file whose
+/// extension other files go by too (Markdown's `.md`, a Mega Drive
+/// cartridge's) is a game by its header ([`library::is_game_file`]), so
+/// a folder of notes doesn't count as games.
 pub fn look_into(dir: &Path) -> Option<Inside> {
     let rd = std::fs::read_dir(dir).ok()?;
     // The folder's own name says a system too (`snes/`).
@@ -544,6 +547,54 @@ mod tests {
         let added = drive.join("roms");
         let s = suggest(&places, &home, &mounts, &|p| p.starts_with(&added));
         assert!(s.iter().all(|s| s.path != added), "{s:?}");
+    }
+
+    /// Issue 437: a package's notes were offered as Sega Genesis games.
+    /// Markdown goes by a Mega Drive cartridge's extension, and a Mac's
+    /// disk image by a Game Boy's.
+    #[test]
+    fn a_folder_of_notes_isnt_offered_as_games() {
+        let root = temp("notes");
+        let home = root.join("home");
+        let drive = root.join("media/STICK");
+        let put = |file: PathBuf, bytes: &[u8]| {
+            std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+            std::fs::write(file, bytes).unwrap();
+        };
+        // Longer than a cartridge's header, and shorter.
+        let notes = "# Building\n\nSee the backend's own page.\n".repeat(12);
+        for f in ["README.md", "build.md", "install.md", "backend/CUDA.md"] {
+            put(home.join("docs").join(f), notes.as_bytes());
+        }
+        put(home.join("docs/todo.md"), b"- [ ] write this\n");
+        for f in ["One.dmg", "Two.dmg", "Three.dmg"] {
+            put(home.join("Installers").join(f), &[0u8; 0x200]);
+        }
+        // Cartridges in a folder that names no system say what they are.
+        let mut cartridge = vec![0u8; 0x200];
+        cartridge[0x100..0x110].copy_from_slice(b"SEGA MEGA DRIVE ");
+        for f in ["Columns.md", "Sonic.md", "Streets.md"] {
+            put(home.join("Sonic hacks").join(f), &cartridge);
+        }
+        // In a folder named for their system, nothing is read to know.
+        touch(&drive, &["Mega Drive/Columns.md", "Mega Drive/Sonic.md", "Mega Drive/Streets.md"]);
+
+        let docs = look_into(&home.join("docs")).unwrap();
+        assert_eq!((docs.games, docs.other, docs.folders), (0, 4, 1), "{docs:?}");
+        assert_eq!(look_into(&home.join("Installers")).unwrap().describe(), "3 other files");
+        assert_eq!(look_into(&home.join("Sonic hacks")).unwrap().describe(), "3 games");
+        assert_eq!(look_into(&drive.join("Mega Drive")).unwrap().describe(), "3 games");
+
+        let mounts = vec![root.join("media")];
+        let s = suggest(&places(&home, &mounts), &home, &mounts, &|_| false);
+        let got: Vec<(&str, &str, &str)> =
+            s.iter().map(|s| (s.name.as_str(), s.place.as_str(), s.word.as_str())).collect();
+        assert_eq!(
+            got,
+            [("Sonic hacks", "In your home folder", "3 games"), ("Mega Drive", "On STICK", "3 games")],
+            "{s:?}"
+        );
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]
