@@ -270,6 +270,31 @@ pub struct Pairing {
     /// What each found controller is doing, for the list.
     pub status: Vec<(String, String)>,
     pub connected: usize,
+    /// Whether the adapter may bond.
+    pub may_bond: MayBond,
+}
+
+/// How long at a time the pairing screen lets controllers bond: asked
+/// again as BlueZ ends it, so a Chanoma that stops without saying leaves it
+/// so no longer than this.
+pub const BONDABLE_FOR: u32 = 180;
+
+/// Whether the pairing screen's adapter may bond (BlueZ's `Pairable`,
+/// Linux's bondable). Linux keeps the key of a controller that asks not to
+/// bond only then (`nix/chanoma-bluetooth-keys.patch`): paired otherwise,
+/// an 8BitDo in Switch mode never reconnects once it's switched off.
+/// Controllers are paired once it may, or once BlueZ wouldn't let it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MayBond {
+    /// Not asked (or not since BlueZ ended it).
+    Unasked,
+    /// Asked; BlueZ hasn't answered.
+    Asking,
+    /// BlueZ said yes, and whether it has said so since (it ends it after
+    /// [`BONDABLE_FOR`], and then it's asked again).
+    Granted { seen: bool },
+    /// BlueZ wouldn't: controllers pair as before, without their keys kept.
+    Refused,
 }
 
 /// How far the pairing screen's adapter has got towards looking for
@@ -1623,6 +1648,7 @@ impl Chanoma {
             paired: HashSet::new(),
             status: Vec::new(),
             connected: 0,
+            may_bond: MayBond::Unasked,
         });
         self.go(Screen::Pairing, cx);
         self.bluetooth_changed(session, cx);
@@ -1646,7 +1672,18 @@ impl Chanoma {
         // Switched on first, and looked with only once BlueZ says it is on.
         // Asked for both at once, the search can reach an adapter that is
         // still off, BlueZ refuses it, and nothing asks again.
+        let mut may_pair = false;
         if let Some(a) = p.adapter.as_deref().and_then(|path| state.adapter(path)) {
+            match p.may_bond {
+                MayBond::Granted { seen: false } if a.pairable => p.may_bond = MayBond::Granted { seen: true },
+                MayBond::Unasked | MayBond::Granted { seen: true } if a.powered && !a.pairable => {
+                    p.may_bond = MayBond::Asking;
+                    let task = p.bt.set_pairable_for(&a.path, BONDABLE_FOR);
+                    cx.spawn(move || Msg::Bondable(session, task.wait().map_err(|e| e.to_string())));
+                }
+                _ => {}
+            }
+            may_pair = a.pairable || p.may_bond == MayBond::Refused;
             let (search, ask) = p.search.step(a.powered);
             p.search = search;
             match ask {
@@ -1672,7 +1709,7 @@ impl Chanoma {
                 "pairing…"
             };
             status.push((name, what.to_owned()));
-            if !d.paired && !p.paired.contains(&d.path) && p.pending.insert(d.path.clone()) {
+            if may_pair && !d.paired && !p.paired.contains(&d.path) && p.pending.insert(d.path.clone()) {
                 let task = p.bt.pair_only(&d.path);
                 let path = d.path.clone();
                 cx.spawn(move || Msg::Paired(session, path, task.wait().map_err(|e| e.to_string())));
@@ -1695,6 +1732,22 @@ impl Chanoma {
                 p.search = Search::Off;
             }
         }
+    }
+
+    /// BlueZ answered the request to let controllers bond.
+    pub fn bondable(&mut self, session: u64, result: Result<(), String>, cx: &mut Cx<Msg>) {
+        if session != self.pairing_session {
+            return;
+        }
+        let Some(p) = &mut self.pairing else { return };
+        p.may_bond = match result {
+            Ok(()) => MayBond::Granted { seen: false },
+            Err(e) => {
+                log::warn!("chanoma: letting controllers bond: {e}; their keys won't be kept");
+                MayBond::Refused
+            }
+        };
+        self.bluetooth_changed(session, cx);
     }
 
     /// BlueZ answered the request to look for controllers.
@@ -1781,6 +1834,9 @@ impl Chanoma {
         let Some(pairing) = self.pairing.take() else { return };
         if let Some(adapter) = &pairing.adapter {
             drop(pairing.bt.stop_discovery(adapter));
+            if matches!(pairing.may_bond, MayBond::Asking | MayBond::Granted { .. }) {
+                drop(pairing.bt.set_pairable(adapter, false));
+            }
         }
         for device in &pairing.pending {
             drop(pairing.bt.cancel_pairing(device));

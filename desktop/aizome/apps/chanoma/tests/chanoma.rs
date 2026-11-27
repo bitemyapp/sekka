@@ -1616,6 +1616,9 @@ mod bluez {
         /// Searches refused because it was off.
         pub refused: u32,
         pub looking: bool,
+        /// Pairable (bondable), and for how long.
+        pub pairable: bool,
+        pub pairable_timeout: u32,
     }
 
     pub struct Adapter {
@@ -1651,6 +1654,22 @@ mod bluez {
         #[zbus(property)]
         fn discovering(&self) -> bool {
             self.asked.lock().unwrap().looking
+        }
+        #[zbus(property)]
+        fn pairable(&self) -> bool {
+            self.asked.lock().unwrap().pairable
+        }
+        #[zbus(property)]
+        fn set_pairable(&mut self, on: bool) {
+            self.asked.lock().unwrap().pairable = on;
+        }
+        #[zbus(property)]
+        fn pairable_timeout(&self) -> u32 {
+            self.asked.lock().unwrap().pairable_timeout
+        }
+        #[zbus(property)]
+        fn set_pairable_timeout(&mut self, seconds: u32) {
+            self.asked.lock().unwrap().pairable_timeout = seconds;
         }
         fn start_discovery(&self) -> Result<(), Error> {
             let mut asked = self.asked.lock().unwrap();
@@ -1736,6 +1755,24 @@ fn pairing_waits_for_bluetooth_to_be_on_before_it_looks() {
     assert!(asked.lock().unwrap().looking, "the adapter is looking");
     assert_eq!(asked.lock().unwrap().refused, 0);
     assert_eq!(lines(&h), ["Looking…"]);
+    // And may bond, for three minutes at a time, so a controller that asks
+    // not to keeps its key.
+    use aizome_chanoma::app::grownups::MayBond;
+    assert!(eventually(|| asked.lock().unwrap().pairable), "the adapter may bond while the screen looks");
+    assert_eq!(asked.lock().unwrap().pairable_timeout, 180);
+    until(&mut h, |a| a.pairing.as_ref().is_some_and(|p| p.may_bond == MayBond::Granted { seen: true }));
+    // BlueZ ends it after the three minutes: asked again.
+    {
+        let iface = fake.object_server().interface::<_, bluez::Adapter>(bluez::ADAPTER).unwrap();
+        iface.get_mut().asked.lock().unwrap().pairable = false;
+        zbus::block_on(iface.get().pairable_changed(iface.signal_emitter())).unwrap();
+    }
+    let again = asked.clone();
+    until(&mut h, move |_| again.lock().unwrap().pairable);
+    // Left: no longer.
+    input(&mut h, Input::Back);
+    assert!(h.program().pairing.is_none());
+    assert!(eventually(|| !asked.lock().unwrap().pairable), "the adapter may bond no longer");
 }
 
 /// Wait up to 20 seconds for `condition` (another process answers in real

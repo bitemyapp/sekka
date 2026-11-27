@@ -168,6 +168,8 @@ pub enum Msg {
     SwitchedOn(u64, Result<(), String>),
     /// BlueZ's answer to looking for controllers with it.
     Searching(u64, Result<(), String>),
+    /// BlueZ's answer to letting the pairing screen's controllers bond.
+    Bondable(u64, Result<(), String>),
     Paired(u64, String, Result<(), String>),
     /// The drives changed, or one finished opening.
     Drives,
@@ -2508,6 +2510,7 @@ impl Chanoma {
             Msg::Bluetooth(session) => self.bluetooth_changed(session, cx),
             Msg::SwitchedOn(session, r) => self.switched_on(session, r),
             Msg::Searching(session, r) => self.searching(session, r),
+            Msg::Bondable(session, r) => self.bondable(session, r, cx),
             Msg::Paired(session, device, r) => self.paired(session, device, r, cx),
             Msg::Drives => self.drives_changed(cx),
             Msg::Opened(outcomes) => self.opened(outcomes, cx),

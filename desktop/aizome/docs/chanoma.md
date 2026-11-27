@@ -256,7 +256,16 @@ any joystick or gamepad (by its class of device) while the computer is
 bondable; `nix/chanoma-bluetooth.nix` builds Linux's `bluetooth` module
 alone with it, from the kernel's own source and configuration, into
 `updates`, which depmod searches first (`chanoma.keepControllerKeys`,
-on by default). It takes effect from the next boot.
+on by default). It takes effect from the next boot. The computer is
+bondable (BlueZ's `Pairable`) while *Pair a controller…* is open, and
+controllers are paired only once it is (`MayBond`): three minutes at a
+time (`PairableTimeout`), asked again as BlueZ ends it, and ended as the
+screen is left, so a Chanoma that stops without saying leaves it so no
+longer than that. Otherwise it isn't, and a device claiming to be a
+gamepad can't have a key kept without someone opening the screen. Where
+BlueZ won't, controllers pair as before, without their keys kept. A
+controller paired before this keeps reconnecting to nothing: forget it
+and pair it again.
 
 *Pair a controller…* (`app/grownups.rs`) talks to BlueZ through
 `aizome-sys`, as Settings does. An adapter found off is switched on

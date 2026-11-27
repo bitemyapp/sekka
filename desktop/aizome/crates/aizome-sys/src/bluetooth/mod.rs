@@ -455,6 +455,16 @@ impl Bluetooth {
         self.set(adapter, IFACE_ADAPTER, "Pairable", on)
     }
 
+    /// Pairable (Linux's bondable) for `seconds`, after which BlueZ ends
+    /// it by itself (`PairableTimeout`, set first).
+    pub fn set_pairable_for(&self, adapter: &str, seconds: u32) -> Task<()> {
+        let path = adapter.to_owned();
+        self.task(move |bus| {
+            bus.set(BLUEZ, &path, IFACE_ADAPTER, "PairableTimeout", seconds)?;
+            bus.set(BLUEZ, &path, IFACE_ADAPTER, "Pairable", true)
+        })
+    }
+
     /// The name other devices see.
     pub fn set_adapter_name(&self, adapter: &str, name: &str) -> Task<()> {
         self.set(adapter, IFACE_ADAPTER, "Alias", name.to_owned())
