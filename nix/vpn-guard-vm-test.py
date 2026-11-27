@@ -1,4 +1,5 @@
 import ipaddress
+import json
 import re
 import shlex
 
@@ -87,6 +88,13 @@ def connect(name: str, address: str, dns: str, allowed: str, port: int, endpoint
     guarded.succeed(f"nmcli connection up {name}")
 
 
+def guard_table_handle() -> int | None:
+    """The kernel's handle for the guard's table: a new one after it was deleted and made again."""
+    listing = json.loads(guarded.succeed("nft -j list tables inet"))["nftables"]
+    handles = [o["table"]["handle"] for o in listing if o.get("table", {}).get("name") == "sekka_vpn_guard"]
+    return handles[0] if handles else None
+
+
 for node in (isp, internet, vpn, guarded):
     start_vm(node)
 isp.wait_for_unit("radvd.service")
@@ -128,6 +136,8 @@ with subtest("Direct internet, public LAN, private LAN and NAT64-prefix service 
     guarded.wait_for_unit("sekka-vpn-guard.service")
     wait_policy("open", "open")
     assert guarded.succeed("stat -c '%a %u' /run/sekka-vpn-guard/lock").strip() == "600 0"
+    # Without nftables, the guard's additions to its service add no unit.
+    guarded.fail("systemctl cat nftables.service")
     private_network_answers(guarded)
     guarded.succeed(f"ping -6 -c 1 -W 2 {ROUTER6}")
     arrives_from(guarded, ONLY4, [ISP4])
@@ -137,6 +147,9 @@ with subtest("Direct internet, public LAN, private LAN and NAT64-prefix service 
 
 with subtest("IPv4-only full tunnel permits IPv4, private LAN and scoped IPv6"):
     connect("GLADOS", "192.168.200.2/32", "192.168.200.1", "0.0.0.0/0", 51820)
+    # Set at the tunnel's pre-up, which NetworkManager waits for before it
+    # reports the tunnel up, and not at the up event that follows.
+    guarded.succeed(NFT_TABLE)
     wait_policy("open", "blocked")
     arrives_from(guarded, ONLY4, [VPN4])
     refused_at_once(guarded, ONLY6)
@@ -198,6 +211,61 @@ with subtest("A split tunnel reaches its peer and keeps ordinary internet access
     arrives_from(guarded, ONLY6, guarded_own)
     guarded.succeed("nmcli connection down SPLIT")
 
+with subtest("A split profile listing an address without a prefix length leaves the guard working"):
+    # wg-quick reads an address alone as one host, and NetworkManager keeps
+    # the entry as it was written.
+    connect("SINGLE", "192.168.201.2/32", "192.168.201.1", "192.168.201.1", 51822)
+    device = json.loads(
+        guarded.succeed(
+            "busctl --json=short call org.freedesktop.NetworkManager /org/freedesktop/NetworkManager"
+            " org.freedesktop.NetworkManager GetDeviceByIpIface s SINGLE"
+        )
+    )["data"][0]
+    guarded.succeed(
+        f"busctl --json=short call org.freedesktop.NetworkManager {device}"
+        " org.freedesktop.NetworkManager.Device GetAppliedConnection u 0 | grep -F '\"192.168.201.1\"'"
+    )
+    wait_policy("open", "open")
+    # A full tunnel beside it is still counted, and its block lifts with it.
+    guarded.succeed("nmcli connection up GLADOS")
+    guarded.succeed(NFT_TABLE)
+    wait_policy("open", "blocked")
+    refused_at_once(guarded, ONLY6)
+    guarded.succeed("nmcli connection down GLADOS")
+    wait_policy("open", "open")
+    arrives_from(guarded, ONLY6, guarded_own)
+    guarded.succeed("nmcli connection down SINGLE")
+
+with subtest("A block flushed with an administrator's nftables ruleset is put back"):
+    guarded.succeed("nmcli connection up GLADOS")
+    wait_policy("open", "blocked")
+    before = guard_table_handle()
+    # The switch starts nftables, which flushes the ruleset to load its own.
+    # Enabling nftables changes the initrd (it blacklists ip_tables), so
+    # Yukimi's pre-switch check would have the change wait for a boot. A
+    # later edit of the ruleset switches live; the reload below is that.
+    no_check = "NIXOS_NO_CHECK=1"
+    guarded.succeed(f"{no_check} {base}/specialisation/nftables/bin/switch-to-configuration test")
+    guarded.succeed("nft list table inet admin")
+    for step in ("switch", "reload", "restart"):
+        if step != "switch":
+            guarded.succeed(f"systemctl {step} nftables.service")
+        after = guard_table_handle()
+        assert after is not None and after != before, (step, before, after)
+        before = after
+        wait_policy("open", "blocked")
+        refused_at_once(guarded, ONLY6)
+        arrives_from(guarded, ONLY4, [VPN4])
+    # Back to the generation without nftables: it flushes the ruleset as it stops.
+    guarded.succeed(f"{no_check} {base}/bin/switch-to-configuration test")
+    guarded.fail("nft list table inet admin")
+    assert guard_table_handle() not in (None, before)
+    wait_policy("open", "blocked")
+    refused_at_once(guarded, ONLY6)
+    guarded.succeed("nmcli connection down GLADOS")
+    wait_policy("open", "open")
+    arrives_from(guarded, ONLY6, guarded_own)
+
 
 def fresh_handshake(endpoint: str) -> None:
     # Recreate both peers to discard the negotiated session keys on each end.
@@ -219,6 +287,7 @@ def fresh_handshake(endpoint: str) -> None:
 
 with subtest("IPv6-only full tunnel negotiates fresh sessions at two IPv4 endpoints"):
     connect("WHEATLEY", "fd00:200::2/128", "fd00:200::1", "::/0", 51821)
+    guarded.succeed(NFT_TABLE)
     wait_policy("blocked", "open")
     arrives_from(guarded, ONLY6, [VPN6])
     refused_at_once(guarded, ONLY4)

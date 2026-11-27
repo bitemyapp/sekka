@@ -5,7 +5,7 @@
 //! tunnel made outside NetworkManager, or a profile that routes through its
 //! own table, rules or gateway, is left alone.
 use std::collections::BTreeSet;
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::num::NonZeroU32;
 use std::process::Command;
 use std::thread;
@@ -29,12 +29,19 @@ const ACTIVATING: u32 = 1;
 const ACTIVATED: u32 = 2;
 const EXTERNAL: u32 = 0x80;
 
+// NMDeviceState. NetworkManager runs the dispatcher's pre-up for a device
+// as it enters IP_CHECK, with the device's addresses and routes in place,
+// and the device is ACTIVATED once every pre-up script has finished.
+const DEVICE_IP_CHECK: u32 = 80;
+const DEVICE_ACTIVATED: u32 = 100;
+
 // A stale listing of active connections is taken again, up to this many
 // observations in all.
 const OBSERVATIONS: u32 = 4;
 const BETWEEN_OBSERVATIONS: Duration = Duration::from_millis(50);
 
-/// A WireGuard tunnel NetworkManager is bringing up or has up.
+/// A WireGuard tunnel NetworkManager has up, or is bringing up and has
+/// reached its pre-up.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Tunnel {
     /// The profile's name, for the status display.
@@ -183,13 +190,8 @@ impl Profile {
         }
         let mut allowed = Vec::new();
         for peer in &wg.peers.data {
-            for prefix in &peer.allowed_ips.data {
-                allowed.push(
-                    prefix
-                        .parse::<IpNet>()
-                        .map_err(|e| format!("invalid NetworkManager AllowedIP {prefix}: {e}"))?
-                        .trunc(),
-                );
+            for entry in &peer.allowed_ips.data {
+                allowed.push(allowed_ip(entry)?);
             }
         }
         for (family, stack, automatic) in [
@@ -239,6 +241,28 @@ impl Profile {
     }
 }
 
+/// One AllowedIPs entry as NetworkManager keeps it: a prefix, or an address
+/// alone. A wg-quick file may give an address without a prefix length,
+/// which WireGuard reads as that one host, and NetworkManager stores the
+/// entry as it was written.
+fn allowed_ip(entry: &str) -> Result<IpNet, String> {
+    entry
+        .parse::<IpNet>()
+        .map(|net| net.trunc())
+        .or_else(|_| entry.parse::<IpAddr>().map(IpNet::from))
+        .map_err(|_| format!("invalid NetworkManager AllowedIP {entry}"))
+}
+
+/// Whether a connection in `active` state, on a device in `device` state,
+/// has its routes in place: activated, or activating and past the point
+/// where the dispatcher's pre-up for it runs. Before that point an
+/// activation can still fail, and NetworkManager sends no down event for
+/// a device that never came up, so a block set for it would stay.
+fn routed(active: u32, device: u32) -> bool {
+    active == ACTIVATED
+        || (active == ACTIVATING && (DEVICE_IP_CHECK..=DEVICE_ACTIVATED).contains(&device))
+}
+
 /// The WireGuard tunnels behind one active connection.
 fn tunnels_of(path: &str) -> Result<Vec<Tunnel>, String> {
     let (active,): (Active,) = call(NM, path, PROPS, "GetAll", &["s", ACTIVE])?;
@@ -251,6 +275,16 @@ fn tunnels_of(path: &str) -> Result<Vec<Tunnel>, String> {
     }
     let mut tunnels = Vec::new();
     for device in &active.devices.data {
+        let state = if active.state.data == ACTIVATED {
+            DEVICE_ACTIVATED
+        } else {
+            let (state,): (Variant<u32>,) =
+                call(NM, device, PROPS, "Get", &["ss", DEVICE, "State"])?;
+            state.data
+        };
+        if !routed(active.state.data, state) {
+            continue;
+        }
         // The applied profile is what the device runs. The saved one may
         // have been edited since without being applied.
         let (profile, _version): (Profile, u64) =
@@ -434,6 +468,43 @@ mod tests {
         assert_eq!(marked.mark, NonZeroU32::new(51820));
         assert!(marked.servers.is_empty());
         assert!(marked.carries.contains(&Family::V4));
+    }
+
+    #[test]
+    fn an_address_without_a_prefix_length_is_one_host() {
+        // As NetworkManager keeps a wg-quick file's `AllowedIPs = 10.8.0.1`.
+        assert_eq!(allowed_ip("10.8.0.1"), Ok("10.8.0.1/32".parse().unwrap()));
+        assert_eq!(
+            allowed_ip("2001:db8::1"),
+            Ok("2001:db8::1/128".parse().unwrap())
+        );
+        assert_eq!(
+            allowed_ip("10.8.0.1/24"),
+            Ok("10.8.0.0/24".parse().unwrap())
+        );
+        assert!(allowed_ip("10.8.0.1/33").is_err());
+        assert!(allowed_ip("vpn.example").is_err());
+        // A split tunnel listing hosts alone is read, not refused, so it
+        // can't keep a full tunnel beside it from being counted.
+        assert!(carries(profile(&[(SERVER, &["192.168.200.1", "fd00::1"])]), 7).is_empty());
+        assert_eq!(
+            carries(profile(&[(SERVER, &["0.0.0.0/0", "fd00::1"])]), 7),
+            [Family::V4]
+        );
+    }
+
+    #[test]
+    fn an_activating_tunnel_counts_from_its_pre_up() {
+        for device in [30, 40, 50, 60, 70] {
+            assert!(!routed(ACTIVATING, device), "{device}");
+        }
+        assert!(routed(ACTIVATING, DEVICE_IP_CHECK));
+        assert!(routed(ACTIVATING, 90));
+        assert!(routed(ACTIVATING, DEVICE_ACTIVATED));
+        assert!(routed(ACTIVATED, DEVICE_ACTIVATED));
+        // Failed, or on its way down.
+        assert!(!routed(ACTIVATING, 110));
+        assert!(!routed(ACTIVATING, 120));
     }
 
     #[test]

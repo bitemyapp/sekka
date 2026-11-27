@@ -62,5 +62,22 @@ in
         ExecStop = "${program} stop";
       };
     };
+    # NixOS's nftables service flushes the whole ruleset when it is given
+    # one of the administrator's own (`networking.nftables.ruleset` or
+    # `rulesetFile`): as it starts, at each reload (a switch that changes
+    # the ruleset reloads it) and as it stops. That deletes this table with
+    # the rest while a tunnel stays connected, and no NetworkManager event
+    # follows to put it back. The guard reconciles after each; it is a
+    # no-op before the guard is armed, and its failure never fails the
+    # firewall. The condition wraps the whole unit: one on `serviceConfig`
+    # alone would declare an empty nftables.service on every system
+    # without nftables.
+    systemd.services.nftables = lib.mkIf config.networking.nftables.enable {
+      serviceConfig = lib.genAttrs [
+        "ExecStartPost"
+        "ExecReload"
+        "ExecStopPost"
+      ] (_: lib.mkAfter [ "-${program} reconcile" ]);
+    };
   };
 }

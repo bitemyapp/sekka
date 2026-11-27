@@ -2999,11 +2999,13 @@ Disconnecting restores normal internet access.
 
 The Rust helper in `installer/genkan/rust/system/vpn-guard` decides from
 NetworkManager alone. Over D-Bus it reads the profile NetworkManager has
-applied to each WireGuard device it is activating or has active, and that
+applied to each WireGuard device that is active, or activating and at its
+pre-up or later (`IP_CHECK`, where its routes are in place), and that
 device's transport mark. It reads nothing from the kernel's routing tables.
 A profile carries a family when its peers' AllowedIPs add up to the whole
 family once the addresses that are not the public internet and the profile's
-own server addresses are counted in. A default qualifies. So do complementary
+own server addresses are counted in. An entry without a prefix length is one
+host, as WireGuard reads it. A default qualifies. So do complementary
 halves, and a list written to leave out private ranges or the server. A list
 that leaves out any other public address is a split tunnel. When the active
 profiles carry one family and not the other, the other is blocked. An edit
@@ -3061,6 +3063,12 @@ dispatcher event runs it again. A read that fails while a first tunnel comes
 up leaves that tunnel unguarded until then. An nftables transaction failure
 preserves the previous rules.
 
+A tunnel counts from its pre-up because NetworkManager sends no down event
+for an activation that fails before the device is up. One that fails
+earlier, waiting for secrets for example, never sets a block. One that fails
+after its pre-up, when a secondary connection fails or a gateway ping set in
+the profile times out, leaves its block until the next dispatcher event.
+
 The scope is host egress for the unsupported family. Forwarding for routed
 VMs, containers and hotspots follows the host's forwarding policy. DNS
 server choice, direct-route exceptions in the carried family, and traffic
@@ -3068,17 +3076,27 @@ after disconnect are separate policies. NetworkManager activation and
 firewall installation are separate operations. A second VPN of another kind
 does not count as carrying a family: traffic routed into it passes, and its
 own connection to a server in the blocked family needs a trusted prefix.
-An administrator replacing the entire nftables ruleset can remove the guard
-until the next reconciliation.
+
+NixOS's nftables service flushes the whole ruleset when it carries one of
+the administrator's own (`networking.nftables.ruleset` or `rulesetFile`): as
+it starts, at each reload, which a switch that changes the ruleset makes,
+and as it stops. Where nftables is enabled, the guard adds a reconciliation
+after each of the three to that service. It does nothing before the guard is
+armed, and a failure never fails the firewall. Anything else that flushes
+the ruleset, `nft flush ruleset` by hand for example, removes the guard until
+the next reconciliation.
 
 From the root flake, run
 `nix build .#checks.x86_64-linux.vpn-guard .#checks.x86_64-linux.vpn-guard-vm`.
 The component VM imports real NetworkManager profiles, checks the address a
 dual-stack web server sees, exercises fresh authenticated handshakes for
-marked and unmarked tunnels, edits a connected profile, stops NetworkManager
+marked and unmarked tunnels, edits a connected profile, connects a split
+profile that lists an address without a prefix length, stops NetworkManager
 from answering, and switches a connected client between enabled, configured
-and disabled NixOS generations. It uses disposable wired guests and a local
-test VPN.
+and disabled NixOS generations and into and out of one with an nftables
+ruleset of its own, which it also reloads and restarts. It checks the block
+is in place when `nmcli connection up` returns. It uses disposable wired
+guests and a local test VPN.
 
 ## Simulated Wi-Fi
 

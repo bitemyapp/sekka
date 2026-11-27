@@ -16,7 +16,8 @@
 # NetworkManager's dispatcher,
 #
 # - blocks IPv6 while the IPv4-only tunnel is up and IPv4 while the IPv6-only
-#   one is, at once and not after a timeout, so that a site with both kinds
+#   one is, from the tunnel's pre-up, before NetworkManager reports it up,
+#   and at once rather than after a timeout, so that a site with both kinds
 #   of address is reached through the tunnel without a wait;
 # - preserves private and link-local access and permits a public LAN address
 #   only when the configuration explicitly trusts it;
@@ -27,7 +28,11 @@
 # - treats a profile that leaves out only private ranges and its own server
 #   as the full tunnel it is, and a profile set never to be the default as
 #   the split tunnel it is, once NetworkManager has applied that setting;
-# - keeps an installed block when NetworkManager does not answer;
+# - reads an AllowedIPs address given without a prefix length as one host,
+#   so such a split profile neither stops the guard nor holds a block;
+# - keeps an installed block when NetworkManager does not answer, and puts
+#   it back after NixOS's nftables service flushes the whole ruleset to
+#   start, reload or stop an administrator's own;
 # - lifts the block when the tunnel goes down, and never sets it for a
 #   tunnel that carries both families;
 # - survives a live switch to an updated policy and is removed by a switch
@@ -93,6 +98,18 @@ let
         };
       };
       specialisation.disabled.configuration.calamares.vpnGuard.enable = lib.mkForce false;
+      # A ruleset of the administrator's own, which NixOS loads after
+      # flushing the whole ruleset, and flushes as it stops.
+      specialisation.nftables.configuration.networking.nftables = {
+        enable = true;
+        ruleset = ''
+          table inet admin {
+            chain input {
+              type filter hook input priority 10; policy accept;
+            }
+          }
+        '';
+      };
       users.users.demo = {
         isNormalUser = true;
         uid = 1000;
