@@ -2905,6 +2905,81 @@ of the instance. The UI tests check that reveal requests select the files,
 one window to a folder, and that the last window takes the token. These are
 component checks, not browser or ISO qualification.
 
+### Building Aizome with Shikka
+
+An experiment, for comparison with the in-tree Buck2 build of pull requests
+291 and 334. [Shikka](https://github.com/bitemyapp/shikka) is that build's
+engine and Cargo frontend as a tool of its own: Cargo resolves the
+workspace, Buck2 runs one action for each of Cargo's units, and a NativeLink
+cache on the same machine is optional. None of it lives in this repository.
+Sekka gives it two things:
+
+- `nix/shikka-toolchain.nix` (`nix build .#shikka-toolchain`): the compiler,
+  the C toolchain and the environment of Aizome's package, as the JSON file
+  Shikka reads from `SHIKKA_TOOLCHAIN`. The C libraries are the package's own
+  `buildInputs`, read from its derivation. `checks.shikka-toolchain` builds
+  it.
+- `[package.metadata.shikka]` in `crates/aizome-comp-core/Cargo.toml`: the
+  core's `-C prefer-dynamic`, which `scripts/rustc-wrapper` gives it under
+  Cargo, and that its build script reads the workspace's lockfile and the
+  sources of the core's path dependencies. Cargo ignores the table.
+
+Shikka is an input of this flake, pinned by revision in `flake.nix` to a
+commit of its `main`, with the Nixpkgs and Rust of its own lock, and
+`.#shikka` is its package. No check builds it and Sekka's cache does not hold
+it. Shikka's own cache, `https://shikka-cache.sekka.computer`, holds it for
+x86_64 Linux: keeping Shikka's lock makes this the store path Shikka
+publishes. Sekka does not name that cache, so a machine whose Nix
+configuration lacks it compiles the engine and runs its tests on the first
+build; Shikka's DEVELOPERS.md gives the address and key to add. To move the
+pin, put the new revision in `inputs.shikka.url` and run
+`nix flake update shikka`. A revision that changes Shikka's engine downloads
+only once Shikka has published it.
+
+The input has a cost on installed systems, which never build it. Their lock
+carries Sekka's inputs beneath Sekka (`nix/installed-lock.nix`), and Yukimi's
+update copies every source that is new in a lock into the store before it
+builds. With this input that is Shikka's source (100 MB), its Nixpkgs
+(339 MB) and its rust-overlay (25 MB), once, and Shikka's source again each
+time the pin moves.
+
+```sh
+nix build .#shikka --out-link ~/shikka
+export SHIKKA_TOOLCHAIN=$(nix build .#shikka-toolchain --no-link --print-out-paths)/env.json
+cd desktop/aizome
+~/shikka/bin/shikka --root ../.. init
+~/shikka/bin/shikka build
+~/shikka/bin/shikka --bin aizomectl run -- --help
+~/shikka/bin/shikka -p aizome-ipc test
+```
+
+`--root ../..` because the workspace's path dependencies under `apps/hotaru`
+and `apps/yukimi` lie outside it. `init` writes `.shikka/`, a `.buckconfig`
+and `BUCK` files through the checkout and keeps them out of commits with
+Git's local exclude file. `--cache managed --nativelink PATH` adds the cache.
+Run it from a plain shell, not `nix develop .#aizome`: Shikka refuses that
+shell's `RUSTFLAGS` and `RUSTC_WRAPPER`, whose work the toolchain file and
+the manifest table do. Shikka's package takes `SHIKKA_TOOLCHAIN` from the
+caller, as every revision of its `main` does. Without that it would build
+with its own toolchain, which has none of Aizome's libraries.
+
+On wx-workstation on 2026-11-14, from `main` at `a9e50870` with the package
+this flake pins, the dev profile (709 actions) with the managed cache:
+
+| | Seconds |
+|---|---|
+| Clean build | 83.3 |
+| Nothing changed | 0.16 to 0.19 |
+| One line in `apps/soroban/src/main.rs` (1 action) | 0.72 to 0.76 |
+| One line in `crates/aizome-ipc/src/lib.rs` (29 actions) | 7.0 to 7.2 |
+| A fresh checkout: `init`, then 709 of 709 actions from the cache | 6.2, then 2.0 |
+
+`aizomectl` restored from the cache runs, and `aizome-ipc`'s four test
+binaries pass. That is the whole of what was checked: a component build of
+one profile. It is not Aizome's package, which builds `release` and
+`release-lto` with Koe's features, nor an ISO, and no other tests were run
+under it.
+
 ### Utsushi diagnostics
 
 Utsushi sends FFmpeg's nonfatal library diagnostics to the
