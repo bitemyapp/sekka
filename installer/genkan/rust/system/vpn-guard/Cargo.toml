@@ -1,0 +1,15 @@
+[package]
+name = "sekka-vpn-guard"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+rust-version = "1.89"
+publish = false
+description = "Blocks the address family a full-tunnel NetworkManager WireGuard profile does not carry"
+
+[workspace]
+
+[dependencies]
+serde = { version = "=1.0.228", features = ["derive"] }
+serde_json = "=1.0.145"
+ipnet = "2.11"

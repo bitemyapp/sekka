@@ -164,6 +164,8 @@ Installed systems start behind Sekka's boot splash: the crest on the night groun
 
 The optional GitHub step can import your public SSH keys and set your Git identity. You can also carry your live session's Wi-Fi connections into the installed system.
 
+When a full-tunnel WireGuard VPN carries only IPv4 or only IPv6, Sekka protects desktop apps from sending public traffic over the other address family. Ordinary internet access returns when you disconnect. Private LAN addresses stay reachable. A printer or router accessed by global IPv6 can need a [trusted LAN exception](DEVELOPERS.md#vpn-address-families). A tunnel started outside Sekka's network settings, with `wg-quick` for example, is not covered.
+
 The keyboard step asks you to press the key just left of your space bar. Aizome's command key is ❖ (Super), as ⌘ is on a Mac, and it belongs under your thumb: if that key is Alt, as on most PC keyboards, Genkan strongly recommends swapping left Alt and Super, and you can keep your keys as they are instead. Right Alt (AltGr) stays available for accents and symbols. If it's ❖ already, as on a Mac, nothing needs changing. Genkan swaps nothing else: with another key there, your keys stay as they are, and Settings can rearrange them after installing. The layout and the swap apply to every keyboard of the installed system, from the login screen and the console to Aizome and Tatami; Aizome still offers to set up a keyboard you plug in later with keys of its own. Genkan hears the key through Aizome, so started anywhere else, it lets you choose the swap without pressing it.
 
 [![Genkan's keyboard step](docs/images/sekka/genkan-keyboard.png)](docs/images/sekka/genkan-keyboard.png)
