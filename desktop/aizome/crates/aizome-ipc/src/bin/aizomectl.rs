@@ -63,6 +63,8 @@ session
   night-light [on|off] [--temperature K]
                                 Night Light: change it, then show it
   power-off-monitors | power-on-monitors
+  activity                      count as input (a controller's, which only
+                                its app reads): idle timers start again
   lock                          ask the shell to lock
   pick-area [TAG] [--prompt TEXT] [--targets area,display,window]
                                 let the person pick an area (the screenshot
@@ -441,6 +443,7 @@ fn parse(command: &str, mut args: Vec<String>) -> Result<Request, String> {
         }
         "power-off-monitors" => Request::PowerOffMonitors,
         "power-on-monitors" => Request::PowerOnMonitors,
+        "activity" => Request::Activity,
         "lock" => Request::Lock,
         "quit" => Request::Quit,
         "input-state" => Request::InputState,

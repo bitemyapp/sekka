@@ -441,6 +441,76 @@ impl Drop for Audio {
     }
 }
 
+/// "Bluetooth", "USB", "HDMI", "Built-in".
+pub fn bus_words(d: &AudioDevice) -> &'static str {
+    match d.bus.as_str() {
+        "bluetooth" => "Bluetooth",
+        "usb" => "USB",
+        _ if d.form_factor == "hdmi" || d.description.contains("HDMI") => "HDMI",
+        "pci" | "" if d.form_factor == "internal" || d.form_factor.is_empty() => "Built-in",
+        _ => "",
+    }
+}
+
+/// Words that say how many channels, at the end of a description.
+const LAYOUTS: [&str; 8] = [
+    "Analog Stereo",
+    "Digital Stereo",
+    "Surround 4.0",
+    "Surround 5.1",
+    "Surround 7.1",
+    "Multichannel",
+    "Stereo",
+    "Mono",
+];
+
+/// A device's name as people say it: a display's own name where HDMI
+/// gives one ("… Output [PG27UCDM] (Stereo)" is "PG27UCDM"), the sound
+/// card's long name taken off where other devices share it ("Core Ultra
+/// Processors (Series 3) HD Audio Speaker" is "Speaker"), and the channel
+/// layout dropped.
+pub fn device_name(d: &AudioDevice, all: &[&AudioDevice]) -> String {
+    let desc = d.description.trim();
+    if let (Some(a), Some(b)) = (desc.find('['), desc.rfind(']'))
+        && a < b
+        && !desc[a + 1..b].trim().is_empty()
+    {
+        return desc[a + 1..b].trim().to_owned();
+    }
+    let mut s = desc.to_owned();
+    for l in LAYOUTS {
+        for form in [format!(" ({l})"), format!(" {l}")] {
+            if s.len() > form.len() && s.ends_with(&form) {
+                s.truncate(s.len() - form.len());
+            }
+        }
+    }
+    // The words every device of its card begins with (its card: those
+    // sharing at least two first words with it).
+    let words: Vec<&str> = s.split(' ').collect();
+    let common = |o: &AudioDevice| words.iter().zip(o.description.split(' ')).take_while(|(a, b)| **a == *b).count();
+    let shared = all
+        .iter()
+        .filter(|o| o.index != d.index || o.name != d.name)
+        .map(|o| common(o))
+        .filter(|n| *n >= 2)
+        .min()
+        .unwrap_or(0);
+    if shared >= 2 && shared < words.len() {
+        s = words[shared..].join(" ");
+    }
+    for end in [" Output", " Input"] {
+        if s.len() > end.len() && s.ends_with(end) {
+            s.truncate(s.len() - end.len());
+        }
+    }
+    let mut c = s.chars();
+    match c.next() {
+        Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+        None => desc.to_owned(),
+    }
+}
+
 fn clamp_balance(balance: f32) -> f32 {
     if balance.is_finite() { balance.clamp(-1.0, 1.0) } else { 0.0 }
 }

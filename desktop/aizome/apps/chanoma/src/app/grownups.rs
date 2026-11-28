@@ -27,15 +27,27 @@ use crate::ui::Focus;
 use crate::ui::screens::{Art, Message};
 use crate::ui::settings::{Do, Page, Row, Value};
 
-pub const SECTIONS: [&str; 8] =
-    ["Time", "Watch", "Games", "Films and shows", "Folders", "Controllers", "PIN and lock", "Chanoma"];
+pub const SECTIONS: [&str; 10] = [
+    "Time",
+    "Watch",
+    "Games",
+    "Films and shows",
+    "Folders",
+    "Controllers",
+    "PIN and lock",
+    "Display",
+    "Sound",
+    "Chanoma",
+];
 /// The sections opened by number.
 pub const FOLDERS: usize = 4;
 pub const CONTROLLERS: usize = 5;
+pub const DISPLAY: usize = 7;
+pub const SOUND: usize = 8;
 
 /// Each section's icon and the colour of its square, as Settei's side list
 /// has them.
-const SECTION_ICONS: [(aizome_kit::Icon, aizome_kit::theme::Role); 8] = {
+const SECTION_ICONS: [(aizome_kit::Icon, aizome_kit::theme::Role); 10] = {
     use aizome_kit::Icon;
     use aizome_kit::theme::Role;
     [
@@ -46,6 +58,8 @@ const SECTION_ICONS: [(aizome_kit::Icon, aizome_kit::theme::Role); 8] = {
         (Icon::FolderOpen, Role::Warning),
         (Icon::Bluetooth, Role::Accent),
         (Icon::Lock, Role::Success),
+        (Icon::Monitor, Role::Accent),
+        (Icon::Volume2, Role::Danger),
         (Icon::Settings, Role::Text3),
     ]
 };
@@ -77,6 +91,9 @@ pub enum Sub {
     Found,
     /// One of the folders: what it holds, looking again, removing it.
     Folder(usize),
+    /// A controller that's on (by its connection's number): its player,
+    /// finding it, its buttons, forgetting it.
+    Pad(u32),
 }
 
 /// Looking for games on the drives.
@@ -160,6 +177,23 @@ enum Act {
     ChangePin,
     Relock,
     Lock,
+    /// Which player a controller is (left and right).
+    Player(u32),
+    /// A display's size of things, resolution or refresh rate (left and
+    /// right).
+    Display(String, super::display::Setting),
+    /// Rumble a controller to find it.
+    Find(u32),
+    /// A controller's buttons as they were before being set up here (its
+    /// guid).
+    UsualButtons(String),
+    /// Unpair a Bluetooth controller (BlueZ's path, its name), after
+    /// asking.
+    Forget(String, String),
+    /// The sound's output, by its name.
+    Output(String),
+    Volume,
+    Mute,
     Leave,
 }
 
@@ -179,6 +213,8 @@ const BEDTIMES: [Option<u16>; 10] = [
 ];
 const WAKES: [u16; 8] = [5 * 60 + 30, 6 * 60, 6 * 60 + 30, 7 * 60, 7 * 60 + 30, 8 * 60, 8 * 60 + 30, 9 * 60];
 const RELOCKS: [u32; 5] = [5, 10, 15, 30, 60];
+/// The volume's step, left or right.
+const VOLUME_STEP: f32 = 0.05;
 
 fn limit_label(l: Option<u32>) -> String {
     match l {
@@ -188,6 +224,30 @@ fn limit_label(l: Option<u32>) -> String {
         Some(90) => "1½ hours".into(),
         Some(m) => format!("{m} minutes"),
     }
+}
+
+/// A controller's row: its player and its name.
+fn pad_label(p: &crate::pad::PadInfo) -> String {
+    if p.slot < crate::pad::SLOTS { format!("Player {}: {}", p.slot + 1, p.name) } else { p.name.clone() }
+}
+
+fn connection(p: &crate::pad::PadInfo) -> &'static str {
+    if p.bluetooth { "Bluetooth" } else { "USB" }
+}
+
+/// "80%", "80%, charging", where it says.
+fn battery_label(p: &crate::pad::PadInfo) -> Option<String> {
+    p.battery.map(|(b, charging)| format!("{b}%{}", if charging { ", charging" } else { "" }))
+}
+
+/// Where each controller (by its number) should sit so that the players
+/// are 1, 2, … with nobody missing, in the order they were: the moves to
+/// make, each from where it sits now (`(id, player)`, 0 is player 1). The
+/// fifth and later watch.
+pub fn seating(pads: &[(u32, usize)]) -> Vec<(u32, usize)> {
+    let mut by_slot: Vec<(u32, usize)> = pads.iter().copied().filter(|(_, s)| *s < crate::pad::SLOTS).collect();
+    by_slot.sort_by_key(|(_, s)| *s);
+    by_slot.iter().enumerate().filter(|(want, (_, s))| want != s).map(|(want, (id, _))| (*id, want)).collect()
 }
 
 /// `v` moved one along `options`, wrapping.
@@ -210,6 +270,31 @@ pub struct Pairing {
     /// What each found controller is doing, for the list.
     pub status: Vec<(String, String)>,
     pub connected: usize,
+    /// Whether the adapter may bond.
+    pub may_bond: MayBond,
+}
+
+/// How long at a time the pairing screen lets controllers bond: asked
+/// again as BlueZ ends it, so a Chanoma that stops without saying leaves it
+/// so no longer than this.
+pub const BONDABLE_FOR: u32 = 180;
+
+/// Whether the pairing screen's adapter may bond (BlueZ's `Pairable`,
+/// Linux's bondable). Linux keeps the key of a controller that asks not to
+/// bond only then (`nix/chanoma-bluetooth-keys.patch`): paired otherwise,
+/// an 8BitDo in Switch mode never reconnects once it's switched off.
+/// Controllers are paired once it may, or once BlueZ wouldn't let it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MayBond {
+    /// Not asked (or not since BlueZ ended it).
+    Unasked,
+    /// Asked; BlueZ hasn't answered.
+    Asking,
+    /// BlueZ said yes, and whether it has said so since (it ends it after
+    /// [`BONDABLE_FOR`], and then it's asked again).
+    Granted { seen: bool },
+    /// BlueZ wouldn't: controllers pair as before, without their keys kept.
+    Refused,
 }
 
 /// How far the pairing screen's adapter has got towards looking for
@@ -263,6 +348,8 @@ pub struct PadSetUp {
     pub step: usize,
     pub binds: Vec<(PadInput, Output)>,
     pub since: Instant,
+    /// Steps gone by in a row with nothing pressed.
+    pub untouched: usize,
 }
 
 /// What each step asks for.
@@ -295,6 +382,8 @@ impl Chanoma {
         if let Some(s) = section {
             self.grownups = State { section: s, ..State::default() };
         }
+        self.connect_sound();
+        self.list_displays(cx);
         self.go(Screen::GrownUps, cx);
         self.focus = self.grownups.focus();
     }
@@ -302,6 +391,8 @@ impl Chanoma {
     /// Leaving the settings: the first setup is done, and the folders are
     /// read again.
     pub fn leave_grownups(&mut self, cx: &mut Cx<Msg>) {
+        self.audio = None;
+        self.bt = None;
         let first = !self.settings.setup_done;
         if first {
             self.settings.setup_done = true;
@@ -518,27 +609,42 @@ impl Chanoma {
                 ));
             }
             5 => {
-                rows.push((Row::heading("Connected"), Act::None));
+                rows.push((Row::heading("Players"), Act::None));
                 if self.controllers.is_empty() {
-                    rows.push((Row::new("No controllers are on", Value::None), Act::None));
-                }
-                for p in &self.controllers {
-                    let battery =
-                        p.battery.map_or(String::new(), |(b, c)| format!(", {b}%{}", if c { " charging" } else { "" }));
-                    let how = match p.source {
-                        Source::SetUp => "buttons set up here",
-                        Source::Database => "buttons known",
-                        Source::Kernel => "buttons as Linux says",
-                    };
                     rows.push((
-                        Row::new(format!("Player {}: {}", p.slot + 1, p.name), Value::Do(Do::SetUp)).detail(format!(
-                            "{}{battery}, {how}. Set up its buttons…",
-                            if p.bluetooth { "Bluetooth" } else { "USB" }
-                        )),
-                        Act::SetUp(p.id),
+                        Row::new("No controller is on", Value::Note(String::new()))
+                            .detail("Press a controller's middle button, or pair a new one"),
+                        Act::None,
                     ));
                 }
-                rows.push((Row::new("Pair a controller…", Value::Do(Do::Pair)).detail("Bluetooth"), Act::Pair));
+                for p in &self.controllers {
+                    let mut detail = vec![connection(p).to_owned()];
+                    detail.extend(battery_label(p));
+                    if p.slot >= crate::pad::SLOTS {
+                        detail.push("watching: four play at once".into());
+                    }
+                    rows.push((
+                        Row::new(pad_label(p), Value::Open(String::new())).detail(detail.join(" · ")),
+                        Act::Open(Sub::Pad(p.id)),
+                    ));
+                }
+                rows.push((
+                    Row::new("Pair a controller…", Value::Do(Do::Pair))
+                        .detail("Bluetooth: put the controller in pairing mode first"),
+                    Act::Pair,
+                ));
+                let resting = self.resting_controllers();
+                if !resting.is_empty() {
+                    rows.push((Row::heading("Paired, not on now"), Act::None));
+                    for (path, name) in resting {
+                        rows.push((
+                            Row::new(format!("Forget {name}"), Value::Do(Do::Forget))
+                                .detail("Its middle button connects it; forgotten, it pairs again"),
+                            Act::Forget(path, name),
+                        ));
+                    }
+                }
+                rows.push((Row::heading("For every controller"), Act::None));
                 let confirm = match s.confirm {
                     Confirm::Auto => "As printed",
                     Confirm::Bottom => "Bottom button",
@@ -559,6 +665,8 @@ impl Chanoma {
                 ));
                 rows.push((Row::new("Lock now", Value::Do(Do::Lock)).detail("Back to kids' mode"), Act::Lock));
             }
+            DISPLAY => self.display_rows(&mut rows),
+            SOUND => self.sound_rows(&mut rows),
             _ => {
                 let leave = if self.config.tv {
                     Row::new("Log Out", Value::Do(Do::LogOut)).detail("Back to the login screen")
@@ -624,6 +732,59 @@ impl Chanoma {
         let games = |n: usize| if n == 1 { "1 game".to_owned() } else { format!("{n} games") };
         let mut rows = Vec::new();
         match sub {
+            Sub::Pad(id) => {
+                let Some(p) = self.controllers.iter().find(|p| p.id == *id) else {
+                    rows.push((
+                        Row::new("It isn't on any more", Value::Note(String::new()))
+                            .detail("Switched off, or out of range"),
+                        Act::None,
+                    ));
+                    return rows;
+                };
+                let player =
+                    if p.slot < crate::pad::SLOTS { format!("Player {}", p.slot + 1) } else { "Watching".to_owned() };
+                rows.push((
+                    Row::new("Plays as", Value::Choice(player)).detail("Another player's controller swaps with it"),
+                    Act::Player(p.id),
+                ));
+                if p.rumble && p.slot < crate::pad::SLOTS {
+                    rows.push((
+                        Row::new("Find it", Value::Do(Do::Find)).detail("It rumbles for a moment"),
+                        Act::Find(p.id),
+                    ));
+                }
+                rows.push((Row::new("Connected by", Value::Note(connection(p).into())), Act::None));
+                if let Some(b) = battery_label(p) {
+                    rows.push((Row::new("Battery", Value::Note(b)), Act::None));
+                }
+                rows.push((Row::heading("Buttons"), Act::None));
+                let (how, detail) = match p.source {
+                    Source::SetUp => ("Set up here", "Pressed one by one on this TV"),
+                    Source::Database => ("Known", "Chanoma knows this controller"),
+                    Source::Kernel => ("As Linux says", "Chanoma doesn't know it: set its buttons up if any are wrong"),
+                };
+                rows.push((Row::new("Its buttons", Value::Note(how.into())).detail(detail), Act::None));
+                rows.push((
+                    Row::new("Set up its buttons…", Value::Do(Do::SetUp))
+                        .detail("Asked for one at a time; Esc, a click or another controller's Back stops"),
+                    Act::SetUp(p.id),
+                ));
+                if p.source == Source::SetUp {
+                    rows.push((
+                        Row::new("Back to its usual buttons", Value::Do(Do::Reset))
+                            .detail("Forgets the buttons set up here"),
+                        Act::UsualButtons(p.guid.clone()),
+                    ));
+                }
+                if let Some(path) = self.bluez_path(p) {
+                    rows.push((Row::heading("Bluetooth"), Act::None));
+                    rows.push((
+                        Row::new("Forget this controller", Value::Do(Do::Forget))
+                            .detail("It disconnects; pair it again to use it"),
+                        Act::Forget(path, p.name.clone()),
+                    ));
+                }
+            }
             Sub::Systems => {
                 rows.push((Row::heading("Systems with games"), Act::None));
                 for (sys, n) in self.systems_found() {
@@ -772,6 +933,10 @@ impl Chanoma {
                 let name = self.settings.folders.get(*i).map(|f| self.said(f).0).unwrap_or_default();
                 format!("Folders › {name}")
             }
+            Some(Sub::Pad(id)) => {
+                let name = self.controllers.iter().find(|p| p.id == *id).map(|p| p.name.as_str()).unwrap_or_default();
+                format!("Controllers › {name}")
+            }
             None if self.settings.setup_done => "Settings".into(),
             None => "Set up Chanoma".into(),
         };
@@ -915,6 +1080,18 @@ impl Chanoma {
                     cycle(&[Confirm::Auto, Confirm::Bottom, Confirm::Right], self.settings.confirm, forward);
             }
             Act::Relock => self.settings.relock_minutes = cycle(&RELOCKS, self.settings.relock_minutes, forward),
+            Act::Volume => {
+                self.step_volume(forward, cx);
+                return;
+            }
+            Act::Player(id) => {
+                self.next_player(id, forward, cx);
+                return;
+            }
+            Act::Display(name, what) => {
+                self.step_display(&name, what, forward, cx);
+                return;
+            }
             _ => return,
         }
         self.save_settings();
@@ -1084,6 +1261,44 @@ impl Chanoma {
             // be enough to take the PIN over.
             Act::ChangePin => self.ask_pin(super::AfterPin::NewPin, cx),
             Act::Lock => self.lock(cx),
+            Act::Output(name) => {
+                if let Some(a) = &self.audio {
+                    let task = a.set_default_sink(&name);
+                    cx.spawn(move || {
+                        Msg::ServiceDone(
+                            "Couldn't change where sound comes out",
+                            task.wait().map_err(|e| e.to_string()),
+                        )
+                    });
+                }
+            }
+            Act::Volume => self.step_volume(true, cx),
+            Act::Player(id) => self.next_player(id, true, cx),
+            Act::Display(name, what) => self.step_display(&name, what, true, cx),
+            Act::Find(id) => self.find_pad(id, cx),
+            Act::UsualButtons(guid) => {
+                if self.layouts.remove(&guid).is_some() {
+                    super::state::save_layouts(&self.config.dirs, &self.layouts);
+                    if let Some(p) = &self.pads {
+                        p.set_layouts(self.layouts.clone());
+                    }
+                    self.toast_note(crate::ui::Note::Controller, "Its usual buttons are back", cx);
+                }
+            }
+            Act::Forget(path, name) => {
+                self.forget = Some((path, name));
+                self.open_menu(super::MenuKind::Remove(super::Removal::Controller), cx);
+            }
+            Act::Mute => {
+                if let Some(a) = &self.audio
+                    && let Some(d) = a.snapshot().default_output()
+                {
+                    let task = a.set_sink_mute(d.index, !d.muted);
+                    cx.spawn(move || {
+                        Msg::ServiceDone("Couldn't mute it", task.wait().map(|_| ()).map_err(|e| e.to_string()))
+                    });
+                }
+            }
             Act::Leave => {
                 self.leave_grownups(cx);
                 self.shutdown();
@@ -1107,6 +1322,18 @@ impl Chanoma {
                 let c = self.settings.custom_services.remove(i);
                 self.save_settings();
                 self.toast(format!("Removed {}", c.name), cx);
+            }
+            super::Removal::Controller => {
+                if let Some((path, name)) = self.forget.take()
+                    && let Some(bt) = &self.bt
+                {
+                    let task = bt.remove(&path);
+                    cx.spawn(move || Msg::ServiceDone("Couldn't forget it", task.wait().map_err(|e| e.to_string())));
+                    if matches!(self.grownups.sub, Some(Sub::Pad(_))) {
+                        self.close_sub();
+                    }
+                    self.toast(format!("Forgot {name}"), cx);
+                }
             }
             _ => {}
         }
@@ -1155,6 +1382,212 @@ impl Chanoma {
         }
         self.grownups.first = self.grownups_page().first;
         self.focus = self.grownups.focus();
+    }
+
+    // Sound: where it comes out, and how loud. Through the session's
+    // PipeWire (pipewire-pulse), as Settings' Sound has it; connected while
+    // the settings show, so nothing listens to the sound server during a
+    // game or a film.
+
+    /// Connect to the sound server, unless Chanoma plays without sound, and
+    /// to BlueZ, where Chanoma reads real controllers.
+    fn connect_sound(&mut self) {
+        let sender = self.sender.clone();
+        let wake = || {
+            let tx = sender.clone();
+            aizome_sys::Wake::new(move || {
+                if let Some(t) = &tx {
+                    t.send(Msg::Services);
+                }
+            })
+        };
+        if self.audio.is_none() && !self.config.silent {
+            self.audio = Some(aizome_sys::audio::Audio::new(wake()));
+        }
+        if self.bt.is_none() && self.config.pads {
+            self.bt = Some(aizome_sys::bluetooth::Bluetooth::new(wake()));
+        }
+    }
+
+    // Controllers.
+
+    /// Bluetooth controllers paired but not on now (BlueZ's path, the
+    /// name), to forget.
+    fn resting_controllers(&self) -> Vec<(String, String)> {
+        let Some(bt) = &self.bt else { return Vec::new() };
+        let state = bt.snapshot();
+        let mut out: Vec<(String, String)> = state
+            .devices
+            .iter()
+            .filter(|d| d.kind == aizome_sys::bluetooth::DeviceKind::Gamepad && d.paired && !d.connected)
+            .map(|d| (d.path.clone(), if d.name.is_empty() { d.address.clone() } else { d.name.clone() }))
+            .collect();
+        out.sort_by(|a, b| a.1.cmp(&b.1));
+        out
+    }
+
+    /// The BlueZ device of a Bluetooth controller that's on.
+    fn bluez_path(&self, p: &crate::pad::PadInfo) -> Option<String> {
+        if !p.bluetooth || p.address.is_empty() {
+            return None;
+        }
+        let state = self.bt.as_ref()?.snapshot();
+        state.devices.iter().find(|d| d.address.eq_ignore_ascii_case(&p.address)).map(|d| d.path.clone())
+    }
+
+    /// The controller as the next or the previous player, swapping with
+    /// whoever that was.
+    fn next_player(&mut self, id: u32, forward: bool, cx: &mut Cx<Msg>) {
+        let Some(p) = self.controllers.iter().find(|p| p.id == id) else { return };
+        let players: Vec<usize> = (0..crate::pad::SLOTS).collect();
+        let to = cycle(&players, p.slot.min(crate::pad::SLOTS - 1), forward);
+        match &self.pads {
+            Some(pads) => pads.seat(id, to),
+            // No controllers' thread (a test): as it would say.
+            None => {
+                let from = p.slot;
+                for c in &mut self.controllers {
+                    if c.id == id {
+                        c.slot = to;
+                    } else if c.slot == to {
+                        c.slot = from;
+                    }
+                }
+                self.controllers.sort_by_key(|p| p.slot);
+            }
+        }
+        let name = self.controllers.iter().find(|p| p.id == id).map(|p| p.name.clone()).unwrap_or_default();
+        self.toast_note(crate::ui::Note::Controller, format!("{name} is player {}", to + 1), cx);
+    }
+
+    /// Rumble a controller so it can be found.
+    fn find_pad(&mut self, id: u32, cx: &mut Cx<Msg>) {
+        let Some(p) = self.controllers.iter().find(|p| p.id == id) else { return };
+        if let Some(pads) = &self.pads {
+            pads.rumble(p.slot, 0xc000, 0xc000, 700);
+        }
+        self.toast_note(crate::ui::Note::Controller, format!("Player {}'s controller is rumbling", p.slot + 1), cx);
+    }
+
+    /// Off a game: the players numbered 1, 2, … again, nobody missing (a
+    /// controller switched off leaves a gap; the next is player 1 now).
+    pub fn seat_players(&mut self) {
+        if matches!(self.screen, Screen::Playing | Screen::Starting(_)) || self.setup.is_some() {
+            return;
+        }
+        if self.seat_asked.is_some_and(|t| t.elapsed() < Duration::from_secs(2)) {
+            return;
+        }
+        let moves = seating(&self.controllers.iter().map(|p| (p.id, p.slot)).collect::<Vec<_>>());
+        if moves.is_empty() {
+            return;
+        }
+        match &self.pads {
+            Some(pads) => {
+                self.seat_asked = Some(Instant::now());
+                for (id, slot) in moves {
+                    pads.seat(id, slot);
+                }
+            }
+            None => {
+                for (id, slot) in moves {
+                    if let Some(p) = self.controllers.iter_mut().find(|p| p.id == id) {
+                        p.slot = slot;
+                    }
+                }
+                self.controllers.sort_by_key(|p| p.slot);
+            }
+        }
+    }
+
+    fn sound_rows(&self, rows: &mut Vec<(Row, Act)>) {
+        use aizome_sys::audio::{AudioDevice, bus_words, device_name};
+        let state = self.audio.as_ref().map(|a| a.snapshot());
+        let Some(state) = state.filter(|s| s.available) else {
+            let why =
+                if self.config.silent { "Chanoma was started without sound" } else { "Waiting for the sound server" };
+            rows.push((Row::new("Sound", Value::Note("Not connected".into())).detail(why), Act::None));
+            return;
+        };
+        let outputs: Vec<&AudioDevice> = state.sinks.iter().filter(|d| !d.is_monitor).collect();
+        rows.push((Row::heading("Sound comes out of"), Act::None));
+        if outputs.is_empty() {
+            rows.push((
+                Row::new("Nothing to play sound through", Value::Note(String::new()))
+                    .detail("Is the TV on, and its cable in?"),
+                Act::None,
+            ));
+        }
+        for d in &outputs {
+            let mut parts: Vec<&str> = Vec::new();
+            let bus = bus_words(d);
+            if !bus.is_empty() {
+                parts.push(bus);
+            }
+            if !d.ports.is_empty() && d.ports.iter().all(|p| p.available == Some(false)) {
+                parts.push("Nothing plugged in");
+            }
+            rows.push((
+                Row::new(device_name(d, &outputs), Value::Picked(d.is_default)).detail(parts.join(" · ")),
+                Act::Output(d.name.clone()),
+            ));
+        }
+        if let Some(d) = state.default_output() {
+            rows.push((Row::heading("How loud"), Act::None));
+            rows.push((Row::new("Volume", Value::Choice(format!("{:.0}%", d.volume * 100.0))), Act::Volume));
+            rows.push((Row::new("Mute", Value::Switch(d.muted)), Act::Mute));
+        }
+    }
+
+    /// Each display on: its size of things, resolution and refresh rate.
+    fn display_rows(&self, rows: &mut Vec<(Row, Act)>) {
+        use super::display::{self, Setting};
+        let why = match &self.displays.listed {
+            Some(Ok(list)) => {
+                let on: Vec<&aizome_ipc::OutputInfo> =
+                    list.iter().filter(|o| o.enabled && o.mirror.is_none() && o.current_mode.is_some()).collect();
+                for o in &on {
+                    let Some(m) = &o.current_mode else { continue };
+                    let act = |what| Act::Display(o.name.clone(), what);
+                    rows.push((Row::heading(display::title(o)), Act::None));
+                    rows.push((
+                        Row::new("Size of things", Value::Choice(display::scale_words(o.scale, m)))
+                            .detail("Larger to see from the sofa; Chanoma's own screens stay as they are"),
+                        act(Setting::Size),
+                    ));
+                    rows.push((
+                        Row::new("Resolution", Value::Choice(display::size_words(o, m))),
+                        act(Setting::Resolution),
+                    ));
+                    rows.push((Row::new("Refresh rate", Value::Choice(display::hz(m.refresh))), act(Setting::Refresh)));
+                }
+                if !on.is_empty() {
+                    return;
+                }
+                ("No display on", "Is the TV on, and its cable in?")
+            }
+            Some(Err(_)) => ("Not connected", "The compositor didn't answer"),
+            None if self.config.compositor => ("Asking…", ""),
+            None => ("Not connected", "Chanoma isn't talking to the compositor"),
+        };
+        rows.push((Row::new("Displays", Value::Note(why.0.into())).detail(why.1), Act::None));
+    }
+
+    /// The output's volume a step up or down, up to its full volume.
+    fn step_volume(&mut self, up: bool, cx: &mut Cx<Msg>) {
+        let Some(a) = &self.audio else { return };
+        let Some(d) = a.snapshot().default_output().cloned() else { return };
+        let step = if up { VOLUME_STEP } else { -VOLUME_STEP };
+        let v = ((d.volume + step) / VOLUME_STEP).round() * VOLUME_STEP;
+        let task = a.set_sink_volume(d.index, v.clamp(0.0, 1.0));
+        cx.spawn(move || Msg::ServiceDone("Couldn't change the volume", task.wait().map_err(|e| e.to_string())));
+    }
+
+    pub fn service_done(&mut self, what: &'static str, result: Result<(), String>, cx: &mut Cx<Msg>) {
+        if let Err(e) = result {
+            log::warn!("chanoma: {what}: {e}");
+            self.toast(what, cx);
+        }
     }
 
     /// Games' and Films' way to the folders: which, and adding one.
@@ -1220,6 +1653,7 @@ impl Chanoma {
             paired: HashSet::new(),
             status: Vec::new(),
             connected: 0,
+            may_bond: MayBond::Unasked,
         });
         self.go(Screen::Pairing, cx);
         self.bluetooth_changed(session, cx);
@@ -1243,7 +1677,18 @@ impl Chanoma {
         // Switched on first, and looked with only once BlueZ says it is on.
         // Asked for both at once, the search can reach an adapter that is
         // still off, BlueZ refuses it, and nothing asks again.
+        let mut may_pair = false;
         if let Some(a) = p.adapter.as_deref().and_then(|path| state.adapter(path)) {
+            match p.may_bond {
+                MayBond::Granted { seen: false } if a.pairable => p.may_bond = MayBond::Granted { seen: true },
+                MayBond::Unasked | MayBond::Granted { seen: true } if a.powered && !a.pairable => {
+                    p.may_bond = MayBond::Asking;
+                    let task = p.bt.set_pairable_for(&a.path, BONDABLE_FOR);
+                    cx.spawn(move || Msg::Bondable(session, task.wait().map_err(|e| e.to_string())));
+                }
+                _ => {}
+            }
+            may_pair = a.pairable || p.may_bond == MayBond::Refused;
             let (search, ask) = p.search.step(a.powered);
             p.search = search;
             match ask {
@@ -1269,7 +1714,7 @@ impl Chanoma {
                 "pairing…"
             };
             status.push((name, what.to_owned()));
-            if !d.paired && !p.paired.contains(&d.path) && p.pending.insert(d.path.clone()) {
+            if may_pair && !d.paired && !p.paired.contains(&d.path) && p.pending.insert(d.path.clone()) {
                 let task = p.bt.pair_only(&d.path);
                 let path = d.path.clone();
                 cx.spawn(move || Msg::Paired(session, path, task.wait().map_err(|e| e.to_string())));
@@ -1292,6 +1737,22 @@ impl Chanoma {
                 p.search = Search::Off;
             }
         }
+    }
+
+    /// BlueZ answered the request to let controllers bond.
+    pub fn bondable(&mut self, session: u64, result: Result<(), String>, cx: &mut Cx<Msg>) {
+        if session != self.pairing_session {
+            return;
+        }
+        let Some(p) = &mut self.pairing else { return };
+        p.may_bond = match result {
+            Ok(()) => MayBond::Granted { seen: false },
+            Err(e) => {
+                log::warn!("chanoma: letting controllers bond: {e}; their keys won't be kept");
+                MayBond::Refused
+            }
+        };
+        self.bluetooth_changed(session, cx);
     }
 
     /// BlueZ answered the request to look for controllers.
@@ -1378,6 +1839,9 @@ impl Chanoma {
         let Some(pairing) = self.pairing.take() else { return };
         if let Some(adapter) = &pairing.adapter {
             drop(pairing.bt.stop_discovery(adapter));
+            if matches!(pairing.may_bond, MayBond::Asking | MayBond::Granted { .. }) {
+                drop(pairing.bt.set_pairable(adapter, false));
+            }
         }
         for device in &pairing.pending {
             drop(pairing.bt.cancel_pairing(device));
@@ -1396,6 +1860,7 @@ impl Chanoma {
             step: 0,
             binds: Vec::new(),
             since: Instant::now(),
+            untouched: 0,
         });
         if let Some(p) = &self.pads {
             p.raw(true);
@@ -1420,9 +1885,15 @@ impl Chanoma {
         let mut m = Message::new(
             art,
             format!("{verb} {what}"),
-            format!("Setting up {}: {} of {}. Not there? Wait, and it's skipped.", s.name, s.step + 1, STEPS.len()),
+            format!(
+                "Setting up {}: {} of {}. Not there? Wait, and it's skipped. To stop, press Esc, click Stop, \
+                 press Back on another controller, or leave it: untouched for three, it stops.",
+                s.name,
+                s.step + 1,
+                STEPS.len()
+            ),
         );
-        m.actions = vec!["Skip".into(), "Cancel".into()];
+        m.actions = vec!["Skip".into(), "Stop".into()];
         m
     }
 
@@ -1430,26 +1901,48 @@ impl Chanoma {
         match i {
             Input::Dir(Dir::Left) => self.focus.row = 0,
             Input::Dir(Dir::Right) => self.focus.row = 1,
-            Input::Ok if self.focus.row == 0 => self.setup_next(cx),
+            Input::Ok if self.focus.row == 0 => self.setup_next(false, cx),
             Input::Ok | Input::Back => self.cancel_setup(cx),
             _ => {}
         }
     }
 
+    /// Stopped: its buttons as they were, back on its page (or the
+    /// controllers, where it went).
     pub fn cancel_setup(&mut self, cx: &mut Cx<Msg>) {
-        self.open_grownups(Some(CONTROLLERS), cx);
+        let pad = self.setup.as_ref().map(|s| s.pad);
+        self.back_to_controllers(pad, cx);
     }
 
-    fn setup_next(&mut self, cx: &mut Cx<Msg>) {
+    /// Back to the controllers, on controller `pad`'s page while it's on.
+    fn back_to_controllers(&mut self, pad: Option<u32>, cx: &mut Cx<Msg>) {
+        self.open_grownups(Some(CONTROLLERS), cx);
+        let Some(id) = pad.filter(|id| self.controllers.iter().any(|p| p.id == *id)) else { return };
+        let rows = self.section_rows(CONTROLLERS);
+        self.grownups.in_list = true;
+        self.grownups.row = rows.iter().position(|(_, a)| *a == Act::Open(Sub::Pad(id))).unwrap_or(0);
+        self.open_sub(Sub::Pad(id));
+        self.focus = self.grownups.focus();
+    }
+
+    /// On to the next step: `untouched`, nothing was pressed for this one.
+    /// After the last, or three untouched in a row, it's done with what was
+    /// pressed.
+    fn setup_next(&mut self, untouched: bool, cx: &mut Cx<Msg>) {
         let Some(s) = &mut self.setup else { return };
         s.step += 1;
         s.since = Instant::now();
-        if s.step < STEPS.len() {
+        s.untouched = if untouched { s.untouched + 1 } else { 0 };
+        if s.step < STEPS.len() && s.untouched < 3 {
             return;
         }
         let s = self.setup.take().expect("set up above");
         let mapping = Mapping { binds: s.binds, source: Source::SetUp };
-        self.open_grownups(Some(CONTROLLERS), cx);
+        self.back_to_controllers(Some(s.pad), cx);
+        if mapping.binds.is_empty() {
+            self.toast_note(crate::ui::Note::Controller, "Stopped: its buttons are as they were", cx);
+            return;
+        }
         if !super::state::usable_layout(&mapping) {
             self.toast_note(
                 crate::ui::Note::Controller,
@@ -1489,13 +1982,13 @@ impl Chanoma {
             (out, input) => (input, out),
         };
         s.binds.push(bind);
-        self.setup_next(cx);
+        self.setup_next(false, cx);
     }
 
     /// Skip a step nothing was pressed for.
     pub fn setup_tick(&mut self, cx: &mut Cx<Msg>) {
         if self.setup.as_ref().is_some_and(|s| s.since.elapsed() >= STEP_WAIT) {
-            self.setup_next(cx);
+            self.setup_next(true, cx);
         }
     }
 }
@@ -1510,6 +2003,18 @@ fn same_input(a: &PadInput, b: &PadInput) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Players are 1, 2, … in the order they were, nobody missing; the
+    /// fifth watches.
+    #[test]
+    fn the_players_close_up_in_their_order() {
+        assert_eq!(seating(&[]), []);
+        assert_eq!(seating(&[(7, 0), (8, 1)]), []);
+        // Player 1 went: player 2 is player 1.
+        assert_eq!(seating(&[(8, 1)]), [(8, 0)]);
+        assert_eq!(seating(&[(9, 3), (8, 1)]), [(8, 0), (9, 1)]);
+        assert_eq!(seating(&[(5, 0), (6, 2), (7, 4)]), [(6, 1)]);
+    }
 
     /// The pairing screen's adapter is switched on once, looked with only
     /// while it is on, and asked to look again after a refusal or after it

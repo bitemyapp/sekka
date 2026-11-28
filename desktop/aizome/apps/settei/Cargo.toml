@@ -35,3 +35,4 @@ log.workspace = true
 env_logger.workspace = true
 libc = "0.2"
 jiff = "0.2"
+sha2 = "0.10"

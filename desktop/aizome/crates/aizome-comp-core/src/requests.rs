@@ -157,6 +157,10 @@ impl State {
                 self.set_monitors_power(true);
                 Response::Ok
             }
+            Request::Activity => {
+                self.note_activity();
+                Response::Ok
+            }
             Request::Lock => {
                 self.az.ipc.emit(&aizome_ipc::Event::Binding { action: "lock".into(), pointer: None, output: None });
                 Response::Ok

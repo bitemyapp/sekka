@@ -252,6 +252,7 @@ fn controller(id: u32, family: Family) -> PadInfo {
         battery: Some((80, false)),
         source: aizome_gamepad::mapping::Source::Database,
         rumble: true,
+        address: String::new(),
         buttons: Button::all_bits(),
     }
 }

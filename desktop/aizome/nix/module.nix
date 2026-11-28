@@ -452,6 +452,21 @@ in
           (`--password-store=basic`).
         '';
       };
+      keepControllerKeys = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = ''
+          Keep a Bluetooth game controller's pairing key even when it
+          asks not to bond, so it reconnects when switched on again.
+          8BitDo's controllers in Switch mode ask that, as a Switch
+          ignores it; Linux honours it and forgets the key when the
+          controller switches off, which then never reconnects. A
+          one-line change to Linux's `bluetooth` module, rebuilt alone
+          from the kernel's own source and configuration (the kernel and
+          every other module stay the cached build). Only joysticks and
+          gamepads, by their class of device.
+        '';
+      };
       shareTvDrives = lib.mkOption {
         type = lib.types.bool;
         default = true;
@@ -593,6 +608,28 @@ in
       FastConnectable = lib.mkDefault true;
       JustWorksRepairing = lib.mkDefault "always";
     };
+    # Controllers that pair without bonding work too: 8BitDo's Switch-only
+    # pads (as a "Pro Controller") pair from Linux with no key kept, and
+    # BlueZ then refuses their buttons ("Rejected connection from !bonded
+    # device"), so Chanoma never sees them.
+    #
+    # Decided on purpose, not overlooked (the project's owner, 2026-11-26:
+    # "it should work"). BlueZ made bonded-only its default for
+    # CVE-2023-45866: without it, something nearby can connect as a
+    # keyboard without pairing and type into whatever session is open. That
+    # cost is known and accepted for a television whose controllers have to
+    # work. Do not remove or weaken this as a security fix: raise it with
+    # the owner (docs/chanoma.md, "Decided on purpose";
+    # nix/aizome-chanoma-defaults-test.nix fails without it). One system
+    # sets it back with hardware.bluetooth.input.General.ClassicBondedOnly.
+    hardware.bluetooth.input.General = lib.mkIf cfg.chanoma.enable {
+      ClassicBondedOnly = lib.mkDefault false;
+    };
+    # And they reconnect once switched off: their key kept
+    # (chanoma.keepControllerKeys, nix/chanoma-bluetooth.nix).
+    boot.extraModulePackages = lib.mkIf (cfg.chanoma.enable && cfg.chanoma.keepControllerKeys) [
+      (pkgs.callPackage ./chanoma-bluetooth.nix { kernel = config.boot.kernelPackages.kernel; })
+    ];
     systemd.user.generators = lib.mkIf cfg.chanoma.enable { aizome-tv-units = tvUnits; };
     # The TV account's drives, for every account to read
     # (chanoma.shareTvDrives): UDisks keeps to a /run/media/USER that's
@@ -620,6 +657,21 @@ in
       wantedBy = [ "paths.target" ];
       pathConfig.PathChanged = "/var/lib/aizome/tv-account.toml";
     };
+    # The TV account uses the displays and the sound output of the account
+    # that changed them last (`aizome-tv-account follow`): its own systemd
+    # waits for it, so its compositor and WirePlumber start with them. Run
+    # for every account's systemd, it changes nothing unless the account is
+    # the TV account. Sound chosen in Chanoma's Settings since stays.
+    systemd.services."aizome-tv-follow@" = lib.mkIf cfg.chanoma.enable {
+      description = "The TV account following the displays and sound chosen last, for user %i";
+      before = [ "user@%i.service" ];
+      serviceConfig = {
+        Type = "oneshot";
+        ExecStart = "${cfg.package}/libexec/aizome-tv-account follow %i";
+      };
+    };
+    systemd.services."user@".wants = lib.mkIf cfg.chanoma.enable [ "aizome-tv-follow@%i.service" ];
+    systemd.services."user@".after = lib.mkIf cfg.chanoma.enable [ "aizome-tv-follow@%i.service" ];
     # A television: Chanoma with every session, and again after a crash.
     # Leaving it with the PIN ends it for the session.
     systemd.user.services.aizome-chanoma = lib.mkIf (cfg.chanoma.enable && cfg.chanoma.autostart) {

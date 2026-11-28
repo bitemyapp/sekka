@@ -34,6 +34,9 @@ pub enum Value {
     Do(Do),
     /// A note (a count, a state).
     Note(String),
+    /// One of a list to choose one from (the sound's device): a check on
+    /// the one chosen; the confirm button chooses another.
+    Picked(bool),
 }
 
 /// The actions a row can do, each with its sign and its word on the hint.
@@ -53,6 +56,12 @@ pub enum Do {
     Pair,
     /// A controller's buttons.
     SetUp,
+    /// A controller, rumbling.
+    Find,
+    /// Back as it was.
+    Reset,
+    /// A Bluetooth controller unpaired, after asking.
+    Forget,
     ChangePin,
     Lock,
     LogOut,
@@ -70,6 +79,9 @@ impl Do {
             Do::KeepFromKids => Icon::EyeOff,
             Do::Pair => Icon::Bluetooth,
             Do::SetUp => Icon::SlidersHorizontal,
+            Do::Find => Icon::LocateFixed,
+            Do::Reset => Icon::RotateCcw,
+            Do::Forget => Icon::Trash,
             Do::ChangePin => Icon::KeyRound,
             Do::Lock => Icon::Lock,
             Do::LogOut | Do::Leave => Icon::LogOut,
@@ -87,6 +99,9 @@ impl Do {
             Do::KeepFromKids => "Keep from kids",
             Do::Pair => "Pair",
             Do::SetUp => "Set up",
+            Do::Find => "Find",
+            Do::Reset => "Reset",
+            Do::Forget => "Forget",
             Do::ChangePin => "Change",
             Do::Lock => "Lock",
             Do::LogOut => "Log out",
@@ -99,7 +114,7 @@ impl Do {
     fn ink(self, theme: &Theme) -> aizome_kit::Color {
         match self {
             Do::Add | Do::Allow => theme.role(Role::Success),
-            Do::Remove => theme.role(Role::Danger),
+            Do::Remove | Do::Forget => theme.role(Role::Danger),
             _ => theme.text(),
         }
     }
@@ -229,7 +244,8 @@ impl Page {
             Value::Choice(_) => Some("Change"),
             Value::Open(_) => Some("Open"),
             Value::Do(d) => Some(d.word()),
-            Value::Note(_) | Value::None => None,
+            Value::Picked(false) => Some("Use"),
+            Value::Note(_) | Value::Picked(true) | Value::None => None,
         }
     }
 
@@ -371,7 +387,7 @@ fn value_width(theme: &Theme, v: &Value) -> f64 {
         Value::Note(s) => measure(theme, s, font(SMALL + 2.0, REGULAR)).width + 30.0,
         Value::Open(s) if s.is_empty() => 50.0,
         Value::Open(s) => measure(theme, s, font(SMALL + 2.0, REGULAR)).width + 70.0,
-        Value::Do(_) => 50.0,
+        Value::Do(_) | Value::Picked(_) => 50.0,
         Value::None => 0.0,
     }
 }
@@ -417,6 +433,10 @@ fn paint_value(c: &mut Canvas, theme: &Theme, v: &Value, r: Rect, on: bool) {
             let ink = if on { d.ink(theme) } else { theme.text3() };
             icon(c, d.icon(), Point::new(right - 14.0, cy), 30.0, ink);
         }
+        Value::Picked(true) => {
+            icon(c, Icon::Check, Point::new(right - 14.0, cy), 30.0, theme.role(Role::Accent));
+        }
+        Value::Picked(false) => {}
         Value::None => {}
     }
 }

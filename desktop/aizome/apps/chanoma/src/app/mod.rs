@@ -13,12 +13,14 @@
 //! counts, and the settings open. It locks again by itself after a while
 //! untouched (not in the middle of a film), or when asked.
 
+pub mod display;
 pub mod drives;
 pub mod grownups;
 pub mod picker;
 pub mod play;
 pub mod reset;
 pub mod rows;
+pub mod saver;
 pub mod search;
 pub mod splash;
 pub mod state;
@@ -79,6 +81,9 @@ const HUD: &str = "hud";
 const BAR_SHOWS: Duration = Duration::from_secs(3);
 /// And over a page, with the pointer resting in it.
 const BAR_SHOWS_OVER_PAGE: Duration = Duration::from_secs(8);
+/// Home held this long is a controller being switched off (an Xbox, an
+/// 8BitDo or a PlayStation controller switches off so), not Home.
+const HOME_HELD: Duration = Duration::from_secs(1);
 /// How long what a look through the folders found stays in the header:
 /// longer than a toast, which may cover it.
 pub const LOOK_SAID: Duration = Duration::from_secs(8);
@@ -150,11 +155,21 @@ pub enum Msg {
     CueTick,
     /// The desktop's media controls (a media key) ask something of the film.
     Mpris(aizome_mpris::Action),
+    /// The sound server or BlueZ changed (the grown-ups' settings).
+    Services,
+    /// What the sound server or BlueZ said to a change asked of it.
+    ServiceDone(&'static str, Result<(), String>),
+    /// The compositor's displays (Settings › Display).
+    Displays(Result<Vec<aizome_ipc::OutputInfo>, String>),
+    /// Its answer to a display change, and its displays after.
+    DisplayChanged(display::Change, String, Result<Vec<aizome_ipc::OutputInfo>, String>),
     Bluetooth(u64),
     /// BlueZ's answer to switching the pairing screen's adapter on.
     SwitchedOn(u64, Result<(), String>),
     /// BlueZ's answer to looking for controllers with it.
     Searching(u64, Result<(), String>),
+    /// BlueZ's answer to letting the pairing screen's controllers bond.
+    Bondable(u64, Result<(), String>),
     Paired(u64, String, Result<(), String>),
     /// The drives changed, or one finished opening.
     Drives,
@@ -259,7 +274,7 @@ impl Modal {
     fn grown_ups(&self) -> bool {
         match self {
             Modal::Pin { pin, after } => pin.new || *after == AfterPin::NewPin,
-            Modal::Menu { kind, .. } => matches!(kind, MenuKind::Time | MenuKind::Remove(_)),
+            Modal::Menu { kind, .. } => matches!(kind, MenuKind::Time | MenuKind::Remove(_) | MenuKind::KeepDisplay),
         }
     }
 }
@@ -283,6 +298,9 @@ pub enum MenuKind {
     Remove(Removal),
     /// A game is taking a long time to start: stop it, or keep waiting.
     Slow,
+    /// A display's new resolution or refresh rate: keep it, or go back
+    /// (by itself, unanswered).
+    KeepDisplay,
 }
 
 /// What a grown-up may remove from the settings.
@@ -292,6 +310,8 @@ pub enum Removal {
     Folder(usize),
     /// A website added, by its place.
     Site(usize),
+    /// The Bluetooth controller being forgotten (`Chanoma::forget`).
+    Controller,
 }
 
 /// What the program runs with: real devices, or a test's stand-ins.
@@ -351,6 +371,15 @@ pub struct Config {
     pub tv: bool,
     /// Started again after a crash (`watch`): what happened, shown first.
     pub after_crash: Option<String>,
+    /// Talk to the compositor about idleness: tell it of controller
+    /// presses, which it can't see, and on the TV account hold the
+    /// display awake for the screensaver ([`saver`]).
+    pub compositor: bool,
+    /// Untouched this long, the screensaver comes.
+    pub saver_after: Duration,
+    /// Aizome's settings, where the displays chosen in Settings › Display
+    /// are kept.
+    pub display_settings: PathBuf,
 }
 
 impl Config {
@@ -393,6 +422,9 @@ impl Config {
             drives: true,
             tv: false,
             after_crash: None,
+            compositor: true,
+            saver_after: saver::AFTER,
+            display_settings: aizome_config::Settings::path(),
         }
     }
 }
@@ -419,6 +451,12 @@ pub struct Chanoma {
     pub scan_generation: u64,
     /// Starting, Chanoma's name up until Home has its games.
     pub splash: Option<splash::Splash>,
+    /// The screensaver: since when it shows, if it does.
+    pub saver: Option<Instant>,
+    /// The last press, click or move of anyone's.
+    pub last_input: Instant,
+    /// When the compositor was last told of a controller's presses.
+    pub activity_told: Option<Instant>,
     pub pads: Option<Pads>,
     pub shared: Arc<Shared>,
     pub controllers: Vec<PadInfo>,
@@ -426,6 +464,9 @@ pub struct Chanoma {
     pub family: Family,
     /// And which one it was, for the buttons it has.
     pub in_hand: Option<u32>,
+    /// The controller whose Home is down, and since when: Home acts as
+    /// it's let go.
+    pub home_down: Option<(u32, Instant)>,
     /// Each controller's shift on the PIN pad, for the digits a pad
     /// short of buttons presses as chords.
     pub chords: ui::pinpad::Chords,
@@ -492,6 +533,18 @@ pub struct Chanoma {
     pub art_agent: Option<ureq::Agent>,
     pub sender: Option<MsgSender<Msg>>,
     pub pairing: Option<grownups::Pairing>,
+    /// The sound server, for the grown-ups' Sound section: connected while
+    /// the settings show.
+    pub audio: Option<aizome_sys::audio::Audio>,
+    /// BlueZ, for the controllers paired: connected while the settings
+    /// show.
+    pub bt: Option<aizome_sys::bluetooth::Bluetooth>,
+    /// The Bluetooth controller asked about forgetting (its path, its name).
+    pub forget: Option<(String, String)>,
+    /// When the controllers were last asked to sit as players 1, 2, …
+    seat_asked: Option<Instant>,
+    /// Settings › Display: the compositor's displays, and a change to keep.
+    pub displays: display::Displays,
     pairing_session: u64,
     /// Choosing a folder.
     pub picker: Option<picker::Picker>,
@@ -568,11 +621,15 @@ impl Chanoma {
             scanned: false,
             scan_generation: 0,
             splash: None,
+            saver: None,
+            last_input: Instant::now(),
+            activity_told: None,
             pads: None,
             shared: Arc::new(Shared::default()),
             controllers: Vec::new(),
             family: Family::Generic,
             in_hand: None,
+            home_down: None,
             chords: ui::pinpad::Chords::default(),
             window: WindowKey::default(),
             hud: None,
@@ -618,6 +675,11 @@ impl Chanoma {
             art_agent: None,
             sender: None,
             pairing: None,
+            audio: None,
+            bt: None,
+            forget: None,
+            seat_asked: None,
+            displays: display::Displays::default(),
             pairing_session: 0,
             picker: None,
             search: None,
@@ -1013,6 +1075,16 @@ impl Chanoma {
                 let marks = self.home_marks();
                 self.controllers.retain(|p| p.id != id);
                 self.chords.forget(id);
+                // Held as it switched off: never let go.
+                if self.home_down.is_some_and(|(pad, _)| pad == id) {
+                    self.home_down = None;
+                }
+                // Its page goes with it.
+                if self.grownups.sub == Some(grownups::Sub::Pad(id)) && self.setup.is_none() {
+                    self.grownups.sub = None;
+                    self.grownups.row = self.grownups.back_to;
+                    self.grownups.first = 0;
+                }
                 if self.setup.as_ref().is_some_and(|s| s.pad == id) {
                     self.cancel_setup(cx);
                     self.toast_note(ui::Note::Controller, "Controller disconnected. Its layout was kept.", cx);
@@ -1027,6 +1099,13 @@ impl Chanoma {
                 if let Some(p) = self.controllers.iter_mut().find(|p| p.id == id) {
                     p.battery = battery;
                 }
+            }
+            PadEvent::Seated { id, slot } => {
+                if let Some(p) = self.controllers.iter_mut().find(|p| p.id == id) {
+                    p.slot = slot;
+                }
+                self.controllers.sort_by_key(|p| p.slot);
+                self.seat_asked = None;
             }
             PadEvent::Raw { id, input } => self.setup_raw(id, input, cx),
             PadEvent::Nav { id, dir, .. } => {
@@ -1078,7 +1157,17 @@ impl Chanoma {
                         ui::pinpad::Chorded::Nothing => {}
                     };
                 }
-                if !pressed {
+                // Home acts as it's let go, after a press: held, it's the
+                // controller being switched off, which takes no one home.
+                if button == Button::Guide {
+                    if pressed {
+                        self.home_down = Some((id, Instant::now()));
+                        return;
+                    }
+                    if !self.home_down.take().is_some_and(|(pad, at)| pad == id && at.elapsed() < HOME_HELD) {
+                        return;
+                    }
+                } else if !pressed {
                     return;
                 }
                 match (self.screen.clone(), self.button_input(button, family)) {
@@ -1246,8 +1335,14 @@ impl Chanoma {
                     .with_subtitle("Turn it on again to carry on")
             }
             // Keeping it comes first: a press too many keeps it.
+            MenuKind::Remove(Removal::Controller) => {
+                let name = self.forget.as_ref().map(|(_, n)| n.clone()).unwrap_or_default();
+                Menu::new(format!("Forget {name}?"), &["Keep it", "Forget it"])
+                    .with_subtitle("To use it again, pair it again")
+            }
             MenuKind::Remove(what) => {
                 let (name, note) = match what {
+                    Removal::Controller => (String::new(), ""),
                     Removal::Folder(i) => {
                         (self.settings.folders.get(i).map(|f| self.said(f).0).unwrap_or_default(), "Files stay put")
                     }
@@ -1268,6 +1363,10 @@ impl Chanoma {
                     if self.starts.behind() { "The game before is stuck" } else { "Taking a long time to start" };
                 Menu::new(title, &["Stop it now", "Keep waiting"]).with_subtitle(name)
             }
+            // Going back comes first: presses on a television gone dark
+            // go back.
+            MenuKind::KeepDisplay => Menu::new("Keep this display setting?", &["Go back", "Keep it"])
+                .with_subtitle(display::back_in(display::KEEP_FOR)),
         };
         log::info!("chanoma: the {kind:?} menu");
         self.modal = Some(Modal::Menu { menu, kind });
@@ -1307,6 +1406,8 @@ impl Chanoma {
                     Input::Back if matches!(kind, MenuKind::Subtitles | MenuKind::Audio) => {
                         self.open_menu(MenuKind::Film, cx);
                     }
+                    // Not keeping a display setting is going back.
+                    Input::Back | Input::Home if kind == MenuKind::KeepDisplay => self.display_back(cx),
                     Input::Back | Input::Home => self.close_modal(cx),
                     Input::Ok => {
                         let choice = self.modal_focus;
@@ -1322,7 +1423,7 @@ impl Chanoma {
     fn menu_chosen(&mut self, kind: MenuKind, choice: usize, cx: &mut Cx<Msg>) {
         // A grown-up's menu answers to a grown-up only, however it came to
         // be showing.
-        if matches!(kind, MenuKind::Time | MenuKind::Remove(_)) && !self.is_grownup() {
+        if matches!(kind, MenuKind::Time | MenuKind::Remove(_) | MenuKind::KeepDisplay) && !self.is_grownup() {
             return self.close_modal(cx);
         }
         match (kind, choice) {
@@ -1352,6 +1453,15 @@ impl Chanoma {
                 self.stop_starting(cx);
             }
             (MenuKind::Slow, _) => self.close_modal(cx),
+            (MenuKind::KeepDisplay, 1) => {
+                self.close_modal(cx);
+                self.keep_display();
+                self.focus = self.grownups.focus();
+            }
+            (MenuKind::KeepDisplay, _) => {
+                self.display_back(cx);
+                self.focus = self.grownups.focus();
+            }
             (MenuKind::Film, c) => self.film_menu_chosen(c, cx),
             (MenuKind::Subtitles, c) => self.track_chosen(true, c, cx),
             (MenuKind::Audio, c) => self.track_chosen(false, c, cx),
@@ -1931,7 +2041,7 @@ impl Chanoma {
                 WEvent::Key(k) => Chanoma::key(k).map(Msg::Input),
                 WEvent::PointerDown { pos, .. } => s.hit(size, *pos).map(Msg::Click),
                 // Over a game or a film: the bar comes down.
-                WEvent::PointerMove { pos, .. } if s.view == View::Clear => {
+                WEvent::PointerMove { pos, .. } if matches!(s.view, View::Clear | View::Saver(_)) => {
                     Some(Msg::Moved { in_bar: ui::in_top_bar(size, *pos) })
                 }
                 _ => None,
@@ -1943,6 +2053,10 @@ impl Chanoma {
     }
 
     fn main_view(&self) -> Element<Msg> {
+        if let Some(s) = self.saver_view() {
+            let scene = Scene::new(View::Saver(s), None, None, Focus::default(), 0, self.art.clone(), self.art_rev);
+            return self.stage(scene);
+        }
         let none = self.hints("Choose", Some("Back"));
         match &self.screen {
             Screen::Playing => {
@@ -2243,6 +2357,7 @@ impl Program for Chanoma {
         if self.config.drives {
             self.drives.watch(tx.clone());
         }
+        self.keep_awake();
         self.outputs_changed(cx);
         self.start_splash(cx);
         if self.config.scan {
@@ -2305,6 +2420,9 @@ impl Chanoma {
     /// Handle a message. [`Program::update`] does, and then says what
     /// couldn't be saved while it did.
     fn handle(&mut self, msg: Msg, cx: &mut Cx<Msg>) {
+        if self.input_seen(&msg, cx) {
+            return;
+        }
         match msg {
             Msg::Pad(e) => self.pad(e, cx),
             Msg::Input(i) => {
@@ -2385,9 +2503,14 @@ impl Chanoma {
             Msg::Film(e) => self.film_event(e, cx),
             Msg::CueTick => self.schedule_cues(cx),
             Msg::Mpris(a) => self.on_mpris(a, cx),
+            Msg::Services => {}
+            Msg::ServiceDone(what, result) => self.service_done(what, result, cx),
+            Msg::Displays(result) => self.displays_listed(result),
+            Msg::DisplayChanged(change, name, result) => self.display_changed(change, name, result, cx),
             Msg::Bluetooth(session) => self.bluetooth_changed(session, cx),
             Msg::SwitchedOn(session, r) => self.switched_on(session, r),
             Msg::Searching(session, r) => self.searching(session, r),
+            Msg::Bondable(session, r) => self.bondable(session, r, cx),
             Msg::Paired(session, device, r) => self.paired(session, device, r, cx),
             Msg::Drives => self.drives_changed(cx),
             Msg::Opened(outcomes) => self.opened(outcomes, cx),

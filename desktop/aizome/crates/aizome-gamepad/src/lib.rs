@@ -202,6 +202,9 @@ pub struct PadInfo {
     /// pad shaped as an old console's may have no triggers, or no
     /// shoulders.
     pub buttons: u32,
+    /// What it calls itself uniquely: a Bluetooth controller's address
+    /// (`AA:BB:CC:DD:EE:FF`), or a serial, or nothing.
+    pub address: String,
 }
 
 impl PadInfo {
@@ -239,6 +242,11 @@ pub enum PadEvent {
     Raw {
         id: u32,
         input: Input,
+    },
+    /// The controller plays as another player now ([`Pads::seat`]).
+    Seated {
+        id: u32,
+        slot: usize,
     },
 }
 
@@ -424,6 +432,12 @@ impl PadState {
     }
 }
 
+/// What a controller's seat is remembered by: its own unique name (a
+/// Bluetooth address), or its kind where it has none.
+fn seat_key(caps: &Caps) -> String {
+    if caps.uniq.is_empty() { mapping::guid(&caps.id) } else { caps.uniq.clone() }
+}
+
 fn set_bit(bits: &mut u32, b: Button, on: bool) {
     if on {
         *bits |= b.bit();
@@ -444,6 +458,7 @@ enum Cmd {
     Rumble { slot: usize, strong: u16, weak: u16, ms: u16 },
     Raw(bool),
     Layouts(HashMap<String, Mapping>),
+    Seat { id: u32, slot: usize },
     Stop,
 }
 
@@ -534,6 +549,12 @@ impl Pads {
         self.send(Cmd::Raw(on));
     }
 
+    /// Make controller `id` player `slot` (0 is player 1): whoever was
+    /// that player takes its place.
+    pub fn seat(&self, id: u32, slot: usize) {
+        self.send(Cmd::Seat { id, slot });
+    }
+
     /// Use these layouts (a controller was just set up).
     pub fn set_layouts(&self, layouts: HashMap<String, Mapping>) {
         self.send(Cmd::Layouts(layouts));
@@ -574,6 +595,7 @@ impl Pad {
             source: self.mapping.source,
             rumble: self.dev.caps.rumble,
             buttons: self.mapping.buttons(),
+            address: self.dev.caps.uniq.clone(),
         }
     }
 
@@ -695,7 +717,7 @@ impl Worker {
     }
 
     fn add(&mut self, dev: Device) {
-        let key = if dev.caps.uniq.is_empty() { mapping::guid(&dev.caps.id) } else { dev.caps.uniq.clone() };
+        let key = seat_key(&dev.caps);
         let taken: HashSet<usize> = self.pads.iter().map(|p| p.slot).collect();
         let slot = match self.seats.get(&key) {
             Some(s) if !taken.contains(s) => *s,
@@ -738,6 +760,34 @@ impl Worker {
         self.pads.push(pad);
         let i = self.pads.len() - 1;
         self.publish(i, Instant::now());
+    }
+
+    /// Controller `id` becomes player `slot`; whoever was takes its old
+    /// place. Each is remembered there, and games read them there at once.
+    fn seat(&mut self, id: u32, slot: usize) {
+        let Some(i) = self.pads.iter().position(|p| p.id == id) else { return };
+        let old = self.pads[i].slot;
+        if slot >= SLOTS || slot == old {
+            return;
+        }
+        let other = self.pads.iter().position(|p| p.slot == slot);
+        for (j, to) in [(Some(i), slot), (other, old)] {
+            let Some(j) = j else { continue };
+            let pad = &mut self.pads[j];
+            pad.slot = to;
+            if to < SLOTS {
+                self.seats.insert(seat_key(&pad.dev.caps), to);
+            }
+            log::info!("gamepad: controller {} is player {} now", pad.dev.caps.name, to + 1);
+            (self.send)(PadEvent::Seated { id: pad.id, slot: to });
+        }
+        if old < SLOTS && other.is_none() {
+            self.shared.set(old, false, 0, [0.0; 6]);
+        }
+        let now = Instant::now();
+        for j in [Some(i), other].into_iter().flatten() {
+            self.publish(j, now);
+        }
     }
 
     fn remove(&mut self, i: usize) {
@@ -828,6 +878,7 @@ impl Worker {
                     }
                 }
                 Cmd::Raw(on) => self.raw = on,
+                Cmd::Seat { id, slot } => self.seat(id, slot),
                 Cmd::Layouts(layouts) => {
                     self.config.layouts = layouts;
                     for p in &mut self.pads {

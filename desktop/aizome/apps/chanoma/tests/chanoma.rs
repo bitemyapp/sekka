@@ -310,6 +310,10 @@ fn config(dirs: Dirs, cores: PathBuf, clock: ManualClock) -> Config {
         drives: false,
         tv: false,
         after_crash: None,
+        compositor: false,
+        // Never in these flows but the screensaver's own.
+        saver_after: Duration::from_secs(24 * 3600),
+        display_settings: root.join("home/.config/aizome/settings.toml"),
     }
 }
 
@@ -327,6 +331,7 @@ fn harness(config: Config) -> Harness<Chanoma> {
         battery: Some((80, false)),
         source: aizome_chanoma::pad::mapping::Source::Database,
         rumble: true,
+        address: String::new(),
         buttons: aizome_chanoma::pad::Button::all_bits(),
     };
     h.send(Msg::Pad(PadEvent::Connected(pad)));
@@ -523,6 +528,7 @@ fn a_pin_is_the_same_presses_on_any_controller() {
         battery: None,
         source: aizome_chanoma::pad::mapping::Source::Database,
         rumble: false,
+        address: String::new(),
         buttons: aizome_chanoma::pad::Button::all_bits(),
     };
     h.send(Msg::Pad(PadEvent::Connected(switch)));
@@ -581,6 +587,7 @@ fn a_pad_without_triggers_presses_nine_and_zero_as_chords() {
         battery: None,
         source: aizome_chanoma::pad::mapping::Source::Database,
         rumble: false,
+        address: String::new(),
         buttons: snes.iter().fold(0, |b, x| b | x.bit()),
     };
     h.send(Msg::Pad(PadEvent::Connected(pad)));
@@ -1360,24 +1367,255 @@ fn incomplete_controller_setup_keeps_the_previous_layout() {
     let clock = ManualClock::at(2026, 10, 31, 17, 0);
     let mut h = harness(config(dirs.clone(), cores, clock));
     into_settings(&mut h);
-    to_section(&mut h, 5);
-    to_row(&mut h, "Player 1: Xbox Wireless Controller");
-    input(&mut h, Input::Ok);
-    assert_eq!(h.program().screen, Screen::SetUpPad);
-    for _ in 0..19 {
+    set_up_buttons(&mut h);
+    // Untouched: three steps go by, and it stops.
+    for _ in 0..3 {
         h.program_mut().setup.as_mut().unwrap().since = Instant::now() - Duration::from_secs(9);
         h.send(Msg::Tick);
     }
+    assert!(h.program().setup.is_none(), "untouched for three, it stops");
     assert_eq!(h.program().screen, Screen::GrownUps);
     assert_eq!(h.program().layouts, layouts);
     assert_eq!(load_layouts(&dirs), layouts);
-    to_section(&mut h, 5);
-    to_row(&mut h, "Player 1: Xbox Wireless Controller");
-    input(&mut h, Input::Ok);
+    set_up_buttons(&mut h);
     h.send(Msg::Pad(PadEvent::Disconnected { id: 1, slot: 0 }));
     assert_eq!(h.program().screen, Screen::GrownUps);
     assert!(h.program().setup.is_none());
     assert_eq!(load_layouts(&dirs), layouts);
+}
+
+/// Settings › Display: the size of things applies at once and is kept in
+/// Aizome's settings. A new resolution asks to be kept, and unanswered (a
+/// television gone dark), or answered with Back, goes back by itself.
+#[test]
+fn display_settings_go_back_unless_a_new_resolution_is_kept() {
+    use aizome_chanoma::app::grownups::DISPLAY;
+    use aizome_chanoma::app::{MenuKind, Modal};
+    use aizome_ipc::{Mode, OutputInfo, Request};
+    let mode = |width, height, hz: i32, preferred| Mode { width, height, refresh: hz * 1000, preferred };
+    let tv = OutputInfo {
+        name: "HDMI-A-1".into(),
+        make: "GSM".into(),
+        model: "LG TV SSCR2".into(),
+        enabled: true,
+        current_mode: Some(mode(3840, 2160, 60, true)),
+        modes: vec![mode(3840, 2160, 60, true), mode(3840, 2160, 120, false), mode(1920, 1080, 60, false)],
+        scale: 2.0,
+        ..OutputInfo::default()
+    };
+    let (dirs, cores) = household("display", |_| {});
+    let cfg = config(dirs, cores, ManualClock::at(2026, 10, 31, 17, 0));
+    let file = cfg.display_settings.clone();
+    let mut h = harness(cfg);
+    h.send(Msg::Displays(Ok(vec![tv])));
+    into_settings(&mut h);
+    to_section(&mut h, DISPLAY);
+    let value = |h: &Harness<Chanoma>, label: &str| {
+        let page = h.program().grownups_page();
+        let row = page.rows.iter().find(|r| r.label == label).unwrap_or_else(|| panic!("no row {label}"));
+        format!("{:?}", row.value)
+    };
+    let asked = |h: &Harness<Chanoma>| h.program().displays.asked.last().cloned();
+    let saved = |file: &std::path::Path| {
+        aizome_config::Settings::load_from(file).unwrap().outputs.first().map(|e| (e.mode.clone(), e.scale))
+    };
+    let keeping =
+        |h: &Harness<Chanoma>| matches!(h.program().modal, Some(Modal::Menu { kind: MenuKind::KeepDisplay, .. }));
+    assert!(h.program().grownups_page().rows.iter().any(|r| r.heading && r.label == "LG TV SSCR2"));
+    assert!(value(&h, "Size of things").contains("2× · as 1920 × 1080"));
+    assert!(value(&h, "Resolution").contains("3840 × 2160 · its own"));
+    assert!(value(&h, "Refresh rate").contains("60 Hz"));
+
+    // Things larger: at once, and kept.
+    to_row(&mut h, "Size of things");
+    input(&mut h, Input::Dir(Dir::Right));
+    assert!(matches!(asked(&h), Some(Request::OutputConfig { scale: Some(2.5), mode: None, .. })), "{:?}", asked(&h));
+    assert!(!keeping(&h));
+    assert_eq!(saved(&file), Some((Some("3840x2160@60".into()), Some(2.5))));
+    input(&mut h, Input::Dir(Dir::Left));
+    assert_eq!(saved(&file), Some((Some("3840x2160@60".into()), Some(2.0))));
+
+    // A smaller resolution, things as big: asked to be kept, and unanswered, back.
+    to_row(&mut h, "Resolution");
+    input(&mut h, Input::Dir(Dir::Left));
+    assert!(
+        matches!(asked(&h), Some(Request::OutputConfig { mode: Some(m), scale: Some(1.0), .. }) if m == "1920x1080@60"),
+        "{:?}",
+        asked(&h)
+    );
+    assert!(keeping(&h));
+    assert!(value(&h, "Resolution").contains("1920 × 1080"));
+    input(&mut h, Input::Dir(Dir::Right));
+    assert!(keeping(&h), "the question stays");
+    h.program_mut().displays.keep.as_mut().unwrap().since -= Duration::from_secs(16);
+    h.send(Msg::Tick);
+    assert!(!keeping(&h));
+    assert!(
+        matches!(asked(&h), Some(Request::OutputConfig { mode: Some(m), scale: Some(2.0), .. }) if m == "3840x2160@60")
+    );
+    assert!(value(&h, "Resolution").contains("3840 × 2160"));
+    assert_eq!(saved(&file), Some((Some("3840x2160@60".into()), Some(2.0))), "never kept: the settings say as before");
+
+    // Back is going back too.
+    input(&mut h, Input::Dir(Dir::Left));
+    assert!(keeping(&h));
+    input(&mut h, Input::Back);
+    assert!(!keeping(&h));
+    assert!(value(&h, "Resolution").contains("3840 × 2160"));
+
+    // Kept: in the settings.
+    to_row(&mut h, "Refresh rate");
+    input(&mut h, Input::Dir(Dir::Right));
+    assert!(keeping(&h));
+    assert_eq!(h.program().modal_focus, 0, "going back comes first");
+    input(&mut h, Input::Dir(Dir::Down));
+    input(&mut h, Input::Ok);
+    assert!(!keeping(&h));
+    assert!(h.program().displays.keep.is_none());
+    assert!(value(&h, "Refresh rate").contains("120 Hz"));
+    assert_eq!(saved(&file), Some((Some("3840x2160@120".into()), Some(2.0))));
+}
+
+/// A new resolution the compositor made, its list of displays lost after:
+/// the display still goes back as it was.
+#[test]
+fn a_display_change_whose_answer_is_lost_still_goes_back() {
+    use aizome_chanoma::app::grownups::DISPLAY;
+    use aizome_ipc::{Mode, OutputInfo, Request, Response};
+    use std::io::{BufRead, BufReader, Write};
+    use std::os::unix::net::UnixListener;
+    // A compositor of the test's own, at a socket of the test's own.
+    let ours = |p: &std::ffi::OsStr| p.to_string_lossy().contains("chanoma-ipc-");
+    if !std::env::var_os("AIZOME_SOCKET").is_some_and(|p| ours(&p)) {
+        let socket = std::env::temp_dir().join(format!("chanoma-ipc-{}.sock", std::process::id()));
+        let status = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "a_display_change_whose_answer_is_lost_still_goes_back"])
+            .env("AIZOME_SOCKET", &socket)
+            .status()
+            .unwrap();
+        let _ = std::fs::remove_file(&socket);
+        assert!(status.success());
+        return;
+    }
+    let socket = PathBuf::from(std::env::var_os("AIZOME_SOCKET").unwrap());
+    let _ = std::fs::remove_file(&socket);
+    let listener = UnixListener::bind(&socket).unwrap();
+    let mode = |width, height, hz: i32, preferred| Mode { width, height, refresh: hz * 1000, preferred };
+    let tv = OutputInfo {
+        name: "HDMI-A-1".into(),
+        make: "GSM".into(),
+        model: "LG TV SSCR2".into(),
+        enabled: true,
+        current_mode: Some(mode(3840, 2160, 60, true)),
+        modes: vec![mode(3840, 2160, 60, true), mode(3840, 2160, 120, false), mode(1920, 1080, 60, false)],
+        scale: 2.0,
+        ..OutputInfo::default()
+    };
+    // The display as the compositor has it, the changes it was asked for
+    // (a mode and a scale each), and whether it has lost a list yet (the
+    // first after a change).
+    type Asked = (Option<String>, Option<f64>);
+    let shown = Arc::new(Mutex::new(tv));
+    let changes: Arc<Mutex<Vec<Asked>>> = Arc::default();
+    let lost = Arc::new(AtomicBool::new(false));
+    {
+        let (shown, changes, lost) = (shown.clone(), changes.clone(), lost.clone());
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let Ok(stream) = stream else { return };
+                let (shown, changes, lost) = (shown.clone(), changes.clone(), lost.clone());
+                std::thread::spawn(move || {
+                    let mut out = stream.try_clone().unwrap();
+                    let mut changed = false;
+                    for line in BufReader::new(stream).lines() {
+                        let Ok(line) = line else { return };
+                        let answer = match serde_json::from_str::<Request>(&line) {
+                            Ok(Request::Outputs) if changed && !lost.swap(true, Ordering::SeqCst) => return,
+                            Ok(Request::Outputs) => Response::Outputs { outputs: vec![shown.lock().unwrap().clone()] },
+                            Ok(Request::OutputConfig { mode: m, scale, .. }) => {
+                                let mut o = shown.lock().unwrap();
+                                if let Some(m) = &m {
+                                    let (w, h, r) = aizome_config::parse_mode(m).unwrap();
+                                    let found = o.modes.iter().find(|x| {
+                                        (x.width, x.height) == (w, h) && r.is_none_or(|r| (x.refresh - r).abs() < 10)
+                                    });
+                                    o.current_mode = found.cloned();
+                                }
+                                if let Some(s) = scale {
+                                    o.scale = s;
+                                }
+                                changes.lock().unwrap().push((m, scale));
+                                changed = true;
+                                Response::Ok
+                            }
+                            _ => Response::Ok,
+                        };
+                        let text = serde_json::to_string(&answer).unwrap() + "\n";
+                        if out.write_all(text.as_bytes()).is_err() {
+                            return;
+                        }
+                    }
+                });
+            }
+        });
+    }
+    let (dirs, cores) = household("display-lost", |_| {});
+    let mut cfg = config(dirs, cores, ManualClock::at(2026, 10, 31, 17, 0));
+    cfg.compositor = true;
+    let mut h = harness(cfg);
+    into_settings(&mut h);
+    until(&mut h, |a| a.display("HDMI-A-1").is_some());
+    to_section(&mut h, DISPLAY);
+    to_row(&mut h, "Resolution");
+    input(&mut h, Input::Dir(Dir::Left));
+    until(&mut h, |a| !a.displays.busy);
+    assert_eq!(changes.lock().unwrap().first(), Some(&(Some("1920x1080@60".into()), Some(1.0))));
+    assert!(lost.load(Ordering::SeqCst), "the list after the change was lost");
+    // Unanswered as long as a change is kept for, if it hasn't gone back already.
+    if let Some(k) = h.program_mut().displays.keep.as_mut() {
+        k.since -= Duration::from_secs(16);
+    }
+    h.send(Msg::Tick);
+    let back = |c: &[Asked]| c.last() == Some(&(Some("3840x2160@60".into()), Some(2.0)));
+    let end = Instant::now() + Duration::from_secs(10);
+    while !back(&changes.lock().unwrap()) && Instant::now() < end {
+        h.settle(Duration::from_millis(20), |_| false);
+    }
+    let changes = changes.lock().unwrap().clone();
+    eprintln!("asked of the compositor: {changes:?}; keep {:?}", h.program().displays.keep);
+    assert!(back(&changes), "gone back to 3840 × 2160 at 2×: {changes:?}");
+    until(&mut h, |a| !a.displays.busy);
+    assert_eq!(h.program().display("HDMI-A-1").and_then(|o| o.current_mode.clone()), Some(mode(3840, 2160, 60, true)));
+    assert!(h.program().displays.keep.is_none());
+}
+
+/// Holding Home is how a controller switches off: Chanoma stays where it
+/// was. Home pressed and let go goes home.
+#[test]
+fn home_held_to_switch_a_controller_off_leaves_chanoma_where_it_was() {
+    let (dirs, cores) = household("home-held", |_| {});
+    let mut h = harness(config(dirs, cores, ManualClock::at(2026, 10, 31, 17, 0)));
+    into_settings(&mut h);
+    let home = |h: &mut Harness<Chanoma>, pressed| {
+        h.send(Msg::Pad(PadEvent::Button { id: 1, slot: 0, button: Button::Guide, pressed }));
+    };
+    // Held, and it switches off: never let go.
+    home(&mut h, true);
+    assert_eq!(h.program().screen, Screen::GrownUps, "Home acts as it's let go");
+    h.send(Msg::Pad(PadEvent::Disconnected { id: 1, slot: 0 }));
+    assert_eq!(h.program().screen, Screen::GrownUps);
+    assert!(h.program().home_down.is_none());
+    // Held as long as switching off takes, and let go.
+    home(&mut h, true);
+    h.program_mut().home_down.as_mut().unwrap().1 -= Duration::from_secs(3);
+    home(&mut h, false);
+    assert_eq!(h.program().screen, Screen::GrownUps, "a long hold isn't Home");
+    // Let go without a press seen (pressed to wake the screen, say).
+    home(&mut h, false);
+    assert_eq!(h.program().screen, Screen::GrownUps);
+    // Pressed and let go: home.
+    press(&mut h, Button::Guide);
+    assert_eq!(h.program().screen, Screen::Home);
 }
 
 #[test]
@@ -1491,6 +1729,9 @@ mod bluez {
         /// Searches refused because it was off.
         pub refused: u32,
         pub looking: bool,
+        /// Pairable (bondable), and for how long.
+        pub pairable: bool,
+        pub pairable_timeout: u32,
     }
 
     pub struct Adapter {
@@ -1526,6 +1767,22 @@ mod bluez {
         #[zbus(property)]
         fn discovering(&self) -> bool {
             self.asked.lock().unwrap().looking
+        }
+        #[zbus(property)]
+        fn pairable(&self) -> bool {
+            self.asked.lock().unwrap().pairable
+        }
+        #[zbus(property)]
+        fn set_pairable(&mut self, on: bool) {
+            self.asked.lock().unwrap().pairable = on;
+        }
+        #[zbus(property)]
+        fn pairable_timeout(&self) -> u32 {
+            self.asked.lock().unwrap().pairable_timeout
+        }
+        #[zbus(property)]
+        fn set_pairable_timeout(&mut self, seconds: u32) {
+            self.asked.lock().unwrap().pairable_timeout = seconds;
         }
         fn start_discovery(&self) -> Result<(), Error> {
             let mut asked = self.asked.lock().unwrap();
@@ -1611,6 +1868,24 @@ fn pairing_waits_for_bluetooth_to_be_on_before_it_looks() {
     assert!(asked.lock().unwrap().looking, "the adapter is looking");
     assert_eq!(asked.lock().unwrap().refused, 0);
     assert_eq!(lines(&h), ["Looking…"]);
+    // And may bond, for three minutes at a time, so a controller that asks
+    // not to keeps its key.
+    use aizome_chanoma::app::grownups::MayBond;
+    assert!(eventually(|| asked.lock().unwrap().pairable), "the adapter may bond while the screen looks");
+    assert_eq!(asked.lock().unwrap().pairable_timeout, 180);
+    until(&mut h, |a| a.pairing.as_ref().is_some_and(|p| p.may_bond == MayBond::Granted { seen: true }));
+    // BlueZ ends it after the three minutes: asked again.
+    {
+        let iface = fake.object_server().interface::<_, bluez::Adapter>(bluez::ADAPTER).unwrap();
+        iface.get_mut().asked.lock().unwrap().pairable = false;
+        zbus::block_on(iface.get().pairable_changed(iface.signal_emitter())).unwrap();
+    }
+    let again = asked.clone();
+    until(&mut h, move |_| again.lock().unwrap().pairable);
+    // Left: no longer.
+    input(&mut h, Input::Back);
+    assert!(h.program().pairing.is_none());
+    assert!(eventually(|| !asked.lock().unwrap().pairable), "the adapter may bond no longer");
 }
 
 /// Wait up to 20 seconds for `condition` (another process answers in real
@@ -2265,6 +2540,7 @@ fn games_say_what_the_databases_know_and_two_controllers_bring_their_games() {
         battery: Some((60, false)),
         source: aizome_chanoma::pad::mapping::Source::Database,
         rumble: true,
+        address: String::new(),
         buttons: aizome_chanoma::pad::Button::all_bits(),
     };
     h.send(Msg::Pad(PadEvent::Connected(second)));
@@ -3198,4 +3474,115 @@ fn a_lock_kept_from_a_clock_that_ran_ahead_lasts_no_longer_than_the_longest() {
     assert_eq!(h.program().lockout.wait(now), Some(MAX_LOCK_SECS));
     let saved: Lockout = aizome_chanoma::store::read(&dirs.state.join("lockout.json"));
     assert_eq!((saved.failures, saved.until), (3, now + MAX_LOCK_SECS));
+}
+
+#[test]
+fn left_alone_chanoma_shows_its_screensaver_and_the_press_that_ends_it_does_nothing_else() {
+    let (dirs, cores) = household("saver", |_| {});
+    let mut c = config(dirs, cores, ManualClock::at(2026, 10, 31, 17, 0));
+    c.saver_after = Duration::ZERO;
+    let mut h = harness(c);
+    h.send(Msg::Tick);
+    let saver = h.program().saver_view().expect("the screensaver, left alone");
+    assert_eq!(saver.clock, "17:00");
+    shot(&mut h, "60-screensaver");
+    // Each minute somewhere else on the screen.
+    let moved = aizome_chanoma::ui::Saver { place: saver.place + 1, ..saver.clone() };
+    assert_ne!(saver.at(), moved.at());
+
+    let (screen, focus) = (h.program().screen.clone(), h.program().focus);
+    press(&mut h, Button::South);
+    assert!(h.program().saver.is_none(), "a press ends it");
+    assert_eq!((h.program().screen.clone(), h.program().focus), (screen.clone(), focus), "and does nothing else");
+    // A key, a click and a controller switched on end it too; the
+    // controller is still counted.
+    h.send(Msg::Tick);
+    assert!(h.program().saver.is_some());
+    input(&mut h, Input::Ok);
+    assert!(h.program().saver.is_none());
+    assert_eq!(h.program().screen, screen, "the key did nothing else");
+    h.send(Msg::Tick);
+    let pad = PadInfo {
+        id: 2,
+        slot: 1,
+        name: "Xbox Wireless Controller".into(),
+        family: Family::Xbox,
+        bluetooth: true,
+        guid: String::new(),
+        battery: Some((80, false)),
+        source: aizome_chanoma::pad::mapping::Source::Database,
+        rumble: true,
+        address: String::new(),
+        buttons: aizome_chanoma::pad::Button::all_bits(),
+    };
+    h.send(Msg::Pad(PadEvent::Connected(pad)));
+    assert!(h.program().saver.is_none(), "a controller switched on ends it");
+    assert!(h.program().controllers.iter().any(|p| p.id == 2), "and is counted");
+}
+
+/// From the settings: the first controller's page, and Set up its buttons.
+fn set_up_buttons(h: &mut Harness<Chanoma>) {
+    to_section(h, 5);
+    to_row(h, "Player 1: Xbox Wireless Controller");
+    input(h, Input::Ok);
+    assert_eq!(h.program().grownups_page().title, "Controllers › Xbox Wireless Controller");
+    to_row(h, "Set up its buttons…");
+    input(h, Input::Ok);
+    assert_eq!(h.program().screen, Screen::SetUpPad);
+}
+
+#[test]
+fn a_controllers_page_has_its_player_and_setting_its_buttons_up_stops_however_asked() {
+    let (dirs, cores) = household("pad-page", |_| {});
+    let mut h = harness(config(dirs, cores, ManualClock::at(2026, 10, 31, 17, 0)));
+    let second = PadInfo {
+        id: 2,
+        slot: 1,
+        name: "Pro Controller".into(),
+        family: Family::Nintendo,
+        bluetooth: true,
+        guid: String::new(),
+        battery: Some((80, false)),
+        source: aizome_chanoma::pad::mapping::Source::Database,
+        rumble: true,
+        buttons: aizome_chanoma::pad::Button::all_bits(),
+        address: "E4:17:D8:8C:B6:D5".into(),
+    };
+    h.send(Msg::Pad(PadEvent::Connected(second)));
+    into_settings(&mut h);
+
+    // A controller's row opens its page; it doesn't start anything.
+    set_up_buttons(&mut h);
+    // Stopped by Esc (Back), a click on Stop, or another controller's Back:
+    // back on its page, its buttons as they were.
+    input(&mut h, Input::Back);
+    assert_eq!(h.program().screen, Screen::GrownUps);
+    assert_eq!(h.program().grownups_page().title, "Controllers › Xbox Wireless Controller");
+    to_row(&mut h, "Set up its buttons…");
+    input(&mut h, Input::Ok);
+    h.send(Msg::Click(aizome_chanoma::ui::Target::Item(1)));
+    assert_eq!(h.program().screen, Screen::GrownUps, "a click on Stop stops");
+    to_row(&mut h, "Set up its buttons…");
+    input(&mut h, Input::Ok);
+    // B on a Nintendo controller: Back.
+    press_on(&mut h, 2, Button::South);
+    assert_eq!(h.program().screen, Screen::GrownUps, "another controller's Back stops");
+    shot(&mut h, "61-controller-page");
+
+    // Its player, swapped with whoever was.
+    to_row(&mut h, "Plays as");
+    assert_eq!(row_on(&h).value, Value::Choice("Player 1".into()));
+    input(&mut h, Input::Dir(Dir::Right));
+    let players: Vec<(u32, usize)> = h.program().controllers.iter().map(|p| (p.id, p.slot)).collect();
+    assert_eq!(players, [(2, 0), (1, 1)]);
+    assert_eq!(row_on(&h).value, Value::Choice("Player 2".into()));
+
+    // Player 1 switched off: off a game, the other is player 1 at once.
+    h.send(Msg::Pad(PadEvent::Disconnected { id: 2, slot: 0 }));
+    h.send(Msg::Tick);
+    let players: Vec<(u32, usize)> = h.program().controllers.iter().map(|p| (p.id, p.slot)).collect();
+    assert_eq!(players, [(1, 0)]);
+    to_section(&mut h, 5);
+    to_row(&mut h, "Player 1: Xbox Wireless Controller");
+    shot(&mut h, "62-controllers");
 }

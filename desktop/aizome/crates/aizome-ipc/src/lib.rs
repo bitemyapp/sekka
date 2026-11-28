@@ -319,6 +319,10 @@ pub enum Request {
     Quit,
     PowerOffMonitors,
     PowerOnMonitors,
+    /// Input happened that the compositor can't see: a controller's,
+    /// read by the app that has it (Chanoma). Counted as input is: the
+    /// idle timers start again, and displays off for idleness come on.
+    Activity,
     /// Asks the shell to lock (sends `binding` `lock` to subscribers).
     Lock,
     /// Turns this connection into an event stream.
@@ -1345,6 +1349,8 @@ mod tests {
         assert_eq!(r, Request::IdleInhibitors);
         let r: Request = serde_json::from_str(r#"{"request":"keep-awake"}"#).unwrap();
         assert_eq!(r, Request::KeepAwake);
+        let r: Request = serde_json::from_str(r#"{"request":"activity"}"#).unwrap();
+        assert_eq!(r, Request::Activity);
         let player = IdleInhibitorInfo {
             kind: IdleHolder::App,
             window: Some(7),

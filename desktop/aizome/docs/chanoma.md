@@ -226,7 +226,46 @@ act on presses Chanoma turns into keys. Devices are found with inotify on
 `/dev/input`, retried when logind's ACL arrives (`IN_ATTRIB`), and told
 apart from keyboards, touchpads and motion sensors by their capabilities.
 A controller that comes back (by its Bluetooth address or USB serial)
-keeps its player number.
+keeps its player number while its seat is free. Off a game the players
+close up: switch player 1's controller off and player 2's is player 1
+within a second (`seat_players`, the thread's `Pads::seat`); during a game
+nobody moves, so a controller dropping out doesn't swap the others.
+
+*Settings › Controllers* lists the players, each opening a page of its
+own (never anything more at a press): *Plays as* (left and right, swapping
+with whoever that player was), *Find it* (it rumbles), how it's connected
+and its battery, how its buttons are known (*Known*, *Set up here*, *As
+Linux says*), *Set up its buttons…*, *Back to its usual buttons* where
+they were set up here, and *Forget this controller* for a Bluetooth one
+(BlueZ's `RemoveDevice`, after asking). Below the players, Bluetooth
+controllers paired but not on now can be forgotten too. Setting buttons
+up asks for one at a time and always has a way out: Esc, a click on
+*Stop*, another controller's Back, or leaving it, since three steps in a
+row untouched end it with what was pressed (a pad with no sticks or
+triggers finishes that way too). Stopped with nothing pressed, its
+buttons stay as they were.
+
+A Bluetooth controller that asks not to bond (8BitDo's in Switch mode,
+as a "Pro Controller") still has its pairing key kept, so it reconnects
+when switched on again: Linux otherwise goes along with the request
+(`hci_get_auth_req`), marks the key not to keep (`hci_persistent_key`)
+and forgets it when the controller switches off, and the controller,
+which a Switch would have remembered, blinks for a computer that no
+longer knows it. `nix/chanoma-bluetooth-keys.patch` keeps the key of
+any joystick or gamepad (by its class of device) while the computer is
+bondable; `nix/chanoma-bluetooth.nix` builds Linux's `bluetooth` module
+alone with it, from the kernel's own source and configuration, into
+`updates`, which depmod searches first (`chanoma.keepControllerKeys`,
+on by default). It takes effect from the next boot. The computer is
+bondable (BlueZ's `Pairable`) while *Pair a controller…* is open, and
+controllers are paired only once it is (`MayBond`): three minutes at a
+time (`PairableTimeout`), asked again as BlueZ ends it, and ended as the
+screen is left, so a Chanoma that stops without saying leaves it so no
+longer than that. Otherwise it isn't, and a device claiming to be a
+gamepad can't have a key kept without someone opening the screen. Where
+BlueZ won't, controllers pair as before, without their keys kept. A
+controller paired before this keeps reconnecting to nothing: forget it
+and pair it again.
 
 *Pair a controller…* (`app/grownups.rs`) talks to BlueZ through
 `aizome-sys`, as Settings does. An adapter found off is switched on
@@ -255,7 +294,10 @@ Which button says yes follows the controller (Nintendo's right-hand A,
 others' bottom button) unless a grown-up sets it. Menus get a direction
 from the arrows or the left stick (with hysteresis), repeating after
 420 ms every 130 ms, quickening to 75 ms. Select and Start held for a
-second is Home on controllers without one. The pointer hides while a
+second is Home on controllers without one. A controller's Home acts as
+it's let go, after a press: held a second or more, it's the controller
+being switched off (an Xbox, an 8BitDo or a PlayStation controller
+switches off so), which leaves Chanoma where it was. The pointer hides while a
 controller is in hand (until the mouse moves), as on a console, and the TV
 account's Chanoma starts without one.
 
@@ -1152,6 +1194,72 @@ controller: X takes a letter back, Y types a space); Start or Back puts
 the keyboard away to go through them, up from their first line brings
 it back, and Back from them goes back where search was opened.
 
+### Screensaver
+
+Left alone for five minutes off a game, a film or a page, Chanoma goes
+dark but for the time and its mark, small and dim, somewhere else on the
+screen each minute so nothing stays put on a television
+(`app/saver.rs`). Any button, key, click or move of the mouse brings it
+back as it was, and does nothing else; a controller switched on brings it
+back and is counted as ever.
+
+The compositor can't see a controller: Chanoma reads it itself. So
+Chanoma tells the compositor of a controller's presses (aizome-ipc's
+`activity`, at most every ten seconds), which counts them as input, as it
+counts keys and the mouse: the idle timers start again, and displays off
+for idleness come back on. On the desktop the session's own locking and
+its displays going off then follow controllers too. On the TV account,
+whose session is Chanoma alone, Chanoma holds the display awake for as
+long as it runs (`keep-awake`, held on a connection it keeps): a
+television whose picture went off would look broken, and only a keyboard
+or a mouse could wake it. The television's own power settings still
+apply.
+
+### Sound
+
+*Settings › Sound* chooses where sound comes out and how loud, as
+Settings' Sound does on the desktop: every output the session's PipeWire
+has (through pipewire-pulse, `aizome_sys::audio`), named as people say
+them (a TV over HDMI by its own name), with a check on the one in use;
+the confirm button uses another. Volume steps by 5% up to full with left
+and right, and Mute switches. WirePlumber keeps the choice for the
+account, as for any. Chanoma connects to the sound server while the
+settings show and lets it go as they're left, so nothing follows the
+sound server during a game or a film; started `--silent`, the section
+says so. Inputs, each app's volume and the alert sound stay the
+desktop's.
+
+### The size of things
+
+Chanoma draws a 1920 × 1080 stage scaled to the screen, whatever the
+screen's scale. What else shows on the television (the login screen, a
+service's page in the browser, the desktop) goes by the compositor's
+scale, and a television's is by its lines until one is chosen: 2 for 4K
+(docs/compositor.md). By its density, as a desk monitor's is, a 4K
+television would be at 1, its text a desk monitor's size seen from the
+sofa, and every service but YouTube's (which has a television's page)
+unreadable.
+
+### Display
+
+*Settings › Display* has each display that's on, by its name (its
+model): the size of things (its scale, said with the room it leaves:
+"2× · as 1920 × 1080"; from 1× to 4×, by halves to 3×, none leaving
+fewer than 540 lines), its resolution (its own marked) and its refresh
+rate, each stepped with left and right, more to the right (`app/display.rs`,
+through the compositor's `outputs` and `output-config`, as Settings'
+Displays does on the desktop). A smaller resolution keeps things as big,
+its scale going down with it, at the refresh rate nearest the one before.
+
+The size of things applies at once. A resolution or refresh rate asks
+"Keep this display setting?", going back by itself after 15 seconds
+unanswered: a television that can't show it is dark, and no one can
+answer. *Go back* comes first, so presses on a dark screen go back, as
+Back and Home do. What's kept goes in Aizome's settings
+(`~/.config/aizome/settings.toml`'s `[[outputs]]`, by make, model and
+serial, as Settings writes them), which the compositor starts with next
+time.
+
 ### The TV account
 
 A grown-up can give the television an account of its own (Settings,
@@ -1194,6 +1302,32 @@ Nothing in the session asks it for anything (the browser's sign-ins,
 under Services), so it keeps nothing: after the session the account's
 home has no keyring in it, which the TV VM check looks for, and which an
 installed system showed on 2026-11-23.
+
+The account uses the displays and the sound output of whichever account
+changed them last, so a grown-up who sets up the television in their own
+account (Settings' Displays and Sound) has set it up for the TV account
+too. Before the account's own systemd starts, systemd runs
+`aizome-tv-account follow UID` as root (`aizome-tv-follow@UID`, which
+every account's `user@UID` waits for; for any other account it does
+nothing). Its displays become the `outputs` of the account that set its
+own up anew last: among the accounts whose `outputs` differ from what
+they were when the TV account last followed (a SHA-256 of each
+account's, kept in `~/.local/state/aizome/tv-followed-outputs.toml`, so
+no other account's displays are copied there), the one whose
+`settings.toml` changed last. Until a grown-up's account sets the
+displays up anew, what was chosen in Chanoma's Settings › Display stays,
+whatever else of that account's settings changes. The rest of its own
+settings stay; settings of its own that are there but can't be read as
+they are (a link, not TOML) stay untouched, and nothing is followed
+until they can be. Its sound becomes WirePlumber's choices
+(`~/.local/state/wireplumber`: `default-nodes`, `default-profile`,
+`default-routes`, each kept with its date) of the account that changed
+its own last, unless the TV account's changed since (in Chanoma's
+Sound). Each app's volume stays its own. The helper reads each account's
+files and writes the TV account's with that account's own file-system
+identity, never through a link and never waiting on a pipe. A TV account still logged in (its
+systemd still running, as for a few seconds after logging out) follows
+at its next login.
 
 The drives the account opens every other account may read, but not
 change (`programs.aizome.chanoma.shareTvDrives`, on unless turned off).
@@ -1551,7 +1685,7 @@ each knowing what it costs. A change that reverses one is not a fix:
 raise it with the owner. Each is marked "Decided on purpose" where it
 is set, and a check fails when it is taken out:
 `checks.aizome-chanoma-defaults` (`nix/aizome-chanoma-defaults-test.nix`)
-for the first two, a test named with each of the others.
+for the first three, a test named with each of the others.
 
 - **A Bluetooth device that forgot the computer pairs again without
   anyone confirming** (`JustWorksRepairing = always`, in the module, on
@@ -1565,6 +1699,17 @@ for the first two, a test named with each of the others.
   took it out the same day as a security fix, and it was put back. One
   system sets it back with
   `hardware.bluetooth.settings.General.JustWorksRepairing`.
+- **A controller that pairs without bonding works** (`ClassicBondedOnly
+  = false` in BlueZ's `input.conf`, in the module, on every system
+  Chanoma comes with). What it costs: BlueZ made bonded-only its default
+  for CVE-2023-45866, so with it off something nearby can connect as a
+  keyboard without pairing and type into whatever session is open, a
+  grown-up's desktop as much as Chanoma. Why it stays: 8BitDo's
+  Switch-only pads pair from Linux as a "Pro Controller" with no key kept
+  (BlueZ: "Rejected connection from !bonded device"), and a television's
+  controllers have to work; the owner, 2026-11-26: "it should work". One
+  system sets it back with
+  `hardware.bluetooth.input.General.ClassicBondedOnly`.
 - **Chanoma comes with every Aizome, whole, with nothing to turn on**:
   the app, its cores, and Google Chrome where unfree packages are
   allowed. The television's own account, made in Settings, is the one

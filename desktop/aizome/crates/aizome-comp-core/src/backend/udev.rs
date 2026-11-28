@@ -1196,12 +1196,28 @@ pub fn parse_edid(e: &[u8]) -> Option<(String, String, String)> {
     Some((make, model, serial))
 }
 
-/// 2 for HiDPI panels (over ~180 dots per inch), else 1.
-pub fn auto_scale(width_px: i32, width_mm: i32) -> f64 {
-    if width_mm <= 0 {
-        return 1.0;
+/// A screen this big across or more (39") with a television's shape is a
+/// television, seen from across the room.
+const TELEVISION_MM: f64 = 1000.0;
+
+/// The scale a display has until one is chosen. A desk monitor or a
+/// laptop's panel goes by its density: 2 over ~180 dots per inch, else 1.
+/// A television goes by its lines, as a television's own menus do: 1080 to
+/// each step, so a 4K one is at 2 (at 1, its text is a desk monitor's
+/// size seen from the sofa). So does a display that doesn't say its size.
+pub fn auto_scale(mode: (i32, i32), mm: (i32, i32)) -> f64 {
+    let (width_px, height_px) = mode;
+    let by_lines = f64::from((height_px / 1080).max(1));
+    let (width_mm, height_mm) = (f64::from(mm.0), f64::from(mm.1));
+    if width_mm <= 0.0 || height_mm <= 0.0 {
+        return by_lines;
     }
-    let dpi = width_px as f64 / (width_mm as f64 / 25.4);
+    // Not an ultrawide or a portrait monitor: 16:9, give or take.
+    let television_shaped = (1.5..=2.0).contains(&(width_mm / height_mm));
+    if television_shaped && width_mm.hypot(height_mm) >= TELEVISION_MM {
+        return by_lines;
+    }
+    let dpi = f64::from(width_px) / (width_mm / 25.4);
     if dpi > 180.0 { 2.0 } else { 1.0 }
 }
 
@@ -1398,7 +1414,10 @@ fn connector_connected_as(
             modes,
         },
     );
-    let scale = cfg.as_ref().and_then(|c| c.scale).unwrap_or_else(|| auto_scale(wl_mode.size.w, mm_w as i32));
+    let scale = cfg
+        .as_ref()
+        .and_then(|c| c.scale)
+        .unwrap_or_else(|| auto_scale((wl_mode.size.w, wl_mode.size.h), (mm_w as i32, mm_h as i32)));
     let x = state.az.outputs.iter().map(|o| state.az.output_rect(o).right()).max().unwrap_or(0);
     let pos = position.or(cfg.as_ref().and_then(|c| c.position).map(|p| (p[0], p[1]))).unwrap_or((x, 0));
     info!(name, make, model, ?pos, scale, "output connected");
@@ -1899,8 +1918,26 @@ mod tests {
 
     #[test]
     fn hidpi_panels_get_scale_2() {
-        assert_eq!(auto_scale(2880, 290), 2.0);
-        assert_eq!(auto_scale(1920, 527), 1.0);
-        assert_eq!(auto_scale(1920, 0), 1.0);
+        assert_eq!(auto_scale((2880, 1800), (290, 180)), 2.0);
+        assert_eq!(auto_scale((1920, 1080), (527, 296)), 1.0);
+        // 27" 4K: under the density for 2.
+        assert_eq!(auto_scale((3840, 2160), (597, 336)), 1.0);
+        // Ultrawides, however big: desk monitors.
+        assert_eq!(auto_scale((5120, 2160), (943, 398)), 1.0);
+        assert_eq!(auto_scale((5120, 1440), (1196, 336)), 1.0);
+    }
+
+    #[test]
+    fn televisions_are_scaled_by_their_lines() {
+        // tanaris's LG: 4K over 160 × 90 cm, 61 dots per inch.
+        assert_eq!(auto_scale((3840, 2160), (1600, 900)), 2.0);
+        assert_eq!(auto_scale((4096, 2160), (1430, 800)), 2.0);
+        assert_eq!(auto_scale((1920, 1080), (1210, 680)), 1.0);
+        assert_eq!(auto_scale((1366, 768), (885, 498)), 1.0);
+        assert_eq!(auto_scale((7680, 4320), (1650, 930)), 4.0);
+        // A display that doesn't say its size (a projector, say).
+        assert_eq!(auto_scale((3840, 2160), (0, 0)), 2.0);
+        assert_eq!(auto_scale((1920, 1080), (0, 0)), 1.0);
+        assert_eq!(auto_scale((1920, 1080), (527, 0)), 1.0);
     }
 }
