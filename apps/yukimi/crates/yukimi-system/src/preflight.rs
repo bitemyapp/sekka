@@ -352,8 +352,19 @@ enum BuildKind {
     Compile,
 }
 
-/// Inputs that mean a derivation compiles, by name without the hash.
-const COMPILERS: [&str; 15] = [
+/// Inputs that mean a derivation compiles, by name without the hash. Nixpkgs
+/// builds .NET projects with `stdenvNoCC`, so its SDK is named here: wrapped
+/// or not, and several combined into one. Its runtime alone, which runs a
+/// program built elsewhere, is not. Bun, Mono, Dart, Flutter, Swift, Deno,
+/// Gradle, Maven, Mill and sbt are wanted only to build something, so they
+/// are named too, before a builder of theirs moves to `stdenvNoCC`.
+///
+/// Decided on purpose: a derivation put together with `stdenvNoCC` whose
+/// toolchain isn't named here counts as a copy, and Yukimi doesn't name it.
+/// A toolchain found missing is added here and to the coverage gate's list
+/// (`scripts/check_cache_coverage.py`), with a case in
+/// `data/build-kinds.json`.
+const COMPILERS: [&str; 27] = [
     "rustc-",
     "cargo-",
     "go-",
@@ -368,6 +379,18 @@ const COMPILERS: [&str; 15] = [
     "openjdk-",
     "jdk-",
     "nodejs-",
+    "bun-",
+    "dotnet-sdk-",
+    "dotnet-wrapped-combined",
+    "mono-",
+    "dart-",
+    "flutter-",
+    "swift-",
+    "deno-",
+    "gradle-",
+    "maven-",
+    "mill-",
+    "sbt-",
     "stdenv-linux.drv",
 ];
 

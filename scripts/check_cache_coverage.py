@@ -243,9 +243,20 @@ def settings(info):
 # cases run in both tests, so change `settings`, COMPILERS, RUNTIME_LIBRARIES,
 # `compiler` or `kind` together with Yukimi's.
 
-# Inputs that mean a derivation compiles (by name, without the hash).
+# Inputs that mean a derivation compiles (by name, without the hash). Nixpkgs
+# builds .NET projects with stdenvNoCC, so its SDK is named here: wrapped or
+# not, and several combined into one. Its runtime alone, which runs a program
+# built elsewhere, is not. Bun, Mono, Dart, Flutter, Swift, Deno, Gradle,
+# Maven, Mill and sbt are wanted only to build something, so they are named
+# too, before a builder of theirs moves to stdenvNoCC.
+#
+# Decided on purpose: a derivation put together with stdenvNoCC whose
+# toolchain isn't named here counts as a copy. A toolchain found missing is
+# added here and to Yukimi's list, with a case in build-kinds.json.
 COMPILERS = ('rustc-', 'cargo-', 'go-', 'gcc-', 'clang-', 'llvm-', 'cmake-', 'meson-', 'ninja-', 'ghc-',
-             'zig-', 'openjdk-', 'jdk-', 'nodejs-', 'stdenv-linux.drv')
+             'zig-', 'openjdk-', 'jdk-', 'nodejs-', 'bun-', 'dotnet-sdk-', 'dotnet-wrapped-combined',
+             'mono-', 'dart-', 'flutter-', 'swift-', 'deno-', 'gradle-', 'maven-', 'mill-', 'sbt-',
+             'stdenv-linux.drv')
 
 # The outputs that hold a compiler's runtime libraries and not the compiler.
 # GCC keeps libstdc++ in `lib` and libgcc_s in `libgcc`, and a program built
