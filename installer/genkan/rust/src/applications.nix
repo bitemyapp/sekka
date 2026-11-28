@@ -49,13 +49,28 @@ let
     inherit lib;
     pkgs = applicationPkgs;
   };
+  # Catalog packages a NixOS program module rebuilds and installs itself,
+  # by name. `programs.steam` below is given the catalog's Steam and adds
+  # this system's fonts and graphics libraries to its root filesystem; that
+  # one is the system's Steam. The plain package beside it was a second
+  # Steam that won every file: the module's was assembled on each machine,
+  # linked nowhere, and so left out of what the binary cache publishes
+  # (scripts/check_cache_coverage.py refused it). nix/applications.nix
+  # resolves it the same way, and its check holds a system to one Steam.
+  fromPrograms = lib.optionalAttrs (has "steam") { steam = config.programs.steam.package; };
   packagesFor =
     app:
     if (app.source or "nixpkgs") == "omp" then
       [ ompPackage ]
     else
       map (
-        name: withKeyring app (sources.${app.source or "nixpkgs"} or applicationPkgs).${name}
+        name:
+        withKeyring app (
+          if (app.source or "nixpkgs") == "nixpkgs" && fromPrograms ? ${name} then
+            fromPrograms.${name}
+          else
+            (sources.${app.source or "nixpkgs"} or applicationPkgs).${name}
+        )
       ) app.packages;
   packages = lib.unique (lib.concatMap packagesFor selected);
   # Development build tools, Lazygit and the GitHub CLI each bring Git.
@@ -153,8 +168,20 @@ in
         message = "Rustup requires Development build tools.";
       }
       {
+        # All proprietary software allowed, or each unfree application's
+        # packages taken by Nixpkgs' predicate: the systems Sekka's binary
+        # cache publishes take those anyone may redistribute (Steam).
         assertion =
-          (config.nixpkgs.config.allowUnfree or false) || builtins.all (app: !(app.unfree or false)) selected;
+          let
+            accepts = config.nixpkgs.config.allowUnfreePredicate or (_: false);
+            accepted =
+              app:
+              builtins.all (
+                name: accepts (sources.${app.source or "nixpkgs"} or applicationPkgs).${name}
+              ) app.packages;
+          in
+          (config.nixpkgs.config.allowUnfree or false)
+          || builtins.all (app: !(app.unfree or false) || accepted app) selected;
         message = "Selected applications require allowing proprietary software.";
       }
     ];
@@ -190,6 +217,9 @@ in
       enable = true;
       package = applicationPkgs.firefox;
     };
+    # The module installs what it builds from this package (`fromPrograms`
+    # above): the catalog's Steam with the system's fonts and graphics
+    # libraries.
     programs.steam = lib.mkIf (has "steam") {
       enable = true;
       package = applicationPkgs.steam;

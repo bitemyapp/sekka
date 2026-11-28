@@ -4,7 +4,10 @@ use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue, RETRY_AFTER, USER_A
 use reqwest::{Method, StatusCode};
 use serde_json::Value;
 use std::cell::Cell;
+use std::io::Read;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+const MAX_RESPONSE: u64 = 16 * 1024 * 1024;
 
 /// A completed HTTP rejection proves Discord did not accept the message.
 /// Transport errors, timeouts and 5xx responses deliberately do not use this.
@@ -54,6 +57,7 @@ impl Api {
             client: Client::builder()
                 .default_headers(headers)
                 .redirect(reqwest::redirect::Policy::none())
+                .no_proxy()
                 .connect_timeout(Duration::from_secs(10))
                 .timeout(Duration::from_secs(35))
                 .build()
@@ -101,7 +105,8 @@ impl Api {
                 .and_then(retry_after);
             let reset = reset_time(headers);
             let remaining = number_header(headers, "x-ratelimit-remaining");
-            let value: Value = response.json().unwrap_or(Value::Null);
+            let bytes = read_response(response)?;
+            let value: Value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
             let secondary_limit = self.github
                 && status == StatusCode::FORBIDDEN
                 && value["message"]
@@ -155,6 +160,20 @@ impl Api {
     }
 }
 
+fn read_response(reader: impl Read) -> Result<Vec<u8>> {
+    // Do not trust Content-Length: chunked and dishonest responses must obey
+    // the same cap. The extra byte distinguishes an exact-limit response.
+    let mut bytes = Vec::new();
+    reader
+        .take(MAX_RESPONSE + 1)
+        .read_to_end(&mut bytes)
+        .context("Reading REST response failed (delivery may be uncertain)")?;
+    if bytes.len() as u64 > MAX_RESPONSE {
+        bail!("REST response exceeds size limit (delivery may be uncertain)");
+    }
+    Ok(bytes)
+}
+
 fn number_header(headers: &HeaderMap, name: &str) -> Option<u64> {
     headers.get(name)?.to_str().ok()?.parse().ok()
 }
@@ -190,5 +209,26 @@ mod tests {
             retry_after("Wed, 21 Oct 2015 07:28:00 GMT"),
             Some(Duration::ZERO)
         );
+    }
+
+    #[test]
+    fn response_size_is_bounded_without_content_length() {
+        let exact = read_response(std::io::repeat(b' ').take(MAX_RESPONSE)).unwrap();
+        assert_eq!(exact.len() as u64, MAX_RESPONSE);
+        assert!(read_response(std::io::repeat(b' ')).is_err());
+        assert!(read_response(std::io::empty()).unwrap().is_empty());
+    }
+
+    #[test]
+    fn response_read_errors_are_not_definite_discord_rejections() {
+        struct Broken;
+        impl Read for Broken {
+            fn read(&mut self, _: &mut [u8]) -> std::io::Result<usize> {
+                Err(std::io::Error::other("broken transport"))
+            }
+        }
+        let error = read_response(Broken).unwrap_err();
+        assert!(error.downcast_ref::<Rejected>().is_none());
+        assert!(error.to_string().contains("delivery may be uncertain"));
     }
 }

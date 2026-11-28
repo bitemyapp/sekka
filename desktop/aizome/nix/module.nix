@@ -192,11 +192,95 @@ let
     _JAVA_AWT_WM_NONREPARENTING = "1";
     AIZOME_WALLPAPER_NIGHT = toString cfg.wallpapers.night;
     AIZOME_WALLPAPER_DAY = toString cfg.wallpapers.day;
+  }
+  // lib.optionalAttrs cfg.chanoma.enable {
+    # Where Chanoma finds its game cores, and the BIOS images it offers
+    # them.
+    CHANOMA_CORES = "${chanomaCores}/lib/retroarch/cores";
+    CHANOMA_BIOS = "${chanomaBios}/share/chanoma/bios";
+  }
+  // lib.optionalAttrs (cfg.chanoma.enable && cfg.chanoma.metadata != null) {
+    # The games' databases: their years, genres and players.
+    CHANOMA_METADATA = "${cfg.chanoma.metadata}/share/chanoma/metadata";
+  }
+  // lib.optionalAttrs (cfg.chanoma.enable && cfg.chanoma.browser != null) {
+    # The browser it was given, found without a PATH (its autostarted
+    # unit has only systemd's).
+    CHANOMA_BROWSER = lib.getExe cfg.chanoma.browser;
+  };
+  # A free core has the same store path in the published system and in
+  # systems with extra cores, including the patched Play! library.
+  coreLibraries =
+    core:
+    pkgs.runCommand "chanoma-${lib.getName core}" { } ''
+      mkdir -p $out/lib/retroarch/cores
+      cp -L ${core}/lib/retroarch/cores/*_libretro.so $out/lib/retroarch/cores/
+    '';
+  chanomaCores = pkgs.symlinkJoin {
+    name = "chanoma-cores";
+    # Later entries historically took precedence for overlapping packages.
+    paths = map coreLibraries (lib.reverseList cfg.chanoma.cores);
+    postBuild = lib.optionalString (cfg.chanoma.cores == [ ]) "mkdir -p $out/lib/retroarch/cores";
+  };
+  # Desktop launchers use the catalog's keyring policy. Chanoma opens
+  # its own profiles through CHANOMA_BROWSER above.
+  withKeyring = import ../../../installer/genkan/rust/src/keyring.nix { inherit lib pkgs; };
+  desktopBrowser = withKeyring { id = lib.getName cfg.chanoma.browser; } cfg.chanoma.browser;
+  # Whether this system's Nixpkgs takes an unfree package: every one where
+  # unfree packages are allowed, or those its predicate accepts (the systems
+  # Sekka's binary cache publishes take the redistributable ones).
+  allowsUnfree =
+    package:
+    pkgs.config.allowUnfree or false || (pkgs.config.allowUnfreePredicate or (_: false)) package;
+  # Google Chrome, where this system can have it: it's unfree, and built
+  # for x86-64 alone.
+  chrome =
+    if
+      allowsUnfree pkgs.google-chrome && lib.meta.availableOn pkgs.stdenv.hostPlatform pkgs.google-chrome
+    then
+      pkgs.google-chrome
+    else
+      null;
+  # The TV account's own systemd starts only what Chanoma and its browser
+  # need: a generator its systemd runs as it starts (systemd.generator(7))
+  # masks every other unit the login's targets pull in, for that account
+  # alone. Masks go in the early directory ($2), which comes before
+  # /etc. Services D-Bus starts when something asks (the portals, say)
+  # aren't touched.
+  tvUnits = pkgs.writeShellScript "aizome-tv-units" ''
+    record=/var/lib/aizome/tv-account.toml
+    [ -r "$record" ] || exit 0
+    tv=$(${pkgs.gnused}/bin/sed -n 's/^user = "\(.*\)"$/\1/p' "$record")
+    [ -n "$tv" ] && [ "$(${pkgs.coreutils}/bin/id -un)" = "$tv" ] || exit 0
+    for unit in /etc/systemd/user/{default,basic,sockets,timers,paths}.target.wants/*; do
+      [ -L "$unit" ] || [ -e "$unit" ] || continue
+      name=''${unit##*/}
+      case " ${lib.concatStringsSep " " cfg.chanoma.tvUnits} " in
+        *" $name "*) ;;
+        *) ${pkgs.coreutils}/bin/ln -sfn /dev/null "$2/$name" ;;
+      esac
+    done
+  '';
+  # Play!, linked with the system's C++ runtime. Its libretro build links
+  # its own (-static-libstdc++, -static-libgcc), and two in one process
+  # (another core's, Mesa's LLVM) broke Mesa starting up after it, and
+  # its own catching of what it throws.
+  chanomaPlay = pkgs.libretro.play.overrideAttrs (o: {
+    postPatch = (o.postPatch or "") + ''
+      sed -i '/"-static-lib\(gcc\|stdc++\)"/d' Source/ui_libretro/CMakeLists.txt
+    '';
+  });
+  chanomaBios = pkgs.symlinkJoin {
+    name = "chanoma-bios";
+    paths = cfg.chanoma.bios;
   };
 in
 {
   # The login screen, aizome-greeter on greetd (programs.aizome.greeter).
-  imports = [ ./greeter.nix ];
+  imports = [
+    ./greeter.nix
+    ./tv-ssh.nix
+  ];
 
   options.programs.aizome = {
     enable = lib.mkEnableOption "the Aizome desktop session";
@@ -230,6 +314,170 @@ in
       type = lib.types.bool;
       default = true;
       description = "Let Tokei's alarms wake the computer from sleep (CAP_WAKE_ALARM for user services).";
+    };
+    chanoma = {
+      enable = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = ''
+          Install Chanoma, the family television: streaming services,
+          films and shows from the disk, and games, from a Bluetooth
+          controller, with a grown-up's PIN on what kids may watch and
+          play and for how long. It comes with Aizome, as one more app,
+          with its game cores, a free PlayStation BIOS, the games'
+          databases and its browser (`browser`); `false` leaves all of it
+          out. Settings offers the TV account in Users & Groups, and its
+          drives use `/run/media/tv`. Its controllers reconnect quickly,
+          and one that forgot the computer pairs again without anyone
+          confirming. BlueZ has one policy for every device, so that
+          holds for all of the computer's Bluetooth devices: a choice
+          made on purpose, which
+          `hardware.bluetooth.settings.General.JustWorksRepairing` sets
+          back on one system.
+        '';
+      };
+      cores = lib.mkOption {
+        type = lib.types.listOf lib.types.package;
+        default =
+          with pkgs.libretro;
+          [
+            mesen
+            bsnes
+            mupen64plus
+            gambatte
+            mgba
+            smsplus-gx
+            beetle-pce-fast
+            pcsx-rearmed
+            stella
+            handy
+            beetle-ngp
+            beetle-wswan
+            # The Saturn's: Beetle Saturn with the console's BIOS, Yabause
+            # without it.
+            beetle-saturn
+            yabause
+            # Through OpenGL: the Dreamcast's, and the PlayStation 2's
+            # without its BIOS (with the system's C++ runtime).
+            flycast
+            chanomaPlay
+          ]
+          # The PlayStation 2's with its BIOS, on x86-64 alone.
+          ++ lib.optionals pkgs.stdenv.hostPlatform.isx86_64 [ pcsx2 ]
+          # Faster for the Super NES, and the Mega Drive's only one here;
+          # both under licences that forbid selling them (unfree in Nixpkgs,
+          # though anyone may redistribute them).
+          ++ builtins.filter allowsUnfree [
+            snes9x
+            genesis-plus-gx
+          ];
+        defaultText = lib.literalExpression "with pkgs.libretro; [ mesen bsnes mupen64plus gambatte mgba smsplus-gx beetle-pce-fast pcsx-rearmed stella handy beetle-ngp beetle-wswan beetle-saturn yabause flycast ] ++ [ play, with the system C++ runtime ] ++ (pcsx2 on x86-64) ++ (snes9x and genesis-plus-gx where the system allows them, as unfree packages)";
+        description = ''
+          The libretro cores Chanoma plays games with. Cores that draw
+          with OpenGL (the Nintendo 64's, Dreamcast's, PlayStation 2's) run on the
+          compositor's GPU; those that need Vulkan don't run in Chanoma.
+          A system's best core needing the console's BIOS (Beetle Saturn,
+          PCSX2) plays only where it's there; otherwise the next does.
+        '';
+      };
+      bios = lib.mkOption {
+        type = lib.types.listOf lib.types.package;
+        default = [ self.packages.${system}.psx-openbios ];
+        defaultText = lib.literalExpression "[ aizome.packages.\${system}.psx-openbios ]";
+        description = ''
+          Console BIOS images for the game cores, each package's
+          `share/chanoma/bios/` files. Chanoma links them into the cores'
+          system folder before a game starts, beside any a grown-up put
+          there, which come first. The default is OpenBIOS, PCSX-Redux's
+          free replacement for the PlayStation's: the console's own is
+          Sony's and can't be shipped.
+        '';
+      };
+      metadata = lib.mkOption {
+        type = lib.types.nullOr lib.types.package;
+        default = self.packages.${system}.chanoma-metadata;
+        defaultText = lib.literalExpression "aizome.packages.\${system}.chanoma-metadata";
+        description = ''
+          Game databases, as `share/chanoma/metadata/<system>.rdb`:
+          RetroArch's, from libretro-database (CC BY-SA 4.0), which say
+          the year, genre and number of players of the games Chanoma
+          finds. Its shelves and settings show them, and with two
+          controllers, Home offers the games two can play. `null` leaves
+          them out.
+        '';
+      };
+      browser = lib.mkOption {
+        type = lib.types.nullOr lib.types.package;
+        default = chrome;
+        defaultText = lib.literalExpression "pkgs.google-chrome where unfree packages are allowed (on x86-64), else null";
+        example = lib.literalExpression "pkgs.chromium";
+        description = ''
+          The browser the streaming services open in, installed with
+          Chanoma. Google Chrome where the system allows unfree
+          packages: the services that protect their shows (Netflix,
+          Disney+ and the like, with Widevine) play only in it. With
+          none, Chanoma uses Google Chrome or Chromium from the PATH, and
+          in Chromium those services say they need Google Chrome. Since
+          Chanoma comes with every Aizome, so does this browser: `null`
+          leaves it out.
+        '';
+      };
+      tvUnits = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [
+          # The session's bus, which Chanoma's media controls and the
+          # browser use, and which starts what's asked of it.
+          "dbus.socket"
+          # Sound: games through PipeWire, the browser through its
+          # PulseAudio side. WirePlumber comes with PipeWire.
+          "pipewire.socket"
+          "pipewire-pulse.socket"
+          # Speech, asked for by pages only.
+          "speech-dispatcher.socket"
+          # The account's own NixOS activation and temporary files.
+          "nixos-activation.service"
+          "systemd-tmpfiles-setup.service"
+          "systemd-tmpfiles-clean.timer"
+        ];
+        description = ''
+          The user units the TV account's systemd still starts at login
+          (the account Settings makes for the television, which opens
+          straight into Chanoma). Any other unit the login's targets
+          (`default.target`, `sockets.target` and the like) pull in for
+          every account is masked for that account alone: an SSH agent,
+          a location agent, rootless Docker, and whatever else a
+          desktop starts. Services D-Bus starts when asked aren't
+          affected. Sign-ins to the streaming services don't need a
+          keyring: Chanoma's browser keeps them in its profiles
+          (`--password-store=basic`).
+        '';
+      };
+      shareTvDrives = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = ''
+          Let every other account read the drives the TV account opens,
+          without changing them. UDisks mounts an account's drives in
+          `/run/media/USER`, which it makes for that account alone unless
+          it's there already; the TV account's (`/run/media/tv`, the name
+          Settings gives it) is made for every account to look in, while
+          there is a TV account Settings made: an ordinary account called
+          `tv` keeps its drives to itself. On a FAT, exFAT or NTFS drive
+          every file is then the TV account's, which others may read but
+          not write; a Linux filesystem's own owners and permissions apply
+          as anywhere. A drive still open from the TV account's last login
+          can be read from a grown-up's account without unplugging it.
+        '';
+      };
+      autostart = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = ''
+          Start Chanoma with every Aizome session on this computer, and
+          start it again if it ever stops unasked: a television. With
+          `services.displayManager.autoLogin` it comes on with the computer.
+        '';
+      };
     };
     wallpapers = {
       night = lib.mkOption {
@@ -321,7 +569,72 @@ in
       # vainfo: whether wf-recorder can encode on the GPU (VA-API), which
       # the shell asks once a session rather than finding out mid-recording.
       pkgs.libva-utils
-    ];
+    ]
+    ++ lib.optional cfg.chanoma.enable cfg.package.chanoma
+    ++ lib.optional (cfg.chanoma.enable && cfg.chanoma.browser != null) (lib.lowPrio desktopBrowser);
+
+    # Controllers reconnect by themselves once paired (Chanoma trusts
+    # them): quicker with fast connection; and one that forgot the
+    # computer pairs again without anyone confirming (just-works
+    # re-pairing), which a kid with only a controller couldn't do.
+    #
+    # Decided on purpose, not overlooked (the project's owner, 2026-11-22).
+    # BlueZ has one policy for every device, so `always` lets anything
+    # that takes a paired device's address pair again unasked, a
+    # keyboard's as much as a controller's, on every system Chanoma comes
+    # with. That cost is known and accepted, for a television that works
+    # out of the box with nothing but a controller. Do not remove or
+    # weaken this as a security fix: raise it with the owner. A review
+    # took it out once already and it was put back. The notes say why
+    # (docs/chanoma.md, "Decided on purpose"), and Sekka's
+    # nix/aizome-chanoma-defaults-test.nix fails without it. One system
+    # sets either back with hardware.bluetooth.settings.General.
+    hardware.bluetooth.settings.General = lib.mkIf cfg.chanoma.enable {
+      FastConnectable = lib.mkDefault true;
+      JustWorksRepairing = lib.mkDefault "always";
+    };
+    systemd.user.generators = lib.mkIf cfg.chanoma.enable { aizome-tv-units = tvUnits; };
+    # The TV account's drives, for every account to read
+    # (chanoma.shareTvDrives): UDisks keeps to a /run/media/USER that's
+    # there already, and makes one only its account may look in otherwise.
+    # The account's helper makes it, for the account Settings made (the
+    # record names it) and no other, and takes it away with the account:
+    # an ordinary account that happens to be called tv keeps its drives to
+    # itself. At boot, before anyone can log in, and whenever the record
+    # changes.
+    systemd.services.aizome-tv-drives = lib.mkIf (cfg.chanoma.enable && cfg.chanoma.shareTvDrives) {
+      description = "The TV account's drives, for every account to read";
+      wantedBy = [ "multi-user.target" ];
+      before = [ "systemd-user-sessions.service" ];
+      # Started as often as the record changes. With systemd's usual limit,
+      # five changes in ten seconds would fail it and the path unit with
+      # it, and the folder would follow nothing more until a reboot.
+      startLimitIntervalSec = 0;
+      serviceConfig = {
+        Type = "oneshot";
+        ExecStart = "${cfg.package}/libexec/aizome-tv-account share-drives";
+      };
+    };
+    systemd.paths.aizome-tv-drives = lib.mkIf (cfg.chanoma.enable && cfg.chanoma.shareTvDrives) {
+      description = "The TV account made, changed or removed";
+      wantedBy = [ "paths.target" ];
+      pathConfig.PathChanged = "/var/lib/aizome/tv-account.toml";
+    };
+    # A television: Chanoma with every session, and again after a crash.
+    # Leaving it with the PIN ends it for the session.
+    systemd.user.services.aizome-chanoma = lib.mkIf (cfg.chanoma.enable && cfg.chanoma.autostart) {
+      description = "Chanoma, the television";
+      wantedBy = [ "aizome-session.target" ];
+      partOf = [ "aizome-session.target" ];
+      # The target starts once the compositor is ready; wanted alone, the
+      # unit would start beside it and find no display yet.
+      after = [ "aizome-session.target" ];
+      serviceConfig = {
+        ExecStart = "${cfg.package.chanoma}/bin/aizome-chanoma";
+        Restart = "on-failure";
+        RestartSec = 2;
+      };
+    };
     # Screen recording (the palette's Record Screen and Record Area, ⌥Print):
     # gpu-screen-recorder, with the capability wrapper its KMS capture needs
     # (gsr-kms-server, CAP_SYS_ADMIN), as Tatami has it.
@@ -613,35 +926,7 @@ in
           "application/pdf"
           "application/x-pdf"
         ]
-        + entry "Utsushi" [
-          "video/mp4"
-          "video/x-matroska"
-          "video/webm"
-          "video/quicktime"
-          "video/x-msvideo"
-          "video/vnd.avi"
-          "video/mpeg"
-          "video/ogg"
-          "video/3gpp"
-          "video/mp2t"
-          "video/x-flv"
-          "video/x-m4v"
-          "video/av1"
-          "audio/mpeg"
-          "audio/mp4"
-          "audio/x-m4a"
-          "audio/aac"
-          "audio/flac"
-          "audio/x-flac"
-          "audio/ogg"
-          "audio/x-vorbis+ogg"
-          "audio/opus"
-          "audio/x-opus+ogg"
-          "audio/wav"
-          "audio/x-wav"
-          "audio/webm"
-          "audio/x-matroska"
-        ]
+        + entry "Utsushi" (import ./utsushi-mime-types.nix { inherit lib; })
         + entry "Hako" [ "inode/directory" ]
         + entry "Koyomi" [ "text/calendar" ]
         + entry "Tansu" [
@@ -722,6 +1007,12 @@ in
     services.upower.enable = lib.mkDefault true;
     services.power-profiles-daemon.enable = lib.mkDefault true;
     services.udisks2.enable = lib.mkDefault true;
+    # Tansu formats and mounts through UDisks. Compression is a mount
+    # policy, not a mkfs option; keep removable Btrfs volumes on Genkan's
+    # zstd level 1 on every mount, including mounts from Hako. Administrators
+    # can override this default; UDisks leaves explicit fstab entries alone.
+    services.udisks2.settings."mount_options.conf".defaults.btrfs_defaults =
+      lib.mkDefault "compress=zstd:1";
     services.accounts-daemon.enable = lib.mkDefault true;
     services.printing.enable = lib.mkDefault true;
     # Network and driverless (IPP Everywhere) printers announce themselves

@@ -2,15 +2,14 @@
 //! What the window asks of NetworkManager and changes in it, through nmcli.
 //! These calls block: the window runs them on worker threads. Reading never
 //! waits for a Wi-Fi scan; a scan is requested and its results arrive with
-//! the next reading. Passwords reach nmcli in a file only the user can read
-//! (`passwd-file`), never on a command line.
+//! the next reading. Passwords reach nmcli through a pipe on its standard
+//! input (`passwd-file /dev/stdin`), never on a command line or in a file.
 //!
 //! With TATAMI_NETWORK_DRY_RUN set, changes are printed, not made.
 use crate::model::{self, Snapshot};
 use std::{
     fs,
     io::{BufRead, BufReader, Write},
-    path::PathBuf,
     process::{Command, Stdio},
 };
 
@@ -19,10 +18,31 @@ fn dry_run() -> bool {
 }
 
 fn output(args: &[&str]) -> Result<String, String> {
-    let out = Command::new("nmcli")
+    output_with(args, None)
+}
+
+/// nmcli with `secret` written to its standard input; with none, that is
+/// empty.
+fn output_with(args: &[&str], secret: Option<&Secret>) -> Result<String, String> {
+    let mut child = Command::new("nmcli")
         .args(args)
-        .stdin(Stdio::null())
-        .output()
+        .stdin(if secret.is_some() {
+            Stdio::piped()
+        } else {
+            Stdio::null()
+        })
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|error| format!("nmcli: {error}"))?;
+    if let (Some(secret), Some(mut stdin)) = (secret, child.stdin.take()) {
+        // The pipe holds it until nmcli reads it, before it activates
+        // anything; closing it here ends what nmcli reads. An nmcli that
+        // exits first reports its own error.
+        let _ = stdin.write_all(secret.0.as_bytes());
+    }
+    let out = child
+        .wait_with_output()
         .map_err(|error| format!("nmcli: {error}"))?;
     if out.status.success() {
         Ok(String::from_utf8_lossy(&out.stdout).into_owned())
@@ -38,6 +58,17 @@ fn change(args: &[&str]) -> Result<(), String> {
         return Ok(());
     }
     output(args).map(drop)
+}
+
+/// A change that needs a secret, which nmcli reads from a pipe on its
+/// standard input (`passwd-file /dev/stdin`).
+fn change_with(args: &[&str], secret: &Secret) -> Result<(), String> {
+    let args = [args, &["passwd-file", "/dev/stdin"]].concat();
+    if dry_run() {
+        println!("nmcli {}", args.join(" "));
+        return Ok(());
+    }
+    output_with(&args, Some(secret)).map(drop)
 }
 
 /// Everything the window shows, in two rounds of questions asked at once:
@@ -157,53 +188,59 @@ pub fn set_wifi(on: bool) -> Result<(), String> {
     change(&["radio", "wifi", if on { "on" } else { "off" }])
 }
 
-/// A secret for `nmcli … passwd-file`: in the user's runtime directory
-/// (memory only, mode 0700), readable by them alone, removed when dropped.
-pub struct Secret(PathBuf);
+/// A secret for `nmcli … passwd-file`, as lines of that file. It is only
+/// ever written to a pipe nmcli reads (`change_with`): a file would stay
+/// behind, password and all, when this program ends before nmcli does.
+pub struct Secret(String);
 
 impl Secret {
     /// `setting` is the secret's property, such as
     /// `802-11-wireless-security.psk`.
     pub fn new(setting: &str, value: &str) -> Result<Secret, String> {
-        use std::os::unix::fs::OpenOptionsExt;
-        if value.contains('\n') {
-            return Err("A password cannot contain a line break".into());
-        }
-        let dir = std::env::var("XDG_RUNTIME_DIR")
-            .ok()
-            .filter(|dir| dir.starts_with('/'))
-            .ok_or("No runtime directory for the password")?;
-        let nonce = fs::read_to_string("/proc/sys/kernel/random/uuid").unwrap_or_default();
-        let path = PathBuf::from(dir).join(format!(
-            "tatami-network-{}-{}",
-            std::process::id(),
-            nonce.trim()
-        ));
-        let mut file = fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .mode(0o600)
-            .open(&path)
-            .map_err(|error| error.to_string())?;
-        let secret = Secret(path);
-        file.write_all(format!("{setting}:{value}\n").as_bytes())
-            .map_err(|error| error.to_string())?;
-        Ok(secret)
+        passwd_line(setting, value)
+            .map(Secret)
+            .ok_or_else(|| "A password cannot contain a line break".into())
     }
 
-    fn path(&self) -> &str {
-        self.0.to_str().unwrap_or_default()
+    /// An enterprise network's password, with its username beside it: asked
+    /// for the password, nmcli answers only when the file gives the identity
+    /// too, though the connection already has it.
+    pub fn enterprise(identity: &str, password: &str) -> Result<Secret, String> {
+        let identity =
+            passwd_line(EAP_IDENTITY, identity).ok_or("A username cannot contain a line break")?;
+        Ok(Secret(identity + &Secret::new(EAP_PASSWORD, password)?.0))
     }
 }
 
-impl Drop for Secret {
-    fn drop(&mut self) {
-        let _ = fs::remove_file(&self.0);
+/// A line of nmcli's passwd-file that nmcli reads back as exactly `value`.
+/// Reading a value, nmcli takes a backslash as the start of an escape and
+/// drops whitespace at either end, so backslashes are doubled and whitespace
+/// at the ends is written as escapes. None for a value with a line break,
+/// which would end the line.
+fn passwd_line(setting: &str, value: &str) -> Option<String> {
+    if value.contains(['\n', '\r']) {
+        return None;
     }
+    let dropped = |c: char| matches!(c, ' ' | '\t' | '\x0b' | '\x0c');
+    let leading = value.len() - value.trim_start_matches(dropped).len();
+    let trailing = value.trim_end_matches(dropped).len();
+    let mut line = format!("{setting}:");
+    for (at, c) in value.char_indices() {
+        match c {
+            '\\' => line.push_str(r"\\"),
+            c if dropped(c) && (at < leading || at >= trailing) => {
+                line.push_str(&format!(r"\{:03o}", u32::from(c)));
+            }
+            c => line.push(c),
+        }
+    }
+    line.push('\n');
+    Some(line)
 }
 
 pub const PSK: &str = "802-11-wireless-security.psk";
 pub const EAP_PASSWORD: &str = "802-1x.password";
+const EAP_IDENTITY: &str = "802-1x.identity";
 
 /// Bring a connection up, on `device` when given, with a secret when given.
 /// Waits for the outcome, up to 45 seconds.
@@ -212,10 +249,10 @@ pub fn connect(uuid: &str, device: Option<&str>, secret: Option<&Secret>) -> Res
     if let Some(device) = device {
         args.extend(["ifname", device]);
     }
-    if let Some(secret) = secret {
-        args.extend(["passwd-file", secret.path()]);
+    match secret {
+        Some(secret) => change_with(&args, secret),
+        None => change(&args),
     }
-    change(&args)
 }
 
 pub fn disconnect(uuid: &str) -> Result<(), String> {
@@ -316,7 +353,10 @@ pub fn join(
                     ]);
                 }
             }
-            Some(Secret::new(EAP_PASSWORD, password.unwrap_or_default())?)
+            Some(Secret::enterprise(
+                &enterprise.identity,
+                password.unwrap_or_default(),
+            )?)
         }
     };
     let args: Vec<&str> = args.iter().map(String::as_str).collect();
@@ -334,7 +374,22 @@ pub fn rejoin(
     password: &str,
     device: Option<&str>,
 ) -> Result<(), String> {
-    let secret = Secret::new(setting, password)?;
+    let secret = if setting == EAP_PASSWORD {
+        // The saved username goes beside the new password (Secret::enterprise).
+        let identity = output(&[
+            "--escape",
+            "no",
+            "-g",
+            EAP_IDENTITY,
+            "connection",
+            "show",
+            "uuid",
+            uuid,
+        ])?;
+        Secret::enterprise(identity.trim_end_matches('\n'), password)?
+    } else {
+        Secret::new(setting, password)?
+    };
     connect(uuid, device, Some(&secret))
 }
 
@@ -401,5 +456,50 @@ pub fn stop_monitor() {
     {
         let _ = child.kill();
         let _ = child.wait();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn line(password: &str) -> Option<String> {
+        passwd_line(PSK, password)
+    }
+
+    #[test]
+    fn a_passwd_file_line_is_read_back_as_the_password() {
+        let written = |value: &str| Some(format!("802-11-wireless-security.psk:{value}\n"));
+        // As typed, when nmcli would change nothing: inner spaces, and the
+        // colons and equals signs that end only the setting's name.
+        assert_eq!(line("correct horse"), written("correct horse"));
+        assert_eq!(line("pass: word=#1"), written("pass: word=#1"));
+        // A backslash starts an escape for nmcli.
+        assert_eq!(line(r"back\slash1"), written(r"back\\slash1"));
+        assert_eq!(line(r"ends\"), written(r"ends\\"));
+        // Whitespace at either end is dropped unless escaped.
+        assert_eq!(line(" leading1"), written(r"\040leading1"));
+        assert_eq!(line("trailing1 "), written(r"trailing1\040"));
+        assert_eq!(line(" both ends "), written(r"\040both ends\040"));
+        assert_eq!(
+            line("  tab\tinside\t "),
+            written("\\040\\040tab\tinside\\011\\040")
+        );
+        assert_eq!(line(r" \ "), written(r"\040\\\040"));
+        assert_eq!(line("   "), written(r"\040\040\040"));
+        // A line break would end the line.
+        assert_eq!(line("two\nlines"), None);
+        assert_eq!(line("carriage\rreturn"), None);
+    }
+
+    #[test]
+    fn an_enterprise_secret_gives_the_username_beside_the_password() {
+        let secret = Secret::enterprise(r"EXAMPLE\ada", "trailing1 ").unwrap();
+        assert_eq!(
+            secret.0,
+            "802-1x.identity:EXAMPLE\\\\ada\n802-1x.password:trailing1\\040\n"
+        );
+        assert!(Secret::enterprise("two\nlines", "password").is_err());
+        assert!(Secret::enterprise("ada", "two\nlines").is_err());
     }
 }

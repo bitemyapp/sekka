@@ -158,7 +158,7 @@ registration. Replacing locked atomic read-modify-write instructions with relaxe
 loads/stores on that owner preserves Atomic storage and snapshot thread safety.
 The isolated corrected checkpoint passed 98 core tests and strict Clippy.
 
-`upstream/budget-atomics/audit.json` identifies the exact candidate sources,
+[`hotaru-benchmark-data/budget-atomics/audit.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/budget-atomics/audit.json) identifies the exact candidate sources,
 patches, validation and raw same-host timing reports. In the controlled earlier
 source, removing the clean-path locked dirty-flag operation improved the
 Rust/Zig ratios from 1.645 to 1.207 for ASCII and 1.716 to 0.820 for styled text.
@@ -170,9 +170,75 @@ reference state checked before timing. They do not establish application-wide
 parity, and reference timing varied between measurement windows. The report
 also retains configured Unicode-mode results and all source/binary hashes.
 
+## Eviction cost and history size
+
+Once history reaches either limit, every line that scrolls off evicts the
+oldest history row, and the screen recycles that row, with its layout, as its
+new blank bottom line. The row is its own allocation, last touched when it
+scrolled off a whole history earlier. Eviction reaches it only through its
+block slot and then its header, and recycling then blanks its cells and style
+table: two or three dependent cache misses on every line, each waiting for the
+one before. Their latency grows as the history outgrows L2, then L3, then
+reaches DRAM, so throughput used to fall as the configured history grew,
+although each line did the same work. For three prefilled 64 MiB ASCII runs
+with 10,000, 41,106 (50 MB) and 100,000 rows, `perf stat` counted 11.0, 11.2
+and 11.3 billion user instructions, but 2.0, 2.4 and 3.5 billion cycles.
+
+Eviction is strictly oldest first, so history knows which rows the next lines
+will reach. Each eviction prefetches the header of the row 12 places ahead.
+An eviction that recycles a row also prefetches the cells and style table of
+the row 6 ahead, whose header has arrived by then; dropping a row frees those
+without reading them (`prefetch.rs`: PREFETCHT0 on x86-64, nothing elsewhere
+or under Miri). The parser's work on the lines between covers the fetches. A
+test checks that each fetched row is the one that many evictions later
+takes. Compressed blocks keep no rows to fetch. New resident blocks
+also reserve their 64 row slots at once rather than reallocating five times as
+they fill. Which rows are kept, their charges, layouts and captures are
+unchanged. The same runs now take 2.0, 2.1 and 2.1 billion cycles.
+
+Steady-state feed of 64 MiB per corpus at 120×80, with history already full
+(`--prefill`), on runnymede's Ryzen 7 9800X3D (96 MiB L3), CPU 2, 12 samples
+each in alternating order. Medians, MiB/s, before (`fa66fb1`) and after
+(`951acfe`):
+
+| History kept | ASCII | Styled | Unicode |
+| --- | ---: | ---: | ---: |
+| none | 1,332 → 1,386 | 349 → 347 | 273 → 271 |
+| 10,000 rows | 997 → 1,012 | 320 → 313 | 243 → 247 |
+| 50 MB (41,106 / 39,720 / 36,089 rows) | 860 → 975 | 318 → 310 | 242 → 244 |
+| 100,000 rows | 642 → 1,009 | 308 → 309 | 217 → 243 |
+| 1,000,000 rows | 345 → 971 | 239 → 310 | 163 → 219 |
+
+The cursor/erase corpus clears the screen and never reaches history (93 MiB/s
+throughout). Styled text at 10,000 rows and 50 MB is 2% slower: there the
+rows are still in cache, and the prefetches cost about 44 instructions a line.
+Prefetching only the first and last cell lines recovers that but loses 22–48%
+on ASCII once history reaches DRAM, where blanking the lines between waits on
+memory too. On a processor with a smaller L3, 50 MB of history is already
+DRAM-sized.
+
+A history that is still growing allocates a new row for every line, and the
+first touch of that memory takes page faults, about 0.6 µs per 4 KiB page
+here: growing to 1,000,000 ASCII rows runs at about 200 MiB/s before and
+after. That cost is proportional to the history kept and outside this change.
+With glibc's `glibc.malloc.hugetlb=1` tunable (transparent huge pages for the
+heap), the same fresh 1,000,000-row run went from 246 to 481 MiB/s, and the
+prefilled steady state was unchanged.
+
+Recording each row's charge and layout as it arrives, so eviction never reads
+the row, and blanking a whole block's rows together when it leaves history was
+also measured, in safe code. It helped less (346 to 512 MiB/s at 1,000,000
+rows) and cost 5% at 10,000 rows, the native default: the batch is still
+bound by how many misses the core can have in flight, with no parsing to
+overlap.
+
+Reproduce with `hotaru-replay --bench-json --scrollback ROWS --scrollback-bytes
+none|default --prefill` and the `history_scaling` example, which reports each
+slice's throughput with the history it ended with.
+
 ## Content capture measurements
 
-`upstream/content-capture.json` records the exact source and binary hashes for
+[`hotaru-benchmark-data/content-capture.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/content-capture.json) records the exact source and binary hashes for
 the owned capture and the eager `snapshot_all` implementation from checkpoint
 `13423440ef68b3633b41d267aea196d87b1007da`. Both use 80 columns and 24 visible
 rows; 120 columns would hit the then-existing 8-million-history-cell cap before
@@ -207,8 +273,8 @@ every row. It includes application access overhead and is not a codec-only
 microbenchmark. Process RSS comes from `/proc/self/status`; no allocator trim
 or forced collection is performed.
 
-`upstream/history-baseline.json` records the earlier uncompressed baseline.
-`upstream/history-compressed.json` compares compression enabled and disabled in
+[`hotaru-benchmark-data/history-baseline.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/history-baseline.json) records the earlier uncompressed baseline.
+[`hotaru-benchmark-data/history-compressed.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/history-compressed.json) compares compression enabled and disabled in
 the same Rust binary, plus the pinned Ghostty library. It includes source,
 binary, library and corpus hashes. The populated Rust implementation in the
 second report includes compact grapheme storage and strong-only row ownership.

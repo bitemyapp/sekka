@@ -97,6 +97,25 @@ pub fn partition_type_name(id: &str) -> Option<&'static str> {
         .map(|p| p.name)
 }
 
+/// Whether a partition type belongs to the firmware, a boot loader, a
+/// recovery system or swap: never where a person keeps their files.
+pub fn reserved_partition_type(id: &str) -> bool {
+    const GPT: &[&str] = &[
+        "c12a7328-f81f-11d2-ba4b-00a0c93ec93b", // EFI System
+        "21686148-6449-6e6f-744e-656564454649", // BIOS boot
+        "bc13c2ff-59e6-4262-a352-b275fd6f7172", // Linux extended boot
+        "0657fd6d-a4ab-43c4-84e5-0933c84b4f4f", // Linux swap
+        "e3c9e316-0b5c-4db8-817d-f92df00215ae", // Microsoft reserved
+        "de94bba4-06d1-4d40-a16a-bfd50179d6ac", // Windows recovery
+        "426f6f74-0000-11aa-aa11-00306543ecac", // Apple boot (recovery)
+    ];
+    // EFI, Linux swap, Windows recovery, and the makers' recovery and
+    // diagnostics partitions (Compaq, Dell).
+    const DOS: &[&str] = &["0xef", "0x82", "0x27", "0x12", "0xde"];
+    let lower = id.to_ascii_lowercase();
+    GPT.contains(&lower.as_str()) || dos_id(&lower).is_some_and(|id| DOS.contains(&id.as_str()))
+}
+
 /// The partition type to use for a filesystem on a table of `table_kind`
 /// (`gpt` or `dos`).
 pub fn type_for_filesystem(table_kind: &str, fs_type: &str) -> &'static str {
@@ -183,6 +202,18 @@ mod tests {
         assert_eq!(partition_type_name("nonsense"), None);
         assert_eq!(type_for_filesystem("gpt", "ext4"), "0fc63daf-8483-4772-8e79-3d69d8477de4");
         assert_eq!(type_for_filesystem("dos", "vfat"), "0x0c");
+    }
+
+    #[test]
+    fn reserved_types() {
+        for id in
+            ["C12A7328-F81F-11D2-BA4B-00A0C93EC93B", "0657fd6d-a4ab-43c4-84e5-0933c84b4f4f", "0xEF", "0x27", "130"]
+        {
+            assert!(reserved_partition_type(id), "{id}");
+        }
+        for id in ["0fc63daf-8483-4772-8e79-3d69d8477de4", "ebd0a0a2-b9e5-4433-87c0-68b6b72699c7", "0x83", "0x07", ""] {
+            assert!(!reserved_partition_type(id), "{id}");
+        }
     }
 
     #[test]

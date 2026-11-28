@@ -61,11 +61,19 @@ use yukimi_config::sekka;
 use yukimi_config::{branch, edit, lock};
 use yukimi_system::catalog;
 use yukimi_system::completion::{self, Receipt};
+use yukimi_system::people;
+use yukimi_system::preflight;
 use yukimi_system::setup::{Choice, Kind, Setup};
 
 const PROFILE: &str = "/nix/var/nix/profiles/system";
-/// pkexec starts programs with an almost empty environment.
-const PATH: &str = "/run/current-system/sw/bin:/run/wrappers/bin";
+/// pkexec starts programs with an almost empty environment. The package adds
+/// a Git of its own (`YUKIMI_HELPER_PATH`): Nix runs Git to fetch Sekka, and
+/// only installations with a developer application have one. Without it,
+/// Nix falls back to libgit2, which reports no progress.
+const PATH: &str = match option_env!("YUKIMI_HELPER_PATH") {
+    Some(path) => path,
+    None => "/run/current-system/sw/bin:/run/wrappers/bin",
+};
 /// Where each generation's configuration is kept, as `generation-<n>`.
 const SAVED: &str = yukimi_system::SAVED_CONFIGURATIONS;
 /// Files bigger than this aren't configuration, and aren't kept with it.
@@ -170,7 +178,13 @@ fn settle() {
 
 /// Start a command, remembering it so it can be stopped, and wait for it.
 fn wait(c: &mut Command) -> Result<std::process::Output> {
-    let child = {
+    wait_with_progress(c, false)
+}
+
+/// Optionally tee stderr to the GUI while retaining it for diagnostics and
+/// the preflight build plan. Drain it alongside stdout so neither pipe fills.
+fn wait_with_progress(c: &mut Command, stream_stderr: bool) -> Result<std::process::Output> {
+    let mut child = {
         let mut state = state();
         if state.0 == Phase::Stopping {
             return Err(Failure("Stopped".into()));
@@ -179,10 +193,36 @@ fn wait(c: &mut Command) -> Result<std::process::Output> {
         state.1 = Some(child.id());
         child
     };
+    let errors = if stream_stderr {
+        child.stderr.take().map(|mut pipe| {
+            std::thread::spawn(move || -> std::io::Result<Vec<u8>> {
+                let mut captured = Vec::new();
+                let mut buffer = [0; 8192];
+                loop {
+                    let n = match pipe.read(&mut buffer) {
+                        Ok(0) => return Ok(captured),
+                        Ok(n) => n,
+                        Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+                        Err(error) => return Err(error),
+                    };
+                    captured.extend_from_slice(&buffer[..n]);
+                    // A closed GUI must not prevent draining and reaping Nix.
+                    let _ = std::io::stderr().write_all(&buffer[..n]);
+                }
+            })
+        })
+    } else {
+        None
+    };
     let out = child.wait_with_output();
     state().1 = None;
+    let errors = errors.map(|reader| reader.join());
     check_stopped()?;
-    Ok(out?)
+    let mut out = out?;
+    if let Some(errors) = errors {
+        out.stderr = errors.map_err(|_| Failure("The command's error reader stopped unexpectedly".into()))??;
+    }
+    Ok(out)
 }
 
 /// A failure, in words for the person who asked.
@@ -408,6 +448,11 @@ fn valid_host(name: &str) -> bool {
     !name.is_empty() && name.bytes().all(|b| b.is_ascii_alphanumeric() || b"-_.".contains(&b))
 }
 
+/// A name an existing account may have, safe to pass on: who is signed in,
+/// and `users.users.NAME` in the configuration, which needn't follow
+/// `useradd`'s rules. Whom the computer logs in as by itself does
+/// ([`people::valid_name`], as Settei makes accounts), so `--choose` checks
+/// that instead.
 fn valid_user(name: &str) -> bool {
     !name.is_empty() && name.len() <= 32 && name.bytes().all(|b| b.is_ascii_alphanumeric() || b"-_.".contains(&b))
 }
@@ -671,6 +716,8 @@ struct Change {
     unlist_user: Vec<(String, Vec<String>)>,
     update: Vec<String>,
     lock: Option<PathBuf>,
+    /// The immutable source snapshot checked before the user agreed.
+    checked_source: Option<String>,
     /// An input to follow another branch, and the branch.
     follow: Option<(String, String)>,
     /// The system's own choices to write (`--choose setting=a,b`), each a
@@ -708,6 +755,7 @@ impl Change {
                 }
                 "--update" => change.update = split_list(value),
                 "--lock" => change.lock = Some(PathBuf::from(value)),
+                "--checked-source" => change.checked_source = Some(value.clone()),
                 "--follow" => {
                     let (input, branch) =
                         value.split_once('=').ok_or_else(|| Failure("--follow needs input=branch".into()))?;
@@ -722,8 +770,9 @@ impl Change {
                     if !valid_setting(setting) || change.choices.iter().any(|(s, _)| s == setting) {
                         return Err(Failure(format!("Not a setting to choose: {setting:?}")));
                     }
+                    // An option, or a person's account (no value: no one).
                     let values = split_list(values);
-                    if let Some(bad) = values.iter().find(|v| !catalog::valid_id(v)) {
+                    if let Some(bad) = values.iter().find(|v| !catalog::valid_id(v) && !people::valid_name(v)) {
                         return Err(Failure(format!("Not a choice: {bad:?}")));
                     }
                     change.choices.push((setting.to_owned(), values));
@@ -748,9 +797,6 @@ impl Change {
         if change.applications.is_some() != change.setting.is_some() {
             return Err(Failure("--applications goes with --setting".into()));
         }
-        if change.lock.is_some() && change.update.is_empty() {
-            return Err(Failure("--lock goes with --update".into()));
-        }
         if change.sekka {
             // The system's choices and Sekka's own branch may change with it.
             let other_follow = change.follow.as_ref().is_some_and(|(input, _)| input != "sekka");
@@ -759,7 +805,11 @@ impl Change {
                 || change.applications.is_some()
                 || !change.unlist_system.is_empty()
                 || !change.unlist_user.is_empty();
-            if change.channels || other_follow || change.lock.is_some() || other_edits {
+            if change.channels
+                || other_follow
+                || (change.lock.is_some() && change.checked_source.is_none())
+                || other_edits
+            {
                 return Err(Failure("--sekka only goes with --mode, --update, --choose and --follow sekka=…".into()));
             }
             if !change.update.iter().any(|i| i == "sekka") {
@@ -769,12 +819,18 @@ impl Change {
         // An input that follows another branch is updated too, by the helper:
         // a lock file prepared beforehand would be for the old branch.
         if let Some((input, _)) = &change.follow {
-            if change.lock.is_some() {
+            if change.lock.is_some() && change.checked_source.is_none() {
                 return Err(Failure("--follow can't go with --lock".into()));
             }
             if !change.update.contains(input) {
                 change.update.push(input.clone());
             }
+        }
+        if change.lock.is_some() && change.update.is_empty() {
+            return Err(Failure("--lock goes with --update".into()));
+        }
+        if change.checked_source.is_some() && (change.lock.is_none() || change.channels || change.edits_main()) {
+            return Err(Failure("--checked-source needs a prepared flake update without other edits".into()));
         }
         Ok(change)
     }
@@ -800,10 +856,13 @@ fn valid_setting(name: &str) -> bool {
 }
 
 /// The main configuration file with one of the system's choices written as
-/// it is declared: a list of strings, a boolean, or a string.
+/// it is declared: a list of strings, a boolean, or a string (for a person,
+/// the empty string when no one is chosen).
 fn write_choice(text: &str, choice: &Choice, values: &[String]) -> Result<String> {
     let path: Vec<&str> = choice.setting.split('.').collect();
-    Ok(if choice.many {
+    Ok(if choice.people {
+        edit::set_string(text, &path, values.first().map_or("", String::as_str))?
+    } else if choice.many {
         edit::set_string_list(text, &path, values)?
     } else if choice.boolean {
         edit::set_bool(text, &path, values[0] == "true")?
@@ -821,6 +880,10 @@ fn unlist(text: &str, path: &[&str], attr: &str) -> Result<String> {
 fn change(args: &[String]) -> Result<String> {
     let change = Change::parse(args)?;
     let setup = Setup::detect();
+    // The check is advisory; never trust its proposed lock or copied flake.
+    // Reconstruct permitted migration/branch changes from the real source
+    // and validate the immutable lock before saving or writing any files.
+    let checked_lock = validate_preflight(&change, &setup)?;
     // Validate migration before touching any files. The GUI's detection is
     // only a convenience; the privileged helper always checks again.
     let sekka_flake = if change.sekka {
@@ -850,7 +913,7 @@ fn change(args: &[String]) -> Result<String> {
             .iter()
             .find(|c| &c.setting == setting)
             .ok_or_else(|| Failure(format!("{setting} isn't a choice this system offers")))?;
-        declared.allows(values).map_err(Failure)?;
+        declared.allows_people(values, people::takes).map_err(Failure)?;
     }
     let main = setup.main.clone();
     let packages_file = setup.packages_file();
@@ -966,12 +1029,18 @@ fn change(args: &[String]) -> Result<String> {
         if !change.update.is_empty() {
             stage(2, "Fetching the newest versions");
             match &change.lock {
-                // Prepared by Yukimi, with every new source already in the store.
+                // Prepared by Yukimi's check, which leaves each updated
+                // input's source in the store (`preflight::keep_sources`).
                 Some(prepared) => {
-                    let proposed = std::fs::read_to_string(prepared)?;
-                    let current = std::fs::read_to_string(&lock_file)?;
-                    lock::check_update(&current, &proposed, &change.update)
-                        .map_err(|e| Failure(format!("The prepared update was refused: {e}")))?;
+                    let proposed = if let Some(checked) = &checked_lock {
+                        checked.clone()
+                    } else {
+                        let proposed = std::fs::read_to_string(prepared)?;
+                        let current = std::fs::read_to_string(&lock_file)?;
+                        lock::check_update(&current, &proposed, &change.update)
+                            .map_err(|e| Failure(format!("The prepared update was refused: {e}")))?;
+                        proposed
+                    };
                     std::fs::write(&lock_file, proposed)?;
                 }
                 None => {
@@ -1348,6 +1417,27 @@ fn estimate(args: &[String]) -> Result<String> {
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    // This reads a private configuration copy and queries Nix. It never
+    // writes /etc, builds packages, starts services or needs polkit.
+    if args.first().is_some_and(|s| s == "preflight") {
+        watch_for_stop();
+        let result = check_update(&args[1..]);
+        return match result {
+            Ok(report) => {
+                let _ = writeln!(std::io::stdout(), "{}", serde_json::to_string(&report).unwrap());
+                ExitCode::SUCCESS
+            }
+            Err(Failure(message)) => {
+                report(
+                    0,
+                    &format!(
+                        "The update compatibility check could not complete. {message}\n\nNo system configuration was changed."
+                    ),
+                );
+                ExitCode::FAILURE
+            }
+        };
+    }
     // A target-side pre-switch check is read-only and also protects legacy
     // clients which still explicitly request a live switch.
     if args.first().is_some_and(|s| s == "check-activation") {
@@ -1420,6 +1510,51 @@ fn main() -> ExitCode {
     let success = serde_json::from_str::<serde_json::Value>(&json).is_ok_and(|v| v["ok"] == true);
     let _ = writeln!(std::io::stdout(), "{json}");
     if success { ExitCode::SUCCESS } else { ExitCode::FAILURE }
+}
+
+fn preflight_request(change: &Change) -> preflight::Request {
+    preflight::Request { inputs: change.update.clone(), sekka: change.sekka, follow: change.follow.clone() }
+}
+
+fn preflight_command(mut c: Command) -> std::result::Result<std::process::Output, String> {
+    c.env("PATH", PATH);
+    wait_with_progress(c.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()), true).map_err(|e| e.0)
+}
+
+fn check_update(args: &[String]) -> Result<preflight::Report> {
+    let change = Change::parse(args)?;
+    if change.channels || change.edits_main() || change.lock.is_some() || change.checked_source.is_some() {
+        return Err(Failure("Only flake input updates can be checked".into()));
+    }
+    stage(1, "Checking the proposed update before changing your system");
+    let result =
+        preflight::check(&Setup::detect(), &preflight_request(&change), &mut preflight_command).map_err(Failure);
+    stage_done(1);
+    result
+}
+
+fn validate_preflight(change: &Change, setup: &Setup) -> Result<Option<String>> {
+    let Some(expected) = &change.checked_source else { return Ok(None) };
+    stage(1, "Verifying the checked configuration");
+    let proposed =
+        std::fs::read_to_string(change.lock.as_ref().ok_or_else(|| Failure("Missing checked lock".into()))?)?;
+    // Root's own copy, with its own migration and branch change. It starts
+    // from what the check found for the updated inputs, so that Nix has
+    // nothing to fetch for an address the check already resolved.
+    let candidate =
+        preflight::Candidate::prepare_to_judge(setup, &preflight_request(change), &proposed, &mut preflight_command)
+            .map_err(Failure)?;
+    if &candidate.source != expected {
+        return Err(Failure(
+            "Your configuration changed after the compatibility check. Check the update again; nothing was changed."
+                .into(),
+        ));
+    }
+    let baseline = std::fs::read_to_string(candidate.dir.join("flake.lock"))?;
+    lock::check_update(&baseline, &proposed, &candidate.inputs)
+        .map_err(|e| Failure(format!("The checked update was refused: {e}")))?;
+    stage_done(1);
+    Ok(Some(proposed))
 }
 
 fn check_activation(args: &[String]) -> Result<()> {
@@ -1513,6 +1648,12 @@ mod tests {
         assert!(early.edits_main());
         let desktops = Change::parse(&args("--choose calamares.desktops=aizome,tatami")).unwrap();
         assert_eq!(desktops.choices[0].1, vec!["aizome", "tatami"]);
+        // A person's account, or no one.
+        let person = Change::parse(&args("--choose calamares.autoLogin=kara_t")).unwrap();
+        assert_eq!(person.choices[0].1, vec!["kara_t"]);
+        let no_one = Change::parse(&args("--choose calamares.autoLogin=")).unwrap();
+        assert_eq!(no_one.choices, vec![("calamares.autoLogin".to_owned(), vec![])]);
+        assert!(no_one.edits_main());
         for bad in [
             "--choose calamares.loginScreen",
             "--choose calamares..x=a",
@@ -1538,6 +1679,24 @@ mod tests {
             "--follow x;y=main",
             "--update tatami --lock /tmp/x.lock --follow tatami=main",
             "--packages",
+        ] {
+            assert!(Change::parse(&args(bad)).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn checked_updates_need_a_lock_and_cannot_edit_settings() {
+        for operation in ["--update nixpkgs", "--sekka", "--follow tatami=main", "--sekka --follow sekka=main"] {
+            let change =
+                Change::parse(&args(&format!("{operation} --lock /tmp/check.lock --checked-source /nix/store/source")))
+                    .unwrap();
+            assert_eq!(change.checked_source.as_deref(), Some("/nix/store/source"));
+        }
+        for bad in [
+            "--sekka --checked-source /nix/store/source",
+            "--channels --lock /tmp/check.lock --checked-source /nix/store/source",
+            "--update nixpkgs --packages htop --lock /tmp/check.lock --checked-source /nix/store/source",
+            "--sekka --choose calamares.loginScreen=aizome --lock /tmp/check.lock --checked-source /nix/store/source",
         ] {
             assert!(Change::parse(&args(bad)).is_err(), "{bad}");
         }
@@ -1631,6 +1790,14 @@ mod tests {
         );
         let off = write_choice(&text, &splash, &v(&["false"])).unwrap();
         assert_eq!(off, text.replace("enable = true", "enable = false"));
+        // A person, and no one: the empty string.
+        let auto = choice(
+            r#"{"setting":"calamares.autoLogin","title":"Log in automatically","people":true,"value":"","options":[]}"#,
+        );
+        let on = write_choice(installed, &auto, &v(&["kara"])).unwrap();
+        assert_eq!(on, "{ ... }:\n{\n  calamares.desktops = [ \"aizome\" ];\n  calamares.autoLogin = \"kara\";\n}\n");
+        let nobody = write_choice(&on, &auto, &v(&[])).unwrap();
+        assert_eq!(nobody, on.replace("\"kara\"", "\"\""));
     }
 
     #[test]

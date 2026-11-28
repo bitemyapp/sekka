@@ -1,5 +1,12 @@
 //! Cold scrollback blocks. Captures share immutable resident or compressed blocks;
 //! eviction keeps a private logical prefix and never changes a captured view.
+//!
+//! Once history is full, every line evicts the oldest row and the screen
+//! recycles it. That row is a separate allocation last touched a whole history
+//! ago, reached only through its slot and then its header, so each line would
+//! wait on a chain of cache misses that lengthens as history outgrows each
+//! cache. Eviction is strictly in order, so history fetches the rows the next
+//! lines will evict while the parser works on this one.
 use crate::hyperlink::{Hyperlink, LinkIdentity, LinkRef};
 use crate::{Row, RowRef};
 use std::collections::{HashMap, VecDeque};
@@ -15,6 +22,10 @@ const ARCHIVE_MAGIC: &[u8; 4] = b"HHR3";
 // Covers a full resident handle array, block/entry headers and amortized deque
 // capacity even when only one logical row remains after prefix eviction.
 const BLOCK_OVERHEAD: usize = 1024;
+// Rows ahead of eviction whose header, then (once that has arrived) whose
+// cells and styles are fetched. A few lines' work covers a memory access.
+const PREFETCH_HEADER: usize = 12;
+const PREFETCH_STORAGE: usize = 6;
 pub const DEFAULT_HISTORY_BYTES: usize = 50_000_000;
 
 /// Both limits apply independently. Bytes charge uncompressed logical owned
@@ -376,9 +387,13 @@ impl History {
             rows.push(Some(row));
             entry.size_bound += size;
         } else {
+            // Reserve every slot now: growing by doubling reallocates five
+            // times per block, and BLOCK_OVERHEAD charges a full array anyway.
+            let mut rows = Vec::with_capacity(MAX_ROWS);
+            rows.push(Some(row));
             self.blocks.push_back(Entry {
                 block: Arc::new(Block {
-                    storage: Storage::Resident(vec![Some(row)]),
+                    storage: Storage::Resident(rows),
                     logical_bytes: charge + BLOCK_OVERHEAD,
                 }),
                 skip: 0,
@@ -396,7 +411,33 @@ impl History {
     pub fn pop_front_recycle(&mut self, cols: usize) -> Option<RowRef> {
         self.remove_front(true, cols)
     }
+    /// The resident row `ahead` rows after the next one eviction takes, if it
+    /// is in the oldest two blocks and both are resident.
+    #[inline]
+    fn upcoming(&self, ahead: usize) -> Option<&RowRef> {
+        let first = self.blocks.front()?;
+        let Storage::Resident(rows) = &first.block.storage else {
+            return None;
+        };
+        let at = first.skip + ahead;
+        if let Some(row) = rows.get(at) {
+            return row.as_ref();
+        }
+        let next = self.blocks.get(1)?;
+        let Storage::Resident(next_rows) = &next.block.storage else {
+            return None;
+        };
+        next_rows.get(next.skip + at - rows.len())?.as_ref()
+    }
     fn remove_front(&mut self, recycle: bool, cols: usize) -> Option<RowRef> {
+        if let Some(row) = self.upcoming(PREFETCH_HEADER) {
+            Row::prefetch_header(row);
+        }
+        // Dropping a row frees its cells and styles without reading them, so
+        // only a recycling eviction (a line scrolling off) fetches them.
+        if recycle && let Some(row) = self.upcoming(PREFETCH_STORAGE) {
+            row.prefetch_storage();
+        }
         let entry = self.blocks.front_mut()?;
         let index = entry.skip;
         let charge = match &entry.block.storage {
@@ -1080,5 +1121,84 @@ mod tests {
                 .map(|index| encoded(&row(index)))
                 .collect::<Vec<_>>()
         );
+    }
+    #[test]
+    fn eviction_prefetches_the_rows_later_evictions_take() {
+        // A wrong guess only costs speed, which no other test would notice.
+        // Across block boundaries, an evicted prefix and captured blocks, each
+        // guess is the row that many evictions later; compressed blocks have
+        // no row to fetch.
+        let mut history = History::default();
+        let mut rows = Vec::new();
+        for index in 0..MAX_ROWS * 5 + 7 {
+            let row = row(index);
+            rows.push(RowRef::as_ptr(&row));
+            history.push_back(row);
+        }
+        // The idle worker compresses the oldest blocks.
+        let hot = history.len() - history.blocks[0].len() - history.blocks[1].len();
+        while history.compress_step(hot) {}
+        let blocks: Vec<(usize, bool)> = history
+            .blocks
+            .iter()
+            .map(|entry| {
+                (
+                    entry.len(),
+                    matches!(entry.block.storage, Storage::Resident(_)),
+                )
+            })
+            .collect();
+        // Every target is then in the evicted row's block or the next one.
+        assert!(
+            blocks.len() > 4
+                && blocks[..blocks.len() - 1]
+                    .iter()
+                    .all(|&(len, _)| len > PREFETCH_HEADER)
+        );
+        assert!(
+            blocks
+                .iter()
+                .map(|&(_, resident)| resident)
+                .take(3)
+                .eq([false, false, true])
+        );
+        let block_of = |row: usize| {
+            let mut end = 0;
+            blocks.iter().position(|&(len, _)| {
+                end += len;
+                row < end
+            })
+        };
+        let mut held = None;
+        let mut guessed = 0;
+        for evicted in 0..rows.len() {
+            if evicted == blocks[0].0 + blocks[1].0 + 9 {
+                held = Some(history.capture());
+            }
+            for ahead in [PREFETCH_STORAGE, PREFETCH_HEADER] {
+                let target = evicted + ahead;
+                let expected = match (block_of(evicted), block_of(target)) {
+                    (Some(front), Some(block))
+                        if block <= front + 1 && blocks[front].1 && blocks[block].1 =>
+                    {
+                        Some(rows[target])
+                    }
+                    _ => None,
+                };
+                assert_eq!(
+                    history.upcoming(ahead).map(RowRef::as_ptr),
+                    expected,
+                    "{ahead} rows after eviction {evicted}"
+                );
+                guessed += usize::from(expected.is_some());
+            }
+            let taken = history.pop_front_recycle(80).unwrap();
+            if blocks[block_of(evicted).unwrap()].1 {
+                assert_eq!(RowRef::as_ptr(&taken), rows[evicted]);
+            }
+        }
+        assert!(held.is_some());
+        let resident = blocks[2..].iter().map(|&(len, _)| len).sum::<usize>();
+        assert!(guessed > 2 * (resident - PREFETCH_HEADER));
     }
 }

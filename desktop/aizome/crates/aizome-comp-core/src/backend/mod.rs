@@ -111,11 +111,16 @@ impl Backend {
     ///
     /// The client hears `release` once more when the next commit replaces
     /// the buffer (smithay's own); by then its pixels are in the texture.
+    ///
+    /// A buffer that wasn't copied ([`import_fresh`]) is kept, as under
+    /// pixman, for smithay's release alone: a client may draw into a
+    /// released buffer at once, and that would show in place of the frame
+    /// it committed.
     pub fn release_shm_after_import(&mut self, surface: &WlSurface, fresh: &[WlBuffer]) {
         let imported = match self {
-            Backend::Headless(h) => h.import_shm_copies(surface),
-            Backend::Winit(w) => w.import_shm_copies(surface),
-            Backend::Udev(u) => u.import_shm_copies(surface),
+            Backend::Headless(h) => h.import_shm_copies(surface, fresh),
+            Backend::Winit(w) => w.import_shm_copies(surface, fresh),
+            Backend::Udev(u) => u.import_shm_copies(surface, fresh),
         };
         if imported {
             for b in fresh {
@@ -507,6 +512,51 @@ pub fn fresh_shm_buffers(surface: &WlSurface) -> Vec<WlBuffer> {
         |_, _, _| true,
     );
     out
+}
+
+/// Imports a surface tree with the renderer that draws it, and says whether
+/// the buffers its commit attached (`fresh`) are in that renderer's
+/// textures now: under GLES, whether their wl_shm pixels were copied.
+///
+/// The import's `Ok` doesn't say so. smithay leaves out what is under a
+/// surface it has no texture for (one with no buffer yet), and its
+/// multi-GPU early import leaves wl_shm for the draw, so the answer is read
+/// from the surfaces.
+pub fn import_fresh<R>(renderer: &mut R, surface: &WlSurface, fresh: &[WlBuffer]) -> bool
+where
+    R: Renderer + ImportAll,
+    R::TextureId: 'static,
+{
+    if let Err(e) = smithay::backend::renderer::utils::import_surface_tree(renderer, surface) {
+        tracing::debug!("importing a commit: {e:?}");
+        return false;
+    }
+    textured(surface, &renderer.context_id(), fresh)
+}
+
+/// Whether every surface of a tree that holds one of `buffers` has a
+/// texture of it for a renderer's context.
+fn textured<T>(surface: &WlSurface, context: &smithay::backend::renderer::ContextId<T>, buffers: &[WlBuffer]) -> bool
+where
+    T: smithay::backend::renderer::Texture + 'static,
+{
+    use smithay::backend::renderer::utils::RendererSurfaceStateUserData;
+    use smithay::wayland::compositor::{TraversalAction, with_surface_tree_upward};
+    let mut all = true;
+    with_surface_tree_upward(
+        surface,
+        (),
+        |_, _, _| TraversalAction::DoChildren(()),
+        |_, states, _| {
+            let Some(data) = states.data_map.get::<RendererSurfaceStateUserData>() else { return };
+            let data = data.lock().unwrap();
+            if data.buffer().is_some_and(|held| buffers.iter().any(|b| held == b)) {
+                all &= data.texture(context.clone()).is_some();
+            }
+        },
+        |_, _, _| true,
+    );
+    all
 }
 
 /// What an output shows and the colour behind it: its scene, or for a

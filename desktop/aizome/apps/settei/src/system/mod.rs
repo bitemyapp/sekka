@@ -9,6 +9,7 @@
 //! [`Task`]), so a pane is written once.
 
 pub mod accounts;
+pub mod choices;
 pub mod sample;
 
 use std::sync::{Arc, Mutex};

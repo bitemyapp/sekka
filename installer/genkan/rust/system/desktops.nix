@@ -8,6 +8,7 @@
 }:
 let
   cfg = config.calamares;
+  autoLogin = config.services.displayManager.autoLogin;
   # Login session name for each installer choice.
   sessions = {
     aizome = "aizome";
@@ -173,6 +174,30 @@ let
       "--with-default-backdrop-filename=${wallpaper "looks-flat.jpg"}"
     ];
   });
+  automatic = autoLogin.enable && autoLogin.user != null;
+  # Whether the account that logs in by itself can open a session with
+  # nothing asked: PAM's account check (pam_unix's check_shadow_expiry), as
+  # yukimi-helper applies it when it writes the choice
+  # (yukimi_system::people::blocked). It fails for an expired account, a
+  # password to set at the next login, and a password as old as the account
+  # allows. A field that isn't a number of days (empty, or -1) is unset,
+  # and no last change means the password doesn't age. An account that is
+  # gone or has no entry passes: each login screen shows itself for that.
+  canLogInByItself = pkgs.writeShellScript "can-log-in-by-itself" ''
+    today=$(( $(${pkgs.coreutils}/bin/date +%s) / 86400 ))
+    ${pkgs.gawk}/bin/awk -F: -v user=${lib.escapeShellArg autoLogin.user} -v today="$today" '
+      function days(field) { return field ~ /^[0-9]+$/ ? field + 0 : -1 }
+      $1 == user {
+        expires = days($8); changed = days($3); most = days($5)
+        if (expires >= 0 && today >= expires) exit 1
+        if (changed == 0) exit 1
+        if (changed > 0 && today >= changed && most >= 0 && today - changed >= most) exit 1
+        exit 0
+      }' /etc/shadow
+  '';
+  # Plasma Login's settings for this start alone: the target of its last
+  # drop-in (/etc/plasmalogin.conf.d), which only the unit below writes.
+  plasmaLoginThisStart = "/run/plasmalogin-this-start.conf";
 in
 {
   # Tatami's module comes from its own repository (the flake's tatami
@@ -227,6 +252,19 @@ in
         screen only under GDM), else Aizome's own when Aizome is chosen,
         else Plasma Login Manager. `aizome` with GNOME chosen too leaves
         GNOME sessions without a lock screen.
+      '';
+    };
+    autoLogin = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      example = "alice";
+      description = ''
+        The account the computer logs in to by itself at boot, without a
+        password, on whichever login screen; empty for none. Settei's Users
+        & Groups sets it through Yukimi, which takes anyone with an account.
+        Null preserves services.displayManager.autoLogin. An explicit choice
+        takes precedence over ordinary definitions of that setting; forced
+        system policy still takes precedence over this choice.
       '';
     };
   };
@@ -311,6 +349,15 @@ in
             }
           ];
         }
+        # Anyone with an account, or no one (Settei's Users & Groups
+        # proposes it): Yukimi checks the account exists as it writes it.
+        {
+          setting = "calamares.autoLogin";
+          title = "Log in automatically";
+          people = true;
+          value = if autoLogin.enable && autoLogin.user != null then autoLogin.user else "";
+          options = [ ];
+        }
       ];
     assertions = [
       {
@@ -335,6 +382,24 @@ in
     '';
     services.xserver.enable = true;
     services.displayManager.gdm.enable = gdm;
+    # GDM shows no login screen when the account it logs in by itself can't
+    # open a session with nothing asked: one that has expired, or has a
+    # password to set or change at its next login (as a person added in
+    # Settei without one has). Its automatic login fails and nothing
+    # follows. So before GDM starts, such an account turns automatic login
+    # off for this start, in GDM's runtime configuration
+    # (/run/gdm/custom.conf, gone at the next). An account that is gone needs
+    # nothing: GDM shows its login screen for that itself. Aizome's login
+    # screen needs none of this: greetd is started again (its module).
+    systemd.services.display-manager.preStart = lib.mkIf (gdm && automatic) (
+      lib.mkAfter ''
+        if ! ${canLogInByItself}; then
+          # Never in GDM's way: at worst it starts as it would have.
+          ${pkgs.coreutils}/bin/mkdir -p /run/gdm || true
+          ${pkgs.gdm}/libexec/gdm-runtime-config set daemon AutomaticLoginEnable false || true
+        fi
+      ''
+    );
     # Otherwise Plasma Login Manager, NixOS's default for graphical systems: a
     # Wayland login screen (KWin) that lights whichever GPU the displays are
     # on, and that also starts X11 sessions. SDDM's X11 greeter needs a fixed
@@ -366,8 +431,27 @@ in
     # condition on the value alone would still define an empty one, whose
     # PATH changes with coreutils and the like, and Yukimi would wait for a
     # restart to apply them.
+    #
+    # Plasma Login shows its login screen by itself when the account it logs
+    # in is gone or has expired, or has a password to set where there is
+    # none yet. Where there is a password that has to be changed (chage -d 0,
+    # or one as old as the account allows), its automatic login waits for
+    # the old password, which nobody is asked for, and no login screen
+    # follows. So such an account turns automatic login off for this start
+    # here too. Plasma Login reads no settings from /run, so the last of its
+    # drop-ins (the later one wins) is a link to a file there, which only
+    # this writes and which is gone at the next start.
     systemd.services.plasmalogin = lib.mkIf plasmaLogin {
       environment.XDG_DATA_DIRS = lib.mkForce "${loginSessions}/share";
+      preStart = lib.mkIf automatic ''
+        if ! ${canLogInByItself}; then
+          # Never in Plasma Login's way: at worst it starts as it would have.
+          ${pkgs.coreutils}/bin/printf '[Autologin]\nUser=\n' > ${plasmaLoginThisStart} || true
+        fi
+      '';
+    };
+    environment.etc."plasmalogin.conf.d/zz-this-start.conf" = lib.mkIf (plasmaLogin && automatic) {
+      source = plasmaLoginThisStart;
     };
     systemd.user.services.plasma-login = lib.mkIf plasmaLogin {
       environment.XDG_DATA_DIRS = lib.mkForce "${loginSessions}/share";
@@ -384,6 +468,15 @@ in
       environment.XCURSOR_PATH = "/run/current-system/sw/share/icons:${pkgs.kdePackages.breeze}/share/icons";
     };
     services.displayManager.defaultSession = sessions.${defaultDesktop};
+    # Whichever login screen, it starts that person's default session at
+    # boot without asking (Aizome's through greetd's initial session).
+    # Preserve existing NixOS settings until Yukimi makes an explicit choice.
+    # That choice supersedes ordinary definitions, including when turning it
+    # off, while respecting settings deliberately forced by system policy.
+    services.displayManager.autoLogin = lib.mkIf (cfg.autoLogin != null) {
+      enable = lib.mkOverride 90 (cfg.autoLogin != "");
+      user = lib.mkOverride 90 (if cfg.autoLogin == "" then null else cfg.autoLogin);
+    };
     services.desktopManager.plasma6.enable = has "plasma";
     services.desktopManager.gnome.enable = has "gnome";
     services.xserver.desktopManager.xfce.enable = has "xfce";

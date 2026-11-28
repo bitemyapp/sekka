@@ -13,7 +13,7 @@
         };
       };
     in
-    aizome.packages.${pkgs.stdenv.hostPlatform.system}.aizome.yukimi,
+    aizome.packages.${pkgs.stdenv.hostPlatform.system}.aizome-yukimi,
 }:
 let
   helper = pkgs.callPackage ./helper.nix { };

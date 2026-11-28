@@ -124,6 +124,15 @@ impl Accounts {
         }
     }
 
+    /// The TV account's helper (the sample pretends it went).
+    pub fn change_tv(&self, change: aizome_sys::tv::Change) -> Task<()> {
+        match self {
+            Accounts::Live(u) => u.change_tv(change),
+            Accounts::Sample(_) => Task::ready(change.check()),
+            Accounts::None => Task::ready(Err(Error::Unavailable("AccountsService".into()))),
+        }
+    }
+
     pub fn set_automatic_login(&self, user: &User, on: bool) -> Task<()> {
         match self {
             Accounts::Live(u) => u.set_automatic_login(user, on),

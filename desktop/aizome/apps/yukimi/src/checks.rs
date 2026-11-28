@@ -50,7 +50,9 @@ pub fn sources(model: &Model) -> BTreeMap<String, String> {
             .inputs
             .iter()
             .filter(|i| i.follows.is_none())
-            .filter_map(|i| Some((i.name.clone(), i.original.as_ref().or(i.locked.as_ref())?.describe())))
+            .filter_map(|i| {
+                Some((i.name.clone(), serde_json::to_string(i.original.as_ref().or(i.locked.as_ref())?).ok()?))
+            })
             .collect(),
         Kind::Channels => model.channels.iter().map(|c| (c.name.clone(), c.release.clone())).collect(),
     }
@@ -286,6 +288,17 @@ mod tests {
         let check = gather(&model, 1000, answers).unwrap();
         model.inputs[0].original.as_mut().unwrap().reference = Some("nixos-unstable-small".into());
         assert!(!movements(&model, &check).contains_key("nixpkgs"));
+    }
+
+    #[test]
+    fn source_identity_is_independent_of_display_labels() {
+        let mut model = flake_model();
+        let before = sources(&model);
+        let original = model.inputs[0].original.as_mut().unwrap();
+        let label = original.describe();
+        original.rev = Some("a".repeat(40));
+        assert_eq!(original.describe(), label, "a label need not show every source constraint");
+        assert_ne!(sources(&model), before, "a changed pin invalidates the cached answer");
     }
 
     #[test]

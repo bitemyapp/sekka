@@ -778,6 +778,11 @@ impl Yukimi {
     /// Run an operation in a sheet showing its progress, then read
     /// everything again.
     fn run(&mut self, operation: Operation, cx: &mut Cx<Msg>) {
+        let operation = if self.model.setup.kind == Kind::Flake && operation.needs_preflight() {
+            Operation::CheckUpdate { operation: Box::new(operation) }
+        } else {
+            operation
+        };
         if let Some(why) = self.cannot_run(&operation) {
             self.note(why, cx);
             return;
@@ -817,11 +822,48 @@ impl Yukimi {
 
     fn job_event(&mut self, id: u64, event: JobEvent, cx: &mut Cx<Msg>) {
         let Some(job) = self.job.as_mut().filter(|j| j.id == id) else { return };
+        let mut checked = None;
+        let event = if let (Operation::CheckUpdate { operation }, JobEvent::Done(Ok(out))) = (&job.operation, &event) {
+            if job.stop.requested() {
+                JobEvent::Done(Err("Compatibility check stopped. No system configuration was changed.".into()))
+            } else {
+                match serde_json::from_str::<yukimi_system::preflight::Report>(out) {
+                    Ok(report) => {
+                        checked = Some(Operation::CheckedUpdate { operation: operation.clone(), report });
+                        event
+                    }
+                    Err(_) => JobEvent::Done(Err(
+                        "The compatibility check returned an unreadable result. The update was not started.".into(),
+                    )),
+                }
+            }
+        } else {
+            event
+        };
         let Some(outcome) = job.take(event, Instant::now()).cloned() else { return };
         if let Some(t) = self.quiet_timer.take() {
             cx.cancel(t);
         }
         let update = job.operation.is_update();
+        if let Some(operation) = checked {
+            let warning = match &operation {
+                Operation::CheckedUpdate { report, .. } => report.warning(),
+                _ => None,
+            };
+            self.close_job(cx);
+            if let Some(warning) = warning {
+                self.confirm(
+                    "Some packages need to be built".into(),
+                    warning,
+                    "Build and Update".into(),
+                    operation,
+                    cx,
+                );
+            } else {
+                self.run(operation, cx);
+            }
+            return;
+        }
         match outcome {
             Outcome::Done(text) => {
                 if update {
@@ -1100,9 +1142,8 @@ impl Yukimi {
     fn choose_branch(&mut self, input: String, cx: &mut Cx<Msg>) {
         let Some(found) = self.model.inputs.iter().find(|i| i.name == input) else { return };
         let Some(locked) = &found.locked else { return };
-        let source = found.original.as_ref().unwrap_or(locked).describe();
-        let current = yukimi_config::branch::of(&source);
-        let repo = (locked.kind == "github").then(|| locked.owner.clone().zip(locked.repo.clone())).flatten();
+        let current = found.original.as_ref().unwrap_or(locked).reference.clone();
+        let repo = locked.github_repo();
         if let Some((owner, name)) = repo.clone()
             && !matches!(self.source, Source::Sample(_))
         {
@@ -1818,8 +1859,18 @@ impl Program for Yukimi {
             Msg::NoteGone(id) => self.notes.retain(|(n, _)| *n != id),
             Msg::Launched(args) => {
                 match launch_from_args(&args) {
+                    // Proposed once read, with the people read with it.
                     Ok(launch) if self.loading => self.launch = Some(launch),
-                    Ok(launch) => self.propose(launch, cx),
+                    Ok(launch) => {
+                        // Settei may propose someone added (or removed)
+                        // since Yukimi read the accounts.
+                        let choices = self.choices();
+                        if launch.choose.iter().any(|(s, _)| choices.iter().any(|c| c.people && &c.setting == s)) {
+                            let people = self.model.paths.people();
+                            Arc::make_mut(&mut self.model).setup.facts.offer_people(&people);
+                        }
+                        self.propose(launch, cx)
+                    }
                     Err(e) => self.note(e, cx),
                 }
                 cx.activate(self.window);
@@ -1905,14 +1956,19 @@ pub fn launch_from_args(args: &[String]) -> Result<Launch, String> {
             "--choose" => {
                 let value = it.next().ok_or("--choose takes SETTING=VALUE[,VALUE]")?;
                 let (setting, values) = value.split_once('=').ok_or("--choose takes SETTING=VALUE[,VALUE]")?;
-                let values: Vec<String> =
+                let mut values: Vec<String> =
                     values.split(',').map(str::trim).filter(|v| !v.is_empty()).map(str::to_owned).collect();
+                // No value: the empty one, which is no one for who logs in by
+                // themselves (other choices refuse it once read).
+                if values.is_empty() {
+                    values.push(String::new());
+                }
                 let named = |s: &str| {
                     !s.is_empty()
                         && s.split('.')
                             .all(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_alphanumeric() || c == '-'))
                 };
-                if !named(setting) || values.is_empty() || launch.choose.iter().any(|(s, _)| s == setting) {
+                if !named(setting) || launch.choose.iter().any(|(s, _)| s == setting) {
                     return Err(format!("--choose {value:?} isn't SETTING=VALUE[,VALUE]"));
                 }
                 launch.choose.push((setting.to_owned(), values));

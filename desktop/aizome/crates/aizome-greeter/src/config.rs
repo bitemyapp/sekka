@@ -40,6 +40,14 @@ pub struct Config {
     pub state: PathBuf,
     /// The computer's name, shown at the top left (else the host name).
     pub hostname: Option<String>,
+    /// Take game controllers: nothing shows until one is pressed (`pads`).
+    pub controllers: bool,
+    /// SDL's controller database, for controllers whose drivers name their
+    /// buttons their own way (else `$AIZOME_GAMECONTROLLERDB`).
+    pub controller_database: Option<PathBuf>,
+    /// How the TV account's session starts, whatever was picked: Chanoma
+    /// alone (`aizome_sys::tv`).
+    pub tv_session: Vec<String>,
 }
 
 impl Default for Config {
@@ -69,6 +77,9 @@ impl Default for Config {
             compositor_settings: None,
             state: "/var/lib/aizome-greeter/state.toml".into(),
             hostname: None,
+            controllers: true,
+            controller_database: None,
+            tv_session: vec!["/run/current-system/sw/bin/aizome-chanoma-session".into()],
         }
     }
 }

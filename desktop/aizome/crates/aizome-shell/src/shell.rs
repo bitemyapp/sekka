@@ -47,6 +47,9 @@ pub enum Msg {
     Awake(aizome_awake::Status),
     /// `aizome-awake on` or `off` finished: on or off, or why not.
     AwakeSet(Result<bool, String>),
+    /// A timer of the cup's came due: apps have held the screen on a
+    /// while, or one let go a moment ago (`holders.rs`).
+    Holders(crate::holders::Due),
     /// The clock's label turned.
     Tick,
     TimeChanged,
@@ -84,6 +87,8 @@ pub enum Msg {
     Note(crate::notifications::server::NoteEvent),
     /// What the shell this one replaces held last (a restart).
     Carried(Box<crate::carry::Carried>),
+    /// The shell this one replaces has gone (a restart's end).
+    ShellBeforeGone,
     /// Idle after starting: warm the palette.
     WarmPalette,
     /// Draw the palette ahead again, if it was asked for last (the ask's
@@ -170,7 +175,30 @@ pub enum Surface {
 pub struct Screen {
     pub output: Output,
     pub bar: Option<WindowKey>,
-    pub desktop: Option<WindowKey>,
+    pub desktop: DesktopSurface,
+}
+
+/// A screen's desktop surface.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DesktopSurface {
+    /// Not open: not yet, or the compositor took it away (its output went,
+    /// or a newer shell's replaced it in a restart). It's opened when the
+    /// outputs change.
+    Closed,
+    /// Waiting for its wallpaper before it opens (a restart, see
+    /// `desktop_waits`): opened as the wallpaper comes in.
+    Waiting,
+    Open(WindowKey),
+}
+
+impl DesktopSurface {
+    /// Its window, while it's open.
+    pub fn window(self) -> Option<WindowKey> {
+        match self {
+            DesktopSurface::Open(k) => Some(k),
+            DesktopSurface::Closed | DesktopSurface::Waiting => None,
+        }
+    }
 }
 
 impl Screen {
@@ -178,6 +206,16 @@ impl Screen {
     pub fn name(&self) -> String {
         self.output.connector.clone().unwrap_or_else(|| self.output.name.clone())
     }
+}
+
+/// A bar that asked the compositor for the keyboard so that a Desk can be
+/// renamed in it (`Shell::rename_desk`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RenameKeys {
+    pub bar: WindowKey,
+    /// The window with the focus when it asked: one focused since gets
+    /// what's typed next.
+    pub focused: Option<aizome_ipc::WindowId>,
 }
 
 /// Whether a connector is a built-in panel (a laptop's eDP, LVDS or DSI),
@@ -239,6 +277,9 @@ pub struct Shell {
     pub meters: Reading,
     pub now: Local,
     pub renaming: Option<(u32, String)>,
+    /// The bar holding the keyboard for that rename, when it had to ask
+    /// the compositor for it (`rename_desk`).
+    pub rename_keys: Option<RenameKeys>,
     pub shelf: crate::shelf::Shelf,
     /// Apps whose windows the person folded (true) or unfolded (false).
     pub folded: HashMap<String, bool>,
@@ -248,9 +289,16 @@ pub struct Shell {
     /// last word).
     pub carried: Option<u64>,
     pub carry_ready: bool,
-    /// Another shell has taken over (a restart): this one saves nothing
-    /// more and waits to be stopped.
+    /// Another process has taken the notifications' name: a new shell in a
+    /// restart, as a rule, though any notification server may. This shell
+    /// saves nothing more; in a restart the compositor stops it shortly.
+    /// By itself it's no proof of a restart (see `deskbar_replaced_on`).
     pub retiring: bool,
+    /// The output where the compositor closed this shell's Deskbar while
+    /// it was stepping down (`retiring`): a restart, in which the new
+    /// shell's Deskbar replaced it there. None is opened there again
+    /// (`sync_deskbar`).
+    pub(crate) deskbar_replaced_on: Option<u32>,
     /// Apps whose every unread notification shows.
     pub notes_open: Vec<String>,
     pub note_server: Option<crate::notifications::server::NoteServer>,
@@ -282,6 +330,9 @@ pub struct Shell {
     pub(crate) wall_failed: std::collections::HashSet<PathBuf>,
     /// The wallpapers' files, Night's and Day's.
     pub(crate) wall_paths: [Option<PathBuf>; 2],
+    /// This shell replaces one still showing (a restart): each output's
+    /// desktop waits for its wallpaper (see `desktop_waits`).
+    pub(crate) replacing: bool,
     pub trash_full: bool,
     /// The user: login and full name.
     pub user: (String, String),
@@ -344,7 +395,8 @@ pub struct Shell {
     /// The bar menu open (its title lit).
     pub bar_menu: Option<crate::barmenus::BarMenu>,
     pub(crate) menu_gen: u64,
-    /// The bar menu that closed last, and when (a press on its title closed it).
+    /// The bar menu or systray panel that closed last, and when (a press on
+    /// its title or widget closed it).
     pub(crate) just_closed: Option<(WindowKey, Slot, std::time::Instant)>,
     /// Koyomi's next events and Tokei's world clocks, for the clock's panel.
     pub agenda: crate::agenda::Agenda,
@@ -360,6 +412,34 @@ pub struct Shell {
     pub night: Option<aizome_ipc::NightLightState>,
     /// Keep Awake, as the watcher last saw it (`awake.rs`).
     pub awake: aizome_awake::Status,
+    /// This shell asked for Keep Awake to be turned on or off and hasn't
+    /// heard back: its service's hold is Keep Awake's meanwhile, whatever
+    /// the watcher has said so far, and nobody's row (`holders.rs`).
+    pub(crate) awake_changing: bool,
+    /// The compositor's idle inhibitor, held while an app on the session
+    /// bus keeps the screen awake (`idle.rs`).
+    pub(crate) idle_hold: crate::idle::IdleHold,
+    /// Who has an idle inhibitor, as the compositor last said.
+    pub(crate) inhibitors: Vec<aizome_ipc::IdleInhibitorInfo>,
+    /// The session bus's holds, as the screen saver last had them.
+    pub(crate) screen_holds: Vec<aizome_sys::screensaver::Hold>,
+    /// The apps holding the screen on, as the cup and its panel show them
+    /// (`holders.rs`).
+    pub holders: crate::holders::Showing,
+    /// Something the holders are merged from has changed since.
+    pub(crate) holders_stale: bool,
+    /// The shell this one replaces, in a restart: until the compositor
+    /// stops it, the inhibitor it held for its bus's holds is still in the
+    /// compositor's list, and is nobody's row either. Forgotten once that
+    /// shell has gone ([`Msg::ShellBeforeGone`]), so that a process given
+    /// its ID later isn't hidden.
+    pub(crate) shell_before: Option<crate::holders::Pid>,
+    /// Processes' programs by process ID, for tests (the running shell
+    /// reads `/proc`).
+    pub programs_fixture: Option<HashMap<u32, String>>,
+    /// The systemd units processes run in, by process ID, for tests (the
+    /// running shell reads `/proc`).
+    pub units_fixture: Option<HashMap<u32, String>>,
     /// GeoClue is being asked where the computer is; when it last answered.
     pub(crate) locating: bool,
     pub(crate) located_at: Option<std::time::Instant>,
@@ -407,12 +487,14 @@ impl Shell {
             meters: Reading::default(),
             now: Local::now(),
             renaming: None,
+            rename_keys: None,
             shelf: crate::shelf::Shelf::default(),
             folded: HashMap::new(),
             notes: crate::notifications::store::Store::default(),
             carried: None,
             carry_ready: false,
             retiring: false,
+            deskbar_replaced_on: None,
             notes_open: Vec::new(),
             note_server: None,
             banner: None,
@@ -434,6 +516,7 @@ impl Shell {
             wall_pending: Default::default(),
             wall_failed: Default::default(),
             wall_paths: [None, None],
+            replacing: false,
             trash_full: false,
             user: crate::pam::current_user(),
             drag_grab: aizome_kit::Vec2::ZERO,
@@ -479,6 +562,15 @@ impl Shell {
             logind_power_key: None,
             night: None,
             awake: aizome_awake::Status::Off,
+            awake_changing: false,
+            idle_hold: Default::default(),
+            inhibitors: Vec::new(),
+            screen_holds: Vec::new(),
+            holders: Default::default(),
+            holders_stale: false,
+            shell_before: None,
+            programs_fixture: None,
+            units_fixture: None,
             locating: false,
             located_at: None,
             recording: None,
@@ -572,7 +664,7 @@ impl Shell {
         let gone: Vec<Screen> =
             self.screens.iter().filter(|s| !outputs.iter().any(|o| o.id == s.output.id)).cloned().collect();
         for s in gone {
-            for k in [s.bar, s.desktop].into_iter().flatten() {
+            for k in [s.bar, s.desktop.window()].into_iter().flatten() {
                 cx.close_window(k);
                 self.surfaces.remove(&k);
             }
@@ -581,7 +673,7 @@ impl Shell {
         for o in outputs {
             match self.screens.iter_mut().find(|s| s.output.id == o.id) {
                 Some(s) => s.output = o,
-                None => self.screens.push(Screen { output: o, bar: None, desktop: None }),
+                None => self.screens.push(Screen { output: o, bar: None, desktop: DesktopSurface::Closed }),
             }
         }
         self.sync_lock_surfaces(cx);
@@ -610,19 +702,49 @@ impl Shell {
                 self.screens[i].bar = Some(k);
                 fresh += surface_bytes(aizome_kit::Size::new(frame.width, crate::menubar::HEIGHT), scale);
             }
-            if self.screens[i].desktop.is_none() {
-                let opts = LayerOptions::new(Layer::Background, "aizome-desktop")
-                    .anchors(Anchors::ALL)
-                    .exclusive_zone(-1)
-                    .keyboard(KeyboardInteractivity::OnDemand)
-                    .output(id);
-                let k = cx.open_window(layer(opts, 0.0, 0.0, "Desktop"));
-                self.surfaces.insert(k, Surface::Desktop { output: id });
-                self.screens[i].desktop = Some(k);
-                fresh += surface_bytes(frame, scale);
-            }
+            fresh += self.open_desktop(i, cx);
         }
         cx.reserve_buffers(fresh);
+    }
+
+    /// Opens screen `i`'s desktop, unless it has one or must wait for its
+    /// wallpaper (it's opened as that comes in, by
+    /// `open_waiting_desktops`): the bytes its first frame draws into.
+    fn open_desktop(&mut self, i: usize, cx: &mut Cx<Msg>) -> usize {
+        let s = &self.screens[i];
+        if matches!(s.desktop, DesktopSurface::Open(_)) {
+            return 0;
+        }
+        if self.desktop_waits(s) {
+            self.screens[i].desktop = DesktopSurface::Waiting;
+            return 0;
+        }
+        let (id, frame, scale) = (s.output.id, s.output.frame.size(), s.output.scale);
+        let opts = LayerOptions::new(Layer::Background, "aizome-desktop")
+            .anchors(Anchors::ALL)
+            .exclusive_zone(-1)
+            .keyboard(KeyboardInteractivity::OnDemand)
+            .output(id);
+        let k = cx.open_window(layer(opts, 0.0, 0.0, "Desktop"));
+        self.surfaces.insert(k, Surface::Desktop { output: id });
+        self.screens[i].desktop = DesktopSurface::Open(k);
+        surface_bytes(frame, scale)
+    }
+
+    /// The desktops that waited for their wallpapers, now they're in. Only
+    /// those: one the compositor closed (for a newer shell's, in the next
+    /// restart) isn't waiting, and a wallpaper that comes in late doesn't
+    /// open it again.
+    fn open_waiting_desktops(&mut self, cx: &mut Cx<Msg>) {
+        let mut fresh = 0;
+        for i in 0..self.screens.len() {
+            if self.screens[i].desktop == DesktopSurface::Waiting {
+                fresh += self.open_desktop(i, cx);
+            }
+        }
+        if fresh > 0 {
+            cx.reserve_buffers(fresh);
+        }
     }
 
     // The bar.
@@ -656,7 +778,7 @@ impl Shell {
                 .or_else(|| self.panel.as_ref().filter(|p| Some(p.bar) == screen.bar).map(|p| Slot::Tray(p.widget))),
             desks: self.wm.desks.clone(),
             renaming: self.renaming.clone(),
-            tray: self.tray.clone(),
+            tray: Tray { cup: self.cup(), ..self.tray.clone() },
             meters: self.meters.clone(),
             clock: self.now.bar_label(self.bar_cfg.clock, self.bar_cfg.clock_seconds, self.bar_cfg.clock_date),
             folded_apps: folded,
@@ -676,6 +798,8 @@ impl Shell {
     fn bar(&mut self, win: WindowKey, msg: BarMsg, cx: &mut Cx<Msg>) {
         match msg {
             BarMsg::DeskbarHover(inside) => self.deskbar_hover(true, inside, cx),
+            // A Desk double-clicked: the click gave this bar the keyboard.
+            BarMsg::Run(Action::RenameDesk { index }) => self.rename_desk(index, Some(win), false, cx),
             BarMsg::Run(a) => self.run(a, cx),
             BarMsg::Press(slot, rect) => {
                 // Pressing the open menu's title closes it (the press closed
@@ -710,8 +834,71 @@ impl Shell {
             BarMsg::DeskMenu(index, at) => {
                 let Some(desk) = self.wm.desk(index).cloned() else { return };
                 let menu = build::desk_context(&desk, self.wm.desks.len() > 1);
-                self.show_menu(win, Rect::from_origin_size(at, (1.0, 1.0)), &menu, MenuStyle::at_point(), cx);
+                // Rename comes back to the bar the menu is over: the Desk
+                // is renamed there, and it must ask for the keyboard.
+                let kit = build::to_kit(&menu, &|a| match a {
+                    Action::RenameDesk { index } => Msg::Bar(win, BarMsg::DeskRename(index)),
+                    a => Msg::Run(a),
+                });
+                cx.show_menu(win, Rect::from_origin_size(at, (1.0, 1.0)), kit, MenuStyle::at_point());
             }
+            BarMsg::DeskRename(index) => self.rename_desk(index, Some(win), true, cx),
+        }
+    }
+
+    /// Starts renaming Desk `index` in place, in `bar`'s strip (the bar of
+    /// the display with the focus, asked from elsewhere).
+    ///
+    /// A bar is an on-demand layer surface: it has the keyboard after a
+    /// click on it, and the compositor takes it back as a menu of the bar
+    /// closes, for the focused window. So a rename chosen from a menu
+    /// (`take_keys`) has the bar ask for the keyboard outright until it's
+    /// over ([`Shell::sync_rename_keys`]); one begun by a double click on
+    /// the Desk already has it, and loses it to a click elsewhere as before.
+    pub(crate) fn rename_desk(&mut self, index: u32, bar: Option<WindowKey>, take_keys: bool, cx: &mut Cx<Msg>) {
+        let screen = bar.and_then(|b| self.screen_of(b)).or_else(|| self.focused_screen());
+        let Some((bar, output)) = screen.and_then(|s| Some((s.bar?, s.name()))) else { return };
+        let name = self.wm.desk(index).map(|d| d.name.clone()).unwrap_or_default();
+        self.renaming = Some((index, name));
+        if self.rename_keys.is_some_and(|k| k.bar != bar) {
+            // Another display's bar was renaming one: this one takes over.
+            self.release_rename_keys(cx);
+        }
+        if take_keys && self.rename_keys.is_none() {
+            cx.set_layer_keyboard(bar, KeyboardInteractivity::Exclusive);
+            self.rename_keys = Some(RenameKeys { bar, focused: self.wm.focused });
+        }
+        cx.focus(&crate::menubar::rename_id(&output, index));
+    }
+
+    fn release_rename_keys(&mut self, cx: &mut Cx<Msg>) {
+        if let Some(k) = self.rename_keys.take() {
+            cx.set_layer_keyboard(k.bar, KeyboardInteractivity::OnDemand);
+        }
+    }
+
+    /// A bar that asked for the keyboard to rename a Desk gives it back
+    /// when the rename is over, however it ended: done, given up with
+    /// Escape, or the field lost the focus or the bar the keyboard to
+    /// something above it (the field says so, `RenameCancel`). It's over,
+    /// too, once something else should have what's typed, which the
+    /// compositor doesn't decide for a surface that asked outright: a
+    /// window focused since, the lock, the shell's own surfaces that take
+    /// the keyboard (on another display the compositor would leave it with
+    /// the bar); and once there's no field to type into, or to hear Escape:
+    /// the bar went, or the Desk.
+    fn sync_rename_keys(&mut self, cx: &mut Cx<Msg>) {
+        let Some(keys) = self.rename_keys else { return };
+        let refocused = self.wm.focused.is_some() && self.wm.focused != keys.focused;
+        let locked = self.wm.locked || !self.lock.surfaces.is_empty();
+        let taken = self.palette.is_some() || self.confirm.is_some() || self.auth.is_some();
+        let gone = !self.surfaces.contains_key(&keys.bar)
+            || self.renaming.as_ref().is_some_and(|(index, _)| self.wm.desk(*index).is_none());
+        if refocused || locked || taken || gone {
+            self.renaming = None;
+        }
+        if self.renaming.is_none() {
+            self.release_rename_keys(cx);
         }
     }
 
@@ -887,11 +1074,9 @@ impl Shell {
                 let name = (self.wm.desks.len() + 1).to_string();
                 self.ipc.send(Request::AddDesk { name, folder: None, index: None });
             }
-            Action::RenameDesk { index } => {
-                let name = self.wm.desk(index).map(|d| d.name.clone()).unwrap_or_default();
-                self.renaming = Some((index, name));
-                cx.focus("desk-rename");
-            }
+            // Asked for away from a bar's own strip (which says which bar,
+            // `Shell::bar`): no click has given a bar the keyboard.
+            Action::RenameDesk { index } => self.rename_desk(index, None, true, cx),
             Action::Session(SessionVerb::Sleep) => self.do_session(SessionVerb::Sleep),
             Action::Session(v @ (SessionVerb::LogOut | SessionVerb::Restart | SessionVerb::ShutDown)) => {
                 self.confirm(v, cx)
@@ -1003,15 +1188,35 @@ impl Shell {
 
     pub(crate) fn save_section(&mut self, section: &str) {
         match section {
-            "deskbar" => self.settings.set_shell_section("deskbar", &self.deskbar_cfg),
-            "menubar" => self.settings.set_shell_section("menubar", &self.bar_cfg),
-            "notifications" => self.settings.set_shell_section("notifications", &self.notes_cfg),
+            "deskbar" => {
+                let cfg = self.deskbar_cfg.clone();
+                self.change_settings("the settings", |s| s.set_shell_section("deskbar", &cfg));
+            }
+            "menubar" => {
+                let cfg = self.bar_cfg.clone();
+                self.change_settings("the settings", |s| s.set_shell_section("menubar", &cfg));
+            }
+            "notifications" => {
+                let cfg = self.notes_cfg.clone();
+                self.change_settings("the settings", |s| s.set_shell_section("notifications", &cfg));
+            }
             _ => {}
         }
+    }
+
+    /// Makes a change of this shell's to the settings and writes it to the
+    /// file. The file is read again first and only `change` made to it, so
+    /// what another program wrote since this shell last read it stays (the
+    /// compositor writes the Desks, Settei everything): saved whole from
+    /// the copy here, a Desk added a moment ago would be gone again. The
+    /// copy here takes the same change, and the rest of the file when the
+    /// file's watcher or the compositor says it changed.
+    pub(crate) fn change_settings(&mut self, what: &str, change: impl Fn(&mut Settings)) {
+        change(&mut self.settings);
         if self.opts.live
-            && let Err(e) = self.settings.save()
+            && let Err(e) = save_change(&Settings::path(), &self.settings, &change)
         {
-            log::warn!("saving the settings: {e}");
+            log::warn!("saving {what}: {e}");
         }
     }
 
@@ -1047,6 +1252,8 @@ impl Shell {
         }
         // What the shell before this one held (a restart, or a crash).
         let previous = crate::carry::previous_shell();
+        self.replacing = previous.is_some();
+        self.shell_before = previous.and_then(crate::holders::Pid::new);
         if let Some(c) = crate::carry::load() {
             log::info!("taking up {} notifications from the shell before (pid {})", c.notes.len(), c.pid);
             // In a restart, ids go on well past the last the old shell gave,
@@ -1138,7 +1345,8 @@ impl Shell {
         }
         // In a restart, take in what the old shell got after this one read
         // its state: it writes its last word as it loses the bus name to
-        // this one (or, without a bus, as it stops).
+        // this one (or, without a bus, as it stops). Then it goes, and its
+        // process ID is forgotten (`holders.rs`).
         if let Some(previous) = previous {
             let tx = tx.clone();
             std::thread::Builder::new()
@@ -1146,6 +1354,8 @@ impl Shell {
                 .spawn(move || {
                     let c = crate::carry::wait_for_last(previous).unwrap_or_default();
                     tx.send(Msg::Carried(Box::new(c)));
+                    crate::carry::wait_until_gone(previous, crate::carry::GONE_WITHIN);
+                    tx.send(Msg::ShellBeforeGone);
                 })
                 .ok();
         }
@@ -1181,9 +1391,15 @@ impl Shell {
                 self.ipc.ask(Request::NightLight { enabled: None, temperature: None }, NIGHT_LIGHT_TAG);
                 // What's shared already (the shell restarted mid-share).
                 self.ipc.ask(Request::Shares, SHARES_TAG);
+                // Who holds the screen on already (a video was playing).
+                self.ipc.ask(Request::IdleInhibitors, IDLE_INHIBITORS_TAG);
+                self.holders_may_be_renamed();
             }
             IpcEvent::Event(e) => {
-                self.wm.apply(&e);
+                // A holder's row says its window's title.
+                if self.wm.apply(&e).windows {
+                    self.holders_may_be_renamed();
+                }
                 match e {
                     Event::WindowOpened { window } => {
                         self.startup_window(&window);
@@ -1203,6 +1419,7 @@ impl Shell {
                     Event::NightLightChanged { state } => self.night = Some(state),
                     Event::AreaPicked { tag, area, output, .. } => self.area_picked(&tag, area, output.as_deref(), cx),
                     Event::SharesChanged { shares } => self.shares_changed(shares),
+                    Event::IdleInhibitorsChanged { inhibitors } => self.idle_inhibitors_changed(inhibitors),
                     // Another main display: the Deskbar goes there.
                     Event::OutputsChanged { .. } => self.sync_screens(cx.outputs(), cx),
                     _ => {}
@@ -1215,6 +1432,12 @@ impl Shell {
             IpcEvent::Reply { tag: SHARES_TAG, response: aizome_ipc::Response::Shares { shares } } => {
                 self.shares_changed(shares)
             }
+            // A compositor from before the request answers an error, and
+            // then only the bus's holds are known.
+            IpcEvent::Reply {
+                tag: IDLE_INHIBITORS_TAG,
+                response: aizome_ipc::Response::IdleInhibitors { inhibitors },
+            } => self.idle_inhibitors_changed(inhibitors),
             IpcEvent::Reply { .. } => {}
         }
     }
@@ -1250,6 +1473,7 @@ impl Shell {
                     self.pointer_menu_soon(x, y, cx);
                 }
             }
+            "deskbar" => self.run(Action::SetDeskbarCollapsed(!self.deskbar_cfg.collapsed), cx),
             "play-pause" => self.sys.media_control(crate::systray::panels::MediaVerb::PlayPause),
             "next" => self.sys.media_control(crate::systray::panels::MediaVerb::Next),
             "previous" => self.sys.media_control(crate::systray::panels::MediaVerb::Previous),
@@ -1458,6 +1682,8 @@ impl Shell {
             })).collect::<Vec<_>>(),
             "recording": self.recording_json(),
             "sharing": self.sharing_json(),
+            // Keep Awake, the cup, and the apps holding the screen on.
+            "awake": self.awake_json(),
         })
         .to_string()
     }
@@ -1465,9 +1691,26 @@ impl Shell {
     fn refresh_clock(&mut self, cx: &mut Cx<Msg>) {
         self.now = Local::now();
         let day = self.settings.theme_now() == aizome_theme::ThemeName::Day;
+        let theme_changed = self.theme_day != day;
         self.theme_changed(day);
         if self.panel.as_ref().is_some_and(|p| p.widget == TrayWidget::Clock) {
             self.refresh_agenda(cx);
+        }
+        // A clock tick changes the bars, lock screens and the open clock
+        // panel, not every desktop, Deskbar, palette and notification.
+        // A theme transition retains the conservative whole-shell pass.
+        if !theme_changed {
+            cx.skip_view_refresh();
+            for (&window, surface) in &self.surfaces {
+                if matches!(surface, Surface::MenuBar { .. } | Surface::Lock { .. }) {
+                    cx.refresh_window(window);
+                }
+            }
+            if let Some(p) = &self.panel
+                && p.widget == TrayWidget::Clock
+            {
+                cx.refresh_window(p.window);
+            }
         }
     }
 
@@ -1496,7 +1739,8 @@ impl Program for Shell {
     }
 
     fn update(&mut self, msg: Msg, cx: &mut Cx<Msg>) {
-        // A menu's closing counts as a press's doing only right before it.
+        // A menu's or a panel's closing counts as a press's doing only right
+        // before it.
         if !matches!(msg, Msg::Bar(_, BarMsg::Press(..))) {
             self.just_closed = None;
         }
@@ -1513,6 +1757,8 @@ impl Program for Shell {
                     })));
                 }
                 self.apps = Some(index);
+                // The holders' names come from the apps' desktop entries.
+                self.holders_may_be_renamed();
             }
             Msg::AppsChanged => {
                 if let Some(tx) = self.stream.clone() {
@@ -1529,13 +1775,29 @@ impl Program for Shell {
                     self.ipc.send(aizome_ipc::Request::SetAudible { pids: playing.clone() });
                     self.audible_sent = playing;
                 }
-                self.tray.awake = (self.awake != aizome_awake::Status::Off).then_some(self.awake);
+                // An app asked the session bus to keep the screen awake,
+                // or the last one let go: the compositor hears it from
+                // the shell, and the cup's panel says who.
+                self.idle_hold.want(self.sys.screen());
+                if let Some(saver) = &self.sys.screensaver {
+                    let holds = saver.snapshot().holds.clone();
+                    self.screen_holds_changed(holds);
+                }
                 self.sync_status_items();
                 self.session_events(cx);
             }
-            Msg::Meters(r) => self.meters = r,
+            Msg::Meters(r) => {
+                self.meters = r;
+                cx.skip_view_refresh();
+                for screen in &self.screens {
+                    if let Some(bar) = screen.bar {
+                        cx.refresh_window(bar);
+                    }
+                }
+            }
             Msg::Awake(s) => self.keep_awake_status(s, cx),
             Msg::AwakeSet(r) => self.keep_awake_set(r, cx),
+            Msg::Holders(due) => self.holders_due(due, cx),
             Msg::Tick => {
                 self.refresh_clock(cx);
                 self.arm_clock(cx);
@@ -1596,13 +1858,25 @@ impl Program for Shell {
                 }
                 self.carry_ready = true;
             }
+            Msg::ShellBeforeGone => self.shell_before_gone(),
             Msg::BannerDone(id) => self.banner_done(id, cx),
             Msg::Recording(serial, e) => self.recording_event(serial, e, cx),
             Msg::RecordTick(serial, tick) => self.record_tick(serial, tick, cx),
             Msg::MenuClosed(n) => self.menu_closed(n),
-            Msg::Agenda(a) => self.agenda = a,
+            Msg::Agenda(a) => {
+                self.agenda = a;
+                cx.skip_view_refresh();
+                if let Some(p) = &self.panel
+                    && p.widget == TrayWidget::Clock
+                {
+                    cx.refresh_window(p.window);
+                }
+            }
             Msg::FlashDone(n) => self.flash_done(n, cx),
-            Msg::Wallpaper(key, image) => self.wallpaper_ready(key, image),
+            Msg::Wallpaper(key, image) => {
+                self.wallpaper_ready(key, image);
+                self.open_waiting_desktops(cx);
+            }
             Msg::WarmPalette => {
                 let theme = cx.theme().clone();
                 self.warm_palette(&theme);
@@ -1704,9 +1978,7 @@ impl Program for Shell {
         if self.startup.window == Some(window) {
             self.startup.window = None;
         }
-        if self.panel.as_ref().is_some_and(|p| p.window == window) {
-            self.panel = None;
-        }
+        self.panel_dismissed(window);
         // A layer the compositor took away (its output went): forget it; it's
         // opened again when the outputs change.
         if let Some(s) = self.surfaces.remove(&window) {
@@ -1720,12 +1992,20 @@ impl Program for Shell {
                 if sc.bar == Some(window) {
                     sc.bar = None;
                 }
-                if sc.desktop == Some(window) {
-                    sc.desktop = None;
+                if sc.desktop == DesktopSurface::Open(window) {
+                    sc.desktop = DesktopSurface::Closed;
                 }
             }
             if s == Surface::Deskbar {
                 self.deskbar = None;
+                // Taken by the compositor after another took the
+                // notifications: a restart, and the new shell's Deskbar has
+                // replaced this one on its output. (Losing the name alone
+                // could be to any notification server, and this shell then
+                // goes on showing its Deskbar.)
+                if self.retiring {
+                    self.deskbar_replaced_on = self.deskbar_output;
+                }
                 // A drag of its edge or grip can't end now.
                 self.end_deskbar_drags(cx);
             }
@@ -1811,6 +2091,7 @@ pub fn app_sel(app_id: &str) -> AppSel {
 /// The tag of the Night Light question asked at connecting.
 const NIGHT_LIGHT_TAG: u64 = 0x4e49_4748;
 const SHARES_TAG: u64 = 0x5348_4152;
+const IDLE_INHIBITORS_TAG: u64 = 0x4944_4c45;
 
 pub fn layer(opts: LayerOptions, width: f64, height: f64, title: &str) -> WindowSpec {
     let mut s = WindowSpec::layer(opts, width, height);
@@ -1832,10 +2113,12 @@ impl Shell {
             self.run(a, cx);
         }
         self.sync_deskbar(cx);
+        self.sync_holders(cx);
         self.sync_panel(cx);
         self.sync_tearoffs(cx);
         self.sync_cards(cx);
         self.keep_palette_ahead(cx);
+        self.sync_rename_keys(cx);
         if let Some(screen) = self.primary().cloned() {
             let model = self.bar_model(&screen);
             let theme = cx.theme().clone();
@@ -1862,6 +2145,7 @@ impl Shell {
         }
         self.carried = Some(mark);
         crate::carry::save(&crate::carry::Carried {
+            version: crate::carry::VERSION,
             pid: std::process::id(),
             last,
             notes: self.notes.list.clone(),
@@ -1911,12 +2195,9 @@ impl Shell {
     /// Night or Day: written to the settings, which the compositor and every
     /// app follow.
     pub fn set_theme(&mut self, day: bool) {
-        self.settings.appearance.theme =
-            if day { aizome_config::ThemeChoice::Day } else { aizome_config::ThemeChoice::Night };
+        let theme = if day { aizome_config::ThemeChoice::Day } else { aizome_config::ThemeChoice::Night };
+        self.change_settings("the theme", |s| s.appearance.theme = theme);
         if self.opts.live {
-            if let Err(e) = self.settings.save() {
-                log::warn!("saving the theme: {e}");
-            }
             self.ipc.send(Request::ReloadConfig);
         }
         self.theme_changed(day);
@@ -2015,6 +2296,25 @@ impl Shell {
     }
 }
 
+/// Writes `change` to the settings file at `path`: made to the file as it
+/// is now. A file that can't be read (it doesn't parse) is written from
+/// `held` instead, the settings last read from it, which have the change
+/// already.
+fn save_change(
+    path: &std::path::Path,
+    held: &Settings,
+    change: &dyn Fn(&mut Settings),
+) -> Result<(), aizome_config::Error> {
+    let fresh = match Settings::load_from(path) {
+        Ok(mut fresh) => {
+            change(&mut fresh);
+            fresh
+        }
+        Err(_) => held.clone(),
+    };
+    fresh.save_to(path)
+}
+
 /// Whether this shell runs an Aizome session (not a test beside another
 /// desktop): only then does it hold logind's sleep, serve polkit, and lock
 /// for logind.
@@ -2110,6 +2410,43 @@ impl Shell {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The shell's own change goes into the file as the file is now: a Desk
+    /// the compositor wrote after the shell last read the settings stays.
+    #[test]
+    fn a_change_is_saved_into_the_file_as_it_is_now() {
+        let dir = std::env::temp_dir().join(format!("aizome-shell-settings-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("settings.toml");
+        // What this shell read, and what the file holds since: a fifth Desk.
+        let mut held = Settings::from_toml("[appearance]\neffects = \"austere\"\n").unwrap();
+        let mut file = held.clone();
+        file.desks = (1..=5).map(|n| aizome_config::DeskConfig::named(n.to_string())).collect();
+        file.save_to(&path).unwrap();
+        let fold = |s: &mut Settings| {
+            let mut deskbar = s.deskbar_settings();
+            deskbar.collapsed = true;
+            s.set_shell_section("deskbar", &deskbar);
+        };
+        fold(&mut held);
+        save_change(&path, &held, &fold).unwrap();
+        let saved = Settings::load_from(&path).unwrap();
+        assert_eq!(saved.desks, file.desks, "the Desks written meanwhile stay");
+        assert!(saved.deskbar_settings().collapsed, "with the shell's change");
+        assert_eq!(saved.appearance, held.appearance);
+        // A file that doesn't parse can't be changed: what the shell holds
+        // is written, as it always was.
+        std::fs::write(&path, "[appearance\n").unwrap();
+        save_change(&path, &held, &fold).unwrap();
+        assert_eq!(Settings::load_from(&path).unwrap(), held);
+        // No file yet: the defaults, with the change.
+        std::fs::remove_file(&path).unwrap();
+        save_change(&path, &held, &fold).unwrap();
+        let saved = Settings::load_from(&path).unwrap();
+        assert!(saved.deskbar_settings().collapsed && saved.desks.is_empty());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 
     fn running_settings() -> (aizome_kit::testing::Harness<Shell>, std::sync::mpsc::Receiver<(Request, Option<u64>)>) {
         let mut h = aizome_kit::testing::Harness::new(Shell::new(Options::default()));

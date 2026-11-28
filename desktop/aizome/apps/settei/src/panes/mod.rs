@@ -30,7 +30,7 @@ mod printers;
 mod search;
 mod sound;
 mod trackpad;
-mod users;
+pub mod users;
 
 /// Every pane, in order.
 pub fn all() -> Vec<Box<dyn AnyPane>> {

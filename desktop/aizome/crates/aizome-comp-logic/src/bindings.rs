@@ -75,8 +75,8 @@ impl Action {
     /// Parses an action name (as in settings overrides and IPC `action`).
     pub fn parse(s: &str) -> Option<Action> {
         let s = s.trim();
-        if let Some(cmd) = s.strip_prefix("spawn ") {
-            return Some(Action::Spawn(cmd.split_whitespace().map(String::from).collect()));
+        if let Some(cmd) = aizome_config::bindings::SpawnCommand::parse(s) {
+            return Some(Action::Spawn(cmd.into_argv()));
         }
         if let Some(n) = s.strip_prefix("go-to-desk-").and_then(|n| n.parse().ok()) {
             return Some(Action::GoToDesk(n));
@@ -130,6 +130,7 @@ pub const SHELL_ACTIONS: &[&str] = &[
     "palette",
     "toolchest",
     "menu-bar",
+    "deskbar",
     "power-key",
     "bell",
     "lock",
@@ -255,6 +256,7 @@ pub fn defaults() -> Vec<(&'static str, String)> {
         ("Ctrl+Shift+Super+bracketleft", "move-tab-left".into()),
         ("Ctrl+Shift+Super+bracketright", "move-tab-right".into()),
         ("Ctrl+Super+F", "fullscreen".into()),
+        ("Ctrl+Super+D", "deskbar".into()),
         ("Super+Return", "terminal".into()),
         ("Super+W", "terminal-close".into()),
         ("Super+Q", "terminal-quit".into()),
@@ -366,6 +368,15 @@ mod tests {
     use super::*;
 
     #[test]
+    fn spawn_actions_use_the_shared_command_grammar() {
+        assert_eq!(
+            Action::parse(" spawn\tkoe  record\ttoggle "),
+            Some(Action::Spawn(vec!["koe".into(), "record".into(), "toggle".into()]))
+        );
+        assert_eq!(Action::parse("spawn"), None);
+    }
+
+    #[test]
     fn parses_chords() {
         let c = parse_chord("Ctrl+Super+Up").unwrap();
         assert!(c.mods.ctrl && c.mods.logo && !c.mods.shift);
@@ -391,6 +402,14 @@ mod tests {
         let ctrl_logo = Mods { ctrl: true, logo: true, ..Default::default() };
         assert_eq!(b.find(ctrl_logo, &[Keysym::new(keysyms::KEY_3)]), Some(&Action::GoToDesk(3)));
         assert_eq!(b.find(logo, &[Keysym::new(keysyms::KEY_space)]), Some(&Action::Shell("palette".into())));
+        assert_eq!(
+            b.find(ctrl_logo, &[Keysym::new(keysyms::KEY_d)]),
+            Some(&Action::Shell("deskbar".into())),
+            "⌃❖D hides and shows the Deskbar"
+        );
+        let mut unbound = std::collections::BTreeMap::new();
+        unbound.insert("Ctrl+Super+D".to_string(), "none".to_string());
+        assert_eq!(Bindings::new(&unbound).find(ctrl_logo, &[Keysym::new(keysyms::KEY_d)]), None);
         assert!(Action::parse("go-to-desk-7") == Some(Action::GoToDesk(7)));
         // ❖⇧[ arrives as braceleft with bracketleft, the key's own symbol,
         // first (as the core passes them).

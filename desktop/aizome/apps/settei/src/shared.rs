@@ -42,6 +42,10 @@ pub struct Shared {
     pub reloads: u32,
     /// The keyboard a launch named (`--keyboard`), while its pane opens.
     pub keyboard: Option<String>,
+    /// Where the system's own choices are read from
+    /// ([`choices::Files`](crate::system::choices::Files)). The sample has
+    /// none, unless a test gives it some.
+    pub choices: Option<crate::system::choices::Files>,
 }
 
 impl Shared {
@@ -63,6 +67,7 @@ impl Shared {
             launched: Vec::new(),
             reloads: 0,
             keyboard: None,
+            choices: (!sample).then(crate::system::choices::Files::system),
         }
     }
 

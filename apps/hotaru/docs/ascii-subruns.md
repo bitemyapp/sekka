@@ -20,7 +20,7 @@ medians. They disqualify this implementation. Its replacement of cached
 `Peekable` lookahead with cloned character decoding is a plausible cause to
 investigate in a separate candidate, not an established timing attribution.
 
-The [complete evidence](../upstream/ascii-subruns/README.md) preserves all 30
+The [complete evidence](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/ascii-subruns/README.md) preserves all 30
 median/p95/maximum and per-round results, raw samples and host observations,
 exact source/vendor/binary identities, the patch, test logs and input generators.
 No generated corpus or executable is included in Git. This small-grid
@@ -28,7 +28,7 @@ measurement does not replace the earlier 80-row common-corpus qualification or
 establish whole-application performance parity. Shared product source is
 unchanged by this experiment.
 
-A separate [cached-lookahead version](../upstream/ascii-subruns/cached-lookahead/README.md)
+A separate [cached-lookahead version](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/ascii-subruns/cached-lookahead/README.md)
 removes repeated decoding with a safe private cursor. It passes 143 debug and
 release tests and the same reference gates, but also remains rejected. Its
 mixed-text medians regress 4.4–4.9%, and dense-wide medians regress about 13%
@@ -39,7 +39,7 @@ handoff to the error path while leaving ordinary valid-text printing unchanged.
 The cached-cursor results do not prove that repeated decoding caused the first
 version's entire regression.
 
-The [error-prefix-only version](../upstream/ascii-subruns/error-prefix/README.md)
+The [error-prefix-only version](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/ascii-subruns/error-prefix/README.md)
 restores the original screen implementation and invokes an outlined partition
 only after a UTF-8 validation error. It also remains rejected. Its new long
 dense-prefix case exposes a 16.7% legacy / 10.7% Unicode scan penalty, despite
@@ -50,7 +50,7 @@ release tests, lint checks, pinned-reference gates and 32 timing-state gates
 pass. An incomplete scalar at a chunk boundary selects this path too; it is
 not accurate to say that all ultimately valid streams are unaffected.
 
-The subsequent [bounded instruction attribution](../upstream/ascii-subruns/error-prefix-attribution/README.md)
+The subsequent [bounded instruction attribution](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/ascii-subruns/error-prefix-attribution/README.md)
 uses matching diagnostic compiler flags and preserves native disassembly
 separately. In a single long dense-prefix case, the added helper accounts for
 344,099 of 344,220 extra instructions; the original UTF-8 printer's count is

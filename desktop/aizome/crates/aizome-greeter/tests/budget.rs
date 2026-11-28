@@ -11,7 +11,7 @@ use aizome_greeter::app::{Greeter, Msg};
 use aizome_greeter::config::{Config, State};
 use aizome_greeter::greetd::{AuthMessageType, ErrorType, Response};
 use aizome_greeter::sessions::{Kind, Session};
-use aizome_greeter::users::User;
+use aizome_greeter::users::{Accounts, User};
 use aizome_kit::prelude::*;
 use aizome_kit::sidestep_ui::{Modifiers, NamedKey};
 use aizome_kit::testing::Harness;
@@ -40,7 +40,7 @@ fn wallpaper() -> Option<PathBuf> {
 }
 
 fn greeter() -> (Harness<Greeter>, WindowKey) {
-    let user = |n: &str, r: &str, uid| User { name: n.into(), real_name: r.into(), uid, icon: None };
+    let user = |n: &str, r: &str, uid| User { name: n.into(), real_name: r.into(), uid, icon: None, tv: None };
     let session = |id: &str, name: &str| Session {
         id: id.into(),
         name: name.into(),
@@ -54,7 +54,14 @@ fn greeter() -> (Harness<Greeter>, WindowKey) {
     let g = Greeter::with(
         cfg,
         State::default(),
-        vec![user("callen", "Chris Allen", 1000), user("alice", "Alice Kimura", 1001), user("bob", "Bob Tanaka", 1002)],
+        Accounts {
+            visible: vec![
+                user("callen", "Chris Allen", 1000),
+                user("alice", "Alice Kimura", 1001),
+                user("bob", "Bob Tanaka", 1002),
+            ],
+            tv: None,
+        },
         vec![session("aizome", "Aizome"), session("tatami", "Tatami")],
         "ganymede".into(),
         false,

@@ -1,7 +1,9 @@
 //! The system's own choices, as its distribution declares them
 //! (`programs.yukimi.choices`): on Sekka, which desktops it has, which one
-//! starts by default, the login screen, and the boot splash (which Settei's
-//! General → Startup proposes here). Picking changes nothing until
+//! starts by default, the login screen, who logs in by themselves (which
+//! Settei's Users & Groups proposes here; anyone with an account, or no one)
+//! and the boot splash (which Settei's General → Startup proposes here).
+//! Picking changes nothing until
 //! Apply, which asks for an administrator password and builds the system
 //! once with every choice made.
 use aizome_kit::column;

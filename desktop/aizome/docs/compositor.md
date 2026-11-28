@@ -34,7 +34,9 @@ aizome --build-info                      # how the core was built (what a logic 
   `[input.pointer]` and `[input.touchpad]` `scroll_factor` (scales axis
   events, wheel and finger; `natural_scroll` turns them round in the
   compositor alone, libinput's own natural scrolling always off, so it's
-  turned round once on every device), `[input.keyboard]` `sticky_keys` (a modifier
+  turned round once on every device), `[input.touchpad] enabled` (false
+  sets every touchpad's libinput send-events mode to disabled; read at
+  each device's configuration, so a change applies live), `[input.keyboard]` `sticky_keys` (a modifier
   tapped alone latches for the next key; tapped again it lets go) and
   `slow_keys` with `slow_keys_ms` (a key counts once held that long; a
   brush is dropped), and `[performance] renderer` (at the next start).
@@ -82,7 +84,9 @@ without one). Once its Wayland socket and IPC are up the compositor:
 - imports `WAYLAND_DISPLAY`, `DISPLAY`, `XDG_CURRENT_DESKTOP=Aizome`,
   `XDG_SESSION_DESKTOP=aizome`, `XDG_SESSION_TYPE`, `AIZOME_SESSION`,
   `AIZOME_SOCKET` and `AIZOME_SHELL_SOCKET` into systemd and D-Bus
-  activation;
+  activation, which `aizome.service` unsets again when the compositor
+  stops, however it stops (`ExecStopPost=`; the names are `SessionEnv`'s
+  in `session.rs`, and a test keeps the unit's list equal to them);
 - tells systemd it's ready (`READY=1` on `$NOTIFY_SOCKET`) and starts
   `aizome-session.target` (bound to `graphical-session.target`);
 - starts `xwayland-satellite :N` (a free display, exported as `DISPLAY`)
@@ -107,6 +111,9 @@ Headless and nested runs never do any of that, even without `--no-session`
 and even when started by systemd. Their display and IPC addresses belong
 only to their children; otherwise a portal restarted during a test could
 inherit the test display and lose its file chooser when the test exits.
+Nor do they write the person's settings, which the login session follows:
+Desks changed in them are saved only to settings of their own (Desks,
+below).
 
 Service supervision is separate: a headless service can still report
 `READY=1` to its own `NOTIFY_SOCKET`. `--no-session` suppresses that readiness
@@ -122,7 +129,7 @@ names only while nobody has them, or from the shell it replaces in a
 restart (`AIZOME_SHELL_PREVIOUS_PID`). `scripts/headless-session` and the
 tests leave the developer's session alone.
 
-Under `aizome.service` it feeds systemd's watchdog (`WatchdogSec=10s`)
+Under `aizome.service` it feeds systemd's watchdog (`WatchdogSec=30s`)
 from its main loop; a loop stalled that long is stopped (SIGABRT, with a
 core dump) and `aizome-session` starts it again, and a watcher thread logs
 the main thread's backtrace to `~/.local/state/aizome/stall.log` first.
@@ -159,8 +166,9 @@ fractional-scale, presentation-time, single-pixel-buffer, cursor-shape,
 idle-notify, idle-inhibit, keyboard-shortcuts-inhibit, pointer-constraints,
 relative-pointer, pointer-gestures, text-input-v3, input-method-v2,
 virtual-keyboard, security-context, content-type, tablet, alpha-modifier,
-fifo, commit-timing, xdg-toplevel-icon, xdg-system-bell (rung as the
-shell's `bell` binding), ext-foreign-toplevel-list,
+fifo, commit-timing, xdg-toplevel-icon, xdg-toplevel-tag (a window
+tagged `utility` is kept by itself: see below), xdg-system-bell (rung as
+the shell's `bell` binding), ext-foreign-toplevel-list,
 wlr-foreign-toplevel-management (3), wlr-output-management (4),
 wlr-screencopy (3), ext-image-copy-capture (1) with ext-image-capture-source
 (1) and wlr-gamma-control (1). Privileged ones (layer shell,
@@ -190,7 +198,10 @@ Notes for client authors:
   buffer goes back once, with the parent commit that applies it: GTK
   takes a release as the buffer to draw into next and frees it on another,
   so a second release there crashed GTK apps (Firefox's panels and
-  tooltips are such subsurfaces).
+  tooltips are such subsurfaces). A buffer its commit didn't copy (with
+  several GPUs, or a subsurface's under a toplevel that has no buffer
+  yet) is kept as under pixman: a client may draw into a released buffer
+  at once, so on every backend the copy comes first.
 - Drag and drop: wl_data_device_manager 3 (source and offer actions),
   and the drag icon moves with its wl_surface.offset (or attach x, y)
   relative to the pointer; it shows above everything, in screenshots
@@ -223,6 +234,20 @@ Notes for client authors:
 - A toplevel's app_id should be set before its first commit; it picks the
   remembered size and place, the icon, and whether ❖ reaches it untouched
   (`org.aizome.…` apps) or as Ctrl.
+- A toplevel tagged `utility` (xdg-toplevel-tag, set before its first
+  commit) is one of its app's small windows beside the others, and is kept
+  by itself. It opens at the size it asks for, placed as a new window is,
+  not at its app's remembered size and place. It doesn't open as a tab on
+  the app's focused window, and no window opens as a tab on it. Closing
+  it leaves the app's remembered place as it was. Dropping its tab on
+  another window, ⌃❖S and `aizomectl stack` stack it as they do any
+  window. Aizome's kit tags the windows opened with `.utility()`: Hako's
+  Operations, Myaku's Energy Meters, Fusen's stickies. The tag is read
+  when the window opens: changing it afterwards changes nothing until the
+  window opens again, across a reload of the logic too. It lasts for that
+  mapping: a toplevel that is unmapped, or a surface given another
+  toplevel, is untagged until its client tags it again. Other tags mean
+  nothing to Aizome.
 - Layer surfaces: `aizome-deskbar` is placed around (new windows open clear
   of it). Exclusive keyboard interactivity on the top and overlay layers
   takes the keyboard while mapped; on-demand takes it on a click; a
@@ -233,6 +258,36 @@ Notes for client authors:
 - xdg-activation: a token made from an input event of the client with the
   keyboard or pointer focus moves focus; any other request marks the
   window urgent (IPC `urgent`) instead.
+- idle-inhibit: while any surface has an inhibitor, idleness is held off:
+  no `idle` event (no lock, and the displays stay on) and no `idled` from
+  ext-idle-notify. The surface needn't show (the shell's never does). An
+  inhibitor goes when it's destroyed, and with its surface or its client
+  (`tests/idle_inhibit.rs`). Apps that ask the session bus's
+  `org.freedesktop.ScreenSaver` instead are answered by the shell, which
+  holds an inhibitor for them (`docs/shell.md`, "Staying awake for a
+  video").
+- Whose hold it is (`idle.rs`, `tests/idle_holders.rs`). An inhibitor is
+  an app's, and is for someone at the screen: once the session is locked
+  (from the lock being asked for until it's unlocked) inhibitors no
+  longer hold off the `idle` events, so `monitors-off` comes after its
+  minutes and the displays turn off behind the lock whatever plays. While
+  a hold counts the idle clock stands at nothing, so those minutes count
+  from the lock (to within the idle timer's five seconds), or from the
+  last input after it. The user's own Keep Awake asks over IPC
+  instead (`keep-awake`, held for as long as the asking connection stays
+  open, so it goes with its service however that ends), and that hold
+  counts locked or not. Asking by a request of its own is what tells it
+  from an app's: nothing is read from a client's name, and only programs
+  of the session reach the IPC socket. Any of them may ask, so the
+  compositor logs which process did, and lists the hold with it; the
+  shell shows every such hold that isn't Keep Awake's own
+  (`docs/shell.md`, "Who is holding"). ext-idle-notify's clients are told
+  of any hold as before, locked or not. `idle-inhibitors` lists the holds
+  (an inhibitor by the window its surface belongs to, with that window's
+  app ID and title, and by its client's process), and
+  `idle-inhibitors-changed` says when the list changes: at once when a
+  hold begins or ends, and within five seconds (the idle timer's next
+  look) when a holder's window opened or was renamed.
 - ext-session-lock: `locked` is sent once every output has drawn a frame
   without the desktop; lock surfaces get the output's size and all input.
   A locker that dies leaves the session locked. Locking closes the
@@ -306,7 +361,8 @@ Notes for client authors:
   `[[outputs]]` entry, or wlr-output-management) takes an output out of the
   layout and, on udev, disables its CRTC; it stays listed (`enabled:
   false`) to be turned on again. Its Desk goes as a display's does when
-  unplugged (see Desks below), and comes back with it.
+  unplugged (see Desks below), and comes back with it. One that fails to
+  come on (the request is answered with the error) stays off and listed.
 - **Mirroring**: `mirror = "eDP-1"` in an `[[outputs]]` entry (or
   `mirror-output`) shows another output's picture, rendered afresh and
   scaled to fit with black bars, pointer included; the mirror has no place
@@ -349,6 +405,17 @@ Notes for client authors:
   That matters when logind doesn't suspend on the lid (Keep Awake,
   docked); a panel another output mirrors stays on, since its frames
   drive the mirror's. `powered` in the IPC's outputs says which are off.
+  The lid is known as the session starts: what libinput queued as it
+  took the seat (its devices, and a closed lid as the switch's device
+  comes) is handled before any display is set up, and again on coming
+  back from another VT (`drain_libinput` in `backend/udev.rs`). libinput's
+  fd tells only of what the kernel sends after, so those used to wait for
+  the first key or movement: a docked start lit the panel behind the lid,
+  and the TV account's Chanoma, driven by a game controller libinput
+  doesn't hear, stayed on that panel. Starting docked with the lid
+  closed, other displays are set up first and the panel is left dark (no
+  modeset, a second or two on some panels), as opening the lid lights it;
+  if no other display comes on, it does.
 - **Night Light**: `[night_light]` `enabled`, `temperature` (K, default
   4000), `schedule` (`sunset`: from sunset to sunrise where the computer
   is, which is `latitude` and `longitude` when set by hand, else
@@ -391,7 +458,22 @@ Notes for client authors:
   showing tab out; ❖⇧[ and ❖⇧] show the previous and next tab, and
   ⌃⇧❖[ and ⌃⇧❖] move the showing one along; IPC `stack`/`unstack`
   (`stack` adds at the end).
-- **Desks**: four by default (settings `[[desks]]`). Each display shows a
+- **Desks**: four by default (settings `[[desks]]`). Desks added, renamed,
+  given a folder, moved or removed here (the overview, the bar's Desks
+  menu, `aizomectl`) are written back to `[[desks]]`, so Settei shows them
+  and a change it saves keeps them. All the Desks are written, one made
+  for a newly plugged display among them; the four defaults are no
+  entries. The file is read again first and written whole, as Settei
+  writes it: its comments and the order of its keys go, and every setting
+  is spelled out. A file that doesn't parse is left alone, and Desks that
+  couldn't be saved stay as they are until the next change here saves
+  them. The compositor says `config-changed` as it writes, so the shell
+  holds the new Desks before it saves anything of its own (it reads the
+  file again before each save, too). Only settings of its own are written:
+  the login session's compositor (`AIZOME_SESSION=1`, above) owns the
+  person's, and a headless or nested one beside it keeps its Desks to
+  itself unless it was given settings alone, a `--config` file or an
+  `XDG_CONFIG_HOME` other than `~/.config`. Each display shows a
   Desk of its own, as XMonad's screens show workspaces: the main display
   starts on the first, the others on the next ones. The current Desk is
   the one of the display with the focus, which moves with the focused
@@ -420,7 +502,9 @@ Notes for client authors:
   display its own back); a new one shows the first Desk no display shows,
   a Desk being added when there's none. Windows of Desks no display shows
   keep their places for when one does. Every display keeps a Desk, so
-  removing Desks stops at one each.
+  removing Desks stops at one each. In the overview, Delete removes the
+  Desk under the pointer as Remove in the bar's Desk menu does (one code
+  path, `Actions::remove_desk`), while no filter is typed.
 - **Overview** (⌃❖↑), **switcher** (❖Tab), **marking menu** (right press
   on a tab, or ⌃❖Space for the focused window: arrows, letters and digits
   pick, and the pointer only what it's over), **area screenshots** (❖⇧4; the shell borrows the picker with
@@ -447,10 +531,10 @@ connections and the way out depend on.
 | `thumbs.rs` | Under pixman, thumbnails (the overview's, the switcher's) kept as pictures at their size, scaled again only where their window drew |
 | `blur.rs` | Under GLES, the blur behind a scene's `Blur` items (dual Kawase, masked by the surface's own alpha), taken again only when what's under it changed |
 | `ghosts.rs` | Layer surfaces' last frames, kept for the logic to move away as they go |
-| `input.rs`, `focus.rs` | Input from libinput, winit or IPC; the core's keys (VT switching, ⌃❖R, Ctrl+Alt+Del) before the logic's, and a key `catch-key` waits for; keyboard focus, popup grabs, grab wrappers |
+| `input.rs`, `focus.rs` | Input from libinput, winit or IPC; the core's keys (VT switching, ⌃❖R, Ctrl+Alt+Del) before the logic's, a key `catch-key` waits for, and those `catch-keys` keeps over a window; keyboard focus, popup grabs, grab wrappers |
 | `keyboards.rs` | The keyboards that type, who each is, and the keymap of the one typing (its own keys from `[[input.keyboards]]`) |
 | `shell.rs`, `handlers.rs`, `popups.rs` | Surfaces, xdg-shell, layer shell, session lock and the smaller protocols; the window registry |
-| `protocols/` | wlr-screencopy and ext-image-copy-capture with its output and window sources (`capture`: the streams and copies they share, wl_shm and dmabuf, per-stream damage; an output's copy draws the logic's scene), wlr foreign toplevel management, wlr output management, wlr gamma control, xdg-toplevel-icon |
+| `protocols/` | wlr-screencopy and ext-image-copy-capture with its output and window sources (`capture`: the streams and copies they share, wl_shm and dmabuf, per-stream damage; an output's copy draws the logic's scene), wlr foreign toplevel management, wlr output management, wlr gamma control, xdg-toplevel-icon, and the tag xdg-toplevel-tag gives a window (`toplevel_tag`) |
 | `backend/` | headless (GLES on a render node or pixman, 60 Hz pacing only while damaged), winit, udev (DRM/KMS, multi-GPU GLES or pixman dumb buffers) |
 | `recovery/` | Ctrl+Alt+Del's overlay: state, keys and actions (`mod.rs`), drawing (`view.rs`, with the core's painter), apps' processes on a thread (`procinfo.rs`, `x11.rs`), pings (`ping.rs`), Reset Input (`reset.rs`). The core calls it before the logic: the first check in `decide_key` and `pointer_button`, `pointer_moved` and `scroll` in input, `may_constrain` (pointer constraints), the first items of `State::scene`, `frame_flags` (udev), `exclusive_keyboard_target`, `handle_request`, `client_pong` and `constraint_requested`, and `start` in `run`. |
 | `watchdog.rs` | systemd's watchdog keepalive from the main loop and the stall watcher (backtrace, `stall.log`, the notice after a restart). |
@@ -496,13 +580,17 @@ nix develop .#aizome --command cargo test -p aizome-comp
   picking, windows alone start at windows); and a window pick, for a
   share or ❖⇧4, keeps its release from the window under it.
 - `tests/keys.rs`: ❖ as Ctrl, Ctrl+Shift in terminals, ❖ for kit apps,
-  system and shell chords.
+  system and shell chords, and a synthesized ❖V under swapped modifier
+  keys and Dvorak.
 - `tests/settings.rs`: tab double-click, scroll factor, sticky and slow
   keys.
 - `tests/displays.rs`: outputs off and on (from IPC and the settings),
   mirroring scaled and letterboxed, the main display, Night Light's IPC
   and schedule, the renderer setting, and a laptop's panel (a headless
-  output named `eDP-1`) dark while its lid is closed.
+  output named `eDP-1`) dark while its lid is closed. On udev, in a VM
+  (`nix build .#aizome-checks.output-enable`): a display off and on, and
+  one whose turning on fails (another VT has the seat) still off and
+  listed.
 - `tests/screens.rs`: displays with Desks of their own: switching on one
   leaves the other alone, a Desk another display shows swaps with it and
   its window scales to the larger display and back exactly, a window
@@ -510,12 +598,21 @@ nix develop .#aizome --command cargo test -p aizome-comp
   display's Desk comes along and goes back when it's plugged in again.
   The model's rules (swaps, homes, hotplug, stepping, removing Desks) are
   unit tests in `wm/tests.rs`.
+- `tests/desks_settings.rs`: Desks added, renamed and removed through IPC
+  reach `settings.toml`, and a Desk Settei adds there keeps the others.
+  Desks added while the file doesn't parse, or can't be written, stay when
+  another setting changes, and are saved by the next change. A compositor
+  on the person's own settings without being their login session leaves
+  the file alone, and writes a file given with `--config`. The write is
+  announced (`config-changed`) before the request is answered. With the
+  real shell (`AIZOME_LAYOUT_TEST_SHELL`, ignored otherwise), folding the
+  Deskbar the moment after a Desk is added keeps the Desk.
 - `tests/input_method.rs`: an input method counting its serial as IBus
   does types into a text input that checks serials as foot does, across a
   display turned off and on.
 - `tests/protocols.rs`: wl_shm formats, shm buffers released once after
-  upload (GLES) or kept (pixman), a sync subsurface's too, drag and drop
-  with an icon and actions.
+  upload (GLES) or kept (pixman), a sync subsurface's too, one nothing
+  has read yet kept, drag and drop with an icon and actions.
 - `tests/chromium.rs`: a window opened the way Chromium and Electron
   open theirs (an xdg-toplevel-icon set and destroyed before its buffer,
   either decoration mode, activation with their own token), and the icon
@@ -537,7 +634,10 @@ nix develop .#aizome --command cargo test -p aizome-comp
 - `tests/focus.rs`: a shell-like wayland-client (layer surfaces and their
   popups): exclusive and on-demand keyboard interactivity, grabbing menus
   getting the keys and giving them back, menus closing for an exclusive
-  surface or a click elsewhere, and the popup layer's stacking.
+  surface or a click elsewhere, a bar that turns exclusive as its menu
+  closes having the keys until it's on demand again, and the popup
+  layer's stacking. With the real shell (`AIZOME_LAYOUT_TEST_SHELL`,
+  ignored otherwise), Rename in a Desk's menu takes what's typed next.
 - `tests/context_menus.rs`: an app with a text field and an input method
   that grabs the keyboard while a field has it (as Telegram and ibus):
   the field's context menu opening on a right-press, keeping the keys

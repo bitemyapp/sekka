@@ -19,7 +19,7 @@ pub enum PlaceKind {
     Folder,
     /// The current Desk's folder.
     Desk,
-    /// The system's disk.
+    /// The system's disk, or a volume on another built-in drive.
     Disk,
     /// A removable or external volume.
     Volume,

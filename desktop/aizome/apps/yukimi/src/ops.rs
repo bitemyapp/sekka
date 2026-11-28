@@ -51,6 +51,10 @@ pub struct SystemChange {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Operation {
+    /// Read-only compatibility check before requesting administrator rights.
+    CheckUpdate { operation: Box<Operation> },
+    /// Apply exactly the lock checked for this source snapshot.
+    CheckedUpdate { operation: Box<Operation>, report: yukimi_system::preflight::Report },
     /// Install a Nixpkgs package into the current user's profile.
     InstallForMe { attr: String, unfree: bool },
     /// Remove a package from the current user's profile.
@@ -99,6 +103,8 @@ impl Operation {
     /// What is happening, for the progress dialog's title.
     pub fn title(&self) -> String {
         match self {
+            Operation::CheckUpdate { .. } => "Checking update compatibility".into(),
+            Operation::CheckedUpdate { operation, .. } => operation.title(),
             Operation::InstallForMe { attr, .. } => format!("Installing {attr} for you"),
             Operation::RemoveForMe { name } => format!("Removing {name}"),
             Operation::ChangeSystem { what, adding: true, .. } => format!("Installing {what} for everyone"),
@@ -120,6 +126,8 @@ impl Operation {
     /// What success looks like, for a toast.
     pub fn done(&self) -> String {
         match self {
+            Operation::CheckUpdate { .. } => "Compatibility check finished".into(),
+            Operation::CheckedUpdate { operation, .. } => operation.done(),
             Operation::InstallForMe { attr, .. } => format!("{attr} is installed for you"),
             Operation::RemoveForMe { name } => format!("{name} is removed"),
             Operation::ChangeSystem { what, adding: true, .. } => format!("{what} is installed for everyone"),
@@ -190,10 +198,13 @@ impl Operation {
 
     /// Whether this changes the whole system (and asks for a password).
     pub fn is_system(&self) -> bool {
-        !matches!(self, Operation::InstallForMe { .. } | Operation::RemoveForMe { .. })
+        !matches!(self, Operation::InstallForMe { .. } | Operation::RemoveForMe { .. } | Operation::CheckUpdate { .. })
     }
 
     pub fn is_update(&self) -> bool {
+        if let Operation::CheckedUpdate { operation, .. } = self {
+            return operation.is_update();
+        }
         matches!(
             self,
             Operation::UpdateSekka { .. }
@@ -203,13 +214,37 @@ impl Operation {
         )
     }
 
+    pub fn needs_preflight(&self) -> bool {
+        matches!(
+            self,
+            Operation::UpdateFlake { .. }
+                | Operation::UpdateSekka { .. }
+                | Operation::FollowBranch { .. }
+                | Operation::Early { .. }
+        )
+    }
+
     /// What the helper is asked to do, after `pkexec yukimi-helper`: the
     /// same arguments the GTK Yukimi gives it. `lock` is the lock file an
     /// update got ready as this user, if it did.
     pub fn helper_args(&self, lock: Option<&Path>) -> Vec<String> {
+        if let Operation::CheckUpdate { operation } = self {
+            let mut args = operation.helper_args(None);
+            args[0] = "preflight".into();
+            return args;
+        }
+        if let Operation::CheckedUpdate { operation, report } = self {
+            let mut args = operation.helper_args(Some(&report.lock));
+            if !args.iter().any(|arg| arg == "--lock") {
+                args.extend(["--lock".into(), report.lock.to_string_lossy().into_owned()]);
+            }
+            args.extend(["--checked-source".into(), report.source.clone()]);
+            return args;
+        }
         let mut a: Vec<String> = Vec::new();
         let mut push = |items: &[&str]| a.extend(items.iter().map(|s| (*s).to_owned()));
         match self {
+            Operation::CheckUpdate { .. } | Operation::CheckedUpdate { .. } => unreachable!(),
             Operation::InstallForMe { .. } | Operation::RemoveForMe { .. } => {}
             Operation::ChangeSystem { change, .. } => {
                 push(&["change"]);
@@ -279,6 +314,15 @@ impl Operation {
     /// The steps that do it.
     pub fn steps(&self, model: &Model) -> Vec<Step> {
         match self {
+            Operation::CheckUpdate { .. } => {
+                let args = self.helper_args(None);
+                vec![Box::new(move || {
+                    let mut command = Command::new(find_helper()?);
+                    command.args(args);
+                    Ok(Some(Run { command, as_root: false }))
+                })]
+            }
+            Operation::CheckedUpdate { .. } => vec![root_step(self.helper_args(None))],
             Operation::InstallForMe { attr, unfree } => {
                 let mut c = nix::command();
                 c.args(["profile", "install", "--log-format", "internal-json", "-v"]);

@@ -1,6 +1,7 @@
 //! Aizome's login screen (`docs/greeter.md`): a greetd greeter that runs on
 //! Aizome's own compositor and looks like Aizome's lock screen, offering
-//! every session installed.
+//! every session installed. A game controller works it too ([`pads`]), and
+//! the TV account opens Chanoma's session (`aizome_sys::tv`).
 
 pub mod app;
 pub mod clock;
@@ -9,7 +10,9 @@ pub mod config;
 pub mod displays;
 pub mod greetd;
 pub mod login;
+pub mod pads;
 pub mod sessions;
+pub mod sofa;
 pub mod users;
 pub mod view;
 

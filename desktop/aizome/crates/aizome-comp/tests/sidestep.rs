@@ -232,3 +232,30 @@ fn frosted_shell_surfaces_blur_what_is_behind_them_under_gles_in_full() {
     assert_eq!(full.px(600, 380), lean.px(600, 380), "the window, off the panel");
     assert_eq!(full.px(100, 100), lean.px(100, 100), "the desktop, off the panel");
 }
+
+#[test]
+fn a_sidestep_window_tagged_utility_is_no_tab_on_its_programs_window() {
+    let palette = |ws: &[aizome_ipc::WindowInfo]| ws.iter().find(|w| w.title == "Palette").cloned();
+    // The control: the program's second window, untagged, opens as a tab on
+    // its first, which has the focus, at that window's size.
+    let c = Compositor::start(Options::default());
+    let _p = run(&c, "second");
+    let ws = c.wait_windows("a second window", |ws| palette(ws).is_some());
+    let p = palette(&ws).unwrap();
+    assert_eq!(ws.len(), 2, "{ws:?}");
+    assert!(p.group.is_some() && ws.iter().all(|w| w.group == p.group), "{ws:?}");
+    assert_eq!((p.geometry.w, p.geometry.h), (320, 200), "{p:?}");
+
+    // Tagged `utility` before its first commit, it opens by itself at its
+    // own size.
+    let c = Compositor::start(Options::default());
+    let _p = run(&c, "utility");
+    c.wait_windows("a utility window", |ws| palette(ws).is_some());
+    c.settle();
+    let ws = c.windows();
+    let p = palette(&ws).unwrap();
+    assert_eq!(ws.len(), 2, "{ws:?}");
+    assert!(ws.iter().all(|w| w.group.is_none()), "{ws:?}");
+    assert_eq!((p.geometry.w, p.geometry.h), (200, 120), "{p:?}");
+    assert!(p.focused, "{p:?}");
+}

@@ -815,6 +815,10 @@ impl Widget for FieldWidget {
         }
     }
 
+    fn edits_text(&self) -> bool {
+        self.enabled
+    }
+
     fn selection(&self, state: crate::widget::StateView) -> Option<String> {
         let st = state.get::<FieldState>()?;
         let r = st.caret.min(st.anchor)..st.caret.max(st.anchor);

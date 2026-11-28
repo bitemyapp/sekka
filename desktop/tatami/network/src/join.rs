@@ -206,6 +206,11 @@ fn run(
     let ui = ui.clone();
     background(work, move |result| {
         ui.state.borrow_mut().joining = None;
+        // Closed while joining (window.rs): the join is over, so it goes.
+        if !ui.window.is_visible() {
+            ui.window.close();
+            return;
+        }
         match result {
             Ok(()) => toast(&ui, &format!("Connected to {ssid}")),
             Err(error) => match retry {

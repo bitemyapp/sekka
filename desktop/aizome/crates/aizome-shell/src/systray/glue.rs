@@ -10,7 +10,7 @@ use super::panels::{
     self, AwakePanel, BatteryPanel, BtDevice, BtPanel, ClockPanel, DisplayPanel, NetPanel, NetRow, Panel, PanelMsg,
     SoundPanel,
 };
-use crate::menubar::TrayWidget;
+use crate::menubar::{Slot, TrayWidget};
 use crate::shell::{Msg, Shell, Surface};
 
 /// A panel showing.
@@ -135,7 +135,10 @@ impl Shell {
                 }
                 Panel::Display(p)
             }
-            TrayWidget::Awake => Panel::Awake(AwakePanel { status: self.awake }),
+            TrayWidget::Awake => Panel::Awake(AwakePanel {
+                status: self.awake,
+                holders: self.holders.listed().into_iter().map(panels::HolderRow::from).collect(),
+            }),
             TrayWidget::Battery => {
                 let mut p = BatteryPanel { keep_awake: self.awake, ..BatteryPanel::default() };
                 if let Some(u) = &self.sys.upower {
@@ -225,6 +228,18 @@ impl Shell {
         if let Some(p) = self.panel.take() {
             cx.close_window(p.window);
             self.surfaces.remove(&p.window);
+        }
+    }
+
+    /// The panel in `window` was dismissed by a press outside it: in
+    /// another app (the compositor closed it) or anywhere else in the shell
+    /// (the kit did). If that press is on the panel's own widget, the
+    /// widget hears it next: remembered as a bar menu's closing is, the
+    /// panel stays closed (see
+    /// [`pressed_to_close`](Shell::pressed_to_close)).
+    pub(crate) fn panel_dismissed(&mut self, window: WindowKey) {
+        if let Some(p) = self.panel.take_if(|p| p.window == window) {
+            self.just_closed = Some((p.bar, Slot::Tray(p.widget), std::time::Instant::now()));
         }
     }
 
@@ -366,19 +381,29 @@ impl Shell {
                     aizome_config::ThemeChoice::Day,
                     aizome_config::ThemeChoice::Auto,
                 ][i.min(2)];
-                self.settings.appearance.theme = choice;
-                self.save_appearance();
+                self.change_appearance(|a| a.theme = choice);
             }
             PanelMsg::Size(i) => {
-                self.settings.appearance.size =
-                    [aizome_config::UiSize::Small, aizome_config::UiSize::Medium, aizome_config::UiSize::Large]
-                        [i.min(2)];
-                self.save_appearance();
+                let size = [aizome_config::UiSize::Small, aizome_config::UiSize::Medium, aizome_config::UiSize::Large]
+                    [i.min(2)];
+                self.change_appearance(|a| a.size = size);
             }
             PanelMsg::KeepAwake(on) => {
                 if (self.awake != aizome_awake::Status::Off) != on {
                     self.set_keep_awake(on, cx);
                 }
+            }
+            // The ways to an app that holds the screen on: its window, as
+            // a switch to it shows it, and its process in Myaku, which
+            // has Quit and Force Quit.
+            PanelMsg::ShowHolder(window) => {
+                self.close_panel(cx);
+                self.run(crate::actions::Action::Wm(aizome_ipc::Request::Focus { id: window }), cx);
+            }
+            PanelMsg::HolderInMyaku(pid) => {
+                self.close_panel(cx);
+                let argv = vec!["aizome-myaku".into(), "--pid".into(), pid.get().to_string()];
+                self.run(crate::actions::Action::Spawn { argv }, cx);
             }
             PanelMsg::DoNotDisturb(on) => {
                 if self.notes_cfg.do_not_disturb != on {
@@ -390,13 +415,10 @@ impl Shell {
                 if let Some(s) = &mut self.night {
                     s.enabled = on;
                 }
-                self.settings.night_light.enabled = on;
                 if self.opts.live {
                     self.ipc.send(aizome_ipc::Request::NightLight { enabled: Some(on), temperature: None });
-                    if let Err(e) = self.settings.save() {
-                        log::warn!("saving Night Light: {e}");
-                    }
                 }
+                self.change_settings("Night Light", |s| s.night_light.enabled = on);
             }
             PanelMsg::PowerMode(mode) => {
                 if let Some(p) = &sys.profiles {
@@ -406,12 +428,10 @@ impl Shell {
         }
     }
 
-    /// Save `[appearance]` and have everything follow it.
-    pub fn save_appearance(&mut self) {
+    /// Change `[appearance]`, save it and have everything follow it.
+    pub fn change_appearance(&mut self, change: impl Fn(&mut aizome_config::Appearance)) {
+        self.change_settings("the appearance", |s| change(&mut s.appearance));
         if self.opts.live {
-            if let Err(e) = self.settings.save() {
-                log::warn!("saving the appearance: {e}");
-            }
             self.ipc.send(aizome_ipc::Request::ReloadConfig);
         }
         let day = self.settings.theme_now() == aizome_theme::ThemeName::Day;

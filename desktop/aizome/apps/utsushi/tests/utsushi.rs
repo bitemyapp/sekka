@@ -220,6 +220,30 @@ fn full_screen_controls_go_after_the_pointer_leaves_the_window_from_a_control() 
 }
 
 #[test]
+fn timeline_is_aligned_and_seeks_at_the_bar_centre() {
+    let mut h = harness();
+    let w = window(&h);
+    play_without_subtitles(&mut h, "chaptered.mkv");
+    h.send(Msg::Pause);
+    until(&mut h, 2.0, |a| a.status == Status::Paused);
+    for fullscreen in [false, true] {
+        h.window_state(w, if fullscreen { FULL_SCREEN } else { WINDOWED });
+        for width in [640.0, 960.0, 1720.0] {
+            h.resize(w, Size::new(width, 600.0));
+            let track = h.find_id(w, "timeline").unwrap();
+            let volume = h.find_id(w, "volume").unwrap();
+            assert!((track.center().y - volume.center().y).abs() <= 1.0);
+            h.click(w, track.center());
+            let expected = h.program().duration() / 2.0;
+            until(&mut h, 2.0, |a| (a.pos - expected).abs() < 0.1);
+            assert_eq!(h.program().status, Status::Paused);
+        }
+    }
+    h.move_to(w, h.find_id(w, "timeline").unwrap().center());
+    assert_golden(&mut h, w, "tests/golden/timeline-hover.png", 1.0);
+}
+
+#[test]
 fn full_screen_controls_stay_while_the_pointer_rests_on_the_timeline() {
     // Reading the times along it: the timeline is part of the controls.
     let (mut h, w) = full_screen_with_the_controls_gone();
@@ -442,6 +466,79 @@ fn a_song_shows_its_cover_and_who_made_it() {
 }
 
 #[test]
+fn statistics_refresh_without_blocking_playback_and_close_independently() {
+    let mut h = harness();
+    let w = window(&h);
+    play_without_subtitles(&mut h, "chaptered.mkv");
+    h.type_text(w, "i");
+    let stats = h.program().statistics.expect("a statistics window");
+    assert!(h.program().sheet.is_none(), "statistics are not modal");
+    assert_eq!(h.title(stats), "Playback Statistics");
+    let texts = h.texts(stats);
+    if let Some(path) = std::env::var_os("UTSUSHI_STATS_SCREENSHOT") {
+        h.save_png(stats, path, 1.0);
+    }
+    for label in ["Frames decoded", "Frames dropped by player", "Presentation feedback", "Frame path"] {
+        assert!(texts.iter().any(|t| t == label), "{label}: {texts:?}");
+    }
+    until(&mut h, 2.0, |a| a.player.as_ref().unwrap().stats().decoded >= 8);
+    h.advance(Duration::from_secs(1));
+    let decoded = h.program().player.as_ref().unwrap().stats().decoded.to_string();
+    assert!(h.texts(stats).contains(&decoded));
+    h.send(Msg::Pause);
+    until(&mut h, 2.0, |a| a.status == Status::Paused);
+    h.send(Msg::ShowStats);
+    assert_eq!(h.program().statistics, Some(stats), "reuse the existing window");
+    h.send(Msg::Open(vec![fixture("song.flac")]));
+    until(&mut h, 5.0, |a| a.status == Status::Playing && !a.has_video());
+    assert!(h.texts(stats).iter().any(|t| t == "Indigo"));
+    assert!(!h.texts(stats).iter().any(|t| t == "Frames decoded"));
+    h.request_close(stats);
+    assert!(h.program().statistics.is_none());
+    assert!(h.is_shown(w));
+    h.send(Msg::ShowStats);
+    let reopened = h.program().statistics.unwrap();
+    h.send(Msg::Close);
+    assert!(h.texts(reopened).iter().any(|t| t.starts_with("Open a video")));
+}
+
+#[test]
+fn close_shortcut_targets_statistics_without_closing_media() {
+    let mut h = harness();
+    let w = window(&h);
+    play_without_subtitles(&mut h, "chaptered.mkv");
+    for paused in [false, true] {
+        if paused {
+            h.send(Msg::Pause);
+            until(&mut h, 2.0, |a| a.status == Status::Paused);
+        }
+        let status = h.program().status;
+        let queue = h.program().queue.clone();
+        h.send(Msg::ShowStats);
+        let stats = h.program().statistics.unwrap();
+        h.focus_window(w, false);
+        h.focus_window(stats, true);
+        h.command(stats, 'w');
+        assert!(h.program().statistics.is_none(), "Close should close the focused statistics window");
+        assert_eq!(h.program().status, status);
+        assert_eq!(h.program().queue, queue);
+        assert!(h.program().info.is_some());
+        assert!(h.is_shown(w));
+    }
+    h.send(Msg::ShowStats);
+    let stats = h.program().statistics.unwrap();
+    h.focus_window(stats, false);
+    h.focus_window(w, true);
+    h.command(w, 'w');
+    assert_eq!(h.program().status, Status::Empty, "Close in the player still closes its media");
+    assert_eq!(h.program().statistics, Some(stats));
+    h.focus_window(w, false);
+    h.focus_window(stats, true);
+    h.command(stats, 'w');
+    assert!(h.program().statistics.is_none(), "statistics can close even after media has closed");
+}
+
+#[test]
 fn media_info_says_how_it_plays() {
     let mut h = harness();
     let w = window(&h);
@@ -453,6 +550,70 @@ fn media_info_says_how_it_plays() {
     for want in ["Video decoding", "h264 in software", "Frames to the screen", "No audio output"] {
         assert!(texts.iter().any(|t| t == want), "{want} in {texts:?}");
     }
+}
+
+#[test]
+fn space_pauses_and_resumes_from_each_control() {
+    use aizome_kit::sidestep_ui::{Modifiers, NamedKey};
+
+    for name in ["chaptered.mkv", "song.flac"] {
+        let mut h = harness();
+        let w = window(&h);
+        h.send(Msg::Open(vec![fixture(name)]));
+        until(&mut h, 5.0, |a| a.status == Status::Playing);
+        // Traverse the bar with Tab, keeping each control's focus. Space
+        // must toggle playback, not activate Mute, Next or the time label.
+        for _ in 0..9 {
+            h.named(w, NamedKey::Tab, Modifiers::NONE);
+            let current = h.program().current;
+            let muted = h.program().muted;
+            let remaining = h.program().show_remaining;
+            h.type_text(w, " ");
+            until(&mut h, 2.0, |a| a.status == Status::Paused);
+            h.type_text(w, " ");
+            until(&mut h, 2.0, |a| a.status == Status::Playing);
+            assert_eq!(h.program().current, current);
+            assert_eq!(h.program().muted, muted);
+            assert_eq!(h.program().show_remaining, remaining);
+        }
+    }
+}
+
+#[test]
+fn space_with_lock_keys_still_controls_playback() {
+    use aizome_kit::sidestep_ui::{Key, Modifiers, NamedKey};
+
+    let mut h = harness();
+    let w = window(&h);
+    h.send(Msg::Open(vec![fixture("song.flac")]));
+    until(&mut h, 5.0, |a| a.status == Status::Playing);
+    h.named(w, NamedKey::Tab, Modifiers::NONE);
+    for mods in [Modifiers::CAPS_LOCK, Modifiers::NUM_LOCK, Modifiers::CAPS_LOCK | Modifiers::NUM_LOCK] {
+        h.key(w, Key::Character(" ".into()), mods);
+        until(&mut h, 2.0, |a| a.status == Status::Paused);
+        h.key(w, Key::Character(" ".into()), mods);
+        until(&mut h, 2.0, |a| a.status == Status::Playing);
+    }
+    // Lock flags must not strip real shortcut modifiers.
+    for mods in [Modifiers::CONTROL, Modifiers::ALT, Modifiers::SUPER] {
+        h.key(w, Key::Character(" ".into()), mods | Modifiers::CAPS_LOCK);
+        h.send_all(std::iter::empty());
+        assert_eq!(h.program().status, Status::Playing);
+    }
+}
+
+#[test]
+fn space_in_media_info_does_not_toggle_playback() {
+    let mut h = harness();
+    let w = window(&h);
+    play_without_subtitles(&mut h, "chaptered.mkv");
+    h.send(Msg::Pause);
+    until(&mut h, 2.0, |a| a.status == Status::Paused);
+    h.command(w, 'i');
+    h.type_text(w, " ");
+    std::thread::sleep(Duration::from_millis(80));
+    h.send_all(std::iter::empty());
+    assert_eq!(h.program().status, Status::Paused);
 }
 
 #[test]
@@ -554,21 +715,34 @@ fn stage_music_queue_row_receives_double_click() {
 }
 
 #[test]
-fn stage_background_keeps_playback_keys_and_double_click() {
+fn stage_click_focuses_without_changing_playback() {
     use aizome_kit::sidestep_ui::PointerButton;
 
     let mut h = harness();
     let w = window(&h);
     play_without_subtitles(&mut h, "chaptered.mkv");
     let at = Point::new(100.0, 100.0);
-    h.click(w, at);
-    until(&mut h, 2.0, |a| a.status == Status::Paused);
-    assert_eq!(h.focused_name(w).as_deref(), Some("stage"));
+    for paused in [false, true] {
+        if paused {
+            h.send(Msg::Toggle);
+            until(&mut h, 2.0, |a| a.status == Status::Paused);
+        }
+        let state = h.program().status;
+        h.focus_window(w, false);
+        h.focus_window(w, true);
+        h.click(w, at);
+        assert_eq!(h.focused_name(w).as_deref(), Some("stage"));
+        // Drain decoder replies: neither click may enqueue a toggle.
+        std::thread::sleep(Duration::from_millis(80));
+        h.send_all(std::iter::empty());
+        assert_eq!(h.program().status, state);
+        h.press(w, at, PointerButton::Left, 2);
+        h.release(w, at, PointerButton::Left);
+        assert_eq!(h.fullscreen_asked(w), Some(true));
+        std::thread::sleep(Duration::from_millis(80));
+        h.send_all(std::iter::empty());
+        assert_eq!(h.program().status, state);
+    }
     h.type_text(w, " ");
-    until(&mut h, 2.0, |a| a.status == Status::Playing);
-    h.click(w, at);
-    h.press(w, at, PointerButton::Left, 2);
-    h.release(w, at, PointerButton::Left);
-    assert_eq!(h.fullscreen_asked(w), Some(true));
     until(&mut h, 2.0, |a| a.status == Status::Playing);
 }

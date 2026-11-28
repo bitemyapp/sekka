@@ -19,6 +19,15 @@ let
   # The network agent's libsecret, with the Secret Service key fix that
   # Nixpkgs' lacks until 0.21.8 (nix/libsecret-dh-padding.nix).
   libsecretFor = pkgs: import ../../../nix/libsecret-dh-padding.nix { inherit (pkgs) lib libsecret; };
+  # Nixpkgs with the gnome-keyring Sekka's systems run
+  # (nix/overlays/gnome-keyring.nix), for the checks that log in with a
+  # password or read the keyring: Nixpkgs' daemon aborts when a client's
+  # first call comes before it has recorded the client, and the login
+  # keyring is locked from then on. A check's VM is built from the packages
+  # the check is given and takes no overlay from a module
+  # (pkgs.testers.runNixOSTest makes nixpkgs.overlays read-only), so the fix
+  # comes as the check's packages, and Aizome's module sets no overlay.
+  keyringPkgs = forAll (pkgs: pkgs.extend (import ../../../nix/overlays/gnome-keyring.nix));
   # Libraries the compositor (smithay), the toolkit (Sukumo) and the
   # apps link against or load at run time.
   buildInputs =
@@ -90,43 +99,67 @@ let
     # What the checks build their systems with.
     inputs = { inherit nixpkgs; };
 
-    packages = forAll (pkgs: rec {
-      aizome = pkgs.callPackage ./package.nix {
-        libsecret = libsecretFor pkgs;
-        inherit
-          src
-          yukimiSrc
-          hotaruSrc
-          ghosttyLicense
-          uucodeLicense
-          unicodeLicense
-          version
-          rev
-          fonts
-          hotaruFonts
-          ;
-      };
-      hotaru = pkgs.callPackage ./hotaru.nix {
-        inherit
-          src
-          yukimiSrc
-          hotaruSrc
-          ghosttyLicense
-          uucodeLicense
-          unicodeLicense
-          fonts
-          hotaruFonts
-          version
-          ;
-      };
-      archivo = pkgs.callPackage ./fonts.nix { };
-      # The session's fonts (Archivo, and nixpkgs' IBM Plex Mono and Noto
-      # Sans Symbols 2) as files in one folder, for $AIZOME_FONT_DIR
-      # (docs/kit.md).
-      fonts = pkgs.callPackage ./aizome-fonts.nix { inherit archivo; };
-      hotaruFonts = pkgs.callPackage ./hotaru-fonts.nix { };
-      default = aizome;
-    });
+    packages = forAll (
+      pkgs:
+      let
+        # Sources and dependency builds that compile only what changed.
+        workspace = pkgs.callPackage ./workspace.nix { };
+      in
+      rec {
+        aizome = pkgs.callPackage ./package.nix {
+          libsecret = libsecretFor pkgs;
+          yukimi = aizome-yukimi;
+          inherit
+            src
+            yukimiSrc
+            hotaruSrc
+            ghosttyLicense
+            uucodeLicense
+            unicodeLicense
+            version
+            rev
+            fonts
+            hotaruFonts
+            workspace
+            ;
+        };
+        # Yukimi's app, every desktop's software manager, built alone.
+        aizome-yukimi = pkgs.callPackage ./yukimi.nix {
+          libsecret = libsecretFor pkgs;
+          inherit
+            fonts
+            hotaruFonts
+            version
+            workspace
+            ;
+        };
+        hotaru = pkgs.callPackage ./hotaru.nix {
+          inherit
+            workspace
+            ghosttyLicense
+            uucodeLicense
+            unicodeLicense
+            fonts
+            hotaruFonts
+            version
+            ;
+        };
+        archivo = pkgs.callPackage ./fonts.nix { };
+        # The session's fonts (Archivo, and nixpkgs' IBM Plex Mono and Noto
+        # Sans Symbols 2) as files in one folder, for $AIZOME_FONT_DIR
+        # (docs/kit.md).
+        fonts = pkgs.callPackage ./aizome-fonts.nix { inherit archivo; };
+        hotaruFonts = pkgs.callPackage ./hotaru-fonts.nix { };
+        # Chanoma, the television (programs.aizome.chanoma).
+        chanoma = aizome.chanoma;
+        # A free PlayStation BIOS for its games (programs.aizome.chanoma.bios).
+        psx-openbios = pkgs.callPackage ./openbios.nix { };
+        # What libretro-database knows of its games
+        # (programs.aizome.chanoma.metadata).
+        chanoma-metadata = pkgs.callPackage ./chanoma-metadata.nix { };
+        default = aizome;
+      }
+    );
 
     nixosModules.default = import ./module.nix { inherit self; };
     nixosModules.aizome = self.nixosModules.default;
@@ -143,8 +176,14 @@ let
       timezone-policy = import ./timezone-policy-test.nix { inherit pkgs self; };
       # The login screen: people, sessions (another Wayland one, an X11
       # one), a wrong password, logging out and back (vm-greeter-test.nix).
-      greeter = import ./vm-greeter-test.nix { inherit pkgs self; };
-      greeter-x11 = import ./vm-greeter-x11-test.nix { inherit pkgs self; };
+      greeter = import ./vm-greeter-test.nix {
+        pkgs = keyringPkgs.${pkgs.stdenv.hostPlatform.system};
+        inherit self;
+      };
+      greeter-x11 = import ./vm-greeter-x11-test.nix {
+        pkgs = keyringPkgs.${pkgs.stdenv.hostPlatform.system};
+        inherit self;
+      };
       koyomi-session = import ./vm-koyomi-session-test.nix { inherit pkgs self; };
       koyomi-modal = import ./vm-koyomi-modal-test.nix { inherit pkgs self; };
       shashin-modal = import ./vm-shashin-modal-test.nix { inherit pkgs self; };
@@ -157,6 +196,22 @@ let
       # Utsushi playing a video opened as the desktop opens one, and a song
       # paused and resumed, through PipeWire (vm-utsushi-test.nix).
       utsushi = import ./vm-utsushi-test.nix { inherit pkgs self; };
+      # A display turned off and on, and one whose turning on fails (the
+      # session paused on another VT) still off and listed
+      # (vm-output-enable-test.nix).
+      output-enable = import ./vm-output-enable-test.nix { inherit pkgs self; };
+      # A video playing in Utsushi, mpv or VLC holds off the idle lock and
+      # the displays' turning off; paused or gone, it doesn't
+      # (vm-idle-inhibit-test.nix).
+      idle-inhibit = import ./vm-idle-inhibit-test.nix { inherit pkgs self; };
+      # Chanoma with a virtual controller alone: found and held, a game
+      # opened, played and paused from it, kept where it was left
+      # (vm-chanoma-test.nix).
+      chanoma = import ./vm-chanoma-test.nix { inherit pkgs self; };
+      # The login screen and the TV account from a controller alone: the
+      # keyboard on the screen, the PIN pad, Chanoma's session in kiosk
+      # mode, and Log Out (vm-tv-test.nix).
+      tv = import ./vm-tv-test.nix { inherit pkgs self; };
       standard-menu = import ./vm-standard-menu-test.nix { inherit pkgs self; };
       tokei-reorder = import ./vm-tokei-reorder-test.nix { inherit pkgs self; };
       loop-images = import ./vm-loop-images-test.nix { inherit pkgs self; };
@@ -166,11 +221,15 @@ let
       power-meter = import ./vm-power-meter-test.nix { inherit pkgs self; };
       tansu-size = import ./vm-tansu-size-test.nix { inherit pkgs self; };
       tansu-resize = import ./vm-tansu-resize-test.nix { inherit pkgs self; };
+      tansu-compression = import ./vm-tansu-compression-test.nix { inherit pkgs self; };
       sumi-search = import ./vm-sumi-search-test.nix { inherit pkgs self; };
       fusen-save = import ./vm-fusen-save-test.nix { inherit pkgs self; };
       encrypted-volumes = import ./vm-encrypted-volumes-test.nix { inherit pkgs self; };
       wallpaper-choice = import ./vm-wallpaper-choice-test.nix { inherit pkgs self; };
-      network-auth = import ./vm-network-auth-test.nix { inherit pkgs self; };
+      network-auth = import ./vm-network-auth-test.nix {
+        pkgs = keyringPkgs.${pkgs.stdenv.hostPlatform.system};
+        inherit self;
+      };
       polkit-recovery = import ./vm-polkit-recovery-test.nix { inherit pkgs self; };
       # Nisshi's reader through real polkit and pkexec: your own journal,
       # the system's once polkit says yes, refused without (vm-nisshi-test.nix).

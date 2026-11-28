@@ -7,7 +7,7 @@ still uses its qualified CPU/SHM renderer. The prototype starts from the histori
 preparation/index changes; it needs rebasing before product integration.
 
 The implementation and compact evidence are archived under
-`upstream/gpu-buffer/admission/`. Raw builds, captures and intermediate failures
+[`hotaru-benchmark-data/gpu-buffer/admission`](https://github.com/bitemyapp/hotaru-benchmark-data/tree/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/gpu-buffer/admission). Raw builds, captures and intermediate failures
 remain at `wx-workstation:/home/callen/work/hotaru-gpu-admission-isolated`.
 All builds and tests ran on the workstation.
 

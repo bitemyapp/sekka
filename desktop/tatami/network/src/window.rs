@@ -286,6 +286,22 @@ fn build(app: &adw::Application) -> Rc<Ui> {
     ));
     window.add_controller(shortcuts);
 
+    // Closed while a network is being joined, the window only hides: the
+    // program would end with it, and the join with the program, leaving a
+    // new connection that failed behind. The join closes it when it is over
+    // (join.rs), unless a launch has brought it back.
+    let closing = Rc::downgrade(&ui);
+    window.connect_close_request(move |window| {
+        if closing
+            .upgrade()
+            .is_some_and(|ui| ui.state.borrow().joining.is_some())
+        {
+            window.set_visible(false);
+            return glib::Propagation::Stop;
+        }
+        glib::Propagation::Proceed
+    });
+
     let toggled = ui.clone();
     wifi_switch.connect_active_notify(move |row| {
         if toggled.updating.get() {

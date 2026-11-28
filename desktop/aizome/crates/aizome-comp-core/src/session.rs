@@ -2,10 +2,11 @@
 //!
 //! Once the Wayland socket and IPC are up, the login compositor exports
 //! its environment to the systemd user manager and D-Bus activation and
-//! starts `aizome-session.target`. Service readiness is independent of
-//! login-session ownership. It runs `aizome-shell` and
-//! `xwayland-satellite` (when installed) and restarts them, backing off,
-//! if they die.
+//! starts `aizome-session.target`; `aizome.service` takes those variables
+//! out of the manager again when the compositor stops (`SessionEnv`).
+//! Service readiness is independent of login-session ownership. It runs
+//! `aizome-shell` and `xwayland-satellite` (when installed) and restarts
+//! them, backing off, if they die.
 
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
@@ -44,8 +45,8 @@ impl Supervised {
 #[derive(Default)]
 pub struct Children {
     pub supervised: Vec<Supervised>,
-    /// The environment every child gets on top of ours.
-    pub env: Vec<(String, String)>,
+    /// xwayland-satellite's display (`:N`), when the session has one.
+    pub x_display: Option<String>,
     /// A shell restart in progress.
     pub handover: Option<Handover>,
 }
@@ -69,21 +70,48 @@ impl Children {
     }
 }
 
+/// What the session tells everything it starts, and, where it owns the
+/// login session under systemd, the user manager. `aizome.service` unsets
+/// every one of these names when the compositor stops, however it stops
+/// (`ExecStopPost=`), so the names live here and in the unit; a test keeps
+/// the two lists equal.
+struct SessionEnv<'a> {
+    wayland_display: &'a str,
+    x_display: Option<&'a str>,
+    ipc_socket: Option<&'a Path>,
+    shell_socket: &'a Path,
+    real: bool,
+}
+
+impl SessionEnv<'_> {
+    /// Every variable, `None` where this session has no value for it.
+    fn vars(&self) -> [(&'static str, Option<String>); 8] {
+        let path = |p: &Path| p.to_string_lossy().into_owned();
+        [
+            ("WAYLAND_DISPLAY", Some(self.wayland_display.to_owned())),
+            ("XDG_CURRENT_DESKTOP", Some("Aizome".to_owned())),
+            ("XDG_SESSION_DESKTOP", Some("aizome".to_owned())),
+            ("XDG_SESSION_TYPE", Some("wayland".to_owned())),
+            ("AIZOME_SOCKET", self.ipc_socket.map(path)),
+            ("AIZOME_SHELL_SOCKET", Some(path(self.shell_socket))),
+            ("AIZOME_SESSION", Some(if self.real { "1" } else { "0" }.to_owned())),
+            ("DISPLAY", self.x_display.map(str::to_owned)),
+        ]
+    }
+}
+
 /// The variables the session shares with everything it starts.
 pub fn session_env(az: &Aizome) -> Vec<(String, String)> {
-    let mut env = vec![
-        ("WAYLAND_DISPLAY".to_string(), az.socket_name.to_string_lossy().into_owned()),
-        ("XDG_CURRENT_DESKTOP".into(), "Aizome".into()),
-        ("XDG_SESSION_DESKTOP".into(), "aizome".into()),
-        ("XDG_SESSION_TYPE".into(), "wayland".into()),
-    ];
-    if let Some(p) = &az.ipc.path {
-        env.push(("AIZOME_SOCKET".into(), p.to_string_lossy().into_owned()));
-    }
-    let shell = aizome_ipc::runtime_dir().join(format!("aizome-shell.{}.sock", az.socket_name.to_string_lossy()));
-    env.push(("AIZOME_SHELL_SOCKET".into(), shell.to_string_lossy().into_owned()));
-    env.extend(az.children.env.iter().cloned());
-    env
+    let wayland_display = az.socket_name.to_string_lossy();
+    let shell_socket = aizome_ipc::runtime_dir().join(format!("aizome-shell.{wayland_display}.sock"));
+    let env = SessionEnv {
+        wayland_display: &wayland_display,
+        x_display: az.children.x_display.as_deref(),
+        ipc_socket: az.ipc.path.as_deref(),
+        shell_socket: &shell_socket,
+        real: real_session(&az.options),
+    };
+    env.vars().into_iter().filter_map(|(name, value)| Some((name.to_owned(), value?))).collect()
 }
 
 /// Runs a program detached from the compositor, with the session's
@@ -95,17 +123,26 @@ pub fn spawn(az: &Aizome, argv: &[String], cwd: Option<PathBuf>) -> Result<u32, 
 /// [`spawn`] with the session's environment taken already, for a thread
 /// that can't reach the compositor's state.
 pub fn spawn_with(env: Vec<(String, String)>, argv: &[String], cwd: Option<PathBuf>) -> Result<u32, String> {
+    spawn_then(env, argv, cwd, None)
+}
+
+/// [`spawn_with`], and `then` called (on the reaping thread) once the
+/// program has ended.
+pub fn spawn_then(
+    env: Vec<(String, String)>,
+    argv: &[String],
+    cwd: Option<PathBuf>,
+    then: Option<Box<dyn FnOnce() + Send>>,
+) -> Result<u32, String> {
     let Some((prog, args)) = argv.split_first() else { return Err("nothing to run".into()) };
     // Keybindings and IPC launches must leave the compositor's service,
     // just as desktop-entry launches already do. In a nested/headless
     // session without a user manager, keep the direct-spawn behaviour.
-    let manager = std::env::var_os("XDG_RUNTIME_DIR")
-        .map(PathBuf::from)
-        .is_some_and(|dir| dir.join("systemd/private").exists());
+    let manager =
+        std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from).is_some_and(|dir| dir.join("systemd/private").exists());
     let mut cmd = if let Some(systemd_run) = which("systemd-run").filter(|_| manager) {
         let mut cmd = Command::new(systemd_run);
-        cmd.args(["--user", "--scope", "--collect", "--quiet", "--slice=app.slice",
-            "--expand-environment=no", "--"]);
+        cmd.args(["--user", "--scope", "--collect", "--quiet", "--slice=app.slice", "--expand-environment=no", "--"]);
         cmd.arg(prog);
         cmd
     } else {
@@ -131,6 +168,9 @@ pub fn spawn_with(env: Vec<(String, String)>, argv: &[String], cwd: Option<PathB
         .name("aizome-reap".into())
         .spawn(move || {
             let _ = child.wait();
+            if let Some(then) = then {
+                then();
+            }
         })
         .ok();
     info!(pid, "spawned {prog}");
@@ -162,7 +202,7 @@ fn free_x_display() -> Option<u32> {
 /// A headless or nested run (tests, screenshots, trying Aizome inside
 /// another desktop) runs as the same user inside that user's real login
 /// session, and must leave all of that alone.
-pub(crate) fn real_session(opts: &crate::cli::Options) -> bool {
+pub fn real_session(opts: &crate::cli::Options) -> bool {
     opts.backend == crate::cli::BackendKind::Udev && !opts.no_session
 }
 
@@ -170,11 +210,9 @@ pub(crate) fn real_session(opts: &crate::cli::Options) -> bool {
 pub fn start(state: &mut State) {
     let opts = state.az.options.clone();
 
-    let real = real_session(&opts);
-    state.az.children.env.push(("AIZOME_SESSION".into(), if real { "1" } else { "0" }.into()));
     // Only someone's own session moves their terminal to Hotaru: a test or
     // nested run must not rewrite the person's lists.
-    if real {
+    if real_session(&opts) && !opts.kiosk {
         crate::terminal::move_to_hotaru_once(state.az.settings.keys.legacy_terminal.clone());
     }
 
@@ -182,7 +220,7 @@ pub fn start(state: &mut State) {
         if let Some(bin) = which("xwayland-satellite") {
             if let Some(n) = free_x_display() {
                 let display = format!(":{n}");
-                state.az.children.env.push(("DISPLAY".into(), display.clone()));
+                state.az.children.x_display = Some(display.clone());
                 state
                     .az
                     .children
@@ -240,8 +278,21 @@ pub fn start(state: &mut State) {
 
     if !opts.command.is_empty() {
         let argv = opts.command.clone();
-        if let Err(e) = spawn(&state.az, &argv, None) {
+        // A kiosk ends with its program, and the session with it.
+        let then: Option<Box<dyn FnOnce() + Send>> = opts.kiosk.then(|| {
+            let signal = state.az.signal.clone();
+            Box::new(move || {
+                info!("the kiosk's program ended: ending the session");
+                notify_stopping();
+                signal.stop();
+                signal.wakeup();
+            }) as Box<dyn FnOnce() + Send>
+        });
+        if let Err(e) = spawn_then(session_env(&state.az), &argv, None, then) {
             warn!("{e}");
+            if opts.kiosk {
+                state.az.signal.stop();
+            }
         }
     }
 }
@@ -279,7 +330,9 @@ fn announcements(opts: &crate::cli::Options, under_systemd: bool) -> Vec<Announc
     if !opts.no_session {
         steps.push(Announce::Ready);
     }
-    if real && under_systemd {
+    // A kiosk's session is its one program: none of the desktop's
+    // services.
+    if real && under_systemd && !opts.kiosk {
         steps.push(Announce::StartTarget);
     }
     steps
@@ -400,6 +453,13 @@ impl State {
         self.az.children.handover.is_some()
     }
 
+    /// Whether `surface` is the old shell's, while a shell restart is under
+    /// way.
+    pub fn of_retiring_shell(&self, surface: &WlSurface) -> bool {
+        let Some(h) = &self.az.children.handover else { return false };
+        surface.client().and_then(|c| c.get_credentials(&self.az.dh).ok()).is_some_and(|c| c.pid as u32 == h.old)
+    }
+
     /// A layer surface of the new shell drew its first frame: the old
     /// shell's surface of the same namespace on this output goes, in the
     /// same frame.
@@ -438,23 +498,27 @@ impl State {
         let Some(h) = &self.az.children.handover else { return };
         let (old, new, started) = (h.old, h.new, h.started);
         let pid_of = |s: &WlSurface| s.client().and_then(|c| c.get_credentials(&self.az.dh).ok()).map(|c| c.pid as u32);
-        let old_surfaces = self
+        let left: Vec<String> = self
             .az
             .outputs
             .iter()
-            .map(|o| {
+            .flat_map(|o| {
                 smithay::desktop::layer_map_for_output(o)
                     .layers()
                     .filter(|l| pid_of(l.wl_surface()) == Some(old))
-                    .count()
+                    .map(|l| l.namespace().to_owned())
+                    .collect::<Vec<_>>()
             })
-            .sum::<usize>();
+            .collect();
         let new_alive = self.az.children.supervised.iter().any(|s| s.pid() == Some(new) && s.child.is_some());
-        let done = old_surfaces == 0 || started.elapsed() > Duration::from_secs(8) || !new_alive;
+        let done = left.is_empty() || started.elapsed() > Duration::from_secs(8) || !new_alive;
         if !done {
             return;
         }
-        info!(old, new, old_surfaces, "shell restart finished");
+        if !left.is_empty() {
+            warn!(old, new, ?left, "shell restart cut short: the old shell's surfaces weren't all replaced");
+        }
+        info!(old, new, old_surfaces = left.len(), "shell restart finished");
         self.az.children.handover = None;
         for s in &mut self.az.children.supervised {
             if let Some(mut c) = s.retiring.take() {
@@ -585,6 +649,8 @@ pub fn stop_children(az: &mut Aizome) {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
+
     use super::*;
 
     #[test]
@@ -610,6 +676,12 @@ mod tests {
         );
         // From a TTY, outside the user manager.
         assert_eq!(steps(&["--backend", "udev"], false), [ImportToDbus { systemd: false }, Ready]);
+        // The TV account's kiosk owns its login session but starts none of
+        // the desktop's services.
+        assert_eq!(
+            steps(&["--backend", "udev", "--kiosk"], true),
+            [ImportToManager, ImportToDbus { systemd: true }, Ready]
+        );
         // Headless and nested runs, under systemd or not, only say they're
         // ready.
         for backend in ["headless", "winit"] {
@@ -619,5 +691,27 @@ mod tests {
         for backend in ["udev", "headless", "winit"] {
             assert!(steps(&["--backend", backend, "--no-session"], true).is_empty(), "{backend}");
         }
+    }
+
+    /// However the compositor stops, its unit takes every variable the
+    /// session exported back out of the user manager, and nothing else.
+    #[test]
+    fn the_service_unsets_exactly_what_the_session_exports() {
+        let unit = include_str!("../../../session/aizome.service");
+        let unset: BTreeSet<&str> = unit
+            .lines()
+            .filter_map(|line| line.strip_prefix("ExecStopPost="))
+            .filter_map(|command| command.split_once(" unset-environment "))
+            .flat_map(|(_, names)| names.split_whitespace())
+            .collect();
+        let every = SessionEnv {
+            wayland_display: "wayland-1",
+            x_display: Some(":1"),
+            ipc_socket: Some(Path::new("/run/user/1000/aizome.wayland-1.sock")),
+            shell_socket: Path::new("/run/user/1000/aizome-shell.wayland-1.sock"),
+            real: true,
+        };
+        let exported: BTreeSet<&str> = every.vars().into_iter().map(|(name, _)| name).collect();
+        assert_eq!(unset, exported);
     }
 }

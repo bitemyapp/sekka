@@ -397,6 +397,7 @@ pub fn choices() -> Vec<Choice> {
         title: title.into(),
         detail: detail.map(Into::into),
         needs: needs.map(Into::into),
+        person: false,
     };
     let desktops: Vec<ChoiceOption> =
         [("aizome", "Aizome"), ("tatami", "Tatami"), ("plasma", "Plasma"), ("gnome", "GNOME"), ("xfce", "Xfce")]
@@ -412,6 +413,7 @@ pub fn choices() -> Vec<Choice> {
             value: ChoiceValue::Many(vec!["aizome".into(), "tatami".into(), "gnome".into()]),
             options: desktops.clone(),
             within: None,
+            people: false,
         },
         Choice {
             setting: "calamares.defaultDesktop".into(),
@@ -421,6 +423,7 @@ pub fn choices() -> Vec<Choice> {
             value: ChoiceValue::One("aizome".into()),
             options: desktops,
             within: Some("calamares.desktops".into()),
+            people: false,
         },
         Choice {
             setting: "calamares.loginScreen".into(),
@@ -448,6 +451,7 @@ pub fn choices() -> Vec<Choice> {
                 option("plasma-login", "Plasma Login", Some("KDE's."), None),
             ],
             within: None,
+            people: false,
         },
         Choice {
             setting: "calamares.bootSplash.enable".into(),
@@ -465,6 +469,7 @@ pub fn choices() -> Vec<Choice> {
                 option("false", "Off", Some("The computer's messages as it starts and stops."), None),
             ],
             within: None,
+            people: false,
         },
     ]
 }

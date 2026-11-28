@@ -2,7 +2,7 @@
 
 Hotaru now remembers the remaining control-free byte range inside one `feed_inner` call. After UTF-8 validation rejects a sequence, the scalar parser consumes it without repeatedly scanning the entire printable suffix. The count is shortened after ASCII runs, valid UTF-8 runs, and individual parser bytes. It is discarded at a feed boundary, including an early return for reply backpressure. Classification depends only on the bytes; entering or leaving a parser state cannot invalidate it.
 
-This fixes a quadratic malformed-input path. That checkpoint retained the standard-library UTF-8 validator and added no dependency. The integrated change and regression tests are recorded in `upstream/utf8-scanner-cache.patch`. The later [repaired SIMD integration](utf8-simd.md) changes validation while preserving this extent cache; neither checkpoint establishes terminal-wide performance parity.
+This fixes a quadratic malformed-input path. That checkpoint retained the standard-library UTF-8 validator and added no dependency. The integrated change and regression tests are recorded in [`hotaru-benchmark-data/utf8-scanner-cache.patch`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/utf8-scanner-cache.patch). The later [repaired SIMD integration](utf8-simd.md) changes validation while preserving this extent cache; neither checkpoint establishes terminal-wide performance parity.
 
 ## Qualification
 
@@ -21,13 +21,13 @@ The three new scanner tests cover 5,120 comparisons of whole/chunked input again
 
 Increasing input by four scales the corrected candidate by approximately 3.6–4.1, while the prior implementation grows by roughly 11–14. These measurements support the scanner's linear-work invariant; they are not measurements of rendering or large scrollback.
 
-The separate valid-input comparison preserves the historical control and candidate source identities. ASCII differs by less than 1%; mixed Unicode changes by +0.8% in legacy mode and −4.1% in Unicode mode; dense Han changes by +3.2% and −2.3%, respectively. The cache does not resolve the outstanding dense Unicode throughput gap. Raw timings, source manifests, and test output are under `upstream/utf8-scanning/`.
+The separate valid-input comparison preserves the historical control and candidate source identities. ASCII differs by less than 1%; mixed Unicode changes by +0.8% in legacy mode and −4.1% in Unicode mode; dense Han changes by +3.2% and −2.3%, respectively. The cache does not resolve the outstanding dense Unicode throughput gap. Raw timings, source manifests, and test output are under [`hotaru-benchmark-data/utf8-scanning`](https://github.com/bitemyapp/hotaru-benchmark-data/tree/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/utf8-scanning).
 
 Candidate source SHA-256: `aa694e32864aa80a3d5e9a47addeabc420c6b8f2b584fb2e59fd4532dfc2dd57`. Replay SHA-256: `cc785c745ae85e2eb255e61d6ee1be50f14de4700a1297983e4ad070dfdc541e`. The earlier control includes an unfinished I/O test snapshot; its measured core/replay targets passed. The corrected candidate includes the finalized I/O tests and passed the full workspace.
 
 ## Rejected alternatives
 
-The captured reports under `upstream/utf8-scanning/rejected/` remain unchanged. Their presence does not qualify them for integration:
+The captured reports under [`hotaru-benchmark-data/utf8-scanning/rejected`](https://github.com/bitemyapp/hotaru-benchmark-data/tree/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/utf8-scanning/rejected) remain unchanged. Their presence does not qualify them for integration:
 
 * A fixed-width inner run increased mixed Unicode time by 10.8–14.5% and legacy dense Han time by 14.2%. It was discarded.
 * Caching Han classification inside the run improved one Unicode dense case but regressed legacy dense and mixed input. It was discarded.

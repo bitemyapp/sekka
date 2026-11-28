@@ -6,8 +6,8 @@
 use std::process::ExitCode;
 
 use aizome_ipc::{
-    AppSel, Client, Event, OutputInfo, Percentiles, PickTarget, Rect, Request, Response, Side, Synthetic, Transform,
-    WindowInfo,
+    AppSel, Client, Event, IdleHolder, IdleInhibitorInfo, OutputInfo, Percentiles, PickTarget, Rect, Request, Response,
+    Side, Synthetic, Transform, WindowInfo,
 };
 
 const USAGE: &str = "\
@@ -69,6 +69,8 @@ session
                                 picker); the pick is an area-picked event
   shares                        what's being shared (screen and window sharing)
   stop-share [ID]               stop a share (every one without ID)
+  idle-inhibitors               who holds idleness off: apps (a playing
+                                video) by window and process, and Keep Awake
   action NAME                   run a key-binding action by name
   quit                          end the session
   reload [--logic] [--shell] [--from PATH] [--check] [--offer]
@@ -100,12 +102,13 @@ recovery (what Ctrl+Alt+Del opens)
 input (through the compositor's own paths, for tests and scripts)
   input motion X Y | click [BUTTON] | button BUTTON [down|up]
   input scroll DX DY | key NAME [down|up] | chord super+shift+3 | type TEXT
-  input lid closed|open
+  input lid closed|open | idle SECONDS
                                 a key or button without down or up is pressed
                                 and released; type taps keys for letters,
                                 digits, space and punctuation (Shift where a
                                 US layout needs it: capitals, ! ( * + ? …);
-                                lid as the laptop's lid switch
+                                lid as the laptop's lid switch; idle as if
+                                nobody had touched anything for that long
 ";
 
 fn main() -> ExitCode {
@@ -477,6 +480,7 @@ fn parse(command: &str, mut args: Vec<String>) -> Result<Request, String> {
         "stop-share" => Request::StopShare {
             id: args.first().map(|a| a.parse().map_err(|_| format!("not a share ID: {a}"))).transpose()?,
         },
+        "idle-inhibitors" => Request::IdleInhibitors,
         "action" => {
             need(&args, 1, "an action name")?;
             Request::Action { action: args[0].clone() }
@@ -575,6 +579,11 @@ fn parse(command: &str, mut args: Vec<String>) -> Result<Request, String> {
                         o => return Err(format!("{o}: say closed or open")),
                     };
                     vec![Synthetic::Lid { closed }]
+                }
+                "idle" => {
+                    need(&args, 2, "seconds")?;
+                    let seconds = args[1].parse().map_err(|_| format!("not a number of seconds: {}", args[1]))?;
+                    vec![Synthetic::Idle { seconds }]
                 }
                 e => return Err(format!("unknown input {e}")),
             };
@@ -722,6 +731,14 @@ fn print_response(r: &Response) -> ExitCode {
                     (None, None) => "?".into(),
                 };
                 println!("{}  {what}{}", s.id, if s.cursor { ", with the pointer" } else { "" });
+            }
+        }
+        Response::IdleInhibitors { inhibitors } => {
+            if inhibitors.is_empty() {
+                println!("nothing holds idleness off");
+            }
+            for i in inhibitors {
+                println!("{}", describe_inhibitor(i));
             }
         }
         Response::Reload { report } => return print_reload(report),
@@ -991,6 +1008,27 @@ fn truncate(s: &str, n: usize) -> String {
     }
 }
 
+/// A hold on idleness in a line: whose it is, its window, its process.
+fn describe_inhibitor(i: &IdleInhibitorInfo) -> String {
+    let mut s = match i.kind {
+        IdleHolder::App => "app".to_string(),
+        IdleHolder::KeepAwake => "keep-awake".to_string(),
+    };
+    if let Some(app) = &i.app_id {
+        s += &format!(" {app}");
+    }
+    if let Some(w) = i.window {
+        s += &format!(" window {w}");
+    }
+    if let Some(title) = &i.title {
+        s += &format!(" {title:?}");
+    }
+    if let Some(pid) = i.pid {
+        s += &format!(" pid {pid}");
+    }
+    s
+}
+
 fn describe_event(e: &Event) -> String {
     match e {
         Event::WindowOpened { window } => format!("opened {} {} \"{}\"", window.id, window.app_id, window.title),
@@ -1051,6 +1089,13 @@ fn describe_event(e: &Event) -> String {
             0 => "shares none".into(),
             n => format!("shares {n}: {}", shares.iter().map(|s| s.id.to_string()).collect::<Vec<_>>().join(" ")),
         },
+        Event::IdleInhibitorsChanged { inhibitors } => match inhibitors.len() {
+            0 => "idle-inhibitors none".into(),
+            n => format!(
+                "idle-inhibitors {n}: {}",
+                inhibitors.iter().map(describe_inhibitor).collect::<Vec<_>>().join("; ")
+            ),
+        },
         Event::KeyboardAdded { keyboard } => format!("keyboard-added {} {}", keyboard.id, keyboard.name),
         Event::KeyCaught { tag, code, keyboard } => match keyboard {
             Some(k) => format!("key-caught {tag} {code} on {} {}", k.id, k.name),
@@ -1109,6 +1154,34 @@ mod tests {
         assert_eq!(p("shares", &[]), Request::Shares);
         assert_eq!(p("stop-share", &[]), Request::StopShare { id: None });
         assert_eq!(p("stop-share", &["4"]), Request::StopShare { id: Some(4) });
+    }
+
+    #[test]
+    fn parses_and_prints_who_holds_idleness_off() {
+        assert_eq!(p("idle-inhibitors", &[]), Request::IdleInhibitors);
+        // Holding as Keep Awake is its service's to ask, on a connection
+        // it keeps: no command here takes that hold.
+        assert!(parse("keep-awake", Vec::new()).is_err());
+        assert_eq!(
+            p("input", &["idle", "900"]),
+            Request::Synthesize { events: vec![Synthetic::Idle { seconds: 900 }] }
+        );
+        assert!(parse("input", vec!["idle".into(), "soon".into()]).is_err());
+        let player = IdleInhibitorInfo {
+            kind: IdleHolder::App,
+            window: Some(7),
+            app_id: Some("mpv".into()),
+            title: Some("Test Pattern - mpv".into()),
+            pid: Some(4242),
+        };
+        assert_eq!(describe_inhibitor(&player), r#"app mpv window 7 "Test Pattern - mpv" pid 4242"#);
+        let bare = IdleInhibitorInfo { pid: Some(9), ..Default::default() };
+        let keep_awake = IdleInhibitorInfo { kind: IdleHolder::KeepAwake, pid: Some(77), ..Default::default() };
+        assert_eq!(
+            describe_event(&Event::IdleInhibitorsChanged { inhibitors: vec![bare, keep_awake] }),
+            "idle-inhibitors 2: app pid 9; keep-awake pid 77"
+        );
+        assert_eq!(describe_event(&Event::IdleInhibitorsChanged { inhibitors: Vec::new() }), "idle-inhibitors none");
     }
 
     #[test]

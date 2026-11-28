@@ -414,6 +414,14 @@ pub(crate) fn file_name(path: &str) -> &str {
     path.rsplit('/').next().unwrap_or(path)
 }
 
+/// What a program goes by: its file name without NixOS's wrapper
+/// decoration (`/nix/store/…/bin/.vlc-wrapped` is `vlc`), as
+/// [`AppIndex::match_program_identity`] looks it up, in the case it was
+/// given. For naming a process no desktop entry runs.
+pub fn program_name(program: &str) -> &str {
+    unwrap_program_name(file_name(program.trim()))
+}
+
 /// `.firefox-wrapped` → `firefox`: NixOS's `wrapProgram` renames the
 /// real binary, and some programs take their app ID from `argv[0]`.
 fn unwrap_program_name(name: &str) -> &str {
@@ -1154,6 +1162,11 @@ mod tests {
         assert_eq!(exec_program_name("\"unterminated").as_deref(), None);
         assert_eq!(unwrap_program_name("..a-wrapped-wrapped"), "a");
         assert_eq!(unwrap_program_name(".hidden"), ".hidden");
+        // A running program's, for a process no desktop entry runs.
+        assert_eq!(program_name("/nix/store/abc-vlc-3.0.21/bin/.vlc-wrapped"), "vlc");
+        assert_eq!(program_name(" /opt/Kiosk/bin/Kiosk-Player\n"), "Kiosk-Player");
+        assert_eq!(program_name("mpv"), "mpv");
+        assert_eq!(program_name(""), "");
     }
 
     #[test]

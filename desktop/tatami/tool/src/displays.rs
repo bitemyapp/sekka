@@ -15,7 +15,7 @@
 //! description. Turning a display off is for the session only, as with
 //! Super+Ctrl+Delete: a display off at every login would leave none on once
 //! the others are unplugged.
-use crate::{hypr, util, window};
+use crate::{aizome_displays, hypr, util, window};
 use serde_json::{Map, Value, json};
 use std::{fs, io::Read, path::PathBuf};
 
@@ -524,15 +524,18 @@ pub(crate) fn kept_for(store: &Value, monitor: &Value, all: &Value) -> Option<(S
     ))
 }
 
-/// The rule to turn a monitor back on with: its kept settings, or the
-/// configuration's for every monitor.
+/// The rule to turn a monitor back on with: its kept settings, Aizome's,
+/// or the configuration's for every monitor.
 pub fn rule_for(monitor: &Value, all: &Value) -> Option<String> {
     let name = monitor["name"].as_str().filter(|n| hypr::safe_name(n))?;
     Some(match kept_for(&load_store(), monitor, all) {
         Some((_, kept)) => kept.rule(name),
-        None => format!(
-            "hl.monitor({{ output = \"{name}\", mode = \"preferred\", position = \"auto\", scale = \"auto\", disabled = false, mirror = \"\" }})"
-        ),
+        None => match aizome_displays::for_connector(name) {
+            Some(aizome) => aizome.rule(),
+            None => format!(
+                "hl.monitor({{ output = \"{name}\", mode = \"preferred\", position = \"auto\", scale = \"auto\", disabled = false, mirror = \"\" }})"
+            ),
+        },
     })
 }
 
@@ -548,7 +551,20 @@ pub fn set_scale(monitor: &Value, all: &Value, scale: f64) -> bool {
     let store = load_store();
     let mut settings = kept_for(&store, monitor, all)
         .map(|(_, kept)| kept)
-        .unwrap_or(display);
+        .unwrap_or_else(|| {
+            // Arranged in Aizome: kept where it is, not placed anew.
+            match (
+                aizome_displays::for_connector(&display.name),
+                monitor["x"].as_i64(),
+                monitor["y"].as_i64(),
+            ) {
+                (Some(_), Some(x), Some(y)) => Settings {
+                    position: format!("{x}x{y}"),
+                    ..display
+                },
+                _ => display,
+            }
+        });
     settings.scale = scale;
     settings.enabled = true;
     let live: Vec<Settings> = all

@@ -10,6 +10,7 @@ use aizome_kit::{column, row};
 use super::app::{Hako, Msg};
 use super::browser::{Browser, Column, Load, Loc};
 use super::dnd::{self, Dest};
+use super::dragout::handle;
 use super::fileview::{Detail, Handlers, Layout, file_view};
 use super::keys::{self, KEY_DOT};
 use super::look;
@@ -45,10 +46,14 @@ pub(crate) fn quick_look_key(w: WindowKey, k: &aizome_kit::sidestep_ui::KeyEvent
 }
 
 /// What a key no control took means to the window: ⇧❖. (by the key's
-/// place) shows hidden files.
+/// place) shows hidden files, and ⇧❖G is Go to Folder as ❖L is (the
+/// file chooser's key for it; the menu lists the command once).
 pub fn window_key(k: &aizome_kit::sidestep_ui::KeyEvent) -> Option<Msg> {
     let m = k.modifiers;
-    (m.super_key() && m.shift() && k.code == KEY_DOT).then_some(Msg::ToggleHidden)
+    if m.super_key() && m.shift() && k.code == KEY_DOT {
+        return Some(Msg::ToggleHidden);
+    }
+    Shortcut::cmd('G').shift().matches(k).then_some(Msg::EditPath(WindowKey::NONE))
 }
 
 fn toolbar(h: &Hako, w: WindowKey, b: &Browser) -> Element<Msg> {
@@ -130,8 +135,12 @@ fn toolbar(h: &Hako, w: WindowKey, b: &Browser) -> Element<Msg> {
 fn pathbar(h: &Hako, w: WindowKey, b: &Browser) -> Element<Msg> {
     let inner: Element<Msg> = if let Some(text) = &b.path_edit {
         row![
+            // The field is new each time the bar is edited (the folders
+            // show in between), so each time it starts with the caret
+            // after the folder's path.
             text_field(text)
                 .id("location")
+                .select_on_focus(text.len()..text.len())
                 .mono()
                 .placeholder("A folder or file: ~/Documents, /etc")
                 .error(b.path_error.clone())
@@ -224,7 +233,7 @@ fn crumbs(h: &Hako, b: &Browser) -> Vec<(String, Option<Icon>, Option<PathBuf>)>
                 .filter(|(m, _)| p.starts_with(m) && m != Path::new("/"))
                 .max_by_key(|(m, _)| m.as_os_str().len());
             let (start, rest) = if let Some((m, v)) = volume.filter(|(m, _)| !home.starts_with(m)) {
-                let icon = if v.image_file.is_some() { Icon::Disc } else { Icon::Usb };
+                let icon = look::place_icon(volume_kind(v)).0;
                 out.push((v.name.clone(), Some(icon), Some(m.clone())));
                 (m.clone(), p.strip_prefix(&m).unwrap_or(Path::new("")).to_path_buf())
             } else if p.starts_with(home) {
@@ -255,6 +264,18 @@ fn crumbs(h: &Hako, b: &Browser) -> Vec<(String, Option<Icon>, Option<PathBuf>)>
         out.push((e.display.clone(), None, None));
     }
     out
+}
+
+/// A volume's kind, for its icon: an image, a built-in drive's, or a
+/// removable or external one.
+fn volume_kind(v: &aizome_sys::disks::Volume) -> PlaceKind {
+    if v.image_file.is_some() {
+        PlaceKind::Image
+    } else if v.internal {
+        PlaceKind::Disk
+    } else {
+        PlaceKind::Volume
+    }
 }
 
 fn drop_fn(w: WindowKey) -> Rc<dyn Fn(Dest, Vec<String>) -> Msg> {
@@ -318,7 +339,7 @@ fn sidebar(h: &Hako, w: WindowKey, b: &Browser) -> Element<Msg> {
         place(&mut items, PlaceKind::Disk, "Computer".into(), None, Loc::Folder(PathBuf::from("/")), None, false);
     }
     for v in &h.volumes {
-        let kind = if v.image_file.is_some() { PlaceKind::Image } else { PlaceKind::Volume };
+        let kind = volume_kind(v);
         let busy = h.mounting.contains(&v.block);
         let can_eject = v.mount_point.is_some() || v.ejectable;
         match &v.mount_point {
@@ -400,7 +421,7 @@ fn content(h: &Hako, w: WindowKey, b: &Browser) -> Element<Msg> {
             let preview = h.preview_entry(w);
             let last_width = if preview.is_some() { 300.0 } else { h.settings.column_width };
             if let Some(e) = preview {
-                cols.push(preview_column(h, &e));
+                cols.push(preview_column(h, w, &e));
             }
             strip(cols, h.settings.column_width, last_width, b.reveal, Rc::new(Msg::ColumnWidth))
         }
@@ -478,14 +499,24 @@ fn column_view(h: &Hako, w: WindowKey, b: &Browser, i: usize, c: &Column, layout
 }
 
 /// The preview of a file selected last: its picture (or icon), name,
-/// kind, size and dates, and the start of its text.
-fn preview_column(h: &Hako, e: &Entry) -> Element<Msg> {
+/// kind, size and dates, and the start of its text. The picture is
+/// something to take hold of: dragged, it carries the file out of the
+/// window.
+fn preview_column(h: &Hako, w: WindowKey, e: &Entry) -> Element<Msg> {
     let p = h.previews.get(&e.path);
     let (ic, role) = look::entry_icon(e);
+    let drag = Msg::DragPreview(w);
     let picture: Element<Msg> = match p.and_then(|p| p.image.clone()).or_else(|| h.thumbs.images.get(&e.path).cloned())
     {
-        Some(img) => image(img).fit(Fit::Contain).width(Length::Fill).height(180.0).into(),
-        None => container(icon(ic).size(96.0).role(role)).center().width(Length::Fill).height(180.0).into(),
+        Some(img) => {
+            let size = img.size();
+            let shown = image(img).fit(Fit::Contain).width(Length::Fill).height(180.0);
+            handle(shown.into(), Some(size), drag).width(Length::Fill).height(180.0)
+        }
+        None => {
+            let held = handle(icon(ic).size(96.0).role(role).into(), None, drag);
+            container(held).center().width(Length::Fill).height(180.0).into()
+        }
     };
     let now = h.now();
     let mut facts: Vec<Element<Msg>> = vec![

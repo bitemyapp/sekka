@@ -65,6 +65,11 @@ pub enum Seen {
         window: u32,
         handle: String,
     },
+    /// The tag a window was shown with.
+    Tag {
+        window: u32,
+        tag: String,
+    },
     /// Display links asked for each frame of the window, or stopped.
     FrameTicks {
         window: u32,
@@ -344,7 +349,10 @@ fn run(channel: Channel<ToRender>, to_main: MainSender) {
     };
     while let Ok(msg) = channel.recv() {
         match msg {
-            ToRender::CreateWindow { window, mut width, mut height, popup, sheet_of, layer, lock, .. } => {
+            ToRender::CreateWindow { window, mut width, mut height, popup, sheet_of, layer, lock, tag, .. } => {
+                if let Some(tag) = tag {
+                    note(Seen::Tag { window, tag });
+                }
                 let keyboard = layer.as_ref().map(|p| p.keyboard);
                 if let Some(placement) = &layer {
                     note(Seen::Layer { window, placement: placement.clone(), asked: (width, height) });

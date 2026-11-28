@@ -47,4 +47,15 @@ fn encrypted_volume_visibility() {
         }
     }
     println!("PASS actual removable identity and system/ignored ancestry exclusions");
+    // A file manager's sidebar adds the internal drive's volume and nothing
+    // else: not the VM's own disk, a removable volume or an ignored one.
+    let internal = state.internal_volumes();
+    println!("INTERNAL_VOLUMES {internal:#?}");
+    let data = state.blocks.iter().find(|b| b.id_label == "QA_SYSTEM").unwrap();
+    assert_eq!(internal.len(), 1, "exactly the internal data volume");
+    assert_eq!((internal[0].block.as_str(), internal[0].name.as_str()), (data.path.as_str(), "QA_SYSTEM"));
+    assert!(internal[0].internal && !internal[0].locked && !internal[0].ejectable && !internal[0].can_power_off);
+    let root = state.system_volume("/home/alice").expect("the VM's own disk");
+    assert!(root.drive.is_some() && root.drive != internal[0].drive, "never the drive the system runs from");
+    println!("PASS internal data volume listed apart from the system's drive");
 }

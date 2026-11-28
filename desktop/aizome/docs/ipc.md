@@ -10,8 +10,8 @@ everything it starts (and to systemd and D-Bus activation) as
 - After `subscribe` (answered `{"response":"ok"}`) the connection carries
   **events**, one per line, until either side closes it. Requests can still
   go on it: each response comes in order, among the events (after those
-  sent before it). `catch-key` is asked this way, as its `key-caught` goes
-  to the connection that asked alone.
+  sent before it). `catch-key` and `catch-keys` are asked this way, as
+  their `key-caught` goes to the connection that asked alone.
 - Enums are tagged in kebab-case: `{"request":"focus","id":7}`,
   `{"response":"error","message":"no window 7"}`,
   `{"event":"window-focused","id":7}`.
@@ -88,10 +88,13 @@ Protocol version: **1** (`version` reports it).
 | `input-state` | | `input-state {state: InputState}` |
 | `keyboards` | | `keyboards {keyboards: [KeyboardInfo]}`: the keyboards that type (a space bar and the letters: not a power button, nor a keyboard's media keys), each once however many devices it has, `{name, id, bus, last}`: `id` is vendor and product as `lsusb` writes them (`05ac:029c`), `bus` `usb`, `bluetooth`, `built-in` or `other` (a VM's, uinput), `last` whether it typed last |
 | `catch-key` | `tag?` | `ok` at once (an error on a connection that hasn't subscribed); the next key pressed (unless the screen is locked) is swallowed, press and release, and sent as `key-caught` with this tag to the connection that asked alone: what Settei's keyboard setup asks, as no app hears a modifier key alone. It waits only while that connection stays open, until it asks again without a tag (another connection's asking without one changes nothing) or another connection asks for a key in its place |
+| `catch-keys` | `tag`, `keys` (names, as `synthesize` takes them, or evdev codes), `windows` | `ok` at once (an error on a connection that hasn't subscribed, or for a key it doesn't know); while one of `windows` has the keyboard, a press of one of `keys` with no Ctrl, Alt or ❖ held (unless the screen is locked) is swallowed, press and release, and sent as `key-caught` with this tag to the connection that asked alone: an app keeping a way back out of another program's window it opened, as Chanoma keeps Home and F1 over its browser. Kept while that connection stays open, until it asks again (in place of before; with no `keys` or no `windows`, to stop) |
 | `debug-stall` | `seconds` | `ok` after blocking the main loop that long (at most 60 s), to try the watchdog (`docs/recovery.md`) |
 | `pick-area` | `tag?`, `prompt?`, `targets?` | `ok` at once; the screenshot picker opens (drag over an area, click for the whole display under the pointer, Space and a click for a window, Esc to give up), says `pick-started` with this tag, and its pick is sent to subscribers as `area-picked` with it, not taken as a screenshot. `targets` narrows what may be picked (`area`, `display`, `window`; all when left out): without `area` a drag picks the display under the pointer, with `window` alone the picker starts at windows, and in window mode a click on no window keeps picking. `prompt` puts a banner at the top of each display saying what the pick is for, with the keys. The shell uses it to choose what to record, `aizome-share-picker` what to share |
 | `shares` | | `shares {shares: [ShareInfo]}`: what's being shared through ext-image-copy-capture (browsers' screen and window sharing): sessions that have shown frames for a second (so not a screenshot tool's single frame), `{id, output?, window?, cursor}` |
 | `stop-share` | `id?` | `ok`, or `error` when nothing (or no such share) is shared; stops the share (every one without `id`) as if its source had gone: the session says `stopped`, so the portal ends the stream and the app hears the track ended |
+| `idle-inhibitors` | | `idle-inhibitors {inhibitors: [IdleInhibitorInfo]}`: who holds idleness off (so no `idle` event comes: no lock, and the displays stay on): apps' Wayland idle inhibitors in the order each began, then the `keep-awake` holds. The shell asks it to say which apps keep the screen on |
+| `keep-awake` | | `ok` at once; idleness is held off as the user's own Keep Awake holds it, for as long as the connection that asked stays open (asked again on it, still one hold). Unlike an app's idle inhibitor it counts while the session is locked too. `aizome-awake hold` asks it for the Keep Awake switch. Any program of the session can ask: the compositor logs the process that does, and the shell lists every such hold but Keep Awake's own among the apps keeping the screen on. `aizomectl` has no command for it, as the hold would be its own |
 
 `desk` is a 1-based position (`2`) or a name (`"Mail"`). `transform` is
 `normal`, `90`, `180`, `270`, `flipped`, `flipped-90`, `flipped-180` or
@@ -108,7 +111,11 @@ Protocol version: **1** (`version` reports it).
   `return`, `escape`, `space`, `grave`, `up`/`down`/`left`/`right`, letters,
   digits, punctuation (`,` `.` `/` `;` `'` `[` `]` `\` `-` `=`), `f1`…`f12`,
   `print`) or an evdev code;
-- `chord {keys}`: `"super+shift+3"` presses in order, releases in reverse;
+- `chord {keys}`: `"super+shift+3"` presses in order, releases in reverse.
+  Its names mean what they say under the keymap in force: `super` is the
+  key that holds ❖ where modifier keys are swapped, `v` the key that
+  types v in the layout in use (the usual key when none does). An evdev
+  code is that key;
 - `lid {closed}`: the laptop's lid closing or opening, as its switch says
   (`aizomectl input lid closed`);
 - `plug-keyboard {name, id, bus?}` and `unplug-keyboard {name}`: a keyboard
@@ -116,7 +123,13 @@ Protocol version: **1** (`version` reports it).
 - `key-on {keyboard, key, pressed}`: a key, as `key`, on a keyboard
   `plug-keyboard` plugged in, so its own keys' settings
   (`[[input.keyboards]]`) apply. `key` and `chord` come from no keyboard,
-  and leave the keymap as the last keyboard left it.
+  and leave the keymap as the last keyboard left it. `key` and `key-on`
+  press the key a US keyboard has under that name, whatever it does now;
+- `idle {seconds}`: nobody has touched anything for that long. The idle
+  clock is put back that far and read at once, as the compositor's timer
+  reads it every five seconds, so `idle` events come (or don't, while
+  something holds idleness off) without waiting the settings' minutes
+  (`aizomectl input idle 900`).
 
 `aizomectl input key NAME` and `input button NAME` press and release
 (a tap); add `down` or `up` for one half. `aizomectl input type TEXT` taps
@@ -199,6 +212,18 @@ the notice after a restart), `panel` (its rectangle while open).
 surface/hidden cursor), `pointer_focus` and `keyboard_focus` (app IDs;
 `the lock screen on <output>` for a lock surface; else `a surface`).
 
+### IdleInhibitorInfo
+
+One hold on idleness, and what identifies its holder. Fields that don't
+apply are left out.
+
+| Field | |
+|---|---|
+| `kind` | `app`: a client's Wayland idle inhibitor (a video player's; the shell's own, on a surface that's no window's, while apps ask the session bus). It counts until the session is locked. `keep-awake`: a hold asked for with `keep-awake`, as the user's Keep Awake asks for its own (whose it is, `pid` says), which counts locked or not |
+| `window` | the window the inhibitor's surface belongs to (its own surface or a subsurface of it) |
+| `app_id`, `title` | that window's, when it has said them, as the compositor last looked: asked, that is now; in `idle-inhibitors-changed`, a change of title follows within five seconds (`window-changed` says at once) |
+| `pid` | the holder's process: the Wayland client's, or for `keep-awake` the one at the other end of the connection |
+
 ### WindowInfo
 
 | Field | |
@@ -271,10 +296,10 @@ and for wl_shm reading it back).
 | `desk-changed` | `index`, `id`, `name` | the current Desk changed (another Desk on the display with the focus, or the focus on another display) |
 | `desks-changed` | `desks` | added, removed, renamed, reordered, shown on other displays, or their window counts changed |
 | `outputs-changed` | `outputs` | plugged, unplugged, reconfigured, or their usable area changed |
-| `config-changed` | | settings were applied |
+| `config-changed` | | settings were applied, or the compositor wrote its Desks to them |
 | `binding` | `action`, `pointer? [x,y]`, `output?` | a key or pointer binding that belongs to the shell |
 | `screenshot-taken` | `path` | |
-| `idle` | `kind` (`lock` or `monitors-off`) | no input for the configured minutes |
+| `idle` | `kind` (`lock` or `monitors-off`) | no input for the configured minutes. Held off while Keep Awake holds, and while an app has an idle inhibitor and the session isn't locked (`idle-inhibitors`) |
 | `resumed` | | input after `idle` |
 | `lock-state-changed` | `locked` | an ext-session-lock client locked or unlocked |
 | `night-light-changed` | `state` | Night Light turned on or off, or warmed or cooled (the schedule) |
@@ -283,8 +308,9 @@ and for wl_shm reading it back).
 | `pick-started` | `tag` | the picker `pick-area` asked for is up |
 | `area-picked` | `tag`, `area?` (`{x,y,w,h}` in points; `null` when given up), `output?` (the one holding its centre), `window?` and `toplevel?` (when a window was picked: its ID, and its ext-foreign-toplevel-list identifier, which is how xdg-desktop-portal-wlr names it) | the picker opened by `pick-area` closed |
 | `shares-changed` | `shares` | something began or stopped being shared (as `shares` answers) |
+| `idle-inhibitors-changed` | `inhibitors` | who holds idleness off changed (as `idle-inhibitors` answers): a hold began or ended, said at once, or a holder's window opened or was renamed, said when the idle timer next looks (within five seconds). The same list is never sent twice running |
 | `keyboard-added` | `keyboard` (`KeyboardInfo`) | a keyboard that types appeared for the first time since the compositor started: one plugged in again, or back from another VT, isn't news. The shell offers to set up one plugged in or paired (USB or Bluetooth) that hasn't keys of its own |
-| `key-caught` | `tag`, `code` (evdev, whatever the keymap makes of it), `keyboard?` (`KeyboardInfo`; none for a key from IPC or a device that doesn't type) | the key `catch-key` waited for, to the connection that asked alone |
+| `key-caught` | `tag`, `code` (evdev, whatever the keymap makes of it), `keyboard?` (`KeyboardInfo`; none for a key from IPC or a device that doesn't type) | the key `catch-key` waited for, or one `catch-keys` keeps, to the connection that asked alone |
 
 ## Bindings
 
@@ -323,6 +349,7 @@ Sent to subscribers as `binding` events, for the shell:
 | ❖Space | `palette` |
 | ❖⌥Space | `toolchest` |
 | ❖⌥M; F10 over Aizome's apps (`org.aizome.…`) and the desktop (other apps keep F10) | `menu-bar` (focus the menu bar) |
+| ⌃❖D | `deskbar` (fold the Deskbar into the bar, or bring it back) |
 | XF86PowerOff (the power key, when logind leaves it to the session) | `power-key` |
 | a client rings xdg-system-bell | `bell`, with the `output` (its window's, else the pointer's) |
 | ⌃❖Q | `lock` |
@@ -366,8 +393,11 @@ Keyboard focus, highest first:
    so a menu opened for a `binding` event (which carries no Wayland
    serial) can grab with the client's last serial, or 0. A press outside
    the client, or focus moving to another window, closes the menus (and
-   the press then does what it does there). An input method's grab of
-   the keyboard (`zwp_input_method_v2`, which ibus holds while a text
+   the press then does what it does there); one in another of the
+   client's surfaces is the client's to answer (the kit dismisses its
+   menus, its popovers and a program's own grabbing popups, such as the
+   shell's systray panels). An input method's grab of the keyboard
+   (`zwp_input_method_v2`, which ibus holds while a text
    field has the keys) doesn't keep shut a menu of the client typed into
    or pointed at (a field's context menu) or of a layer surface (the
    shell's, for a binding); another client's menu is dismissed. The menu

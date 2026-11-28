@@ -162,6 +162,27 @@ fn activating_a_stack_tab_announces_the_previous_tabs_state() {
 }
 
 #[test]
+fn unstacking_one_of_two_tabs_announces_the_window_left_alone() {
+    use aizome_ipc::Event;
+    let c = Compositor::start(opts(None));
+    let _a = c.client(Spec::new("test.a", 0x2222cc));
+    let a = c.wait_window("test.a");
+    let _b = c.client(Spec::new("test.b", 0x22cc22));
+    let b = c.wait_window("test.b");
+    c.ok(Request::Stack { a: a.id, b: b.id });
+    c.wait_windows("stacked", |ws| ws.iter().all(|w| w.group.is_some()));
+    let events = aizome_ipc::Client::connect_to(&c.ipc).unwrap().events().unwrap();
+    events.stream().set_read_timeout(Some(std::time::Duration::from_secs(2))).unwrap();
+    c.ok(Request::Unstack { id: Some(b.id) });
+    assert!(
+        events.map_while(Result::ok).any(|event| {
+            matches!(event, Event::WindowChanged { window } if window.id == a.id && window.group.is_none())
+        }),
+        "the shell must hear that the window left alone is no longer in a stack"
+    );
+}
+
+#[test]
 fn stacks_share_a_frame_and_switch() {
     let c = Compositor::start(opts(None));
     let _a = c.client(Spec::new("test.a", 0x2222cc).title("Alpha"));
@@ -688,6 +709,173 @@ fn windows_reopen_where_their_app_left_them() {
     let _b = c.client(Spec::new("test.remember", 0x2222cc).size(500, 320));
     let w = c.wait_window("test.remember");
     assert_eq!((w.geometry.x, w.geometry.y), (77, 99));
+}
+
+/// The windows once one titled `title` has opened and everything has settled.
+fn opened(c: &Compositor, title: &str) -> Vec<aizome_ipc::WindowInfo> {
+    c.wait_windows(title, |ws| ws.iter().any(|w| w.title == title));
+    c.settle();
+    c.windows()
+}
+
+fn titled(ws: &[aizome_ipc::WindowInfo], title: &str) -> aizome_ipc::WindowInfo {
+    ws.iter().find(|w| w.title == title).unwrap_or_else(|| panic!("no window titled {title}: {ws:?}")).clone()
+}
+
+#[test]
+fn a_utility_window_stays_out_of_its_apps_tabs() {
+    // New windows of the focused app open as tabs on it (the default).
+    let c = Compositor::start(opts(None));
+    let _main = c.client(Spec::new("test.notes", 0x2222cc).title("Notes").size(500, 320));
+    let main = c.wait_window("test.notes");
+    assert!(main.focused, "{main:?}");
+    // A utility window of that app (its tag says so) opens by itself, at
+    // its own size, and takes the focus as any new window does.
+    let _sticky = c.client(Spec::new("test.notes", 0xcccc22).title("Sticky").size(260, 240).tag("utility"));
+    let ws = opened(&c, "Sticky");
+    let sticky = titled(&ws, "Sticky");
+    assert!(ws.iter().all(|w| w.group.is_none()), "the sticky is no tab on the main window: {ws:?}");
+    assert_eq!((sticky.geometry.w, sticky.geometry.h), (260, 240), "{sticky:?}");
+    assert!(sticky.focused, "{sticky:?}");
+    assert_eq!(titled(&ws, "Notes").geometry, main.geometry, "the main window is as it was");
+    // An ordinary window of the app opening while the sticky has the focus
+    // is no tab on the sticky.
+    let _second = c.client(Spec::new("test.notes", 0x22cc22).title("Second").size(500, 320));
+    let ws = opened(&c, "Second");
+    assert!(ws.iter().all(|w| w.group.is_none()), "nothing opens as a tab on a utility window: {ws:?}");
+    // With an ordinary window focused, the app's next ordinary window is
+    // its tab as before, and another utility window is not.
+    c.ok(Request::Focus { id: main.id });
+    c.wait_windows("the main window focused", |ws| titled(ws, "Notes").focused);
+    let _third = c.client(Spec::new("test.notes", 0xcc2222).title("Third").size(500, 320));
+    let ws = opened(&c, "Third");
+    let (main, third) = (titled(&ws, "Notes"), titled(&ws, "Third"));
+    assert!(third.group.is_some() && third.group == main.group, "an ordinary second window still joins: {ws:?}");
+    assert!(third.group_active && third.focused, "{third:?}");
+    let _palette = c.client(Spec::new("test.notes", 0xcc22cc).title("Palette").size(200, 120).tag("utility"));
+    let ws = opened(&c, "Palette");
+    assert_eq!(titled(&ws, "Notes").group_members, vec![main.id, third.id], "{ws:?}");
+    for alone in ["Sticky", "Second", "Palette"] {
+        assert!(titled(&ws, alone).group.is_none(), "{alone}: {ws:?}");
+    }
+    // By hand a utility window stacks as any window does.
+    c.ok(Request::Stack { a: sticky.id, b: titled(&ws, "Palette").id });
+    c.wait_windows("stacked by hand", |ws| {
+        let (s, p) = (titled(ws, "Sticky"), titled(ws, "Palette"));
+        s.group.is_some() && s.group == p.group
+    });
+}
+
+#[test]
+fn a_tag_that_is_not_utility_changes_nothing() {
+    let c = Compositor::start(opts(None));
+    let _main = c.client(Spec::new("test.notes", 0x2222cc).title("Notes").tag("main window"));
+    let main = c.wait_window("test.notes");
+    let _second = c.client(Spec::new("test.notes", 0x22cc22).title("Second").tag("settings"));
+    let ws = opened(&c, "Second");
+    let second = titled(&ws, "Second");
+    assert!(second.group.is_some() && second.group == titled(&ws, "Notes").group, "{ws:?}");
+    assert_eq!(titled(&ws, "Notes").group_members, vec![main.id, second.id]);
+}
+
+#[test]
+fn a_utility_window_neither_takes_nor_leaves_its_apps_place() {
+    let c = Compositor::start(opts(None));
+    let place = aizome_ipc::Rect::new(77, 99, 640, 420);
+    // The app's window is left at a place and size of the user's choosing.
+    let a = c.client(Spec::new("test.meters", 0x2222cc).size(400, 300));
+    let w = c.wait_window("test.meters");
+    c.ok(Request::Resize { id: Some(w.id), rect: place });
+    c.wait_windows("resized", |ws| ws[0].geometry == place);
+    drop(a);
+    c.wait_windows("closed", |ws| ws.is_empty());
+    // A utility window of the app opens at its own size, placed as a new
+    // window is, not where and as large as the app's window was.
+    let u = c.client(Spec::new("test.meters", 0xcccc22).title("Meters").size(260, 240).tag("utility"));
+    let ws = opened(&c, "Meters");
+    let g = ws[0].geometry;
+    assert_eq!((g.w, g.h), (260, 240), "{ws:?}");
+    assert_ne!((g.x, g.y), (place.x, place.y), "{ws:?}");
+    // Moved and closed, it leaves the app's place alone: the app's next
+    // window opens where its last ordinary one was.
+    c.ok(Request::Move { id: Some(ws[0].id), x: 900, y: 500 });
+    c.wait_windows("moved", |ws| ws[0].geometry.x == 900);
+    drop(u);
+    c.wait_windows("closed", |ws| ws.is_empty());
+    let _b = c.client(Spec::new("test.meters", 0x2222cc).size(400, 300));
+    let w = c.wait_window("test.meters");
+    assert_eq!(w.geometry, place, "{w:?}");
+}
+
+#[test]
+fn an_unmapped_toplevel_forgets_its_tag() {
+    let c = Compositor::start(opts(None));
+    let _main = c.client(Spec::new("test.notes", 0x2222cc).title("Notes").size(500, 320));
+    let main = c.wait_window("test.notes");
+    let palette = c.client(Spec::new("test.notes", 0xcc22cc).title("Palette").size(200, 120).tag("utility"));
+    let ws = opened(&c, "Palette");
+    assert!(ws.iter().all(|w| w.group.is_none()), "a palette by itself: {ws:?}");
+    let unmap = || {
+        palette.send(Cmd::Unmap);
+        c.wait_windows("the palette unmapped", |ws| ws.iter().all(|w| w.title != "Palette"));
+        c.ok(Request::Focus { id: main.id });
+        c.wait_windows("the main window focused", |ws| titled(ws, "Notes").focused);
+    };
+    // Unmapped, a toplevel is as it was when made: the tag was that
+    // mapping's. Mapped again with none, it is an ordinary window of the
+    // app, and opens as a tab on the app's focused window.
+    unmap();
+    palette.send(Cmd::Remap { tag: None, size: (500, 320) });
+    let ws = opened(&c, "Palette");
+    let again = titled(&ws, "Palette");
+    assert!(again.group.is_some() && again.group == titled(&ws, "Notes").group, "untagged now, it joins: {ws:?}");
+    // Tagged as it maps once more, it is by itself again, at its own size
+    // (not the size it had as a tab).
+    unmap();
+    palette.send(Cmd::Remap { tag: Some("utility".into()), size: (200, 120) });
+    let ws = opened(&c, "Palette");
+    let again = titled(&ws, "Palette");
+    assert!(ws.iter().all(|w| w.group.is_none()), "tagged again, it is by itself: {ws:?}");
+    assert_eq!((again.geometry.w, again.geometry.h), (200, 120), "{again:?}");
+}
+
+#[test]
+fn a_new_toplevel_on_a_surface_starts_untagged() {
+    let c = Compositor::start(opts(None));
+    let _main = c.client(Spec::new("test.notes", 0x2222cc).title("Notes").size(500, 320));
+    c.wait_window("test.notes");
+    // A palette's toplevel, tagged, goes before it draws, and its surface
+    // gets a document's toplevel with no tag. (Nothing is unmapped here:
+    // the tag has to go with the toplevel.)
+    let reused =
+        c.client(Spec::new("test.notes", 0xcc22cc).title("Palette").size(200, 120).tag("utility").defer_mapping());
+    reused.wait_seen("the palette's first configure", |s| s.configures >= 1);
+    reused.send(Cmd::Renew { title: "Document".into(), tag: None, size: (500, 320) });
+    reused.send(Cmd::Map);
+    let ws = opened(&c, "Document");
+    let document = titled(&ws, "Document");
+    assert!(
+        document.group.is_some() && document.group == titled(&ws, "Notes").group,
+        "the document is an ordinary window, a tab on the app's focused one: {ws:?}"
+    );
+}
+
+#[test]
+fn a_toplevel_mapped_again_as_a_utility_window_takes_its_own_size() {
+    let c = Compositor::start(opts(None));
+    // A document, left at a size of the user's choosing, then unmapped.
+    let a = c.client(Spec::new("test.meters", 0x2222cc).title("Meters").size(400, 300));
+    let w = c.wait_window("test.meters");
+    c.ok(Request::Resize { id: Some(w.id), rect: aizome_ipc::Rect::new(77, 99, 650, 475) });
+    c.wait_windows("resized", |ws| (ws[0].geometry.w, ws[0].geometry.h) == (650, 475));
+    a.send(Cmd::Unmap);
+    c.wait_windows("unmapped", |ws| ws.is_empty());
+    // The same toplevel maps again as a utility window: at the size it
+    // draws, not the size its last configure as a document named.
+    a.send(Cmd::Remap { tag: Some("utility".into()), size: (211, 177) });
+    let ws = opened(&c, "Meters");
+    let g = ws[0].geometry;
+    assert_eq!((g.w, g.h), (211, 177), "{ws:?}");
 }
 
 #[test]

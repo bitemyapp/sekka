@@ -12,19 +12,23 @@
 -------------------------------------------------------------------------------
 
 hl.env("GDK_SCALE", "2")
--- The display settings chosen in the Displays window and with Super+/, then
--- this session's monitor state, which the tatami helper writes before each
--- of its reloads and as it turns a display off: of the rules naming a
--- display the last loaded wins, so a display off for the session stays off,
--- and reloading this configuration turns no monitor on or off. A rule naming
--- a display also wins over the rule for every monitor below.
+-- Aizome's settings for the connected displays, then the display settings
+-- chosen in the Displays window and with Super+/, then this session's
+-- monitor state, which the tatami helper writes before each of its reloads
+-- and as it turns a display off: of the rules naming a display the last
+-- loaded wins, so a display set up in Tatami keeps Tatami's settings, a
+-- display off for the session stays off, and reloading this configuration
+-- turns no monitor on or off. A rule naming a display also wins over the
+-- rule for every monitor below.
 local state_home = os.getenv("XDG_STATE_HOME")
 if not state_home or state_home:sub(1, 1) ~= "/" then
   state_home = (os.getenv("HOME") or "") .. "/.local/state"
 end
+local runtime = os.getenv("XDG_RUNTIME_DIR") or ""
 for _, file in ipairs({
+  runtime .. "/tatami/aizome-displays.lua",
   state_home .. "/tatami/displays.lua",
-  (os.getenv("XDG_RUNTIME_DIR") or "") .. "/tatami/monitors.lua",
+  runtime .. "/tatami/monitors.lua",
 }) do
   local settings = loadfile(file)
   if settings then

@@ -12,6 +12,7 @@ use aizome_sys::power::Backlight;
 use aizome_sys::power::Logind;
 use aizome_sys::power::PowerProfiles;
 use aizome_sys::power::Upower;
+use aizome_sys::screensaver::ScreenSaver;
 use aizome_sys::statusnotifier::StatusNotifier;
 
 use crate::menubar::{NetGlyph, Tray};
@@ -34,6 +35,9 @@ pub struct Sys {
     /// Apps' status items: the shell serves the watcher they register
     /// with.
     pub status: Option<StatusNotifier>,
+    /// Apps keeping the screen awake over the session bus: the shell
+    /// serves the screen saver they ask.
+    pub screensaver: Option<ScreenSaver>,
 }
 
 impl Sys {
@@ -51,7 +55,13 @@ impl Sys {
             disks: Some(aizome_sys::disks::Disks::new(w())),
             mpris: Some(Mpris::new(w())),
             status: Some(StatusNotifier::new(w(), crate::shell::takeover())),
+            screensaver: Some(ScreenSaver::new(w(), crate::shell::takeover())),
         }
+    }
+
+    /// Whether an app on the session bus holds the screen awake now.
+    pub fn screen(&self) -> crate::idle::Screen {
+        self.screensaver.as_ref().map_or(crate::idle::Screen::MayIdle, |s| crate::idle::Screen::from(&*s.snapshot()))
     }
 
     /// What the sound panel shows of the player playing (or the one that

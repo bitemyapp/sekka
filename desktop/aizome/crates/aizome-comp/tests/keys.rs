@@ -1,6 +1,7 @@
 //! Keys: the command key (❖) translated to Ctrl (Ctrl+Shift in
 //! terminals) for apps that don't use Aizome's kit, the system's chords
-//! kept for the compositor, and shell bindings sent to subscribers.
+//! kept for the compositor, shell bindings sent to subscribers, and
+//! synthesized chords pressed as the keyboard that typed last has them.
 
 mod common;
 
@@ -65,6 +66,59 @@ fn kit_apps_keep_super() {
     }
 }
 
+/// A chord means what it says, and the keymap of the keyboard that typed
+/// last reads it. Koe pastes into Aizome's apps with ❖V, which must reach
+/// them as ❖V whichever key holds ❖ on that keyboard and wherever its
+/// layout has v: with left Alt and Super swapped (as Genkan suggests for a
+/// PC keyboard), Sumi got Alt+V and typed a v.
+#[test]
+fn a_chord_means_what_it_says_on_the_keyboard_that_typed_last() {
+    const ALT: u32 = 8;
+    const KEY_V: u32 = 47;
+    // Where Dvorak has v: the full stop's key on a US keyboard.
+    const KEY_DOT: u32 = 52;
+    const KEY_SPACE: u32 = 57;
+    const PC: &str = "Logitech K120";
+    // The layout's variant, the keyboard's own keys, and the key that types
+    // v there.
+    let keyboards = [
+        ("", "altwin:swap_lalt_lwin", KEY_V),
+        ("", "ctrl:swap_lwin_lctl", KEY_V),
+        ("dvorak", "", KEY_DOT),
+        ("dvorak", "altwin:swap_lalt_lwin", KEY_DOT),
+    ];
+    // What the app saw of ❖V on each: the key and the modifiers held.
+    let saw = keyboards.map(|(variant, options, _)| {
+        // The keyboard's own keys, as Settei's keyboard setup saves them.
+        let settings = format!(
+            "[appearance]\neffects = \"austere\"\n\
+             [input.keyboard]\nlayouts = [\"us\"]\nvariant = \"{variant}\"\noptions = \"\"\n\
+             [[input.keyboards]]\nname = \"{PC}\"\nid = \"046d:c31c\"\noptions = \"{options}\"\n"
+        );
+        let c = Compositor::start(Options { settings: &settings, ..Default::default() });
+        let a = c.client(Spec::new("org.aizome.Sumi", 0x2222cc));
+        c.wait_window("org.aizome.Sumi");
+        a.wait_seen("keyboard focus", |s| s.keyboard_focus);
+        // It types, so the keymap is its own.
+        let space = |pressed| Synthetic::KeyOn { keyboard: PC.into(), key: "space".into(), pressed };
+        c.ok(Request::Synthesize {
+            events: vec![
+                Synthetic::PlugKeyboard { name: PC.into(), id: "046d:c31c".into(), bus: aizome_ipc::KeyboardBus::Usb },
+                space(true),
+                space(false),
+            ],
+        });
+        a.wait_seen("the keyboard's space bar", |s| s.keys.iter().any(|(k, _)| *k == KEY_SPACE));
+        chord(&c, "super+v");
+        // The chord's letter, on whichever of the two keys it came.
+        let letter = |s: &Seen| s.keys.iter().find(|(k, _)| [KEY_V, KEY_DOT].contains(k)).copied();
+        let (key, mods) = letter(&a.wait_seen("the chord's letter", |s| letter(s).is_some())).unwrap();
+        a.wait_seen("modifiers released", |s| s.mods & (SHIFT | CTRL | ALT | LOGO) == 0);
+        (variant, options, key, mods & (SHIFT | CTRL | ALT | LOGO))
+    });
+    assert_eq!(saw, keyboards.map(|(variant, options, v)| (variant, options, v, LOGO)));
+}
+
 #[test]
 fn the_setting_turns_translation_off() {
     let c = Compositor::start(Options {
@@ -125,6 +179,40 @@ fn system_chords_stay_with_the_system_and_shell_ones_go_to_subscribers() {
         s.keys
     );
     let _ = w;
+}
+
+#[test]
+fn holding_ctrl_super_d_toggles_the_deskbar_once() {
+    let c = Compositor::start(Options::default());
+    let a = c.client(Spec::new("org.example.editor", 0x2222cc));
+    c.wait_window("org.example.editor");
+    a.wait_seen("keyboard focus", |s| s.keyboard_focus);
+    let mut events = aizome_ipc::Client::connect_to(&c.ipc).unwrap().events().unwrap();
+    events.stream().set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+    let key = |key: &str, pressed| Synthetic::Key { key: key.into(), pressed };
+    c.ok(Request::Synthesize { events: vec![key("ctrl", true), key("super", true), key("d", true)] });
+    // Held well past the default 600 ms repeat delay.
+    std::thread::sleep(Duration::from_millis(1500));
+    c.ok(Request::Synthesize { events: vec![key("d", false), key("super", false), key("ctrl", false)] });
+    // ❖Space after it: every binding before the palette's came from the hold.
+    chord(&c, "super+space");
+    let mut got = Vec::new();
+    for e in events.by_ref() {
+        match e {
+            Ok(Event::Binding { action, .. }) => {
+                let last = action == "palette";
+                got.push(action);
+                if last {
+                    break;
+                }
+            }
+            Ok(_) => {}
+            Err(_) => break,
+        }
+    }
+    assert_eq!(got, ["deskbar", "palette"], "one toggle for one press, however long it's held");
+    let s = a.seen();
+    assert!(!s.keys.iter().any(|(k, _)| *k == 32), "D stayed with the system: {:?}", s.keys);
 }
 
 #[test]
@@ -231,4 +319,77 @@ fn the_system_bell_rings_for_the_shell() {
         _ => None,
     });
     assert_eq!(got, Some(("bell".to_string(), Some("HEADLESS-1".to_string()))));
+}
+
+#[test]
+fn an_app_keeps_its_home_key_over_a_window_it_opened() {
+    const KEY_HOME: u32 = 102;
+    const KEY_F1: u32 = 59;
+    let c = Compositor::start(Options::default());
+    let a = c.client(Spec::new("org.example.browser", 0x2222cc));
+    let wa = c.wait_window("org.example.browser");
+    let b = c.client(Spec::new("org.example.other", 0xcc2222));
+    let wb = c.wait_window("org.example.other");
+    let focus = |id: u64, who: &TestClient| {
+        c.ok(Request::Focus { id });
+        who.wait_seen("keyboard focus", |s| s.keyboard_focus);
+    };
+    let tap = |key: &str| {
+        let key = |pressed| Synthetic::Key { key: key.into(), pressed };
+        c.ok(Request::Synthesize { events: vec![key(true), key(false)] });
+    };
+    let caught = |events: &mut aizome_ipc::Events| {
+        events.by_ref().find_map(|e| match e {
+            Ok(Event::KeyCaught { tag, code, .. }) => Some((tag, code)),
+            _ => None,
+        })
+    };
+    let home = |windows: Vec<u64>| Request::CatchKeys {
+        tag: "home".into(),
+        keys: if windows.is_empty() { Vec::new() } else { vec!["home".into(), "f1".into()] },
+        windows,
+    };
+
+    // Asked on a connection that doesn't listen, nobody would hear it.
+    let mut plain = aizome_ipc::Client::connect_to(&c.ipc).unwrap();
+    assert!(matches!(plain.request(&home(vec![wa.id])).unwrap(), aizome_ipc::Response::Error { .. }));
+    let mut keeper = aizome_ipc::Client::connect_to(&c.ipc).unwrap().events().unwrap();
+    keeper.stream().set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+    let bad = Request::CatchKeys { tag: "home".into(), keys: vec!["no-such-key".into()], windows: vec![wa.id] };
+    assert!(matches!(keeper.request(&bad).unwrap(), aizome_ipc::Response::Error { .. }));
+    assert_eq!(keeper.request(&home(vec![wa.id])).unwrap(), aizome_ipc::Response::Ok);
+
+    // Over the window: Home and F1 come to the keeper alone; other keys,
+    // and Home with Ctrl, are the window's.
+    focus(wa.id, &a);
+    tap("home");
+    assert_eq!(caught(&mut keeper), Some(("home".into(), KEY_HOME)));
+    tap("f1");
+    assert_eq!(caught(&mut keeper), Some(("home".into(), KEY_F1)));
+    tap("a");
+    chord(&c, "ctrl+home");
+    let s = a.wait_seen("Ctrl+Home", |s| s.keys.iter().any(|(k, _)| *k == KEY_HOME));
+    assert!(s.keys.iter().any(|(k, _)| *k == KEY_A), "{:?}", s.keys);
+    assert!(!s.keys.iter().any(|(k, _)| *k == KEY_F1), "F1 was caught: {:?}", s.keys);
+    let homes: Vec<u32> = s.keys.iter().filter(|(k, _)| *k == KEY_HOME).map(|(_, m)| *m).collect();
+    assert_eq!(homes.len(), 1, "Home alone was caught: {:?}", s.keys);
+    assert_ne!(homes[0] & CTRL, 0, "the one that came held Ctrl");
+
+    // Another window with the keys: Home is its own.
+    focus(wb.id, &b);
+    tap("home");
+    b.wait_seen("Home", |s| s.keys.iter().any(|(k, _)| *k == KEY_HOME));
+
+    // Let go: Home is the window's again.
+    focus(wa.id, &a);
+    assert_eq!(keeper.request(&home(Vec::new())).unwrap(), aizome_ipc::Response::Ok);
+    tap("home");
+    a.wait_seen("Home let go", |s| s.keys.iter().filter(|(k, _)| *k == KEY_HOME).count() == 2);
+
+    // The keeper gone (Chanoma quit), nothing is caught.
+    assert_eq!(keeper.request(&home(vec![wa.id])).unwrap(), aizome_ipc::Response::Ok);
+    drop(keeper);
+    c.settle();
+    tap("f1");
+    a.wait_seen("F1", |s| s.keys.iter().any(|(k, _)| *k == KEY_F1));
 }

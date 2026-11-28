@@ -10,6 +10,7 @@ write-up names it.
 | Topic | Write-up | Data | Harness |
 |---|---|---|---|
 | How Aizome is built for speed, with targeted benchmarks | [design.md](design.md) | [data/design](data/design) | [tests/performance/design](../../tests/performance/design) |
+| Idle-update follow-up, 6–7 November 2026 | [design.md §9](design.md#9-idle-updates-november-2026) | [data/design/idle-updates-2026-11-07](data/design/idle-updates-2026-11-07) | [supplemental fixtures](../../tests/performance/design/idle-updates) |
 | Aizome, GNOME and KDE Plasma in a small VM | [desktops.md](desktops.md) | [data/desktops](data/desktops) | [tests/performance/desktops](../../tests/performance/desktops) |
 | Hotaru against Ghostty, GNOME's and KDE's terminals | [terminals.md](terminals.md) | [data/terminals](data/terminals) | [tests/performance/terminals](../../tests/performance/terminals) |
 | Utsushi's energy against mpv and VLC | [media.md](media.md) | [data/media](data/media) | [tests/performance/media](../../tests/performance/media) |
@@ -63,7 +64,13 @@ processor's own sensors:
   a second. Over the same 20 s window PPT gave 69.5 W and RAPL 70.6 W,
   1.5% apart.
 
-## Rules every measurement followed
+## Measurement protocol
+
+The original 2 November measurements followed the protocol below.
+Follow-ups record their dates and exceptions in their write-ups: the
+6 November latency rerun had unrelated background jobs; those jobs were
+stopped for the 7 November energy rerun. Its idle measurements use RAPL
+boundary reads, and report absolute package power.
 
 - One measurement at a time: five tracks of work shared the machine, and
   every measured run held an exclusive lock that also held off builds,
@@ -108,8 +115,10 @@ processor's own sensors:
 - **Hotaru's extra frame of typing latency** is in its own PTY-to-frame
   path, not Sukumo's; the proxy traces recorded in why-toolkits.md's smoke
   runs are the place to start.
-- **Aizome's idle wake-ups:** its shell's polling threads wake about 47
-  times a second and its compositor 7 ([why-desktop.md](why-desktop.md)).
+- **Aizome's remaining idle wake-ups:** settings polling was removed on
+  6 November; the kit window went from 1 to 0 wakeups/s. Service watchers,
+  watchdogs and caret timers remain ([idle-update follow-up](design.md#9-idle-updates-november-2026),
+  [original breakdown](why-desktop.md)).
 - **Aizome's wallpaper** costs its shell 24 MiB for an 8 MiB picture
   ([why-desktop.md](why-desktop.md)).
 - **The kit's font discovery** took 12 of an app's 19 ms to its first

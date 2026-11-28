@@ -20,7 +20,7 @@ Sekka is the source home for the ISO, Genkan installer, Aizome and Tatami deskto
 | `site/` | The sekka.computer website generator |
 | `aizome-site/` | The aizome.computer website generator |
 | `tests/` | Generated-system configuration matrices, integration checks and [performance harnesses](docs/performance/README.md) |
-| `docs/` | Architecture, migration notes, screenshots, historical evidence, [incident records](docs/incidents/README.md), [performance records](docs/performance/README.md), brand, patches sent upstream |
+| `docs/` | Architecture, migration notes, screenshots, historical evidence, [incident records](docs/incidents/README.md), [performance records](docs/performance/README.md), the [implicit state machine catalog](docs/implicit-state-machines.md) and the [state-machine crate evaluation](docs/state-machine-crates.md), brand, patches sent upstream |
 
 The initial import preserves component layouts and separate Cargo workspaces, and Aizome, which joined later, keeps its own workspace in `desktop/aizome` ([migration record](docs/migration.md#aizome)). There are no submodules or remote first-party flake inputs. Sukumo, Aizome's toolkit, is a workspace of its own inside `desktop/aizome` ([Sukumo](#sukumo)). `nix/components.nix` adapts the local components to the existing integration interface; its `calamares` name and the `calamares.*` options are compatibility names, not another source repository.
 
@@ -29,7 +29,9 @@ Sidestep (whose engine and native toolkit Sukumo continues), Upleft, Omperor, up
 ## Discord repository notifications
 
 `nix build .#sekka-discord --no-update-lock-file` builds the standalone Rust
-bot, its embedded Diesel/SQLite migrations, and two user-systemd units. Yuki
+bot, embedded Diesel/SQLite migrations, and the Python security monitor and
+deployer that run beside it under identities of their own.
+`nixosModules.sekka-discord` supplies the hardened system services. Yuki
 accepts signed GitHub webhooks on loopback behind Cloudflare Tunnel and posts
 through Discord REST; no Discord gateway or privileged intents are needed.
 Commands are `setup`, `check`, `smoke`, `run`, and read-only `preview`.
@@ -40,8 +42,10 @@ The dedicated **Yuki (manual)** workflow (`.github/workflows/yuki.yml`) has
 only `workflow_dispatch`: no push, pull-request, schedule, or dependency-change
 trigger. It builds/tests `.#sekka-discord` and smoke-checks the packaged CLI on
 the sandboxed `sekka-builder`, from `main` only, with read-only repository
-permissions and no production credentials. It does not deploy, restart Yuki,
-or publish releases. After this workflow is merged, invoke it when needed:
+permissions and no production credentials. The job itself deploys nothing and
+publishes no releases, but a host with deployment enabled takes each successful
+run as its request to deploy that commit ([Deploying from main](#deploying-from-main)).
+Invoke it after merging a Yuki change:
 
 ```sh
 gh workflow run yuki.yml --ref main
@@ -55,13 +59,78 @@ Mentions are disabled.
 
 ### Durable receipt and delivery behavior
 
-On every start, Yuki opens `~/.local/state/sekka-discord/state.sqlite3`, binds
+On every start, deployed Yuki opens `/var/lib/sekka-discord/state.sqlite3`, binds
 `127.0.0.1:8787`, then starts Events API catch-up. The listener verifies
 `X-Hub-Signature-256` against the exact body, validates the public repository's
 ID/name, and commits the delivery receipt and outbox transaction before HTTP 202.
-Payloads are bounded to 25 MiB. Invalid signatures receive 401; malformed
-payloads receive 400; wrong/private repositories receive 403; uncommitted
-receipts receive 503. The local `/healthz` route is not exposed by the tunnel.
+Payloads are bounded to 25 MiB. Missing, malformed, or duplicate signature
+headers receive 401, bad delivery or event headers 400, and a declared length
+over the bound 413, all without reading the body; a well-formed signature is
+authenticated against the exact bytes, as they are read, before JSON parsing.
+Body reads have a 10-second deadline and requests a 20-second
+deadline. Oversized bodies receive 413; malformed payloads 400; wrong/private
+repositories 403; uncommitted receipts 503. The local `/healthz` route is not
+exposed by the tunnel. Rejections are counted in bounded 60-second journal
+summaries rather than logging attacker-controlled request content. Outbound REST
+responses are limited to 16 MiB; redirects and inherited HTTP proxies are
+disabled.
+
+A body is the only proof of the secret, so the listener has to read one for
+anyone who sends it. Senders it has not verified take none of the workers and
+a stated amount of memory; what they can still cost a signed delivery is listed
+after the bounds:
+
+- Reading a body takes no slot. A sender that stalls holds only the bytes it has
+  sent, until its deadline.
+- Each connection may hold a request head and the first 256 KiB of a body. A
+  head of up to 64 KiB is taken however it arrives. The bound is checked
+  between reads, so a larger head that arrives in large reads can be taken up
+  to just under 128 KiB: 100,224 bytes sent in one write were taken and 118,224
+  were refused with 431, as is a head with more than 100 header fields. Bodies
+  needing more than their 256 KiB draw on one shared allowance of 50 MiB; one
+  that finds it used up receives 503 at once. A delivery under 256 KiB, which
+  is nearly every delivery GitHub sends, is never crowded out by larger ones.
+- The listener holds at most 128 connections, well under the unit's 1,024 file
+  descriptors, and serves one request on each. When all places are taken, a new
+  connection gets one by closing, without an answer, the connection that has
+  gone longest without showing the secret. A connection with no complete
+  request head after 5 seconds is closed, and every connection after 30.
+- The two workers that parse and commit are taken only after the signature
+  verifies. A verified delivery waits for one until its deadline, then receives
+  503; workers still running after an HTTP timeout or disconnect stay counted.
+
+Before a signature verifies, the listener therefore holds at most
+128 × (128 KiB + 256 KiB) + 50 MiB = 98 MiB of heads and bodies for all senders
+together. Verified bodies stay inside the same allowances until they are
+committed. The process's memory runs above what it holds: with 81.5 MiB of
+unverified bodies held on 126 connections it measured about 126 to 146 MiB
+resident, and up to about 200 MiB over runs of abusive connections among
+signed deliveries, the longest 15 minutes, against the unit's limit of
+512 MiB.
+
+The limits that remain:
+
+- A delivery shows the secret only with its last byte, so while it is arriving
+  it gives way like any other connection: once 128 further connections have
+  arrived behind it, it is closed without an answer and nothing is committed.
+  Its sender sees the connection end; caddy and nginx in front of the listener
+  answered 502. Requests that stall at the body hold a place for 10 seconds
+  each, so about 13 of them a second keep every place taken. Past that the
+  rate decides: with 100 arriving a second, all ten signed 2 MiB deliveries
+  that took 2 seconds to arrive were closed, and all ten that took 1 second
+  were taken. Small deliveries written in one piece were all taken, 1,500 of
+  1,500, while 36,000 silent connections a second arrived.
+- More than 128 deliveries at once lose the excess in the same way. Of 128
+  small signed deliveries started together all were taken; of 200, about 140;
+  of 400, about 165.
+- A delivery over 256 KiB can receive 503 while unverified senders have filled
+  the shared 50 MiB, which they must keep refilling every 10 seconds.
+- A process on the host itself can still open connections faster than the
+  listener closes them.
+
+Connections closed for giving way or for sending no request head are counted
+with the rejections, in the one number: the journal does not say which they
+were.
 
 Diesel uses SQLite WAL, full synchronous commits, and an exclusive state-directory
 lock. Receipts are unique by source and source ID; a delivery ID reused with
@@ -138,22 +207,52 @@ also recovered the original message ID from real channel history on restart,
 without reposting. The database passed `PRAGMA integrity_check`; both units were
 enabled/running with `Linger=yes`. These checks did not include a host reboot.
 
-The deployment target is `callen@wx-workstation`, with lingering enabled so its
-user services survive logout and start at boot. Build locally, then copy the
-derivation with `nix copy --derivation --to ssh-ng://wx-workstation <derivation-path>`
-and realise it remotely with `nix-store --realise <derivation-path>`.
-`nix path-info --derivation .#sekka-discord` reports that derivation path.
-The workstation rejects unsigned local binary closures; rebuilding there avoids
-weakening its trusted-key policy. Install the resulting output on the workstation
-with `nix-env --profile ~/.local/lib/sekka-discord/profile --install <package-store-path>`.
-Create `~/.local/lib/sekka-discord/bin` as a symlink to `profile/bin`; the profile
-keeps the executable and dependencies rooted against garbage collection.
-Install both package units from `share/systemd/user/` into
-`~/.config/systemd/user/`, then run `systemctl --user daemon-reload`.
-Build the pinned connector with
-`nix build --inputs-from . nixpkgs#cloudflared --no-link --print-out-paths`, copy
-its signed closure to the workstation, and install it into the separate
-`~/.local/lib/sekka-discord-tunnel/profile` Nix profile.
+The deployment target is `wx-workstation`. The receiver, connector and monitor
+now run as separate system identities `yuki` (UID/GID 980), `yuki-tunnel` (981)
+and `yuki-monitor` (982), with no login shell, Docker group, wheel group, or
+access to the operator home. These IDs must be unused before enabling the module.
+The monitor alone has `systemd-journal` membership. The old operator-owned user
+units are retired; lingering is no longer part of Yuki's deployment.
+
+Configure a NixOS host with the root flake's module and package:
+
+```nix
+{
+  imports = [ inputs.sekka.nixosModules.sekka-discord ];
+  services.sekka-discord = {
+    enable = true;
+    package = inputs.sekka.packages.x86_64-linux.sekka-discord;
+    alertUserId = "869288104790458388";
+    lanNetworks = [ "192.168.1.0/24" ];
+    credentialsDirectory = "/etc/sekka-discord";
+  };
+}
+```
+
+The current workstation keeps a root-owned copy of the module in
+`/etc/nixos/sekka-discord-service.nix`, imported through `sekka-discord-host.nix`,
+and the narrowly filtered package source under `/etc/nixos/yuki/`. This lets its
+existing installed flake build the same package without depending on an operator
+checkout or an unpublished branch. Update that source and module together.
+Build locally, copy the derivation with
+`nix copy --derivation --to ssh-ng://wx-workstation <derivation-path>`, and realise
+it remotely with `nix-store --realise <derivation-path>`. The workstation rejects
+unsigned binary closures; do not weaken the trusted-key policy to deploy.
+
+The hardened services are active now. The complete NixOS generation was built
+and registered with `switch-to-configuration boot`, without switching/restarting
+the running desktop or CI services. Until reboot, the matching service units are
+under `/run/systemd/system`; the system profile roots the permanent generation.
+Do not roll the system profile back to the pre-hardening generation without
+accounting for these services. A host reboot has not been exercised.
+
+Two parts described below were not running on the workstation as of 2026-11-10.
+Its monitor is the build from before `lanNetworks` existed and its unit lists no
+prefixes, so successful SSH logins from the home network are still reported.
+Deployment from `main` is not enabled: the host has no `yuki-deploy` identity,
+deployer unit or profile, and Yuki changes only when root rebuilds it from the
+`/etc/nixos` copies. Both start once those copies are updated to a revision
+that has them and that generation is activated.
 
 The remotely managed Cloudflare tunnel is `yuki-sekka`
 (`d6f32ec8-1638-4ea6-ad54-3090496b2be7`). Its proxied
@@ -168,14 +267,16 @@ signing secret. It subscribes to `create`, `delete`, `discussion`,
 `pull_request`, `pull_request_review`, `pull_request_review_comment`, `push`,
 and `release`.
 
-Create a Discord application/bot and invite it to the Sekka server with the
-`bot` scope and Manage Channels, View Channels, Send Messages, Embed Links and
-Read Message History permissions (permission bitset `85008`). Manage Channels
-is needed for initial channel creation, not normal operation. No Administrator
-permission is required. Do not use a Discord user token.
+Use a Discord bot account, not a Discord user token. Normal operation needs
+View Channels, Send Messages, Embed Links and Read Message History (role bitset
+`84992`). The deployed managed role's former Manage Channels grant was removed
+through the owner's Discord session and verified through the API; Administrator,
+Manage Roles and Manage Webhooks are also absent. `setup` alone needs temporary
+Manage Channels permission if it must create a channel; remove that grant
+afterwards. Existing deployments must keep their pinned notifications channel.
 
-Keep `~/.config/sekka-discord/` mode `0700`. Store these files mode `0600`,
-outside source control and the Nix store:
+Keep `/etc/sekka-discord/` root-owned mode `0700`, with these root-owned files
+mode `0600`, outside source control and the Nix store:
 
 - `bot-token`: Discord bot token.
 - `webhook-secret`: random shared GitHub signing secret, at least 32 bytes.
@@ -184,42 +285,278 @@ outside source control and the Nix store:
   deployment, `SEKKA_ACTIVATED_AT=2026-11-05T02:31:10Z` preserves Yuki's original
   activation across JSON migration; a new database otherwise defaults to now.
 
-Secret paths can be overridden with `DISCORD_TOKEN_FILE` and
-`GITHUB_WEBHOOK_SECRET_FILE`; `SEKKA_STATE_DIR` selects the state directory.
-`SEKKA_LISTEN_ADDR` defaults to `127.0.0.1:8787` and must remain loopback.
-Run these commands on the workstation after supplying the files and configuring
-the tunnel/webhook:
+Systemd `LoadCredential` exposes only each service's required secrets: the bot
+gets the Discord token and webhook secret, the connector only its tunnel token,
+and the monitor only the Discord token. The source credential directory is hidden
+inside every sandbox. The module supplies the runtime paths and loopback binding;
+the standalone CLI retains its home-directory defaults for operator use.
+Neither host ingress ports nor a Discord gateway connection are required.
+
+### Deploying from main
+
+With `services.sekka-discord.deploy.enable`, a host deploys Yuki's package from
+each successful **Yuki (manual)** run on `main` made after it began looking.
+Nothing on GitHub can reach the host for this: the runner keeps its unprivileged
+identity, the workflow its read-only token, and there is no deploy key or host
+credential anywhere. The host pulls instead. `sekka-discord-deploy.timer` runs
+the deployer every three minutes as `yuki-deploy` (UID/GID 983), a fourth
+isolated identity whose own egress is public HTTPS, fixed DNS and the bot's
+loopback health check. Each tick:
+
+1. Asks GitHub's API, with a conditional request, for the latest successful
+   `workflow_dispatch` run of `yuki.yml` on `main`. The run and its source must
+   be this repository, and every job of that run attempt must have succeeded: a
+   job skipped by the workflow's main-only guard is not a build.
+2. Takes that run only if it is newer than every run the host has settled and
+   its commit is the head of `main` or one of its ancestors, as described below.
+3. Builds the run's commit itself, `github:bitemyapp/sekka/<commit>#sekka-discord`,
+   as an untrusted Nix user. The daemon builds or substitutes from its own trusted
+   caches, and the package's tests run as part of the build.
+4. Switches `/var/lib/sekka-discord-deploy/profile` to the result and asks for a
+   restart. `sekka-discord-deploy-restart.path` sees the request arrive and runs
+   `systemctl restart sekka-discord.service` as root; root never reads the request
+   or the profile.
+5. Requires the restarted bot to answer `/healthz` and stay up for ten seconds,
+   and the monitor's first tick on the new package to succeed if its last one did.
+   Otherwise it returns to the package deployed before, or removes the profile
+   when there was none, restarts the bot again, and records that run attempt as
+   failed, never to be retried; re-running the workflow is a new attempt.
+
+The deployer never goes back to an earlier run and does not take a run's word
+for its branch. Its first tick on a host records the latest run that has
+succeeded and deploys nothing: a run that had finished before the host looked
+was not a request to it, and its commit can be far older than the package the
+host already runs. After that a run is deployed only if its number is higher
+than that first one's and than every run deployed since. A run still in
+progress at the first tick has a higher number than the one recorded, so it is
+deployed when it succeeds. Run numbers only grow, so an older run becomes the
+latest only when later runs are deleted, and the deployer refuses it. The commit
+must also be the head of `refs/heads/main` or an ancestor of it, which the
+deployer asks GitHub about by commit: a run dispatched on a tag named `main`
+reports the same branch name and takes its workflow from the tag's commit. Both
+refusals reach the owner as a failed deployment. Another attempt of the run the
+host first recorded is not deployed either; dispatch a new run.
+
+The bot and monitor units run whatever the profile holds, and the host's `package`
+while there is no profile: before the first deployment that passes its checks,
+and again after one that fails them with nothing deployed before. Once a
+deployment has passed, the profile outranks the host's `package`, a newer one
+from a later rebuild included, until the profile link is removed. The connector
+is untouched. Profile generations are garbage-collector roots, the newest five
+are kept, and they survive reboots. The switch is recorded in the deployer's
+private state first, so a deployment interrupted midway is rolled back by the
+next tick rather than trusted. A failed build is retried twice, 15 minutes
+apart. Failed, refused or rolled-back deployments reach the owner as a security
+DM; successful ones are in the journal:
 
 ```sh
-set -a
-. ~/.config/sekka-discord/service.env
-set +a
-~/.local/lib/sekka-discord/bin/sekka-discord setup
-~/.local/lib/sekka-discord/bin/sekka-discord check
-~/.local/lib/sekka-discord/bin/sekka-discord smoke
-systemctl --user enable --now sekka-discord.service sekka-discord-tunnel.service
-journalctl --user -u sekka-discord.service -n 50 --no-pager
+systemctl list-timers sekka-discord-deploy.timer
+journalctl -u sekka-discord-deploy -u sekka-discord-deploy-restart
+readlink -f /var/lib/sekka-discord-deploy/profile
 ```
 
-`setup` creates `#github-notifications` if absent, with explicit community read
-and bot delivery permissions. It does not modify existing channels; ambiguous
-names or inadequate permissions fail rather than choosing silently. Save the
-chosen `DISCORD_CHANNEL_ID` in `service.env` before running the service.
-`smoke` posts a clearly labelled setup-verification message and reads it back;
-it verifies Discord transport, not webhook authentication or startup catch-up.
-Without credentials and destination IDs, leave the unit disabled.
-The bot uses REST only, so its Discord presence need not appear online.
+Whoever can push to `main` chooses the code Yuki runs once a run is dispatched,
+as merging already did; `main` is unprotected, and `bitemyapp` is the only
+collaborator. Whoever can only dispatch workflows deploys the head of `main` and
+nothing else. A deployed commit, or a compromised deployer, runs any code as
+`yuki` and `yuki-monitor` with everything those identities hold: the bot token,
+the webhook secret, read access to the whole system journal, and the monitor
+that would report it. It can restart the bot at will. While building it also has
+network access that the egress policy does not cover: the build goes through the
+Nix daemon, whose fixed-output derivations run as build users on the host's
+network and so reach the LAN and loopback services that Yuki's own identities
+cannot. It gains no root and no Nix trust. Only the package deploys this way: the
+units, sandboxing, egress policy, module options and the deployer itself come
+from the host's configuration and change only when root rebuilds it. A package
+needing a newer module fails its health checks and is rolled back; after
+updating the host's module, run the workflow again, because the failed attempt
+is not retried. Rolling back does not undo SQLite migrations a newer bot
+applied. Polling is unauthenticated: at most 20 requests an hour from the host's
+address, of GitHub's 60, and up to three more for each run it considers.
 
-Both units use private umasks and restart on failure; the connector also
-restarts after a clean exit. Inspect them with `systemctl --user status` and
-`journalctl --user -u sekka-discord.service -u sekka-discord-tunnel.service`.
-After a package or credential change, restart the corresponding unit. Preserve
-the state directory during upgrades. Use SQLite's backup API for live database
-backups rather than copying only the main file while WAL writes are active.
+The deployer is not enabled on wx-workstation yet. To enable it, update the
+module and package copies in `/etc/nixos` to a revision that includes the
+deployer, add `deploy.enable = true;` to `services.sekka-discord` in
+`sekka-discord-host.nix` and activate that generation. Wait for the deployer's
+first tick, which logs `DEPLOY baseline`, and only then dispatch the workflow. A
+run that had already succeeded by then is the one the first tick records, and
+it is never deployed; dispatch another. A run dispatched earlier that is still
+in progress at the first tick is deployed when it succeeds. To go back to the
+host's own package, stop
+`sekka-discord-deploy.timer`, remove the profile link and restart
+`sekka-discord.service`. `checks.sekka-discord-deploy` exercises the first tick,
+deployment, both kinds of rollback, skipped, older and off-`main` runs and a
+reboot in VMs, with stand-ins for the bot, monitor, connector and GitHub's API.
+
+### Host isolation and security alerts
+
+All three long-lived workloads have a read-only system filesystem, hidden home
+directories and privileged sockets, private temporary files/devices, no
+capabilities, no privilege escalation, restricted syscalls/address families,
+hidden other-user processes, and limits of 512 MiB RAM, one CPU, 64 tasks and
+1,024 file descriptors. Only their own state directories are writable persistently.
+The receiver and connector cannot create Unix-domain sockets; the monitor needs
+them for read-only systemd status queries, governed by the system bus policy.
+
+`sekka-discord-firewall.service` installs its own `inet yuki` nftables table
+before the services start. It affects only Yuki's dedicated UIDs, not SSH,
+CI, Docker or other host traffic. Established replies are allowed. New egress:
+
+- Receiver: public IPv4 HTTPS and DNS to `1.1.1.3`; no new loopback, host-address,
+  private/LAN, link-local/metadata, reserved or multicast connections.
+- Connector: only Cloudflare's `198.41.192.0/24` and `198.41.200.0/24` edge
+  addresses on TCP/UDP 7844, fixed DNS, and `127.0.0.1:8787`.
+- Monitor: public IPv4 HTTPS, fixed DNS, and the two local health endpoints.
+- Deployer, when enabled: public IPv4 HTTPS, fixed DNS, and `127.0.0.1:8787`.
+  It also reaches the Nix daemon's socket as an untrusted user.
+- New IPv6 egress is blocked, including globally addressed LAN neighbors;
+  IPv4 remains available. Expected IPv6 fallback failures are counted but not
+  logged as incidents. Other denies produce kernel summaries, rate-limited to
+  five packets/minute with a burst of five. Counts in DMs are observations,
+  not a complete packet audit.
+
+The public tunnel still exposes only the exact webhook path. Even a compromised
+connector or changed remote ingress route cannot connect to host SSH, Docker,
+Nix, LAN services, or unrelated loopback listeners under this policy.
+
+That table can be deleted, and a ruleset flush by other firewall tooling takes it
+too, while the units stay active: `sekka-discord-firewall.service` only records
+that it once loaded it. So each unit also carries `IPAddressDeny=` for the same
+private, shared-address, link-local, reserved and multicast IPv4 ranges and for
+all of IPv6. systemd enforces it in the unit's own control group, on packets in
+both directions, and no change to the tables reaches it. The two layers do not
+enforce the same things:
+
+- The LAN, other private IPv4 destinations and IPv6 are refused by both.
+- Loopback and the host's own public addresses are refused by the table alone.
+  The unit filter leaves loopback open, because the units reach each other there.
+- Ports, the fixed resolver and which identity may reach which public address
+  are the table's alone. Without it the connector, for one, can reach any public
+  address on any port.
+- The table applies to Yuki's identities wherever they run; the unit filter
+  applies to what runs inside the units. Builds that the deployer asks of the Nix
+  daemon run under neither, as described under [Deploying from main](#deploying-from-main).
+- The table refuses at once and logs; the unit filter drops in silence, so a
+  connection it stops times out and no denied-egress alert follows.
+
+After activating a generation that has the unit filter, check that it took
+effect. `systemctl show -p IPAddressDeny sekka-discord.service` lists the ranges
+whether or not they are enforced; systemd starts a unit without the filter, with
+one warning in the journal that the system does not support BPF/cgroup
+firewalling, when the kernel or control-group setup cannot attach it. With
+`bpftool`, `sudo bpftool cgroup show /sys/fs/cgroup/system.slice/sekka-discord.service`
+shows the ingress and egress programs. Then confirm that a webhook still reaches
+Discord, that `systemctl status sekka-discord-tunnel` shows registered
+connections and that the monitor's next tick succeeds: they prove the resolver,
+Discord, GitHub and Cloudflare's edge are still within reach.
+`checks.sekka-discord-deploy` proves both directions in a VM, from inside the
+units, with the table present and after `nft delete table inet yuki`.
+
+`sekka-discord-monitor.timer` invokes the monitor roughly every 60 seconds. It
+runs apart from the receiver, as its own process, identity and state.
+`DISCORD_ALERT_USER_ID` is explicitly pinned to the application owner,
+`bitemyapp` (`869288104790458388`); it is not inferred from incoming events.
+It sends **DMs** with Yuki's bot token, the same one the receiver holds, never
+security reports to the public notifications channel. It reports:
+
+- Bot/tunnel inactivity, failed loopback health/readiness checks and automatic
+  restarts.
+- Rejected webhooks, denied egress, SSH authentication failures/successes and
+  sudo activity. Successful SSH logins from `lanNetworks` prefixes are not
+  reported; failures from them still are. Loopback logins are always reported,
+  because a Cloudflare connector forwarding SSH arrives from loopback, as are
+  origins sshd logs as host names. IPv6 LAN peers have global addresses: list the
+  delegated prefix too if they connect over IPv6, and expect reports to resume
+  if the ISP changes it.
+- Catch-up/dispatch errors and unresolved Discord sends.
+- Failed, refused or rolled-back deployments.
+- Less than 512 MiB or 5% free space on the state filesystem.
+- Journal coverage failures, retention gaps and collection backlogs.
+
+Private atomic state under `/var/lib/sekka-discord-monitor` preserves alert
+deduplication, retries and Discord rate-limit waits. Incident transitions are
+sent promptly; ongoing observations are aggregated with a 15-minute cooldown.
+Recovery checks send `RECOVERED`; security observations become `QUIET` after
+five minutes without new observations, explicitly **not** proof of remediation.
+Pending uncertain sends use a stable nonce and bounded DM-history reconciliation.
+If the history window cannot establish safety, the monitor retains the alert
+and reports the problem locally instead of blindly reposting.
+
+Each tick reads at most 1 MiB/1,000 journal records, persists a cursor, and
+catches up across ticks. DMs contain fixed summaries and counts, no raw journal
+messages, request bodies, usernames, addresses, commands or credentials; mentions
+are disabled. Local journal inspection supplies incident detail.
+
+```sh
+systemctl status sekka-discord sekka-discord-tunnel
+systemctl list-timers sekka-discord-monitor.timer
+sudo journalctl -u sekka-discord -u sekka-discord-tunnel -u sekka-discord-monitor
+sudo systemctl start sekka-discord-monitor.service
+```
+
+The packaged `sekka-discord-monitor --smoke` sends a labelled real verification
+DM and reads it back without changing monitoring state. Run it with the monitor
+identity, its three configured environment variables, and its loaded credential,
+not by making the root-owned source token readable to the operator account.
+The bot's separate `smoke` command posts to the public notifications channel.
+Neither smoke command certifies all monitoring checks.
+
+Preserve `/var/lib/sekka-discord` during upgrades. Use SQLite's backup API for
+live backups; copying only the main file while WAL writes are active loses data.
+During ownership migration, stop the old writer, take the final backup, **close
+both SQLite connections**, then set ownership before starting the new writer.
+A Python connection context manager commits/rolls back but does not close the
+connection; leaving root-owned WAL/SHM files open makes the new UID's database
+read-only. Root-only pre-cutover backups, the retired user credentials/state,
+and retired unit files are under `/var/backups/sekka-discord/`.
 Read-only SQL diagnostics include `SELECT state, COUNT(*) FROM notifications
 GROUP BY state;` and `SELECT source, delivery_id, notification_key FROM receipts;`.
-The tunnel's metrics endpoint is loopback-only at `127.0.0.1:20241`.
-Release publication settings are unrelated and remain unchanged.
+The connector's metrics/readiness endpoint remains `127.0.0.1:20241`.
+
+This is process isolation on a shared kernel, not a VM boundary or proof against
+kernel exploits. The receiver and monitor can still send public IPv4 HTTPS and
+must possess the bot token; a compromise can abuse that token's remaining Discord
+permissions or exfiltrate to an external HTTPS service.
+
+The monitor is separate from the receiver in process, identity and state, and
+not in credential: both hold the one bot token. A compromised receiver could
+therefore send the owner DMs that read like the monitor's, delete the DMs the
+monitor has sent, and end their delivery altogether, for instance by taking the
+bot out of the community server it shares with the owner, after which Discord
+refuses the monitor's DMs and its ticks fail with nobody told. It could also
+keep the monitor's journal reading behind by logging more than 1,000 records a
+tick, which reaches the owner only as a repeated collection-backlog DM. A
+second Discord application for the monitor would take the first three away; it
+has not been created. Apart from a compromise, the monitor cannot deliver while
+the host, monitor, network or Discord itself is unavailable. An off-host
+dead-man/uptime check is needed to cover that failure class. Journal access
+does not constitute a complete host intrusion detection system. Release
+publication remains inhibited and unchanged.
+
+Hardening verification on 2026-11-05:
+
+- Local and workstation package builds passed 39 Rust and 30 Python monitor tests.
+- A real sandboxed probe denied operator-home/credential access, Docker/Nix/systemd
+  sockets, host SSH/LLM ports, LAN/metadata destinations, IPv6 and system writes,
+  while real Discord and public GitHub HTTPS requests succeeded.
+- The first migration hit the open SQLite-backup ownership issue described above
+  and automatically restored the old service after about 20 seconds. The corrected
+  cutover took 96 ms; 20 ms health sampling observed three failed samples spanning
+  41 ms. An overlapping hardened connector kept the tunnel connected. GitHub's
+  delivery history showed no failed deliveries in the migration window.
+- An unsigned request declaring a 1 MiB body received 401 before sending its body
+  in 0.21 ms. Public signed ping `779efccd-ee90-4398-a65b-be58cce3f878` and its replay
+  both received 202, with one durable receipt. Public root and `/healthz` stayed 404.
+- Genuine post-cutover GitHub push `2de3abac-d8e3-11f1-8bbb-04f6d789f28b` received
+  202 and reached Discord as `1567789595712823297`, verified by read-back.
+  SQLite passed `PRAGMA integrity_check`.
+- Verification DM `1567788208085934213`, observed denied-egress/SSH alert
+  `1567789450443096117`, webhook-rejection alert `1567790214435446835`, and subsequent
+  quiet transitions were read back from the owner's DM. A transient journal backlog
+  was reported, caught up, and recovered without resetting its cursor.
+- Bot and connector were active with zero automatic restarts after the successful
+  cutover; the independent timer completed successful ticks. The persistent boot
+  generation is registered, but no host reboot or VM escape test was performed.
 
 ## Build and check
 
@@ -249,6 +586,17 @@ nix build .#iso --no-update-lock-file --out-link result-iso
 ```
 
 The ISO is under `result-iso/iso/`. `nix build .#installed-lock` exposes the lock shipped to the installed machine. `nix fmt` formats Nix files supplied to it.
+
+### Aizome media defaults
+
+Aizome's audio/video MIME defaults come from Utsushi's desktop entry, so
+adding a supported format cannot leave it assigned to another player by
+accident. `nix build .#checks.x86_64-linux.aizome-media-defaults` compares the
+live and standalone Aizome module's generated list, resolves every advertised
+format with isolated XDG directories, checks user overrides and another
+desktop's defaults, and dispatches video/music paths through `xdg-open` to
+test launch recorders. It is a configuration and dispatch check, not playback
+or ISO qualification.
 
 ### Googlebook live media
 
@@ -347,6 +695,20 @@ cargo test --locked --manifest-path rust/Cargo.toml
 
 Do not merge unrelated Cargo workspaces or broaden package source filters as part of routine edits. Preserve Genkan, Yukimi and Kakehashi's unprivileged GUI/privileged helper boundaries. Keep slow I/O off the interface thread.
 
+Before changing code that keeps state across events, look it up in the
+[implicit state machine catalog](docs/implicit-state-machines.md). Its index
+lists every machine found by an audit of every in-scope first-party file at
+`8e0acbe5`, and the machines rated High have entries with their states,
+transitions and hazards. Its suspected bugs on High machines were reproduced
+with tests ([suspected bugs](docs/implicit-state-machines/reproductions.md));
+the rest are leads. When a change reifies, removes or reshapes a machine,
+update its follow-up status in the index, and its entry if it has one. Reify
+a machine as hand-written
+typestate, following the design rules in the
+[state-machine crate evaluation](docs/state-machine-crates.md): states hold only
+their own data and borrow the shared context, instance checks take a proof
+value, and the typed transitions are the only way to change state.
+
 The retained VM tooling is available through `nix build .#tools`. Run `result/bin/respin-tools qemu-test --help` for its firmware, storage, desktop, and application options. The Genkan fixture now builds from `installer/genkan/tests/vm-fixture`, not a remote installer revision. The rootless builder's static guest tools require the Rust musl target. The older reports in `TESTING.md`, `installer/genkan/RUST-TESTING.md`, and `docs/test-results/` describe their named predecessor revisions only.
 
 BIOS fixtures keep PCI memory windows below 4 GiB with SeaBIOS's
@@ -382,7 +744,7 @@ image is an implementation input; build and publish `.#iso`.
 
 ```sh
 nix build .#genkan.helper .#checks.x86_64-linux.genkan-preflight \
-  .#checks.x86_64-linux.iso-store-integrity --no-update-lock-file
+  .#iso-checks.store-integrity --no-update-lock-file
 ```
 
 The preflight regression uses the packaged helper and Determinate Nix in a
@@ -419,7 +781,7 @@ when GNOME is also chosen. Without that system an installation compiled them:
 for one choosing Aizome and GNOME, Genkan expected to fetch 1434 MiB
 (unpacked), most of it rustc and cargo; with it, 16 MiB
 ([record](docs/test-results/several-desktops-media.json)). The cache's
-`installed-systems` uses the same reference list. `nix build .#checks.x86_64-linux.iso-desktop-references`
+`installed-systems` uses the same reference list. `nix build .#iso-checks.desktop-references`
 compares that evaluated list with the actual GUI's `Desktop::ALL` inventory
 and checks that each reference system and path list is included in the ISO
 configuration. This is a packaging check; qualification still boots and
@@ -436,9 +798,9 @@ The live image's copy-to-RAM path checks available memory against the media size
 plus 4 GiB for the desktop and installer. It keeps the original media mounted
 until the copy is complete and preserves it on copy failure. A fallback boots
 from the media, and Genkan warns when it opens to keep the USB drive or DVD
-connected. `nix build .#checks.x86_64-linux.iso-copytoram` tests insufficient
+connected. `nix build .#iso-checks.copytoram` tests insufficient
 memory, a real read error, and a successful switch to RAM in a disposable VM;
-`nix build .#checks.x86_64-linux.iso-copytoram-initrd` separately unpacks the
+`nix build .#iso-checks.copytoram-initrd` separately unpacks the
 actual installer initrd and runs its copy-to-RAM entrypoint and runtime tools
 inside that filesystem. Initrd generation does not follow references inside
 shell scripts, so both the helper and its runtime inputs must be included.
@@ -542,13 +904,15 @@ the later forwarding/latch changes responsible for this observed regression.
 Regression checks:
 
 ```sh
-nix build .#checks.x86_64-linux.aizome-ibus-policy \
+nix build .#checks.x86_64-linux.aizome-ibus-policy{,-alone,-coexist,-gnome,-xfce,-disabled,-custom,-without-aizome,-plasma,-hyprland,-tatami} \
   .#checks.x86_64-linux.ibus-wayland-serial \
   .#checks.x86_64-linux.aizome-ibus --no-update-lock-file
 ```
 
-The policy check evaluates complete system derivations for desktop combinations,
-disabled IBus and custom panels, including the scope of the dconf default.
+The policy check covers desktop combinations, disabled IBus and custom panels,
+including the scope of the dconf default; one `aizome-ibus-policy-*` check per
+system evaluates its complete system derivations, separately so that CI
+evaluates them in parallel.
 The serial check compiles the actual registry callback before and after its
 patch; its negative control must reproduce the unrelated-global serial reset.
 The component VM exercises real Hangul preedit, editing, spaces, digits and
@@ -1026,6 +1390,17 @@ between changes. Don't describe it as untested on hardware.
 `nix build .#checks.x86_64-linux.displays-cursor-vm` opens the Displays window
 with `tatami display`, as the bar's icon does, and checks that the cursor stays
 where it was.
+`nix build .#checks.x86_64-linux.tatami-aizome-displays` logs in to Aizome and
+then to Tatami on a system with both, with two monitors on one virtio GPU told
+apart by their EDID names. It checks that a display turned, scaled and placed
+in Aizome's settings comes up the same way in Tatami, through a reload and a
+change of those settings; that settings applied in Tatami then win and last
+through a new login, with Aizome's unchanged; and that a display unplugged
+while the display watcher is stopped loses its rule when the watcher starts.
+It cannot connect a display (a virtio head comes back without its EDID), and
+the recovery policy leaves `Virtual-` connectors alone, so a display connected
+mid-session and recovery with Aizome's settings are not covered. This
+component test does not qualify an ISO.
 
 Displays fits its floating window inside the logical workspace, excluding the
 bar's reserved space, when opened and after monitor layout or scale changes.
@@ -1069,20 +1444,113 @@ real PipeWire and wf-recorder, single-source/no-audio recording, cancellation,
 startup failure, interrupted processes and recovery. The component fixture
 supplies the capture rectangle; it does not qualify the exact ISO's GUI journey.
 
-`nix/installed-lock.nix` extends that external lock with Sekka itself. A clean Git build pins its commit and source hash; a dirty development build pins the exact source copied into the Nix store. The source is included on the ISO. The installed flake follows `github:bitemyapp/sekka/nightly` for subsequent updates, and every other input follows Sekka's own (`inputs.nixpkgs.follows = "sekka/nixpkgs"`, and likewise `determinate`, `fh`, `applications`, `ai-apps` and `omp`). Sekka's `superluminal`, `tracy` and `uta` inputs are the exception: only Sekka's own outputs use them, as catalog packages (`nix/components.nix`), so the installed flake doesn't name them and they stay locked beneath Sekka, where updating it moves them just the same. Updating Sekka therefore moves them together, and only to revisions the nightly workflow has checked and confirmed a fresh system downloads entirely: it moves `nightly` only then, so nothing upstream publishes reaches an installed system untested, and no update compiles. The exception is an unfree application such as Superluminal: Sekka's binary cache carries only free ones, so updates download it from its maker and build its small wrapper on the machine. The `tracy` input is bitemyapp's fork of Quince-Pie's flake, which nothing updates on its own: the nightly signs and publishes Tracy's build, so only upstream changes reviewed and pushed to the fork reach it. The `uta` input names its revision, so the nightly's input update never moves it: Sekka builds Uta against its own Aizome (`nix/uta.nix`), so a new Uta is a change to `flake.nix`, built with the Aizome it will run with.
+`nix/installed-lock.nix` extends that external lock with Sekka itself. A clean Git build pins its commit and source hash; a dirty development build pins the exact source copied into the Nix store. The source is included on the ISO. The installed flake follows `git+https://github.com/bitemyapp/sekka?ref=nightly&shallow=1` for subsequent updates: Nix keeps that one-commit clone (`~/.cache/nix/gitv3` of each account that fetches; which do is described below), so each update downloads only the objects that changed, where a `github:` address downloaded a tarball of the whole tree every time (GitHub generated the 344 MB tarball at about 450 KB/s when measured on 2026-11-07). The content hash is the same either way, so the ISO's source still serves the first build. Nix runs Git for that fetch and passes Git's progress on to Yukimi; only installations with a developer application have Git, so the helper's PATH ends with a `gitMinimal` of its own (`YUKIMI_HELPER_PATH`, set by `apps/yukimi/nix/helper.nix`). Without Git, Nix falls back to libgit2, which reports no progress and logs `executing "git"` errors. Every other input follows Sekka's own (`inputs.nixpkgs.follows = "sekka/nixpkgs"`, and likewise `determinate`, `fh`, `applications`, `ai-apps` and `omp`). Sekka's `superluminal`, `tracy` and `uta` inputs are the exception: only Sekka's own outputs use them, as catalog packages (`nix/components.nix`), so the installed flake doesn't name them and they stay locked beneath Sekka, where updating it moves them just the same. Updating Sekka therefore moves them together, and only to revisions the nightly workflow has checked and confirmed a fresh system downloads entirely: it moves `nightly` only then, so nothing upstream publishes reaches an installed system untested, and no update compiles. The exception is an unfree application whose licence forbids redistributing it, such as Superluminal: Sekka's binary cache carries only applications anyone may redistribute, so updates download it from its maker and build its small wrapper on the machine. The `tracy` input is bitemyapp's fork of Quince-Pie's flake, which nothing updates on its own: the nightly signs and publishes Tracy's build, so only upstream changes reviewed and pushed to the fork reach it. The `uta` input names its revision, so the nightly's input update never moves it: Sekka builds Uta against its own Aizome (`nix/uta.nix`), so a new Uta is a change to `flake.nix`, built with the Aizome it will run with.
 
 Update the distro through **Yukimi → Updates → Update** or `sekka-update`.
-Both use the privileged helper transaction: recognize/migrate the flake,
+The GUI checks flake updates before requesting administrator access. It copies
+the source Nix actually sees to a private temporary directory, preserving Git
+revision metadata, tracked-file selection and the repository layout around
+subdirectory flakes. It borrows Git objects read-only with an independent
+index and no checkout or hooks. It applies the requested migration/branch
+and input changes there, and evaluates a Nix dry
+run with import-from-derivation disabled. Evaluation failures stop the update
+and display Nix's diagnostic without writing the installed configuration.
+Snapshot, migration and update fetches stream Nix's structured activities and
+Git's carriage-return progress to the GUI while the commands run. The helper
+also retains stderr for diagnostics; only the dry-run command uses plain logs,
+whose build-plan headings the check reads before classifying derivations.
+Uncached package builds are named in a separate confirmation: they are
+unverified, not necessarily incompatible. This would flag an uncached
+cargo-geiger before attempting its build, but cannot predict its compiler or
+native-library errors. Generated configuration derivations marked
+`preferLocalBuild` and fixed-output downloads do not trigger that warning.
+The check uses the user's configured caches; a cache introduced by the update
+may therefore cause a conservative warning until the root build reads it.
+
+Proceeding uses the exact checked lock stored in Nix, with root independently
+validating the permitted input changes and rejecting a configuration changed
+since the check, including a new Git revision with identical files. It does
+not refresh the inputs again after confirmation.
+Cancellation, evaluation errors and unreadable results never start the root
+update. Source downloads and Nix store writes are possible during the check;
+package builds, profile changes and activation are not. This GUI preflight
+covers Sekka updates, other flake inputs, Early updates and branch changes.
+Channel-based systems and direct `sekka-update` retain their existing flow.
+For a read-only command-line check use `yukimi-helper preflight --sekka`
+(or `--update input`), without sudo. A successful check is not a guarantee
+that later compilation, downloading or activation will succeed.
+`nix build .#checks.x86_64-linux.yukimi-preflight` runs real Nix and the
+packaged helper in disposable namespaces with private stores and sentinel
+builders; it checks warnings, evaluation errors, Git revisions and worktrees,
+sibling imports, stale sources and lock validation. These are component
+tests, not ISO installation qualification.
+
+The GUI and CLI use the privileged helper transaction: recognize/migrate the flake,
 back up the configuration, update the selected inputs, and build the host once.
-A flake following Sekka's `main` (or its default branch) is moved to
+A flake at the installer's original `github:` address for Sekka's `main`
+(or its default branch) is moved to
 `nightly`, and each of the other inputs still at the address Sekka's
 installations have used is made to follow Sekka's (`yukimi_config::sekka`).
-Early updates are the exception: `github:bitemyapp/sekka?ref=main`, written
+Early updates are the exception: `git+https://github.com/bitemyapp/sekka?ref=main&shallow=1`, written
 only when chosen (Early updates in Aizome's Yukimi, `sekka-update --early`,
 or the helper's `--follow sekka=main`), stays, so the system gets every change
 as soon as it's merged, before the nightly checks; whatever the binary cache
 doesn't have yet builds on the machine. `--nightly` (`--follow sekka=nightly`)
-goes back.
+goes back. Git addresses following `main` are recognized as early updates
+with or without `shallow=1` and regardless of query parameter order.
+The known default, nightly and early-update `github:` addresses move to Git
+(`sekka::fetched_with_git`). Custom refs, pins and addresses with additional
+settings stay unchanged: a GitHub ref can be a tag or pull-request ref,
+where an unqualified Git ref would instead name a branch. Existing Git
+addresses also stay unchanged, and update checks retain their own targets.
+The check runs as the person at the desktop, and root repeats it before
+accepting the lock it proposed, each with a Git cache of its own. When the
+request changes an input's address (Sekka's move to Git, early updates on or
+off, another branch for any input), the old lock entry no longer answers it,
+and Nix fetches the input to lock the new address. The check needs that
+answer. Root doesn't use it: `lock::check_update` asks only that an updated
+input comes from the address root's own lock gives it. Root's copy therefore
+starts from the checked lock's entries for the updated inputs
+(`lock::with_checked_sources`, through `Candidate::prepare_to_judge`). Nix
+keeps an entry that is for the address root's own flake names, and fetches
+nothing. It replaces an entry for any other address by locking the input
+itself, and `check_update` then refuses the checked lock as before. Only an
+entry's `original` and `locked` are taken, and only for inputs being updated.
+A legacy flake that gains its `sekka` input in the same update has no entry
+to start from, so root still fetches there.
+Root's build needs the source of each commit the check found, and Nix doesn't
+always leave a fetched source in the store. With `lazy-trees = true`, which
+Determinate Nix sets on Sekka's installations (both machines checked have
+it), and in nixpkgs' Nix (2.35.6 when measured), it stays in the fetching
+account's Git or tarball cache, and root fetched the checked commit itself
+when it built, on every update through Yukimi. The check therefore ends by
+putting each updated input's source in the store (`preflight::keep_sources`):
+Nix names the locked address (`builtins.flakeRefToString`), and
+`nix flake prefetch` copies it from that account's cache with nothing more to
+download. Root's Nix then uses the copy. For Sekka this is one more copy of
+its tree in the store with each update: 299 MB in 0.6 s on wx-workstation.
+Only inputs with a lock entry of their own are kept. The inputs that follow
+Sekka's (`nixpkgs` and the rest) move with it and aren't, so root fetches
+what it needs of them as before. An input that can't be kept is left for
+root to fetch. `YUKIMI_TEST_NIX_CONF='lazy-trees = true'` runs
+`tests/test_yukimi_preflight.py` as an installation's Determinate Nix
+behaves; the flake's check runs nixpkgs' Nix.
+The migration reads Nix attribute paths and literal strings through `rnix`,
+then parses flake URLs with `fluent-uri` (RFC 3986) and Nix's ref/revision
+rules. It reconstructs changed URLs with the URI builder and writes only the
+affected Nix syntax nodes. Branch switching and update-target selection use
+the same parser; percent encoding, literal `+`, duplicate query keys and
+commit pins have the same meaning across these operations. The offline
+`reconstruction_agrees_with_nix` test compares reconstructed URLs with
+`builtins.parseFlakeRef`; run it explicitly with
+`cargo test --locked --manifest-path apps/yukimi/Cargo.toml -p yukimi-config reconstruction_agrees_with_nix -- --ignored`.
+Lock-file descriptions, GitHub links/API requests and FlakeHub release URLs
+use the same URI component encoders. Branch controls read the lock's `ref`
+directly; update-cache identities serialize source metadata rather than
+reusing visible labels, so a changed pin invalidates the previous answer.
+When GitHub can't be asked about a Git source (its hourly limit, say), the
+check keeps GitHub's answer instead of locking it anew with Nix, which would
+clone the repository into the user's own cache.
 One given an address of one's own keeps it, and Sekka follows it; that
 system may then build Sekka's packages itself. The build passes the binary
 caches the new configuration names (as root, so the daemon accepts them), so
@@ -1131,17 +1599,85 @@ previous version.
 The system's own choices travel with an update or go alone: the Nix module
 declares which settings of the main configuration file Yukimi may write, and
 to which values (`programs.yukimi.choices`, listed in `/etc/yukimi/system.json`;
-Sekka declares `calamares.desktops`, `calamares.defaultDesktop` and
-`calamares.loginScreen` in `installer/genkan/rust/system/desktops.nix`, and
-`calamares.bootSplash.enable` in `installer/genkan/rust/system/boot-splash/`).
+Sekka declares `calamares.desktops`, `calamares.defaultDesktop`,
+`calamares.loginScreen` and `calamares.autoLogin` in
+`installer/genkan/rust/system/desktops.nix`, and `calamares.bootSplash.enable`
+in `installer/genkan/rust/system/boot-splash/`).
 `yukimi-helper change --choose SETTING=VALUE[,VALUE]` (and `sekka-update
 --choose`) refuses any other setting or value, writes a string, a list of
 strings or a boolean as declared (a `boolean` choice's options are `true` and
-`false`, given as strings so older readers of `system.json` still parse it),
-and builds once with the rest of the change, so choosing
+`false`, given as strings so older readers of `system.json` still parse it).
+A `people` choice (`calamares.autoLogin`, who logs in by themselves) takes no
+value for no one, written as `""`, or a name the helper checks against
+`/etc/passwd` as it writes it: an account from uid 1000 to 59999 with a login
+shell, so people added in Settei after installing count. It also reads
+`/etc/shadow` and refuses an account that can't open a session with nobody
+asked anything, by pam_unix's account rules (`check_shadow_expiry`): an
+expired account, or a password that has to be set at the next login (a
+person added without one) or changed (`chage -d 0`, or one as old as the
+account's maximum, from that day on; one with no last change doesn't age).
+It refuses a locked password too (`!` before a hash: `passwd -l`, and
+AccountsService's `SetLocked`), though PAM's account check passes it and an
+automatic login would open that session: an account locked after it was
+chosen still logs in by itself. A bare `!`, as NixOS writes an account
+declared without a password, is taken. The helper builds
+once with the rest of the change, so choosing
 Aizome's login screen is a click and a password, with the same switch-or-boot
 planning and Restart button as an update. A changed login screen always stages
 for the next start.
+`calamares.autoLogin` defaults to `null`, preserving an existing
+`services.displayManager.autoLogin` configuration. Its choice reports the
+effective display-manager setting. Selecting a person or no one explicitly
+overrides ordinary definitions of that setting (priority 90), including
+disabling an existing automatic login; `mkForce` policy still wins.
+Settei offers only the accounts the helper takes (local, uid 1000 to 59999,
+a `useradd`-style name, a login shell; an empty shell field is `/bin/sh`;
+with no password still to set, naming whoever that leaves out;
+AccountsService's `Locked` is also true of an account declared without a
+password, so a locked or expired one is left to the helper to refuse), and
+re-reads `system.json` every two seconds while a proposal waits in Yukimi.
+It doesn't remove the person the choice names: the remove sheet offers to
+turn automatic login off in Yukimi first, and removes them once the next
+start's choice no longer names them. It reads the choice again when Remove
+is pressed, so one applied in Yukimi while the pane stayed open counts.
+On Aizome's login screen the choice is greetd's initial session
+(`desktop/aizome/nix/greeter.nix`). greetd exits with status 1 when that
+session can't start, before it notes its first run. So whenever greetd has
+an initial session (from this choice, from
+`services.displayManager.autoLogin`, or set as greetd's own
+`settings.initial_session`), the unit marks greetd's run file whenever
+greetd stops and restarts it after that exit (and after a clean one, as
+NixOS does without an initial session): the login screen comes up instead,
+and no restart logs anyone in again. Those units also stop after five starts
+in three minutes (the greeter waits up to 20 s for its compositor before it
+gives up), so a greeter that can't start leaves the unit failed and a text
+console usable, where restarting without end would take the console back
+each time. The live image's greetd unit is one of them: it logs in by
+itself. A unit without an initial session is as NixOS makes it.
+`checks.x86_64-linux.aizome-automatic-login` boots the fallback: an account
+that is gone, one that has to set a password, then one that can log in.
+The other two login screens show themselves for some of these and not for
+others. GDM does only for an account that is gone: for one that has expired
+or has a password to set or change, its automatic login fails and no login
+screen follows. Plasma Login does for one that is gone or has expired, and
+for a password to set where there is none; where a password exists and has
+to be changed, its automatic login waits for the old one, which nobody is
+asked for, and no login screen follows either. So each of their units'
+`preStart` (`installer/genkan/rust/system/desktops.nix`, `canLogInByItself`)
+reads `/etc/shadow` by the helper's account rules and, for such an account,
+turns automatic login off for that start: in GDM's runtime configuration
+(`gdm-runtime-config`, `/run/gdm/custom.conf`), and for Plasma Login, which
+reads no settings from `/run`, through the last of its drop-ins
+(`/etc/plasmalogin.conf.d/zz-this-start.conf`, a link to
+`/run/plasmalogin-this-start.conf`). Keep that script and
+`yukimi_system::people::blocked` alike. No check boots GDM or Plasma Login
+this way; they were run in disposable VMs. On standalone
+Aizome, Settei queries the active greetd service through systemd and reads
+the configuration named by its `ExecStart` arguments, including NixOS's
+store path. Under greetd, and on NixOS under any login screen (NixOS writes
+GDM's `custom.conf` read-only, and SDDM and Plasma Login never read
+AccountsService), it shows the setting as controlled by the configuration;
+only other systems use AccountsService's flag.
 `sekka-update --boot` explicitly
 stages the update; `--switch` requests live activation but refuses an unsafe
 transition before committing configuration edits. A target-side NixOS
@@ -1216,7 +1752,7 @@ changing the host desktop.
 helper in a rootless bubblewrap namespace. It covers migration, repeat updates,
 following Sekka and the new system's caches, a Nixpkgs of the system's own,
 early updates and the system's declared choices (and refusing undeclared
-ones), refusing to start without room, failed builds, cancellation, concurrent operations, closed progress pipes, unsafe
+ones), who logs in automatically (and refusing someone whose account can't), refusing to start without room, failed builds, cancellation, concurrent operations, closed progress pipes, unsafe
 explicit switches and rollbacks, and UWSM session identity. Nix and
 systemd actions are stubbed; also evaluate/build a copy of the installed host
 flake to check actual module and dependency compatibility before deployment.
@@ -1279,9 +1815,10 @@ it, twice in the week before the cache was added. Three limits:
   give the store path the cache has; other `cudaCapabilities`, or an overlay
   under the package, give one it doesn't.
 - Nothing promises a build is there by the time a nightly locks its Nixpkgs.
-  The reference systems refuse unfree packages, so
+  The reference systems have no CUDA build, so
   `scripts/check_cache_coverage.py` neither lists this cache nor covers what
-  it serves; a build it lacks compiles as before.
+  it serves; a build it lacks compiles as before. (NVIDIA's driver itself
+  isn't a CUDA build: Sekka's cache publishes it.)
 - Its key is trusted for any path the earlier caches lack, as numtide's is.
   `?priority=60` makes Nix ask it last (its `nix-cache-info` says 50, as
   Sekka's does).
@@ -1301,27 +1838,58 @@ nix run .#push-cache
 
 It builds `genkan`, `tatami`, `displays`, `wallpapers`, `yukimi`, `kakehashi`, `uta`,
 `uta.source` (Uta's GPL-3.0-only build's sources, published beside it),
-`aquamarine`, `hyprland`, `cargo-geiger`, `tools` and `installed-systems`, and signs their
-complete runtime closures into a temporary local cache: Nix only adds a path to
-a binary cache that already holds its references. `installed-systems` is an
+`aquamarine`, `hyprland`, `cargo-geiger`, `tools` and `installed-systems`, then
+checks their runtime closures against the upstream caches and Sekka's cache
+before creating any archives. `installed-systems` is an
 installed system for each desktop the media offers (`respin.referenceDesktops`),
-one with all of those desktops together, and one with every free catalog
-application, so everything Sekka's modules
+one with all of those desktops together, one with every catalog
+application anyone may redistribute, and one with NVIDIA's driver for each
+kernel Genkan offers (latest and LTS). Each has what
+`templates/flake.nix.in` adds to every installed system beside Sekka's
+modules (FlakeHub's `fh`). So everything Sekka's modules
 change and every application one can choose is covered without a list to
 keep up:
 Hyprland and what uses its patched Hyprtoolkit (hyprlauncher among them),
-Elephant, the wallpapers. It then uploads just the paths that none of
-cache.nixos.org, Determinate's cache and numtide's cache serve (about 0.8 GiB),
-archives before the narinfos that point to them, and skips objects already in
-the bucket. Determinate Nixd is left to Determinate. Clients substitute each
+Elephant, the wallpapers, `fh`. Only paths absent from cache.nixos.org, Determinate's
+cache, numtide's cache and Sekka's cache are exported and compressed. Existing
+Sekka archives are checked for availability and advertised size; missing or
+truncated archives are staged again. A published path that differs from the
+local build (one that is not reproducible) stays as published, with a note.
+Cache-query failures stop preparation.
+`scripts/prepare_cache.py` streams each missing path's canonical NAR through
+zstd, checks its hash and size against the local store, and uses Nix to sign
+the resulting narinfo. It stages no archives for a fully cached closure.
+All staged archives are uploaded before any of their narinfos, without listing
+the whole bucket. Determinate Nixd remains excluded: its exact derivation can
+assemble it from Determinate's download, and the separate coverage gate checks
+that fallback and affected cached ancestors need no compiler. Clients substitute each
 reference separately, so the shared libraries come from cache.nixos.org; the
 Sekka cache is incomplete on its own, and `nix copy --from` it alone fails.
-All of these are evaluated refusing unfree packages (`installed-systems`
-forces it), so NVIDIA's driver and other unfree packages are never published,
-and one added to a desktop makes the push fail rather than publish it.
+The packages are evaluated refusing unfree packages. `installed-systems`
+allows only those anyone may redistribute (`nix/redistributable.nix`: every
+licence a package names has Nixpkgs' `redistributable`), in the systems'
+own Nixpkgs and in the applications' (`redistributable` in
+`nix/reference-systems.nix`, which `checks.aizome-chanoma-defaults` holds it
+to). So the cache backfills what cache.nixos.org, which builds nothing
+unfree, leaves out: NVIDIA's driver for each kernel, Steam, and Chanoma's
+snes9x and Genesis Plus GX cores. Google Chrome, VS Code, Discord, Slack,
+Spotify, Obsidian, the AI desktop apps and Superluminal (whose package
+names no licence, so the catalog's `unfree` flag decides) forbid it, and
+are never published: one of those added to a desktop, or pulled in by an
+application, makes the push fail rather than publish it.
 Installed systems at the same lock use the identical store paths.
 The command also writes `nix-cache-info` with priority 50, so Nix asks
 cache.nixos.org (40) first.
+
+The main/nightly update-download gate still verifies complete runtime coverage
+after publication. `nix build .#checks.x86_64-linux.cache-publication` tests
+selective exports, warm and one-output-changed publication, archive repair,
+a published path built differently, content-addressed metadata, an HTTP
+destination, failure propagation, Nix signatures and fresh substitution across
+multiple disposable caches. `SEKKA_CACHE_URL` and `SEKKA_CACHE_BUCKET` point a test
+publication at an alternate cache and the bucket behind it (with
+`SEKKA_CACHE_ENDPOINT` and `SEKKA_CACHE_PROFILE` for the account); they must
+name the same cache, or paths the bucket lacks look published.
 
 The push needs two credentials, neither of which belongs in the repository:
 
@@ -1464,6 +2032,120 @@ nix develop .#aizome
 nix build .#aizome-checks.session -L
 ```
 
+### Tansu and removable Btrfs compression
+
+Aizome sets UDisks's `btrfs_defaults` to `compress=zstd:1`, matching Genkan's
+installed root filesystem. Tansu delegates formatting and mounting to UDisks;
+compression is enabled when the volume is mounted, not by `mkfs.btrfs`. The
+policy also applies to Hako mounts and persists across unmounts and reconnects.
+It affects new writes on existing Btrfs volumes, without recompressing old data.
+
+Administrators can override
+`services.udisks2.settings."mount_options.conf".defaults.btrfs_defaults`.
+UDisks continues to honor explicit `/etc/fstab` entries and its per-device
+overrides. Other filesystem types retain their existing mount defaults.
+
+`nix build .#aizome-checks.tansu-compression` checks the evaluated module's
+default and administrator override, then uses real UDisks Format/Mount calls
+on a disposable VM disk. It checks `compress=zstd:1`, actual zstd extents,
+remount persistence, and a subsequent ext4 mount. This is a storage-policy
+component check, not a Tansu GUI or ISO installation qualification.
+
+### Aizome's builds
+
+An edit to Aizome compiles Aizome's crates, not the hundreds of third-party
+crates under them. `desktop/aizome/nix/workspace.nix` gives the packages
+built from Aizome's workspace (`aizome`, Yukimi's app `aizome-yukimi`, and
+`hotaru`) a `dependencies` derivation each. It runs the package's own Cargo
+commands, its check phase's test builds included, over a copy of the
+workspace in which every first-party crate is its manifest and empty
+targets (`workspace.stubs`), then saves the target directory without those
+stubs. That copy changes with `Cargo.lock`, the manifests, the toolchain and
+the package's inputs and flags, never with Rust source. The package unpacks
+the saved directory before its build, and Cargo finds the third-party
+crates fresh and compiles the first-party ones. The crates are vendored once,
+from the lockfile alone (`workspace.vendor`).
+
+The two derivations share every attribute that reaches Cargo: the commands,
+profiles, features, wrappers, inputs and environment. Two things differ by
+nature and are evened out. Stdenv seeds the C compilers with each
+derivation's own hash, which bindgen's build script watches, so both builds
+use a fixed seed (`workspace.sameEnvironment`). cargoSetupHook copies the
+vendored crates into each build afresh, so the package dates them back
+before Cargo looks (`workspace.restoreTarget`). Any other difference would
+make Cargo compile the dependencies again inside the package, which would
+still build but lose the gain silently. So each package's build and its
+tests end by looking at what Cargo wrote since the dependency build's
+crates were restored (`workspace.onlyFirstParty`): a third-party library or
+build script newer than that fails the build and names the crates. After
+changing a package's build, that failure says the two derivations differ in
+something Cargo fingerprints; even it out in both, as `sameEnvironment` does.
+
+A derivation that overrides the package to run a Cargo command of its own
+shares nothing with the dependency build. The VM checks' test binaries
+(`encrypted-volumes-fixture.nix`, `loop-images-fixture.nix`) are such: they
+clear `preBuild` and `postBuild`, so nothing is restored or compared, and
+turn off the package's check phase, which tests the compositor they don't
+build.
+
+Yukimi's app is a package of its own (`desktop/aizome/nix/yukimi.nix`), and
+`hotaru` builds from a source with only its crates real. `workspace.withCrates`
+keeps the real source of the crates a package builds and every first-party
+crate they reach by path (dev-dependencies too, for its tests), with stubs
+for the rest. Every desktop has Yukimi, so an edit to the compositor or an
+Aizome app Yukimi doesn't use no longer changes Tatami's, Plasma's, GNOME's
+or the other desktops' systems and VM checks. Aizome's package links
+Yukimi's for its session.
+
+This is written on Nixpkgs' `buildRustPackage` rather than crane: Aizome's
+build runs two Cargo commands with different profiles and wrappers and its
+checks build chosen test targets, so crane's dependency commands would be
+replaced anyway, and the Git dependencies keep their hashes in
+`cargo-output-hashes.nix`.
+
+Measured on wx-workstation on 2026-11-03, with CI's `cores = 16` and the
+host's 1-minute load between 20 and 60:
+
+| Build | Before | After |
+| --- | --- | --- |
+| `aizome` after an edit to the compositor | 574 s | 243 s (448–458 s with 16 jobs) |
+| its dependencies, after a `Cargo.lock` or Nixpkgs change | (in the above) | 154 s, then `aizome` in 247 s; a 1.06 GB zstd archive |
+| Yukimi's app (dependencies, then the app) | (in `aizome`) | 61 s, then 60 s |
+| `hotaru` (dependencies, then the package and its tests) | one build | 32 s, then 123 s |
+
+The package compiles 64 first-party units and no third-party crate.
+Aizome's own crates are most of its build: two dozen applications, each
+linked with thin LTO. That step scales with Cargo's jobs (280 s with 16,
+142 s with 32, 86 s with 64; the dependency build gains 30 s), so the
+`release-lto` build runs 64 jobs, or the builder's `cores` when that is
+higher, never more than its processors. Builds with 16, 32 and 64 jobs gave
+the same bytes. Evaluating `aizome`'s derivation takes as long as before
+(1.5 s).
+
+An in-place comment in a compositor crate, or in `aizome-apps`, changed 22
+of the flake's 93 checks before and 9 after: the six with Aizome in their
+systems (`aizome-login`, `aizome-ibus`, `aizome-greeter-desktops`,
+`genkan-keyboard`, `mpv-software`, `tuning`) and the three that stamp the
+revision (`site`, `aizome-site`, `template-lock`). The network, display,
+activity, Plasma login, session environment, update and Yukimi checks no
+longer change, nor do the `hotaru`, `yukimi` and `yukimi-discover` packages.
+
+Command bindings, Settei's list of commands on keys and Koe's
+executable-name migration share `aizome_config::bindings::SpawnCommand`. The
+grammar is `spawn` followed by whitespace-separated arguments, with no shell
+expansion or quote processing; migrations edit the parsed executable and
+serialize representable arguments. The shell's carried notification state has
+an explicit version. Only unversioned history uses the old keyboard-offer text
+recognizer: nothing posts those offers any more, so versioned notifications
+are never judged by their wording.
+
+Ananicy's build-time rule filter parses JSON records and matches their decoded
+`name` fields. Surviving records, comments and malformed upstream lines stay
+unchanged, except a malformed line that still begins with a removed name's
+record (one followed by a comment, say): Ananicy might apply it, so the build
+fails instead. `checks.x86_64-linux.tuning-policy` builds the filtered provider
+and runs its regression tests alongside the scheduling policy tests.
+
 The shell observes application launch attempts through `aizome-sys`:
 process creation and exit are separate events, and only a compositor window
 event confirms that a window opened. D-Bus acceptance and successful
@@ -1560,12 +2242,19 @@ signals immediately; cleanup terminates and reaps that client before stopping
 the session, including when it has not yet submitted its start request.
 The launcher holds a per-user runtime lock through startup and cleanup, and
 refuses active, activating or deactivating services left by older launchers.
-A rejected duplicate login never installs cleanup traps. See the
+A rejected duplicate login never installs cleanup traps. A launcher killed
+where no trap runs releases the lock with its death: `aizome-session-watch.service`,
+waiting on that lock in the user manager, then ends the session in its place
+(`aizome-session --end-session`). The launcher removes the variables it
+imported, and `aizome.service` removes the compositor's in `ExecStopPost=`,
+however the compositor stops; a unit test in `aizome-comp-core` keeps that list
+equal to what the compositor exports. Before a session, the launcher resets
+only the failed units bound to the session targets. See the
 [orphaned-session incident](docs/incidents/2026-10-28-aizome-orphaned-session.md).
 The [session lifecycle review](docs/aizome-session-lifecycle.md) records the
 effective logind policy, the distinction between service uniqueness and
-launcher ownership, remaining cleanup and supervision issues, and the
-requirements for a replacement.
+launcher ownership, how the session ends and who removes which variables, the
+remaining supervision issues, and the requirements for a replacement.
 
 `nix build .#aizome-checks.session-launcher .#aizome-checks.session-launcher-systemd .#aizome-checks.greeter -L`
 checks the launcher with isolated service stand-ins, startup/cancellation
@@ -1578,18 +2267,35 @@ inactive, and Aizome's D-Bus activation files, installed by both of the
 module's routes, must not make FileManager1 activatable. The module's own
 unit settings are not part of that fixture.
 The startup check gates requests both before submission and before compositor
-readiness, rejects overlapping launches and verifies subsequent login.
+readiness, rejects overlapping launches and verifies subsequent login. It also
+kills a running launcher with SIGKILL, and kills a launcher's process group
+while a compositor slow to stop holds its cleanup open; the watch must end each
+session, refusing a login meanwhile. After every session the user manager's
+environment must equal its environment before the first one, and a login must
+reset a failed unit bound to the session but not an unrelated one.
 The greeter VM keeps the user manager alive, checks that the old desktop
-and its environment end, and
-logs the same user back in. These are component checks; they do not qualify
-an ISO or physical suspend/resume. An uncatchable SIGKILL or a dead user
-manager cannot run the launcher's cleanup trap.
+ends and that the user manager's environment is back to its state before the
+first login, and logs the same user back in. These are component checks; they
+do not qualify an ISO or physical suspend/resume. A user manager that dies
+takes the session, and the watch, with it.
 
 `aizome-checks` holds the 24 VM checks Aizome's flake had, under the names it
 gave them. They are in `legacyPackages`, not `checks`, so `nix flake check` and
 CI don't run them, just as they didn't run in Aizome's repository. Sekka's own
-Aizome checks (`aizome-login`, `aizome-greeter-desktops`, `aizome-ibus`,
+Aizome checks (`aizome-login`, `aizome-automatic-login`,
+`aizome-greeter-desktops`, `aizome-ibus`,
 `aizome-ibus-policy`) still run with the others.
+
+Three of them log in with a password or read the keyring: `greeter`,
+`greeter-x11` and `network-auth`. Their VMs are built from Nixpkgs with Sekka's
+gnome-keyring fix (`nix/overlays/gnome-keyring.nix`), which Sekka's systems get
+from `modules/gnome-keyring-fixes.nix`. Nixpkgs' daemon aborts when a client's
+first call comes before the daemon has recorded the client, and the keyring is
+locked from then on; `greeter` then timed out waiting for it to unlock, in 5
+of 192 runs started 64 at a time. The fix is the checks' package set
+(`keyringPkgs` in `desktop/aizome/nix/default.nix`) because a check's VM takes
+no overlay from a module. Aizome's module sets none, so a system that uses the
+module without Sekka's runs Nixpkgs' daemon.
 
 The package version is a plain `0.1.0`. Aizome's flake added its own revision
 to it. Inside Sekka that revision would be Sekka's, and every Sekka commit
@@ -1667,10 +2373,10 @@ catalog `preload: false` excludes it from `application-cache` and the ISO's
 application closure lists; it remains in the free-application systems published
 to the binary cache. New catalog entries preload by default. Keep the two
 policies separate: catalog availability does not require offline media inclusion.
-Run `nix build .#uta .#checks.x86_64-linux.uta-rustypipe .#checks.x86_64-linux.uta-installation`
-after changing the pin or preload policy. This checks the package, package
-selection and evaluated ISO contents; it does not certify an ISO boot or
-installation. Because the ISO doesn't carry Uta, installing it from that ISO
+Run `nix build .#uta .#checks.x86_64-linux.uta-rustypipe .#checks.x86_64-linux.uta-installation
+.#iso-checks.application-cache` after changing the pin or preload policy. This
+checks the package, package selection and evaluated ISO contents; it does not
+certify an ISO boot or installation. Because the ISO doesn't carry Uta, installing it from that ISO
 needs the network and a cache.sekka.computer entry for the exact Uta that
 ISO's revision builds; otherwise Genkan compiles it in the live session. ISO
 qualification checks that entry first
@@ -1728,6 +2434,21 @@ whose metadata claims more than their dependencies support list their
 libraries, and Lutris brings the x86-only libstrangle. An application whose
 package pulls in an unfree one is marked `unfree`, as Lutris is for Steam's
 runtime.
+
+Genkan's Steam is the one NixOS's `programs.steam` builds: that module takes
+the catalog's package, adds the system's fonts and graphics libraries to its
+root filesystem, and installs the result. The catalog's `steam` therefore
+resolves to the module's package (`fromPrograms` in Genkan's
+`applications.nix`, and in `nix/applications.nix` for the media's lists and
+offline cache), not to the plain package beside it. With both installed, the
+plain one won every file and the module's was assembled on each machine and
+linked nowhere, so no cache could have it and
+`scripts/check_cache_coverage.py` refused the system.
+`checks.x86_64-linux.applications` holds a system to one Steam. That root
+filesystem follows each system's fonts and graphics packages, so Sekka's
+cache has the published system's (Plasma, without NVIDIA's driver) and a
+system that differs assembles its own: it links files and compiles nothing,
+in 4 s on the builder.
 
 Genkan's entries with a `source` (the AI assistants, oh-my-pi, Superluminal,
 Tracy, Uta and Kakehashi) are decided by their `platforms` lists alone, which
@@ -1956,6 +2677,112 @@ The engine evaluation (PDFium against hayro over the pdf.js corpus, and
 why MuPDF and Poppler were ruled out by licence), the fork's work, and the
 reader's design are in [Shiori's notes](desktop/aizome/docs/shiori.md).
 
+Chanoma (`desktop/aizome/apps/chanoma`), the family television, comes
+with Aizome (`programs.aizome.chanoma.enable`, on unless turned off): the
+package builds it into a `chanoma` output of its own, and the module
+adds it with its libretro cores (snes9x and Genesis Plus GX, unfree but
+redistributable, only where the system allows them), OpenBIOS, a free PlayStation BIOS
+built from source (`desktop/aizome/nix/openbios.nix`, the `psx-openbios`
+package), and libretro-database's game databases for its systems (CC
+BY-SA 4.0, fetched file by file at a pinned commit:
+`desktop/aizome/nix/chanoma-metadata.nix`). So all of that is in every
+installed Aizome system and on the installation media, and the free
+systems `push-cache` publishes carry it for updates to download: 173 MiB
+of store paths, uncompressed (2026-11-22, Aizome's module alone). The
+module copies each core library into a separate store path. The free
+and unfree configurations share these paths, so an update can download
+the patched Play! core from the free system's closure. The combined
+directory links to the libraries without pulling in RetroArch and Qt. Where unfree packages are
+allowed, as on the media and the installed systems it carries, Google
+Chrome comes too (`programs.aizome.chanoma.browser`, 458 MiB more), with
+the two unfree cores. Ordinary desktop launches use the catalog's keyring
+wrapper. Chanoma starts the underlying browser with its own profile.
+The media already carried Chrome in the offline
+application cache, behind the catalog's keyring wrapper
+(`installer/genkan/rust/src/keyring.nix`). That one comes from the
+applications' Nixpkgs and Chanoma's from the system's, which are
+pinned apart: at one revision, as they mostly are, the media carry one
+Chrome, and when the two give different Chromes (7 and 8 November 2026:
+156 and 157) they carry both. No cache has Chrome, so such a system
+fetches it from Google when an update changes it. The systems `push-cache`
+publishes allow only unfree packages anyone may redistribute
+(`redistributable` in `nix/reference-systems.nix`): they have the two
+cores, which cache.nixos.org doesn't build, and not Chrome. BlueZ is set to connect quickly and to let
+a device that forgot the computer pair again without anyone confirming,
+for Chanoma's controllers; BlueZ has one policy for every device, so
+this holds for all of them on every Aizome system. That is decided on
+purpose, with its cost known, and is not to be removed as a fix
+(`desktop/aizome/docs/chanoma.md`, "Decided on purpose").
+`nix build .#checks.x86_64-linux.aizome-chanoma-defaults` holds Aizome's
+module alone (with unfree packages allowed and refused), the live media
+and the installed Aizome system the media carries to all of this, to
+the published system having both unfree cores and no Chrome,
+and to nothing being started (`autostart`). It is a configuration check: it
+runs nothing of Chanoma. The television's own account is the one thing
+a grown-up turns on, in Settings. It reads controllers from
+evdev itself so that it can grab them, drives libretro cores in its own
+process (unpacking zipped games for them), and opens streaming services
+in Chrome or Chromium driven through the compositor's IPC. The PIN keeps
+out kids with a controller, not someone with a terminal. A forgotten PIN
+is reset with the account's password through PAM, from `aizome-sys`'s
+`pam` feature (the lock screen's, moved there to share it); box art
+comes from thumbnails.libretro.com over HTTPS (`ureq`, as Tenki fetches
+the weather). It reads its folders, for games and videos alike, through
+`aizome-index` (`desktop/aizome/crates/aizome-index`), a files index in
+one SQLite database under `$XDG_CACHE_HOME/aizome/index` that any Aizome
+app can share: a second look lists only folders whose modified time
+changed. Its design and measurements are in [the files index's
+notes](desktop/aizome/docs/files-index.md).
+
+Nintendo 64 support uses the default `libretro.mupen64plus` package
+(Mupen64Plus-Next), GLideN64 through Chanoma's OpenGL host, and the pinned
+Nintendo 64 game database. See [the Nintendo 64 notes](desktop/aizome/docs/chanoma.md#nintendo-64)
+for formats, controls, limits and the optional real-core rendering/resume
+check. Search keeps the category it was opened in. Newly found films and
+shows wait for approval by default, as games do; saved policies remain in
+effect. Switching films back to approval does not approve the existing
+library, and playback rechecks the film or show's permission.
+
+What a controller needs is shared with the login screen as two crates:
+`aizome-gamepad` (controllers from evdev, by position, through SDL's
+database) and `aizome-sofa` (the sofa-sized look, the on-screen keyboard
+and the PIN pad, whose ten digits a controller short of buttons presses as
+chords with Select). The TV account (Settings, Users & Groups;
+`aizome_sys::tv`) is a real account with nologin for a shell, made and
+changed by `aizome-tv-account`, a root helper Settings runs through
+pkexec under its own polkit action (installed in the package's `libexec`,
+as Nisshi's is); its record, nothing secret, is
+`/var/lib/aizome/tv-account.toml`. The login screen forces its session,
+`aizome-chanoma-session` (the compositor's new `--kiosk` mode with
+`aizome-chanoma --tv` alone, ending with it), and `aizome-session` hands
+over to it too.
+
+```sh
+cargo test -p aizome-index
+cargo test -p aizome-gamepad -p aizome-sofa
+cargo test -p aizome-chanoma
+cargo test -p aizome-greeter                 # the controller at the login screen, the TV account
+cargo test -p aizome-settei --test window    # setting the TV account up
+CHANOMA_TEST_CORES=<folder of *_libretro.so> \
+  cargo test -p aizome-chanoma --test cores -- --ignored --nocapture
+nix build .#aizome-checks.chanoma -L
+nix build .#aizome-checks.tv -L              # login screen to Chanoma and back, a controller alone
+```
+
+The first (also run in the package's check phase) covers the rules,
+controller mappings, the frontend and whole evenings through a core the
+test defines. The second loads nixpkgs' cores and plays a generated Game
+Boy game with gambatte, SameBoy and mGBA. The VM check drives the packaged
+app in an Aizome session with a uinput controller alone: found and held,
+a game opened, played (its picture read from the compositor), paused and
+kept; a page in Chromium clicked, keyed and pointed at, and the overlay
+menu over it. The TV check drives the login screen with the same kind of
+controller: Alice's password on the on-screen keyboard, the TV account
+made by its helper and its PIN pressed on the PIN pad, Chanoma set up and
+left in its kiosk session, and the login screen back. None of these is a physical controller, a DRM service or a
+television; [Chanoma's notes](desktop/aizome/docs/chanoma.md) record what
+has and hasn't been checked.
+
 The lock screen follows enabled Wayland outputs throughout lock acquisition
 and the confirmed lock. Every display has a focused password field sharing
 one authentication state; mirrors show their source's prompt and explicitly
@@ -2048,6 +2875,19 @@ and token it was started with. The unit tests include concurrent launches
 of the instance. The UI tests check that reveal requests select the files,
 one window to a folder, and that the last window takes the token. These are
 component checks, not browser or ISO qualification.
+
+### Utsushi diagnostics
+
+Utsushi sends FFmpeg's nonfatal library diagnostics to the
+`aizome_media::ffmpeg` log target at debug level; verbose decoder traces
+use trace level. For seek investigation, run
+`RUST_LOG=aizome_media::ffmpeg=debug aizome-utsushi FILE`. Fatal FFmpeg
+messages stay at error level, and failed open/decode operations still
+report errors through the player's normal UI. This changes diagnostic
+routing, not open-GOP recovery or frame selection. The media crate's
+`diagnostics` integration test exercises the C variadic bridge concurrently
+and seeks/rate changes in a generated open-GOP H.264 fixture, including
+post-seek snapshots. It does not certify every recovery frame's fidelity.
 
 ### Sukumo
 
@@ -2773,13 +3613,37 @@ git push origin v0.1.0-preview.1
 gh workflow run release.yml --ref main -f tag=v0.1.0-preview.1
 ```
 
-It checks out the tag, runs `nix flake check` and builds `.#iso` without
-updating the lock, creates checksums and a source manifest, uploads assets into
+It checks out the tag, runs `nix flake check` and the ISO's own checks (see
+below) and builds `.#iso` without updating the lock, creates checksums and a source manifest, uploads assets into
 a draft release, then publishes it as a prerelease. It uses the repository's
 `GITHUB_TOKEN` with `contents: write`. Nothing creates tags, and no push, pull
 request or schedule starts it. It does not push to the binary cache.
 
 GitHub limits individual release assets to 2 GiB. `scripts/prepare-release.py` keeps a smaller ISO whole or splits a larger one into 1900 MiB parts. Release notes include Linux/macOS and Windows reassembly instructions. `SHA256SUMS` verifies downloadable parts; `ISO-SHA256SUMS` verifies the reconstructed image. Failed uploads leave a draft to inspect, not a partially published release. The script refuses to overwrite an existing output directory.
+
+### Building an ISO
+
+`.github/workflows/iso.yml` builds `.#iso` on the builder, from `main`, and
+runs the ISO's own checks, `legacyPackages.x86_64-linux.iso-checks`: every
+prebuilt desktop system and path list on the media against Genkan's desktop
+inventory, store integrity, copy-to-RAM and its initrd, and the offline
+application cache. Only its **Run workflow** button (Actions, "Build and check
+Sekka's ISO") starts it:
+
+```sh
+gh workflow run iso.yml --ref main
+```
+
+Pull requests and main leave these checks out: evaluating the media means
+evaluating the installer and its seven installed systems, which took 221
+seconds of single-threaded evaluation, five times any other check
+(2026-11-03). The nightly runs them after its other checks (see
+[Nightly builds](#nightly-builds)), and
+`nix build .#iso-checks.desktop-references` runs one of them. The
+workflow publishes nothing and holds no secrets; the image stays rooted on the
+builder with main's generations, and the job summary gives its path and
+SHA-256. Qualification and publication still happen on a workstation (see
+below).
 
 ### Nightly builds
 
@@ -2814,29 +3678,39 @@ with the same scope and overwrite the file.
 
 The job runs on the builder. It first brings every input in `flake.lock` up
 to date (`nix flake update`) and commits that, if anything moved, on top of
-`main`. Every run checks the candidate with `nix flake check`; it doesn't build
-`.#iso`, which no check uses and only qualification needs. Every check runs
-even after one fails, and the failed ones run once more, so a VM test losing a
-timing race once doesn't hold back upstream security fixes; a check that fails
-twice stops the update. The first attempt's passing checks stay rooted (see
-[The builder](#the-builder)), so the second attempt reruns only the failures.
-The run's warning names the checks that needed the retry: they are flaky, and
-need fixing like any failure. Then, in this order and only if each step
+`main`. Every run builds the candidate's checks with nix-fast-build (see
+[The builder](#the-builder)), then evaluates every other output with
+`nix flake check --no-build`, which pull requests and main skip, then builds
+`.#iso` and the ISO's checks (`legacyPackages.x86_64-linux.iso-checks`), which
+pull requests and main leave out: the installer image is still checked every
+night, on that night's inputs, in one `--keep-going` build without a retry.
+Every other check runs even after one fails, and the failed ones
+run once more, so a VM test losing a timing race once doesn't hold back
+upstream security fixes; a check that fails twice, or fails to evaluate, stops
+the update. The first attempt's passing checks stay rooted, and the second
+attempt builds only the checks that still have no result.
+`scripts/ci-retain.py --retry-failed` finds those itself after a failed first
+attempt: it evaluates the checks once more and asks the store which of their
+outputs are valid, then builds the rest by derivation. It reads no report from
+the first attempt, so the retry is the same with nix-fast-build and on a runner
+image without it (see [The builder](#the-builder)). The run's warning
+names the checks that needed the retry: they are flaky, and need fixing like
+any failure. Then, in this order and only if each step
 succeeded:
 
 1. `nix run .#push-cache` publishes Sekka's packages for that revision to
    cache.sekka.computer.
 2. `scripts/check_cache_coverage.py .#uta .#installed-systems` follows, from each
-   desktop's installed system, the one with every desktop and the free
-   catalog applications, everything
+   desktop's installed system, the one with every desktop, the one with the
+   redistributable catalog applications and those with NVIDIA's driver,
+   everything
    none of cache.nixos.org, Sekka's, numtide's and Determinate's caches has,
    as a system with an empty store would. It fails if any of it would be
    compiled rather than written locally (configuration), copied into place
    without a compiler (as Determinate Nixd is from its download) or fetched.
-   NVIDIA's driver and the unfree applications aren't covered: they can't be
-   published, so systems that have them build them (the driver for each
-   kernel, in minutes; the applications by repackaging their vendors'
-   downloads).
+   Unfree applications whose licences forbid redistribution (Chrome, VS
+   Code and the like) aren't covered: they can't be published, so systems
+   that have them repackage their vendors' downloads.
    Cached outputs are also checked independently: the gate follows their runtime
    references across all four caches. A reference missing from every cache must
    have a valid derivation for that exact output; it and its affected cached
@@ -2938,8 +3812,8 @@ waiting run and cancels older ones, so a burst of merges builds the first and
 the last.
 
 It builds `.#uta` first, so a kit or Sukumo change that breaks Uta fails by
-name (see [Aizome](#aizome)), then runs `nix flake check` on the revision as
-merged, without updating inputs; its `uta-rustypipe` check confirms, in the
+name (see [Aizome](#aizome)), then builds every check on the revision as
+merged, without updating inputs (nix-fast-build, see [The builder](#the-builder)); its `uta-rustypipe` check confirms, in the
 build sandbox, that RustyPipe is enabled. Nothing of Uta runs in the job
 itself, which goes on to hold the cache's secrets.
 `nix run .#push-cache` signs and uploads the packages, including Uta and its
@@ -2983,11 +3857,13 @@ have a read-only token, no publishing environment or secrets, and publish no
 cache or ISO. Ordinary PR-owned workflows remain rejected by the runner's
 admission hook.
 
-The job builds Uta and runs the full root `nix flake check --keep-going` with
-the existing lock, including package check phases and the component VM checks
-exposed under `checks.x86_64-linux`. One push reports every failing check, and
-the passing ones stay rooted for the next push. The separate `aizome-checks` legacy outputs and
-actual ISO installation/hardware qualification remain separate. Results
+The job builds Uta and every check under `checks.x86_64-linux` with the
+existing lock, including package check phases and the component VM checks;
+each check starts building as soon as it is evaluated. One push reports every
+failing check, and the passing ones stay rooted for the next push. The
+separate `aizome-checks` and `iso-checks` legacy outputs, the evaluation of the
+flake's other outputs (the nightly's) and actual ISO installation/hardware
+qualification remain separate. Results
 appear on the tested PR head as `Trusted PR / build and tests`; a newer
 push cancels the previous run. To check an already open PR, dispatch from
 main: `gh workflow run pr.yml --ref main -f pr=233`. If the head or base
@@ -2995,8 +3871,8 @@ changes while queued, dispatch again against the new merge.
 
 `nix build .#checks.x86_64-linux.pr-ci` exercises trust rejection, merge
 identity, API failures, runner admission, Git object reuse with private
-candidate state, and the retention wrapper and its bounds, and lints all three
-build workflows. Enabling
+candidate state, and the retention wrapper and its bounds, and lints the
+build, ISO and release workflows. Enabling
 this workflow requires deploying the updated runner image below; the former
 admission hook rejects all pull-request events. Release publication remains
 manually disabled.
@@ -3079,18 +3955,60 @@ eight at 38–45 GiB, within the job container's 64 GiB; 16 workers were slower
 than eight. The image is the one place Nix settings live: a workflow's
 `NIX_CONFIG` would replace its whole value, not add to it.
 
+Pull requests, main and the nightly build the checks with nix-fast-build, not
+`nix flake check`, which evaluates every output before building anything and
+evaluates the ISO, installed systems and other packages it doesn't build: on
+2026-11-03, under load from other work, `nix flake check --no-build` took 151
+seconds on main against 81–95 seconds for the checks alone. nix-fast-build
+evaluates `checks.x86_64-linux` alone, in nix-eval-jobs workers, and builds each
+check as soon as its derivation is known, so a long build such as Aizome's
+starts within seconds. The workers run upstream Nix's evaluator (`eval-cores`
+doesn't apply) as separate processes; `scripts/ci-retain.py` starts twelve, each
+with a 2 GiB initial heap rather than the job's 32 GiB and restarted past 4 GiB.
+Together they peaked at 25.6 GiB with eight workers and 48.6 GiB with sixteen.
+Builds go through the job's Determinate client, sixteen `nix build` processes
+of one build each: the 16 at a time the image allows each of the builder's two
+slots (`max-jobs = 16`, above). On a runner image
+without nix-fast-build the wrapper runs `nix flake check` instead, and says so
+in a warning. wx-workstation's image is one, as of 2026-11-24: it was built on
+2026-11-08, the day before nix-fast-build joined `nix/runner.nix`, and gets it
+with the next image update ([Setting up the builder](#setting-up-the-builder)).
+The nightly still evaluates every output, with `nix flake check --no-build`.
+
+The nightly's second attempt costs one more evaluation of the checks, and only
+after a first attempt that failed: 31 seconds and 36.5 GiB at its peak for
+main's 111 checks, with the job's 32 GiB starting heap and eight evaluator
+threads (wx-workstation, 2026-11-24).
+
+Emulating pull request jobs on wx-workstation on 2026-11-03 with PR #269's
+branch (these changes and Aizome's dependency split together), alternating
+with main at 41fdd11d (`nix flake check` with eight evaluator threads and the
+ISO's checks) at load 4–43 from other work:
+
+- With every check already built: 34–43 seconds, against 87–113 seconds.
+  Retention added about a second, every derivation's inputs already recorded.
+- With one VM check to rebuild (128 seconds): 140 seconds with nix-fast-build,
+  168 with `nix flake check`, which starts building only after evaluating
+  everything.
+
+Those runs used sixteen build processes of two builds each, for the single
+runner slot of the time.
+
 A job's container is on Docker's default network: it reaches the internet, the
 LAN and services on the host. The admission hook and pull request approval keep
 untrusted code from getting that far. Each build leaves its closure in the
-host's store. `scripts/ci-retain.py` runs the ordinary `nix build` or
-`nix flake check` with an out-link below `/nix/var/nix/gcroots/sekka-ci`, mounted
-at that same absolute path in the job and on the daemon's host. It retains the
+host's store. `scripts/ci-retain.py` runs the ordinary `nix build`,
+`nix flake check` or nix-fast-build with out-links below
+`/nix/var/nix/gcroots/sekka-ci`, mounted at that same absolute path in the job
+and on the daemon's host. It retains the
 results plus existing outputs of their derivation closures: otherwise a VM
 check's tiny success marker would keep neither its VM image nor compiled
 build dependencies alive. This does not globally enable `keep-outputs`, skip
-checks, or treat a failed build as successful. A failed
-`nix flake check --keep-going` still links the checks that passed, so their
-inputs are kept for the rerun; a failed `nix build` links nothing. Rooting
+checks, or treat a failed build as successful. nix-fast-build links every
+check on its own, and a failed `nix flake check --keep-going` links the checks
+that passed too, so their inputs are kept for the rerun; a failed `nix build`
+links nothing. nix-fast-build's evaluation roots stay in the generation while
+it runs. Rooting
 inputs is best effort: if Nix can't list them, the results stay rooted, the
 job warns, and a passing build stays green.
 
@@ -3103,9 +4021,13 @@ own collection target (`max-free`), each group keeps only its newest successful
 main generation, so PR results go first and the daemon can reclaim the rest.
 The host is shared, so free space is the budget, not a byte quota of Sekka's
 own. One generation of the flake's checks roots about 33,600 build inputs,
-94 GiB of store paths (2026-11-02), and takes about 11 seconds to root.
-Generations at the same Nixpkgs share nearly all of it; an input update
-starts a new set. The job-start hook and each build prune these bounds, so a cancelled job
+94 GiB of store paths (2026-11-02). Generations at the same Nixpkgs share
+nearly all of it; an input update starts a new set. Listing those inputs took
+11–13 seconds, nearly all of it Nix's queries (the links take 0.4 s), so the
+wrapper records each derivation's inputs, gzipped, in `.closures` beside the
+groups right after it builds, and runs that build the same derivation reuse the
+record: a run queries only what it builds for the first time. Records unused
+for a week expire. The job-start hook and each build prune these bounds, so a cancelled job
 cannot leave roots indefinitely while the runner is in use. A lock covers only
 pruning and creating a generation; each build holds its own generation's lock,
 so a build in progress is never pruned and concurrent jobs never wait on one
@@ -3143,11 +4065,16 @@ runner has finished.
 `checks.x86_64-linux.ci-cache` uses the actual runner client and an untrusted
 user in a disposable VM. It collects garbage and verifies that results and
 compile-only dependencies survive, including those of the passing checks of a
-failed `--keep-going` run. It also reuses checks with builds disabled, checks
-failure propagation and the plain-Nix fallback, drops PR roots when space is
+failed `--keep-going` run and of a failed nix-fast-build run. It also reuses
+checks with builds disabled and their recorded inputs without querying Nix,
+checks failure propagation and the plain-Nix fallback, drops PR roots when space is
 low, and verifies that paths become collectable after removing the roots.
+Last it runs the nightly's second attempt, with nix-fast-build and without it:
+a check that fails once is built once more, alone, and the run passes; one
+that fails twice, or does not evaluate, fails the run.
 `checks.x86_64-linux.pr-ci` exercises the wrapper with stand-ins for Nix,
-retention expiry, locks that refuse links and FIFOs, and clean Git checkouts.
+the same second attempt, retention expiry, locks that refuse links and FIFOs,
+and clean Git checkouts.
 
 The live-media guard fixture puts its mounts in a private guest mount namespace;
 systemd must not race the fixture by tearing down the VM's own `/nix/store`.

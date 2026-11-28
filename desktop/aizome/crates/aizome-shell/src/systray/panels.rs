@@ -50,6 +50,11 @@ pub enum PanelMsg {
     NightLight(bool),
     /// Keep Awake turned on or off.
     KeepAwake(bool),
+    /// Bring forward the window of an app that holds the screen on.
+    ShowHolder(aizome_ipc::WindowId),
+    /// Open Myaku at the process of an app that holds the screen on:
+    /// quitting it is Myaku's to do, with its confirmation.
+    HolderInMyaku(crate::holders::Pid),
     /// Open Koyomi at a day (`YYYY-MM-DD`).
     OpenDay(String),
     /// Open Tokei's world clocks.
@@ -143,11 +148,35 @@ pub struct BatteryPanel {
     pub keep_awake: aizome_awake::Status,
 }
 
-/// Keep Awake's panel, under its cup.
+/// The cup's panel: Keep Awake, and the apps holding the screen on.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct AwakePanel {
     pub status: aizome_awake::Status,
+    /// The apps holding the screen on, by name.
+    pub holders: Vec<HolderRow>,
 }
+
+/// An app holding the screen on, as the cup's panel lists it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct HolderRow {
+    pub name: String,
+    /// Why, in its own words; else which of its windows holds.
+    pub detail: String,
+    pub glyph: (Icon, Hue),
+    /// Its window, which a click on the row brings forward.
+    pub window: Option<aizome_ipc::WindowId>,
+    /// Its process, which the row's button shows in Myaku.
+    pub pid: Option<crate::holders::Pid>,
+}
+
+impl From<&crate::holders::Holder> for HolderRow {
+    fn from(h: &crate::holders::Holder) -> HolderRow {
+        HolderRow { name: h.name.clone(), detail: h.detail(), glyph: h.glyph, window: h.window, pid: h.pid }
+    }
+}
+
+/// The most holders the cup's panel lists by name.
+pub const HOLDERS: usize = 6;
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ClockPanel {
@@ -618,31 +647,110 @@ fn battery(p: &BatteryPanel) -> Vec<Element<PanelMsg>> {
 /// Keep Awake's two lines under its switch.
 const AWAKE_TEXT: f64 = 40.0;
 
-fn awake(p: &AwakePanel) -> Vec<Element<PanelMsg>> {
+/// Two lines of small print: what a switch or a list above them means.
+fn small_print(lines: [&'static str; 2], hue: Hue) -> Element<PanelMsg> {
+    drawn(WIDTH, AWAKE_TEXT, (lines, hue), move |cx| {
+        let t = cx.theme();
+        let s = ui(t, typeface::SMALL, typeface::WEIGHT_REGULAR, hue.color(t));
+        for (i, line) in lines.iter().enumerate() {
+            let y = 2.0 + i as f64 * 17.0;
+            cx.draw_text_in(line, &s, Rect::new(PAD, y, WIDTH - PAD, y + 17.0), Align::Start);
+        }
+    })
+    .text(lines.join(" "), SemanticRole::Label)
+    .into()
+}
+
+/// A holder's row: its name over why it holds.
+const HOLDER: f64 = 40.0;
+/// The caption over the holders.
+const HOLDERS_HEAD: f64 = 24.0;
+
+/// An app holding the screen on: its glyph, its name, and under it why (or
+/// which window). A click brings its window forward, when it has one, and
+/// the button at the right shows its process in Myaku. Nothing here lets
+/// go of its hold: the app would only take it again.
+fn holder_row(h: &HolderRow) -> Element<PanelMsg> {
+    let (name, detail, (glyph, hue)) = (h.name.clone(), h.detail.clone(), h.glyph);
+    let reaches = h.window.is_some();
+    let said = if detail.is_empty() { name.clone() } else { format!("{name}: {detail}") };
+    let about = drawn(0.0, HOLDER, (name.clone(), detail.clone(), glyph, hue, reaches), move |cx| {
+        let t = cx.theme();
+        let b = cx.bounds();
+        let hot = reaches && cx.is_hovered();
+        if hot {
+            cx.canvas.fill_rect(b, t.selection());
+        }
+        let fg = if hot { t.on_selection() } else { t.text() };
+        glyph.draw(cx.canvas, Point::new(PAD, 5.0), 16.0, if hot { fg } else { hue.color(t) });
+        let s = ui(t, typeface::BODY, typeface::WEIGHT_REGULAR, fg);
+        cx.draw_text_in(&name, &s, Rect::new(PAD + 24.0, 3.0, b.x1 - 4.0, 21.0), Align::Start);
+        let small = ui(t, typeface::SMALL, typeface::WEIGHT_REGULAR, if hot { fg } else { t.text3() });
+        cx.draw_text_in(&detail, &small, Rect::new(PAD + 24.0, 20.0, b.x1 - 4.0, 37.0), Align::Start);
+    })
+    .text(said, SemanticRole::MenuItem)
+    .key(("holder", h.name.as_str(), h.pid, h.window));
+    let about = match h.window {
+        Some(window) => about.on_click(PanelMsg::ShowHolder(window)),
+        None => about,
+    };
+    let mut items = vec![Element::from(about).width(aizome_kit::Length::Fill)];
+    if let Some(pid) = h.pid {
+        items.push(icon_btn(Icon::Activity, PanelMsg::HolderInMyaku(pid), &format!("Show {} in Myaku", h.name)));
+    }
+    aizome_kit::row(items).align(Align::Center).height(HOLDER).padding([0.0, PAD - 4.0, 0.0, 0.0]).into()
+}
+
+/// What Keep Awake's switch is doing, in two lines: with it off, the
+/// screen's part is left out while apps hold the screen on.
+fn keep_awake_lines(status: aizome_awake::Status, holders: usize) -> ([&'static str; 2], Hue) {
     use aizome_awake::Status;
-    let on = p.status != Status::Off;
-    let mut v = vec![head("Keep Awake", Some(toggle(on).on_toggle(PanelMsg::KeepAwake).into()))];
-    let (lines, hue) = match p.status {
-        Status::On => {
+    match (status, holders) {
+        (Status::On, _) => {
             (["Won't sleep, lock or turn the displays off;", "closing the lid just turns its screen off."], Hue::Text3)
         }
-        Status::Unprotected => {
+        (Status::Unprotected, _) => {
             (["Not working: the computer may sleep.", "Turn it off and on again to retry."], Hue::Red)
         }
-        Status::Off => (["Off: the computer sleeps, locks and turns", "the displays off as usual."], Hue::Text3),
-    };
-    v.push(
-        drawn(WIDTH, AWAKE_TEXT, (lines, hue), move |cx| {
-            let t = cx.theme();
-            let s = ui(t, typeface::SMALL, typeface::WEIGHT_REGULAR, hue.color(t));
-            for (i, line) in lines.iter().enumerate() {
-                let y = 2.0 + i as f64 * 17.0;
-                cx.draw_text_in(line, &s, Rect::new(PAD, y, WIDTH - PAD, y + 17.0), Align::Start);
-            }
-        })
-        .text(lines.join(" "), SemanticRole::Label)
-        .into(),
-    );
+        (Status::Off, 0) => (["Off: the computer sleeps, locks and turns", "the displays off as usual."], Hue::Text3),
+        (Status::Off, 1) => {
+            (["Off: the computer can sleep as usual.", "The app below keeps its screen on."], Hue::Text3)
+        }
+        (Status::Off, _) => {
+            (["Off: the computer can sleep as usual.", "The apps below keep its screen on."], Hue::Text3)
+        }
+    }
+}
+
+/// What an app's hold does and doesn't do: the screen stays on and
+/// unlocked, and sleep and the lid are none of its business.
+fn holders_lines(holders: usize) -> [&'static str; 2] {
+    match holders {
+        1 => ["This app keeps the screen on and unlocked.", "It doesn't hold off sleep or the lid."],
+        _ => ["These apps keep the screen on and unlocked.", "They don't hold off sleep or the lid."],
+    }
+}
+
+/// How many holders aren't listed by name, in words.
+fn more_holders(holders: usize) -> Option<String> {
+    let more = holders.checked_sub(HOLDERS).filter(|more| *more > 0)?;
+    Some(if more == 1 { "and 1 more app".to_owned() } else { format!("and {more} more apps") })
+}
+
+fn awake(p: &AwakePanel) -> Vec<Element<PanelMsg>> {
+    let on = p.status != aizome_awake::Status::Off;
+    let mut v = vec![head("Keep Awake", Some(toggle(on).on_toggle(PanelMsg::KeepAwake).into()))];
+    let (lines, hue) = keep_awake_lines(p.status, p.holders.len());
+    v.push(small_print(lines, hue));
+    if !p.holders.is_empty() {
+        v.push(sep());
+        v.push(labelled("Keeping the screen on", typeface::WEIGHT_REGULAR, None, HOLDERS_HEAD));
+        v.extend(p.holders.iter().take(HOLDERS).map(holder_row));
+        if let Some(more) = more_holders(p.holders.len()) {
+            v.push(faint_row(&more));
+        }
+        v.push(small_print(holders_lines(p.holders.len()), Hue::Text3));
+    }
     v.push(sep());
     v.push(settings_row("Battery Settings…", "power"));
     v
@@ -863,7 +971,16 @@ pub fn height(p: &Panel) -> f64 {
                 + sep
                 + ROW
         }
-        Panel::Awake(_) => HEAD + AWAKE_TEXT + sep + ROW,
+        Panel::Awake(a) => {
+            let holders = match a.holders.len() {
+                0 => 0.0,
+                n => {
+                    let more = if n > HOLDERS { ROW } else { 0.0 };
+                    sep + HOLDERS_HEAD + n.min(HOLDERS) as f64 * HOLDER + more + AWAKE_TEXT
+                }
+            };
+            HEAD + AWAKE_TEXT + holders + sep + ROW
+        }
         Panel::Battery(b) => HEAD + 34.0 + if b.modes.is_empty() { 0.0 } else { 24.0 + 30.0 } + ROW + sep + ROW,
         Panel::Clock(c) => {
             let weeks = crate::clock::month_grid(c.now.year, c.now.month).len();

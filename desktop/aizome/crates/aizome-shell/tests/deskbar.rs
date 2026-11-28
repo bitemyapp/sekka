@@ -53,6 +53,44 @@ fn the_deskbar_folds_into_the_bar() {
 }
 
 #[test]
+fn the_deskbar_key_hides_and_shows_the_deskbar() {
+    use aizome_ipc::Event;
+    use aizome_shell::ipc::IpcEvent;
+    let key = || Msg::Ipc(IpcEvent::Event(Event::Binding { action: "deskbar".into(), pointer: None, output: None }));
+    let mut h = scene(false);
+    h.send(key());
+    assert!(h.program().deskbar_cfg.collapsed);
+    assert!(h.program().settings.deskbar_settings().collapsed, "the fold is saved");
+    assert!(h.windows().iter().all(|k| h.title(*k) != "Deskbar"));
+    h.send(key());
+    assert!(!h.program().deskbar_cfg.collapsed);
+    assert!(!h.program().settings.deskbar_settings().collapsed);
+    assert!(h.windows().iter().any(|k| h.title(*k) == "Deskbar"));
+}
+
+#[test]
+fn the_deskbar_key_folds_an_auto_hidden_deskbar_for_good() {
+    use aizome_ipc::Event;
+    use aizome_shell::ipc::IpcEvent;
+    let key = || Msg::Ipc(IpcEvent::Event(Event::Binding { action: "deskbar".into(), pointer: None, output: None }));
+    let mut h = scene(false);
+    let mut config = h.program().settings.deskbar_settings();
+    config.auto_hide = true;
+    h.program_mut().settings.set_shell_section("deskbar", &config);
+    h.send(Msg::SettingsChanged);
+    assert!(h.program().deskbar.is_none(), "auto-hide keeps it out of sight");
+    // Out of sight for now is not folded: the key folds it.
+    h.send(key());
+    assert!(h.program().deskbar_cfg.collapsed);
+    assert!(h.program().deskbar.is_none());
+    // Again: unfolded, shown as the menu bar's control shows it.
+    h.send(key());
+    assert!(!h.program().deskbar_cfg.collapsed);
+    assert!(h.program().deskbar_visible());
+    assert!(h.windows().iter().any(|k| h.title(*k) == "Deskbar"));
+}
+
+#[test]
 fn the_bar_has_controls_to_hide_and_show_the_deskbar() {
     let mut h = scene(false);
     let bar = window_titled(&h, "Menu bar");
@@ -65,6 +103,56 @@ fn the_bar_has_controls_to_hide_and_show_the_deskbar() {
     assert!(!h.program().deskbar_cfg.collapsed);
     assert!(h.windows().iter().any(|k| h.title(*k) == "Deskbar"));
     assert!(h.find(bar, "Hide Deskbar").is_some());
+}
+
+fn deskbars(h: &aizome_kit::testing::Harness<aizome_shell::shell::Shell>) -> usize {
+    h.windows().iter().filter(|k| h.title(**k) == "Deskbar").count()
+}
+
+/// Losing the notifications' name isn't a restart by itself: any
+/// notification server may take it, and nothing then replaces the shell.
+/// It goes on, and its Deskbar opens whenever it's to show again.
+#[test]
+fn a_shell_that_lost_the_notifications_still_opens_its_deskbar() {
+    use aizome_shell::actions::Action;
+    let mut h = scene(false);
+    // As losing `org.freedesktop.Notifications` leaves it.
+    h.program_mut().retiring = true;
+    h.send(Msg::Run(Action::SetDeskbarCollapsed(true)));
+    assert_eq!(deskbars(&h), 0);
+    h.send(Msg::Run(Action::SetDeskbarCollapsed(false)));
+    assert_eq!(deskbars(&h), 1, "shown again");
+    // Its display goes, the compositor closing what was on it, and another
+    // comes: the Deskbar opens there.
+    h.request_close(window_titled(&h, "Deskbar"));
+    let mut other = output();
+    other.id = 2;
+    h.set_outputs(vec![other]);
+    assert_eq!(deskbars(&h), 1, "on the display that came");
+}
+
+/// In a restart the compositor closes the old shell's Deskbar as the new
+/// shell's first draws. The old shell, the notifications gone to the new
+/// one, leaves it closed: opened again it would lie over the new shell's
+/// (and hold the restart open, in a compositor that doesn't close it).
+#[test]
+fn a_shell_replaced_in_a_restart_leaves_its_deskbar_closed() {
+    let mut h = scene(false);
+    h.program_mut().retiring = true;
+    h.request_close(window_titled(&h, "Deskbar"));
+    h.send(Msg::Nothing);
+    assert_eq!(deskbars(&h), 0, "the new shell's has replaced it");
+    // Nor when the outputs are described again, the main display still
+    // there.
+    h.set_outputs(vec![output()]);
+    assert_eq!(deskbars(&h), 0);
+
+    // The name not lost, nothing says a new shell took over: a Deskbar the
+    // compositor closed opens again.
+    let mut h = scene(false);
+    h.request_close(window_titled(&h, "Deskbar"));
+    h.send(Msg::Nothing);
+    assert_eq!(deskbars(&h), 1);
 }
 
 #[test]

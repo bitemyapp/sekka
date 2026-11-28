@@ -324,6 +324,27 @@ new shell takes over `org.freedesktop.Notifications` (both hold it
 allowing replacement), and the shell socket that kit apps talk to; kit
 apps reconnect at once and publish their menus again.
 
+The desktop changes hands last. A shell started this way opens each
+output's desktop only once that output's wallpaper is read (or doesn't
+read), so the old shell's desktop stays up, wallpaper and all, until the
+new one can show the same. A shell started at login doesn't wait: its
+desktop shows its colour until the wallpaper is in.
+
+While the restart is under way the compositor closes any layer surface
+the old shell opens, at once. What the old shell shows is being
+replaced, and a surface it opened again (its Deskbar, closed for the new
+shell's) would lie over the new shell's and keep the restart from
+ending. The old shell also leaves its Deskbar closed of its own accord,
+once the compositor has closed it after the notifications' name went to
+another: that covers a session whose running compositor is from before
+it closed such surfaces. Losing the name alone isn't taken for a
+restart. Any notification server may take it, and the shell then goes on
+as before, its Deskbar included.
+
+If the eight seconds do run out with surfaces of the old shell still up,
+the compositor says so in its log (`shell restart cut short`, with their
+namespaces) and stops the old shell all the same.
+
 The shell keeps what it carries across in
 `$XDG_RUNTIME_DIR/aizome-shell-state.$WAYLAND_DISPLAY.json`, written on
 every change: the notifications and their history, what the Deskbar

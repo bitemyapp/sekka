@@ -813,7 +813,8 @@ impl Shell {
     }
 
     /// Read the file index (rebuilding it first if it's stale), on a
-    /// thread; `keep` hands it to the palette.
+    /// thread; `keep` hands it to the palette. Without `keep`, an index
+    /// that's still fresh isn't read at all.
     pub fn index_soon(&mut self, keep: bool, cx: &mut Cx<Msg>) {
         let roots: Vec<PathBuf> = self.palette_cfg.roots.iter().map(|r| aizome_config::expand_home(r)).collect();
         let skip: Vec<PathBuf> = self.palette_cfg.exclude.iter().map(|r| aizome_config::expand_home(r)).collect();
@@ -825,9 +826,15 @@ impl Shell {
             let cache = FileIndex::default_cache_path();
             let key_file = cache.with_extension("key");
             let same = std::fs::read_to_string(&key_file).is_ok_and(|k| k == over);
-            let index = match FileIndex::load(&cache) {
-                Some(i) if same && i.age().is_some_and(|a| a < max_age) => i,
-                _ => {
+            let fresh = same && FileIndex::saved_age(&cache).is_some_and(|a| a < max_age);
+            if fresh && !keep {
+                // Nothing to do: reading it (tens of MB for a large home) would
+                // only drop it.
+                return Msg::Nothing;
+            }
+            let index = match fresh.then(|| FileIndex::load(&cache)).flatten() {
+                Some(i) => i,
+                None => {
                     let limits = aizome_search::files::Limits { skip, ..Default::default() };
                     let i = FileIndex::build(&roots, &limits);
                     if let Some(d) = cache.parent() {

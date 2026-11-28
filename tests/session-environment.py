@@ -17,6 +17,9 @@ os.environ["OMP_THREAD_LIMIT"] = "1"
 # "05345" for 05:45).
 PASSWORD_ENTRY = ("password", "320x50+480+446", "-negate")
 TATAMI_BAR = ("tatami-bar", "1280x26+0+0")
+# Xfce's Applications button, the first item of its top panel: the same
+# corner at the 1024x768 its X11 session chooses as at 1280x800.
+XFCE_MENU_BUTTON = ("xfce-menu-button", "120x26+0+0")
 
 
 def wait_text(machine, expected, timeout=60, regex=False, crop=None):
@@ -231,6 +234,12 @@ for machine in (original, fixed):
         else:
             assert "WAYLAND_DISPLAY" not in environment(machine)
             assert "DCONF_PROFILE" not in environment(machine)
+            # A panel process is not yet a panel on screen. Every wait above
+            # can pass while the desktop is still black, and a click sent
+            # then lands on the desktop: the panel appears under the resting
+            # pointer afterwards and shows the button's tooltip, never its
+            # menu. Click the button once it is drawn.
+            wait_text(machine, "Applications", timeout=90, crop=XFCE_MENU_BUTTON)
             click(machine, 50, 12)
             wait_text(machine, "Settings", timeout=30)
             machine.screenshot("fixed-xfce-menu")

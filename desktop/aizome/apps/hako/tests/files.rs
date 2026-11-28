@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use aizome_kit::sidestep_ui::{DropAction, Key, Modifiers, NamedKey, PointerButton};
 use aizome_kit::testing::Harness;
 use aizome_kit::theme::ThemeChoice;
-use aizome_kit::{Point, WindowKey};
+use aizome_kit::{DragSource, Point, Rect, Vec2, WindowKey};
 use common::*;
 use hako::ui::app::{Request, Sheet};
 use hako::ui::browser::Loc;
@@ -51,6 +51,25 @@ fn click_name(h: &mut Harness<Hako>, w: WindowKey, col: usize, name: &str) {
         .unwrap_or_else(|| panic!("{name} in column {col}: {:?}", names(h, w, col)));
     let p = row_at(h, w, col, i);
     h.click(w, p);
+}
+
+/// Where the preview's picture is: the largest picture (or icon) the
+/// window shows. A picture is drawn in the middle of its room.
+fn preview_picture(h: &Harness<Hako>, w: WindowKey) -> Rect {
+    use aizome_kit::widget::SemanticRole;
+    h.semantics(w)
+        .into_iter()
+        .filter(|(s, _)| s.role == SemanticRole::Image)
+        .map(|(_, r)| r)
+        .max_by(|a, b| a.area().total_cmp(&b.area()))
+        .expect("the preview's picture")
+}
+
+/// What a drag offers and lets a destination do with it, apart from the
+/// chip it shows.
+fn offer(source: &DragSource) -> String {
+    let all = format!("{source:?}");
+    all.split(", icon:").next().unwrap_or_default().to_owned()
 }
 
 fn open(s: &Sandbox, rel: &str, layout: Layout) -> (Harness<Hako>, WindowKey) {
@@ -310,6 +329,265 @@ fn putting_back_a_folder_closes_its_trash_column() {
     assert!(!h.texts(w).iter().any(|t| t.contains("can't be read")));
 }
 
+/// The names of what the Trash holds.
+fn trashed(s: &Sandbox) -> Vec<String> {
+    let mut names: Vec<String> = std::fs::read_dir(s.path().join("data/Trash/files"))
+        .map(|d| d.flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect())
+        .unwrap_or_default();
+    names.sort();
+    names
+}
+
+/// ❖⌫ is Move to Trash's key, and a text field's for deleting back to the
+/// start of the line. In the location field it's the field's, whatever is
+/// selected in the columns behind it.
+#[test]
+fn super_backspace_in_the_location_field_edits_its_text() {
+    let s = Sandbox::new("trash-key-location");
+    populate(&s);
+    let (mut h, w) = open(&s, "work/notes.txt", Layout::Column);
+    let notes = s.home().join("work/notes.txt");
+    let field = |h: &Harness<Hako>| h.program().browser(w).unwrap().path_edit.clone();
+    assert_eq!(selected(&h, w), ["notes.txt"]);
+    h.command(w, 'l');
+    assert_eq!(h.focused_name(w).as_deref(), Some("location"));
+    assert!(field(&h).is_some_and(|t| t.contains("work")));
+    // From the end of the folder's path, it empties the field.
+    h.named(w, NamedKey::End, Modifiers::NONE);
+    h.named(w, NamedKey::Backspace, Modifiers::SUPER);
+    settle(&mut h);
+    assert!(notes.exists(), "the file selected behind the field went to the Trash: {:?}", trashed(&s));
+    assert!(trashed(&s).is_empty());
+    assert_eq!(field(&h).as_deref(), Some(""));
+    assert_eq!(selected(&h, w), ["notes.txt"]);
+    // Pressed again on the empty field, it still trashes nothing.
+    h.named(w, NamedKey::Backspace, Modifiers::SUPER);
+    h.named(w, NamedKey::Backspace, Modifiers::SUPER);
+    settle(&mut h);
+    assert!(notes.exists() && trashed(&s).is_empty());
+    // The field goes on taking what's typed.
+    assert_eq!(h.focused_name(w).as_deref(), Some("location"));
+    h.type_text(w, "~/Documents\n");
+    settle(&mut h);
+    assert_eq!(h.program().browser(w).unwrap().location(), Some(&Loc::Folder(s.home().join("Documents"))));
+    // It's the field's only while the field has the keyboard: with the
+    // field still open and the keyboard back in a column, it's Move to
+    // Trash's again.
+    h.send(Msg::GoPath(w, notes.clone()));
+    settle(&mut h);
+    h.command(w, 'l');
+    let row = names(&h, w, 1).iter().position(|n| n == "notes.txt").unwrap();
+    let at = row_at(&h, w, 1, row);
+    // (A plain click: the harness holds ❖ from the key before.)
+    h.click_with(w, at, Modifiers::NONE);
+    assert_eq!(h.focused_name(w).as_deref(), Some("col-1"));
+    assert_eq!(selected(&h, w), ["notes.txt"]);
+    assert!(field(&h).is_some());
+    h.named(w, NamedKey::Backspace, Modifiers::SUPER);
+    settle(&mut h);
+    assert!(!notes.exists());
+    assert_eq!(trashed(&s), ["notes.txt"]);
+}
+
+/// In the Trash the same keys are Put Back, Delete Immediately… and
+/// Empty Trash…: none of them acts from a field either.
+#[test]
+fn super_backspace_in_a_field_leaves_the_trash_alone() {
+    let s = Sandbox::new("trash-key-in-trash");
+    populate(&s);
+    let (mut h, w) = open(&s, "Documents/roadmap.md", Layout::Column);
+    let roadmap = s.home().join("Documents/roadmap.md");
+    let field = |h: &Harness<Hako>| h.program().browser(w).unwrap().path_edit.clone();
+    h.named(w, NamedKey::Backspace, Modifiers::SUPER);
+    settle(&mut h);
+    assert_eq!(trashed(&s), ["roadmap.md"]);
+    h.send(Msg::Go(w, Loc::Trash));
+    settle(&mut h);
+    h.named(w, NamedKey::Home, Modifiers::NONE);
+    assert_eq!(selected(&h, w), ["roadmap.md"]);
+    h.command(w, 'l');
+    assert_eq!(h.focused_name(w).as_deref(), Some("location"));
+    for mods in [Modifiers::SUPER, Modifiers::SUPER | Modifiers::ALT, Modifiers::SUPER | Modifiers::SHIFT] {
+        h.type_text(w, "~/work");
+        h.named(w, NamedKey::Backspace, mods);
+        settle(&mut h);
+        assert!(!roadmap.exists(), "put back from under the field");
+        assert_eq!(trashed(&s), ["roadmap.md"]);
+        assert!(h.program().sheets.is_empty(), "nothing is asked");
+        assert_eq!(field(&h).as_deref(), Some(""));
+    }
+    // From the list they act as before: ⌥❖⌫ asks, ❖⌫ puts back.
+    h.named(w, NamedKey::Escape, Modifiers::NONE);
+    assert_eq!(h.focused_name(w).as_deref(), Some("col-0"));
+    h.named(w, NamedKey::Backspace, Modifiers::SUPER | Modifiers::ALT);
+    assert!(h.program().sheets.values().any(|s| matches!(s, Sheet::Confirm { .. })));
+    h.named(w, NamedKey::Enter, Modifiers::NONE);
+    settle(&mut h);
+    assert!(h.program().sheets.is_empty() && !roadmap.exists());
+    h.named(w, NamedKey::Backspace, Modifiers::SUPER);
+    settle(&mut h);
+    assert!(roadmap.exists() && trashed(&s).is_empty());
+}
+
+/// While a file is being renamed, ❖⌫ edits the name: the file isn't
+/// moved to the Trash from under the field.
+#[test]
+fn super_backspace_while_renaming_edits_the_name() {
+    let s = Sandbox::new("trash-key-rename");
+    populate(&s);
+    let (mut h, w) = open(&s, "work/notes.txt", Layout::Column);
+    let notes = s.home().join("work/notes.txt");
+    let name = |h: &Harness<Hako>| h.program().browser(w).unwrap().rename.as_ref().map(|r| r.text.clone());
+    h.named(w, NamedKey::F(2), Modifiers::NONE);
+    assert_eq!(h.focused_name(w).as_deref(), Some("rename"));
+    assert_eq!(h.selection(w).as_deref(), Some("notes"), "the name without its extension is selected");
+    // With text selected it deletes that, as ⌫ does.
+    h.named(w, NamedKey::Backspace, Modifiers::SUPER);
+    settle(&mut h);
+    assert!(notes.exists(), "the file being renamed went to the Trash: {:?}", trashed(&s));
+    assert!(trashed(&s).is_empty());
+    assert_eq!(name(&h).as_deref(), Some(".txt"));
+    // With none, everything before the caret.
+    h.type_text(w, "todo");
+    h.named(w, NamedKey::End, Modifiers::NONE);
+    h.named(w, NamedKey::Backspace, Modifiers::SUPER);
+    settle(&mut h);
+    assert!(notes.exists() && trashed(&s).is_empty());
+    assert_eq!(name(&h).as_deref(), Some(""));
+    assert_eq!(h.focused_name(w).as_deref(), Some("rename"));
+    // The name typed after it is the file's.
+    h.type_text(w, "plan.txt\n");
+    settle(&mut h);
+    assert_eq!(std::fs::read_to_string(s.home().join("work/plan.txt")).unwrap(), "notes\n");
+    assert!(!notes.exists() && trashed(&s).is_empty(), "renamed, not trashed");
+    // The renaming done and the keyboard back in the column, ❖⌫ moves
+    // the file to the Trash as before.
+    assert_eq!(h.focused_name(w).as_deref(), Some("col-1"));
+    assert_eq!(selected(&h, w), ["plan.txt"]);
+    h.named(w, NamedKey::Backspace, Modifiers::SUPER);
+    settle(&mut h);
+    assert!(!s.home().join("work/plan.txt").exists());
+    assert_eq!(trashed(&s), ["plan.txt"]);
+}
+
+/// The search field: ❖⌫ clears what's typed, and neither the file
+/// selected in the columns nor a result selected in the list goes to the
+/// Trash, however often it's pressed.
+#[test]
+fn super_backspace_in_the_search_field_edits_the_query() {
+    let s = Sandbox::new("trash-key-search");
+    populate(&s);
+    let (mut h, w) = open(&s, "work/notes.txt", Layout::Column);
+    let notes = s.home().join("work/notes.txt");
+    let readme = s.home().join("work/sidestep/README.md");
+    let query = |h: &Harness<Hako>| h.program().browser(w).unwrap().search.as_ref().map(|s| s.query.clone());
+    // ❖F, and the key at once: nothing to delete, nothing trashed.
+    h.command(w, 'f');
+    assert_eq!(h.focused_name(w).as_deref(), Some("search"));
+    h.named(w, NamedKey::Backspace, Modifiers::SUPER);
+    settle(&mut h);
+    assert!(notes.exists(), "the file selected in the column went to the Trash: {:?}", trashed(&s));
+    // A result selected, then the field clicked to search for something
+    // else: the key clears the query.
+    h.type_text(w, "readme");
+    settle(&mut h);
+    let list = h.find_id(w, "col-0").expect("the results");
+    h.click(w, Point::new(list.x0 + 60.0, list.y0 + 24.0 + 12.0));
+    assert_eq!(h.program().browser(w).unwrap().selection(), vec![readme.clone()]);
+    let field = h.find_id(w, "search").expect("the search field");
+    h.click(w, field.center());
+    assert_eq!(h.focused_name(w).as_deref(), Some("search"));
+    h.named(w, NamedKey::End, Modifiers::NONE);
+    h.named(w, NamedKey::Backspace, Modifiers::SUPER);
+    settle(&mut h);
+    assert!(readme.exists(), "the result selected went to the Trash: {:?}", trashed(&s));
+    assert_eq!(query(&h), None, "the query is cleared, and the search with it");
+    // Again on the empty field, the column's selection showing again.
+    assert_eq!(selected(&h, w), ["notes.txt"]);
+    h.named(w, NamedKey::Backspace, Modifiers::SUPER);
+    settle(&mut h);
+    assert!(notes.exists() && readme.exists());
+    assert!(trashed(&s).is_empty(), "{:?}", trashed(&s));
+}
+
+/// The passphrase field of the sheet that unlocks a volume: ❖⌫ clears
+/// what's typed there too, with a file selected in the window behind.
+#[test]
+fn super_backspace_in_the_passphrase_field_edits_the_passphrase() {
+    let s = Sandbox::new("trash-key-unlock");
+    populate(&s);
+    let (mut h, w) = open(&s, "work/notes.txt", Layout::Column);
+    let notes = s.home().join("work/notes.txt");
+    let pass = |h: &Harness<Hako>| {
+        h.program().sheets.values().find_map(|s| match s {
+            Sheet::Unlock { pass, .. } => Some(pass.clone()),
+            _ => None,
+        })
+    };
+    h.program_mut().volumes.push(aizome_sys::disks::Volume {
+        block: "/dev/hako-test-vault".into(),
+        name: "Vault".into(),
+        locked: true,
+        ..Default::default()
+    });
+    h.send(Msg::Mount("/dev/hako-test-vault".into()));
+    assert_eq!(h.focused_name(w).as_deref(), Some("unlock-pass"));
+    h.type_text(w, "not it");
+    assert_eq!(pass(&h).as_deref(), Some("not it"));
+    h.named(w, NamedKey::Backspace, Modifiers::SUPER);
+    settle(&mut h);
+    assert!(notes.exists() && trashed(&s).is_empty());
+    assert_eq!(pass(&h).as_deref(), Some(""));
+}
+
+/// The other menu keys a field edits with: ❖↑ and ❖↓ move the caret to
+/// the text's ends (they're Enclosing Folder and Open Selected in the
+/// columns), and ⌥❖V pastes text (Move Here).
+#[test]
+fn a_field_keeps_the_other_keys_it_edits_with() {
+    let s = Sandbox::new("text-keys");
+    populate(&s);
+    let (mut h, w) = open(&s, "Documents/roadmap.md", Layout::Column);
+    let roadmap = s.home().join("Documents/roadmap.md");
+    let work = s.home().join("work");
+    let field = |h: &Harness<Hako>| h.program().browser(w).unwrap().path_edit.clone();
+    // Cut a file: Move Here (and Paste) would move it into the folder shown.
+    h.command(w, 'x');
+    h.send(Msg::GoPath(w, work.join("notes.txt")));
+    settle(&mut h);
+    h.command(w, 'l');
+    h.command(w, 'a');
+    h.type_text(w, "bc");
+    // ❖↑: the caret goes to the start, the columns stay where they are.
+    h.key(w, Key::Named(NamedKey::ArrowUp), Modifiers::SUPER);
+    settle(&mut h);
+    h.type_text(w, "a");
+    // ❖↓: to the end; the file selected isn't opened.
+    h.key(w, Key::Named(NamedKey::ArrowDown), Modifiers::SUPER);
+    settle(&mut h);
+    h.type_text(w, "d");
+    assert_eq!(field(&h).as_deref(), Some("abcd"));
+    assert_eq!(h.program().browser(w).unwrap().location(), Some(&Loc::Folder(work.clone())));
+    assert_eq!(selected(&h, w), ["notes.txt"]);
+    assert!(h.program().opened.is_empty(), "opened: {:?}", h.program().opened);
+    // ⌥❖V: the clipboard's text (the cut file's path) over the selection.
+    h.command(w, 'a');
+    h.key(w, Key::Character("v".into()), Modifiers::SUPER | Modifiers::ALT);
+    settle(&mut h);
+    assert!(roadmap.exists() && !work.join("roadmap.md").exists(), "the cut file was moved here");
+    assert_eq!(field(&h).as_deref(), roadmap.to_str());
+    // Out of the field, they're the menu's again: Move Here moves the
+    // file, ❖↑ goes to the enclosing folder.
+    h.named(w, NamedKey::Escape, Modifiers::NONE);
+    assert_eq!(h.focused_name(w).as_deref(), Some("col-1"));
+    h.key(w, Key::Character("v".into()), Modifiers::SUPER | Modifiers::ALT);
+    settle(&mut h);
+    assert!(!roadmap.exists() && work.join("roadmap.md").exists());
+    h.key(w, Key::Named(NamedKey::ArrowUp), Modifiers::SUPER);
+    settle(&mut h);
+    assert_eq!(h.program().browser(w).unwrap().location(), Some(&Loc::Folder(s.home())));
+}
+
 #[test]
 fn an_explicit_path_can_open_through_a_hidden_ancestor() {
     let s = Sandbox::new("hidden-ancestor");
@@ -411,6 +689,107 @@ fn drags_move_within_a_disk_and_drops_copy_in() {
 }
 
 #[test]
+fn the_preview_s_picture_drags_its_file_out() {
+    let s = Sandbox::new("drag-preview");
+    populate(&s);
+    let (mut h, w) = open(&s, "Pictures/mark.png", Layout::Column);
+    let mark = s.home().join("Pictures/mark.png");
+    assert!(wait_for(&mut h, |p| p.previews.get(&mark).is_some_and(|p| p.image.is_some())), "its picture shows");
+    h.render(w, 1.0);
+    // What a drag of its row carries once it has left the window.
+    let from = row_at(&h, w, 0, names(&h, w, 0).iter().position(|n| n == "mark.png").unwrap());
+    h.drag(w, from, Point::new(-40.0, from.y), 8);
+    settle(&mut h);
+    let (by_row, _) = h.program().outbound.clone().expect("the row's drag went out");
+    let rows = format!("{:?}", h.drags()[0].1);
+    h.end_drag(by_row, DropAction::None);
+    // A click on the picture is the click it was (the preview takes the
+    // keys, to scroll by), and drags nothing. Nor does the room beside
+    // the picture, or a press that hardly moves.
+    let room = preview_picture(&h, w);
+    let picture = room.center();
+    assert_eq!(h.focused_name(w).as_deref(), Some("col-0"));
+    h.click(w, picture);
+    assert_eq!(h.focused_name(w), None, "the click went to the preview");
+    assert!(room.width() > room.height() + 60.0, "a square picture leaves room beside it: {room:?}");
+    let beside = Point::new(room.x0 + 20.0, picture.y);
+    h.drag(w, beside, beside + Vec2::new(0.0, 40.0), 4);
+    h.press(w, picture, PointerButton::Left, 1);
+    h.move_to(w, picture + Vec2::new(3.0, 0.0));
+    assert_eq!(h.drags().len(), 1, "no drag yet: a click, the room beside, and three points");
+    // Moved on, the file goes out, once, however far it's taken.
+    h.move_to(w, picture + Vec2::new(12.0, 4.0));
+    h.move_to(w, picture + Vec2::new(60.0, 4.0));
+    let drags = h.drags();
+    assert_eq!(drags.len(), 2, "the picture's drag went out");
+    let (id, carried) = drags[1];
+    // It offers the file, to copy and nothing else, under the row's chip.
+    let a_copy = DragSource::new().urls([hako::model::uri::file_uri(&mark)]).actions(true, false);
+    assert_eq!(offer(carried), offer(&a_copy));
+    assert_eq!(format!("{carried:?}"), rows, "as its row goes");
+    assert_eq!(h.program().outbound, Some((id, vec![mark.clone()])));
+    // Whatever took it says it did, Hako moves and deletes nothing.
+    h.end_drag(id, DropAction::Move);
+    settle(&mut h);
+    assert!(mark.exists());
+    assert_eq!(selected(&h, w), ["mark.png"]);
+    assert_eq!(h.program().outbound, None);
+}
+
+#[test]
+fn the_preview_drags_what_its_row_would_or_nothing() {
+    let s = Sandbox::new("drag-preview-edges");
+    populate(&s);
+    let (mut h, w) = open(&s, "Documents/roadmap.md", Layout::Column);
+    let drag = |h: &mut Harness<Hako>| {
+        h.render(w, 1.0);
+        let from = preview_picture(h, w).center();
+        h.drag(w, from, from + Vec2::new(40.0, 10.0), 4);
+        settle(h);
+        h.drags().len()
+    };
+    // A file with no picture of its own goes by its icon.
+    let roadmap = s.home().join("Documents/roadmap.md");
+    assert_eq!(drag(&mut h), 1);
+    let first = h.drags()[0].0;
+    assert_eq!(h.program().outbound, Some((first, vec![roadmap.clone()])));
+    h.end_drag(first, DropAction::Copy);
+    // Gone since it was selected (the column hasn't heard): there's
+    // nothing to carry.
+    std::fs::remove_file(&roadmap).unwrap();
+    assert_eq!(h.program().preview_entry(w).map(|e| e.path), Some(roadmap));
+    assert_eq!(drag(&mut h), 1, "a file that's gone drags nothing");
+    assert_eq!(h.program().outbound, None);
+    // In the Trash it's the file the can holds, as it is for its row.
+    h.send(Msg::GoPath(w, s.home().join("Documents/budget.csv")));
+    settle(&mut h);
+    h.key(w, Key::Named(NamedKey::Backspace), Modifiers::SUPER);
+    settle(&mut h);
+    h.send(Msg::Go(w, Loc::Trash));
+    settle(&mut h);
+    click_name(&mut h, w, 0, "budget.csv");
+    settle(&mut h);
+    let trashed = s.path().join("data/Trash/files/budget.csv");
+    assert_eq!(h.program().preview_entry(w).map(|e| e.path), Some(trashed.clone()));
+    assert_eq!(drag(&mut h), 2);
+    let second = h.drags()[1].0;
+    assert_eq!(h.program().outbound, Some((second, vec![trashed.clone()])));
+    h.end_drag(second, DropAction::Copy);
+    assert!(trashed.exists());
+    // Several items selected show no preview to drag by; nor does a
+    // folder, which opens its column instead.
+    h.send(Msg::GoPath(w, s.home().join("Downloads/fonts.tar.gz")));
+    settle(&mut h);
+    assert!(h.program().preview_entry(w).is_some());
+    h.key(w, Key::Named(NamedKey::End), Modifiers::SHIFT);
+    assert_eq!(selected(&h, w).len(), 3);
+    assert!(h.program().preview_entry(w).is_none());
+    h.send(Msg::GoPath(w, s.home().join("work/sidestep")));
+    settle(&mut h);
+    assert!(h.program().preview_entry(w).is_none());
+}
+
+#[test]
 fn hidden_files_show_on_asking() {
     let s = Sandbox::new("hidden");
     populate(&s);
@@ -474,6 +853,103 @@ fn the_location_bar_and_reveal() {
     assert_eq!(selected(&h, ws[n]), ["fonts.tar.gz", "release-notes.pdf"]);
     assert_eq!(selected(&h, ws[n + 1]), ["roadmap.md"]);
     assert_eq!(h.platform.activations.last().unwrap().1.as_deref(), Some("launchers-token"));
+}
+
+/// Go to Folder starts with the folder's path, a slash and the caret
+/// after them, so what's typed goes on below the folder.
+#[test]
+fn go_to_folder_starts_below_the_folder() {
+    let s = Sandbox::new("go-to-folder");
+    populate(&s);
+    s.dir("home/work/.cache");
+    s.dir("home/work/日本 語/sub");
+    let (mut h, w) = open(&s, "work", Layout::Column);
+    let work = s.home().join("work");
+    let field = |h: &Harness<Hako>| h.program().browser(w).unwrap().path_edit.clone();
+    let here = |h: &Harness<Hako>| h.program().browser(w).unwrap().location().cloned();
+    let slashed = |p: &std::path::Path| Some(format!("{}/", p.display()));
+
+    // ❖L: the folder and one slash, nothing selected, the caret at the
+    // end (⇧← from there selects the slash).
+    h.command(w, 'l');
+    assert_eq!(h.focused_name(w).as_deref(), Some("location"));
+    assert_eq!(field(&h), slashed(&work));
+    assert_eq!(h.selection(w), None);
+    h.named(w, NamedKey::ArrowLeft, Modifiers::SHIFT);
+    assert_eq!(h.selection(w).as_deref(), Some("/"));
+    h.named(w, NamedKey::ArrowRight, Modifiers::NONE);
+    // What's typed goes on below the folder: a hidden one, say.
+    h.type_text(w, ".cache");
+    assert_eq!(field(&h), Some(format!("{}/.cache", work.display())));
+    h.type_text(w, "\n");
+    settle(&mut h);
+    assert_eq!(here(&h), Some(Loc::Folder(work.join(".cache"))));
+    assert_eq!(field(&h), None);
+
+    // Return on the text as it stands stays put: the columns and the
+    // selection are kept, and Back has nothing new to remember.
+    h.send(Msg::GoPath(w, work.clone()));
+    settle(&mut h);
+    h.named(w, NamedKey::Home, Modifiers::NONE);
+    settle(&mut h);
+    let chosen = selected(&h, w);
+    assert_eq!(chosen.len(), 1);
+    let b = h.program().browser(w).unwrap();
+    let (columns, back, focus) = (b.columns.len(), b.back.clone(), b.focus);
+    h.command(w, 'l');
+    assert_eq!(field(&h), slashed(&work));
+    h.type_text(w, "\n");
+    settle(&mut h);
+    let b = h.program().browser(w).unwrap();
+    assert_eq!((b.path_edit.as_ref(), b.path_error.as_ref()), (None, None));
+    assert_eq!(b.location(), Some(&Loc::Folder(work.clone())));
+    assert_eq!((b.columns.len(), &b.back), (columns, &back));
+    assert_eq!(selected(&h, w), chosen);
+    assert_eq!(h.focused_name(w), Some(format!("col-{focus}")));
+
+    // Escape puts the folders back, whatever was typed, and the field
+    // starts at the end again however it was left. ⇧❖G opens it too,
+    // though the Go menu lists the command once.
+    h.command(w, 'l');
+    h.type_text(w, "nowhere");
+    h.named(w, NamedKey::Home, Modifiers::NONE);
+    h.named(w, NamedKey::Escape, Modifiers::NONE);
+    assert_eq!(field(&h), None);
+    assert!(h.find_id(w, "location").is_none());
+    assert_eq!(here(&h), Some(Loc::Folder(work.clone())));
+    assert_eq!(h.focused_name(w), Some(format!("col-{focus}")));
+    h.key(w, Key::Character("G".into()), Modifiers::SUPER | Modifiers::SHIFT);
+    assert_eq!(h.focused_name(w).as_deref(), Some("location"));
+    assert_eq!(field(&h), slashed(&work));
+    let bar = hako::ui::menus::menu_bar(h.program());
+    let listed = bar.menus().iter().flat_map(|m| m.actions()).filter(|a| a.label == "Go to Folder…").count();
+    assert_eq!(listed, 1);
+    // A name with a space in it, not ASCII, and a slash typed after it.
+    h.type_text(w, "日本 語/\n");
+    settle(&mut h);
+    let odd = work.join("日本 語");
+    assert_eq!(here(&h), Some(Loc::Folder(odd.clone())));
+    h.command(w, 'l');
+    assert_eq!(field(&h), slashed(&odd), "one slash");
+    h.type_text(w, "sub\n");
+    settle(&mut h);
+    assert_eq!(here(&h), Some(Loc::Folder(odd.join("sub"))));
+
+    // The top of the disk is its one slash; the Trash and Recent have no
+    // path, so the field starts empty there.
+    h.send(Msg::GoPath(w, "/".into()));
+    settle(&mut h);
+    h.command(w, 'l');
+    assert_eq!(field(&h).as_deref(), Some("/"));
+    h.named(w, NamedKey::Escape, Modifiers::NONE);
+    for loc in [Loc::Trash, Loc::Recent] {
+        h.send(Msg::Go(w, loc.clone()));
+        settle(&mut h);
+        h.command(w, 'l');
+        assert_eq!(field(&h).as_deref(), Some(""), "{loc:?}");
+        h.named(w, NamedKey::Escape, Modifiers::NONE);
+        assert_eq!(field(&h), None);
+    }
 }
 
 #[test]

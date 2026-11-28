@@ -229,8 +229,7 @@ impl IdleNotifierHandler for State {
 
 impl IdleInhibitHandler for State {
     fn inhibit(&mut self, surface: WlSurface) {
-        self.az.idle_inhibitors.insert(surface);
-        self.az.idle_notifier.set_is_inhibited(true);
+        self.add_idle_inhibitor(surface);
     }
 
     fn uninhibit(&mut self, surface: WlSurface) {

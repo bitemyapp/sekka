@@ -61,7 +61,13 @@ fn main() {
 - **Messages** are `Clone + Send`. Widgets send them (`on_press`,
   `on_change`); timers, background work and other threads send them through
   `Cx`. `update` gets one at a time; after a batch the kit views every
-  window again.
+  window again by default. An update that changes only particular windows
+  can call `cx.refresh_window(key)` for each one; an update that changes
+  no views can call `cx.skip_view_refresh()`. These requests accumulate
+  across the batch, and an unannotated update still refreshes all windows.
+  Sheets refresh their containing window. Opening, showing, resizing and
+  other kit operations retain their own required refreshes, and menus
+  still update. Use the default when shared state affects other windows.
 - **Views are cheap to make and are made often.** An element is a
   description; the kit mounts it, lays it out, and diffs the result against
   the window's last tree by **key path**: each node's identity is its
@@ -83,9 +89,9 @@ What `launched` and `update` act with:
 
 | | |
 |---|---|
-| `open_window(WindowSpec) -> WindowKey` | `WindowSpec::new(title).size(w, h).min_size(..).max_size(..).resizable(b)`, `.dialog(parent)`, `.utility()`, `.foreign_parent(handle)` (over another program's window, by the handle it exported: a portal dialog's `wayland:<handle>`), `WindowSpec::layer(LayerOptions, w, h)`, `WindowSpec::lock(output)`. Sizes are the content's: where the kit draws the menu bar in the window (no Aizome shell), the bar comes on top. |
+| `open_window(WindowSpec) -> WindowKey` | `WindowSpec::new(title).size(w, h).min_size(..).max_size(..).resizable(b)`, `.dialog(parent)`, `.utility()` (a small window beside the app's others, such as a palette or a progress window: it has no minimise button, though the compositor can still minimise it, and its tag `utility` has Aizome's compositor open it at its own size and by itself, not as a tab on the app's focused window), `.foreign_parent(handle)` (over another program's window, by the handle it exported: a portal dialog's `wayland:<handle>`), `WindowSpec::layer(LayerOptions, w, h)`, `WindowSpec::lock(output)`, `.kind(WindowKind::Popup { parent, anchor, placement, grab })` (a popup of the program's own against a rectangle of one of its windows, its content `view(key)`: the shell's systray panels). Sizes are the content's: where the kit draws the menu bar in the window (no Aizome shell), the bar comes on top. A popup opened with `grab` closes at a press outside it, in another app or anywhere else in this one (what opened it included), and when a menu opens elsewhere in the app; the program hears `close_requested` for it before anything the press itself sends, so a button that toggles it can tell that its own press closed it. |
 | `close_window(key)`, `set_title(key, t)`, `request_size`, `minimise`, `set_fullscreen(key, on)`, `activate(key)`, `windows()`, `key_window()` | `activate` brings a window forward (a one-instance app hearing its second launch); `key_window` is the window with the keyboard (or the last that had it), the one a document app's menu commands are for. |
-| `show_window(key)`, `hide_window(key)`, `prepare_window(key, scale) -> bool` | A window opened hidden (`.hidden()` on its `WindowSpec`) or hidden since isn't viewed, its widgets' ticks wait and its focus leaves it (coming back when it shows); shown, it's as it was. `prepare_window` draws a hidden window ahead of its next showing at the scale it'll show at: laid out at once, drawn offscreen at idle in bands of about a millisecond, again when asked, when its focus moves or the theme changes. Shown at that size and scale, its first frame copies the pictures in and draws only what changed since, rather than rasterising all of it (the shell's palette: see `ahead.rs`). The pictures hold the window's pixels while it's hidden. |
+| `show_window(key)`, `hide_window(key)`, `prepare_window(key, scale) -> bool` | A window opened hidden (`.hidden()` on its `WindowSpec`) or hidden since isn't viewed, its widgets' ticks wait and its focus leaves it (coming back when it shows); shown, it's as it was. `prepare_window` draws a hidden window ahead of its next showing at the scale it'll show at: laid out at once, drawn offscreen at idle in bands of about a millisecond, again when asked, when its focus moves or the theme changes. Shown at that size and scale, its first frame copies the pictures in and draws only what changed since, rather than rasterising all of it (the shell's palette: see `ahead.rs`). The pictures hold the window's pixels while it's hidden and through the showing that starts from them, until it hides again: the renderer caches what a frame draws until its owner drops it, so they are not dropped in the frame that draws them. |
 | `spawn(\|\| msg)` | Work on the kit's thread pool; its result comes back as a message. |
 | `stream() -> MsgSender<Msg>` | A `Clone + Send` sender for threads that keep sending (D-Bus, IPC event streams, file watchers): `sender.send(msg)` wakes the loop. |
 | `after(d, msg)`, `every(d, msg) -> TimerHandle`, `cancel(h)`, `send(msg)` | Timers; a message to the next update. |
@@ -95,7 +101,7 @@ What `launched` and `update` act with:
 | `element_rect(window, name)` | Where the element given `.id(name)` is in a window, as last laid out (to put something by it without a press: the shell's panels asked for over its socket). |
 | `theme() -> &Theme`, `quit()` | |
 | `show_context_menu(window, at, Menu)` | A menu at a point. |
-| `show_menu(window, anchor_rect, Menu, MenuStyle)` | A menu anchored to any rectangle of any window (the shell's bar menus). |
+| `show_menu(window, anchor_rect, Menu, MenuStyle)` | A menu anchored to any rectangle of any window (the shell's bar menus). One menu is open at a time: one opening closes another (and dismisses a popover, and a popup of the program's own that holds a grab), and a press outside it closes it, in whichever of the app's windows it lands (the compositor closes menus for a press in another app only). |
 | `show_sheet(parent) -> WindowKey` | A sheet over a window: its content is `view(key)`; close it with `close_window`. |
 | `alert(window, Alert)` | Title, message, buttons; Return and Escape press the default and cancel ones. |
 | `open_panel(window, FileDialog, \|paths\| msg)`, `save_panel(…)` | File panels. |
@@ -351,7 +357,7 @@ a `bevel_lo` bottom): compact pop-ups, `button(..).toolbar()`,
 
 | | |
 |---|---|
-| `popover(anchor, content, open).on_dismiss(msg)` | Content in a floating popup under the anchor (raised, the hard shadow) while `open`; a click elsewhere or Escape sends `on_dismiss`. It takes the keyboard (Tab moves within it), resizes with its content, and follows its anchor when that moves. |
+| `popover(anchor, content, open).on_dismiss(msg)` | Content in a floating popup under the anchor (raised, the hard shadow) while `open`; a click elsewhere (in any of the app's windows, or another app's) or Escape sends `on_dismiss`, and so does a menu opening; a click on the anchor is the program's (a toggle). It takes the keyboard (Tab moves within it), resizes with its content, and follows its anchor when that moves. |
 | `context_menu(el, Menu)` | The menu on a right click (or ⌃-click). |
 | `tooltip(el, "text")` (or `.tooltip(..)`) | After the pointer rests 650 ms. |
 | `mouse_area(el)` | `.on_press`, `.on_release`, `.on_double_click`, `.on_right_click(\|at\| ..)`, `.on_hover(\|in\| ..)`, `.on_move`, `.on_drag(\|DragEvent\| ..)`, `.on_drop(\|Dropped { urls, text, .. }\| ..)` (files and text from other programs, and this program's own drags out), `.drag_out(\|\| DragSource)` (pressed and moved four points, it goes out as the desktop's drag; `on_drag` hears no more of that press), `.cursor(c)`. |
@@ -493,10 +499,13 @@ elsewhere), the press is over and the next one starts afresh.
   keyboard for others).
 - Space or Return work the focused control. In a sheet, Return presses the
   default button and Escape the cancel one; Escape closes popovers and
-  menus.
+  menus. Space and Return press only as the key goes down: a held key's
+  repeats press nothing, so the Return that opened a sheet, or moved the
+  focus to a button, doesn't also answer it (`--test held_keys`).
 - Menus' shortcuts come before the focused widget: ❖ (Super) is the command
   key. With nothing focused, keys go to what's under the pointer (a scroll
-  view pages).
+  view pages). An item marked `.yields_to_text()` leaves its shortcut to a
+  text field or editor that has the keyboard (see Menus).
 
 ## Menus
 
@@ -533,7 +542,7 @@ fn menus(&self) -> MenuBar<Msg> {
 `.replace(title, menu)`, `.remove(title)`, `.extend(title, items)`,
 `.insert(i, menu)` change the standard ones. Items: `MenuItem::new(label,
 msg)`, `.shortcut(Shortcut::cmd('N').shift().alt().ctrl())`, `.enabled`,
-`.checked`, `.icon`, `.key(k)`, `.role(MenuRole::..)`;
+`.checked`, `.icon`, `.key(k)`, `.role(MenuRole::..)`, `.yields_to_text()`;
 `MenuItem::role_item(label, role)` for an item the kit carries out itself;
 `Menu::separator()`, `.submenu(menu)`, `.header(text)`.
 
@@ -551,6 +560,14 @@ too gets it only when no widget takes the command); Quit asks each window's
 `close_requested`; About shows the About panel; Minimise asks the window's
 compositor; Hide, Hide Others, Fill, Stack with… and Bring All to Front go
 through `Cx::set_window_manager` (the compositor's IPC).
+
+A shortcut that is also a key text is edited with (❖⌫ deletes back to the
+start of a line; ❖↑ and ❖↓ go to the text's ends) is taken from a focused
+field like any other. `.yields_to_text()` on the item leaves the key to a
+text field or editor while one has the keyboard, in a sheet too; the item is
+still chosen from the menu. Hako's Move to Trash (❖⌫) is one: while a name,
+the location or a search is being typed, the key edits that text. `cargo test
+-p aizome-kit --test menu_text_keys` covers it.
 
 Settings and app-specific Help have no generic kit handler. Their role-only
 standard entries are disabled, including their shortcuts. Apps with preferences
@@ -689,6 +706,7 @@ fn adds() {
 `Harness::with(program, appearance, menu_bar)` picks the theme and the
 in-window menu bar. Input: `click`, `click_text`, `press`/`release`,
 `drag`, `move_to`, `scroll`, `pinch`, `key`, `named`, `command`, `type_text`, `ime`,
+`key_down`/`key_repeat`/`key_up` (a key held and repeating),
 `focus_window`, `send(msg)`, `resize`, `window_state` (the compositor's
 answer; `fullscreen_asked` says what was asked). `settle(wait, |p| done)`
 handles what `cx.spawn` and streams send until the program says it's

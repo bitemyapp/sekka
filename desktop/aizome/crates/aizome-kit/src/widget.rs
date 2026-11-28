@@ -324,6 +324,13 @@ pub trait Widget: std::any::Any {
         false
     }
 
+    /// Whether it's text with a caret, a field or an editor: while it has
+    /// the keyboard, the shortcuts of menu items that
+    /// [yield to text](crate::menu::MenuItem::yields_to_text) are its keys.
+    fn edits_text(&self) -> bool {
+        false
+    }
+
     /// Activate it as Space or Return would, or as a sheet's default
     /// button answers Return.
     fn activate(&mut self, cx: &mut EventCx) -> bool {

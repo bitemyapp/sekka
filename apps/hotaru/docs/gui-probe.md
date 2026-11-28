@@ -5,7 +5,7 @@ through its unchanged `nix/package.nix`, using Sekka's locked Nixpkgs source.
 The external reference remains clean. This build does not change the existing
 native terminal-only oracle or add GTK to Hotaru. The build command, exact
 package and executable hashes, Nixpkgs NAR hash, loader dependencies and preserved
-VT oracle hashes are in [`ghostty-gui-baseline.json`](../upstream/ghostty-gui-baseline.json).
+VT oracle hashes are in [`hotaru-benchmark-data/ghostty-gui-baseline.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/ghostty-gui-baseline.json).
 Both application packages target baseline x86-64; the separately recorded
 terminal-core benchmarks target the workstation's native CPU.
 
@@ -34,7 +34,7 @@ The six retained runs alternate Ghostty and Hotaru, three fresh processes each,
 on CPUs 8–11 under the shared workstation lock. All use probe SHA-256
 `bb2eff9f22760d35e3464391f83a2363a0bf2b809ee97a4cd621da118c31bf58`.
 Their individual timings, process samples, exact commands, corpus hashes and
-configurations are in [`upstream/gui-probes/`](../upstream/gui-probes/).
+configurations are in [`hotaru-benchmark-data/gui-probes`](https://github.com/bitemyapp/hotaru-benchmark-data/tree/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/gui-probes).
 The Hotaru ELF is the earlier tested checkpoint, SHA-256
 `27b62cc38cdb4b8f7d79a22446fb5bea2bc9a222aea5802f77f93fce46ea1917`;
 these are **not measurements of the subsequent rich-copy implementation**.

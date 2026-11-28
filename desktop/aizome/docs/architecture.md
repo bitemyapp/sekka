@@ -19,8 +19,12 @@ boards' exact CSS. This document is the contract between the parts.
 | Config | `crates/aizome-config` | — | `~/.config/aizome/settings.toml`: schema, defaults, load/save, change notification |
 | Kit | `crates/aizome-kit` | — | Widget kit on sidestep-ui in Aizome's look: layout, controls, lists, text fields, menus (published to the global menu bar), sidebars, sheets, icons |
 | System | `crates/aizome-sys` | — | System services over D-Bus and the kernel: NetworkManager, BlueZ, PipeWire volume, UPower, brightness, power profiles, timedate/locale/hostname, AccountsService, CUPS, logind, MPRIS, disks (UDisks2) |
+| Media controls | `crates/aizome-mpris` | — | A player's side of MPRIS 2 (the menu bar's media widget and the media keys follow players through `aizome-sys`): Utsushi and Chanoma serve it |
 | Apps index | `crates/aizome-apps` | — | Installed applications without D-Bus: desktop entries, the index of them, `Exec` lines, icons, default apps and the default terminal (Settei shows it, ❖Return starts it); `aizome-sys` re-exports it as `apps` and adds launching |
 | Search | `crates/aizome-search` | — | Fuzzy matching and the file index behind the palette and Find |
+| Files index | `crates/aizome-index` | — | What's in folders and drives, shared by every app in one SQLite database; a second look lists only folders whose time changed (`docs/files-index.md`): Chanoma finds games with it |
+| Game controllers | `crates/aizome-gamepad` | — | Controllers from their event devices on a thread of their own: buttons by where they are (SDL's database, the kernel's layout), which button says yes, which buttons a controller has, menus' repeating directions, rumble: Chanoma and the login screen read them |
+| From the sofa | `crates/aizome-sofa` | — | Aizome's look at twice its size on a 1920 × 1080 design scaled to the screen, a controller's buttons drawn as its maker prints them, the on-screen keyboard and the PIN pad (ten digits, chords for a controller short of buttons): Chanoma's and the login screen's |
 | Portal | `crates/aizome-portal` | `aizome-portal` | The xdg-desktop-portal backend `org.freedesktop.impl.portal.desktop.aizome`: file choosers (Open and Save) for every app that asks the portal, each a window of its own over the app that asked (`docs/apps.md`, "The file chooser") |
 | Apps | `apps/*` | one each | Settei (Settings), Yukimi, Soroban, Koyomi, Tokei, Fusen, Sumi, Tenki, Tansu, Kura, Hako, Myaku |
 
@@ -103,6 +107,7 @@ apps, as ⌘ does on a Mac. The system takes only:
 | ❖⇧[, ❖⇧] | Previous, next tab of the window's group (⌘⇧[ ⌘⇧] on a Mac) |
 | ⌃⇧❖[, ⌃⇧❖] | Move the tab left, right in its group |
 | ⌃❖F | Full screen |
+| ⌃❖D | Hide or show the Deskbar (the menu bar's Hide Deskbar / `N apps` controls) |
 | ❖Return | Terminal (Hotaru, or the one chosen in Settei) in the Desk's folder |
 | ⌃❖Q | Lock |
 | ⌃⌥Del | Recovery: force quit stuck apps, reset input, restart the shell (`docs/recovery.md`) |
@@ -169,7 +174,14 @@ which acts through the compositor.
 `aizome-config`. Settings (Settei) writes it and sends `reload-config` to
 the compositor, which applies it and broadcasts `config-changed`; the shell
 and kit apps reload on that event (kit apps also watch the file, so they
-need no socket). Missing keys take defaults; unknown keys are kept.
+need no socket). Settei isn't the only writer: the shell writes what's
+changed from the bar and the Deskbar (the Deskbar's settings, Do Not
+Disturb, the theme and size, Night Light, `location`), Shashin the
+wallpaper, and the login session's compositor its Desks
+(`docs/compositor.md`), saying `config-changed` itself. Each reads the
+file again, makes its change and writes the file whole, so nobody saves
+over another's change from an older copy. Missing keys take defaults;
+unknown keys are kept, comments aren't.
 Sections: `appearance` (theme, follow sunset, focus colour, effects, size,
 reduced motion, wallpaper), `input` (keyboard layouts, repeat, pointer,
 touchpad), `outputs` (by make/model/serial: mode, scale, position,
@@ -199,7 +211,9 @@ sunrise and sunset: the shell writes what GeoClue says).
   does). The compositor imports its environment into systemd and D-Bus
   (`WAYLAND_DISPLAY`, `DISPLAY`, `XDG_CURRENT_DESKTOP=Aizome`, the IPC
   sockets), notifies systemd that it is ready, and starts
-  `aizome-session.target`, which binds `graphical-session.target`.
+  `aizome-session.target`, which binds `graphical-session.target`. Its
+  unit unsets those variables when it stops. If the launcher dies without
+  ending the session, `aizome-session-watch.service` ends it.
 - The compositor starts and keeps alive `aizome-shell` and
   `xwayland-satellite` (X11 apps).
 - Live reload (`docs/reload.md`): the compositor's logic swaps between

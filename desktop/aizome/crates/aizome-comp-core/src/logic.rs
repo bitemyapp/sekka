@@ -131,6 +131,9 @@ pub struct MapInfo {
     pub title: String,
     pub pid: Option<i32>,
     pub parent: Option<WinId>,
+    /// The app's own name for the window among its windows, if it gave one
+    /// (xdg-toplevel-tag: see `protocols::toplevel_tag`).
+    pub tag: Option<String>,
     /// Server-side decorations.
     pub ssd: bool,
     /// Its geometry's size.

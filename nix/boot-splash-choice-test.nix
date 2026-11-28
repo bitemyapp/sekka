@@ -67,6 +67,7 @@ assert
     "calamares.desktops"
     "calamares.defaultDesktop"
     "calamares.loginScreen"
+    "calamares.autoLogin"
     "calamares.bootSplash.enable"
   ];
 # Both interfaces and the helper must come from this checkout's integration.

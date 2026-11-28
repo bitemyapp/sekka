@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 
 use aizome_kit::WindowKey;
 use aizome_kit::layout::{Point, Vec2};
-use aizome_kit::sidestep_ui::Modifiers;
+use aizome_kit::sidestep_ui::{Key, Modifiers, NamedKey};
 use aizome_kit::testing::Harness;
 use aizome_yukimi::app::{Changes, Clock, Launch, Msg, Page, Runner, Source, Yukimi, launch_from_args};
 use aizome_yukimi::job::Outcome;
@@ -25,6 +25,8 @@ const FAILS: &str = r#"echo 'building the new system' >&2
 echo '@nix {"action":"msg","level":0,"msg":"error: builder for gimp2 failed with exit code 1"}' >&2
 exit 1"#;
 
+const CHECKED: &str = r#"echo '{"source":"/nix/store/checked-source","lock":"/nix/store/checked.lock","builds":[]}'"#;
+
 /// A step that runs `script` in place of Nix or the helper.
 fn script(text: &'static str) -> Step {
     Box::new(move || {
@@ -37,12 +39,19 @@ fn script(text: &'static str) -> Step {
 /// The sample, with every operation it runs written down and run as
 /// `script`.
 fn sample(script_text: &'static str) -> (Harness<Yukimi>, WindowKey, Arc<Mutex<Vec<Operation>>>) {
+    sample_with_check(script_text, CHECKED)
+}
+
+fn sample_with_check(
+    script_text: &'static str,
+    check: &'static str,
+) -> (Harness<Yukimi>, WindowKey, Arc<Mutex<Vec<Operation>>>) {
     let ran = Arc::new(Mutex::new(Vec::new()));
     let seen = ran.clone();
     let model = Arc::new(aizome_yukimi::fixture::model());
     let runner = Runner::Mock(Arc::new(move |op: &Operation| {
         seen.lock().unwrap().push(op.clone());
-        vec![script(script_text)]
+        vec![script(if matches!(op, Operation::CheckUpdate { .. }) { check } else { script_text })]
     }));
     let mut app = Yukimi::with(Source::Sample(model.clone()), runner, Clock::Fixed(aizome_yukimi::fixture::NOW, 21));
     app.check = Some(Arc::new(aizome_yukimi::fixture::check(&model)));
@@ -400,9 +409,82 @@ fn updating_takes_what_moves_forward() {
     // On a Sekka system one update takes Sekka and every newer source.
     assert!(h.click_text(w, "Update"));
     let op = ran.lock().unwrap().first().cloned().unwrap();
-    assert_eq!(op, Operation::UpdateSekka { inputs: vec!["nixpkgs".into(), "sekka".into()] });
-    assert_eq!(op.helper_args(None), ["change", "--sekka", "--mode", "auto", "--update", "nixpkgs,sekka"]);
+    assert_eq!(
+        op,
+        Operation::CheckUpdate {
+            operation: Box::new(Operation::UpdateSekka { inputs: vec!["nixpkgs".into(), "sekka".into()] })
+        }
+    );
+    assert_eq!(op.helper_args(None), ["preflight", "--sekka", "--mode", "auto", "--update", "nixpkgs,sekka"]);
     settle(&mut h, |a| a.job.as_ref().is_some_and(|j| j.outcome.is_some()));
+    let operations = ran.lock().unwrap();
+    assert_eq!(operations.len(), 2);
+    let args = operations[1].helper_args(None);
+    assert!(args.windows(2).any(|a| a == ["--lock", "/nix/store/checked.lock"]));
+    assert!(args.windows(2).any(|a| a == ["--checked-source", "/nix/store/checked-source"]));
+}
+
+const NEEDS_BUILD: &str = r#"echo '{"source":"/nix/store/checked-source","lock":"/nix/store/checked.lock","builds":["cargo-geiger-0.13.0"]}'"#;
+
+#[test]
+fn an_uncached_package_is_named_and_can_be_cancelled_before_the_update() {
+    let (mut h, w, ran) = sample_with_check(WORKS, NEEDS_BUILD);
+    h.send(Msg::Show(Page::Updates));
+    assert!(h.click_text(w, "Update"));
+    settle(&mut h, |a| a.job.is_none());
+    assert!(has(&h, w, "Some packages need to be built"));
+    assert!(h.texts(w).iter().any(|s| s.contains("cargo-geiger-0.13.0")));
+    assert_eq!(ran.lock().unwrap().len(), 1);
+    if let Some(dir) = std::env::var_os("YUKIMI_PREFLIGHT_PICTURES") {
+        h.save_png(w, std::path::PathBuf::from(dir).join("uncached-package.png"), 1.0);
+    }
+    assert!(click_last(&mut h, w, "Cancel"));
+    h.advance(Duration::from_secs(1));
+    assert_eq!(ran.lock().unwrap().len(), 1);
+    assert!(h.program().job.is_none());
+}
+
+#[test]
+fn agreeing_to_build_applies_the_exact_checked_update() {
+    let (mut h, w, ran) = sample_with_check(WORKS, NEEDS_BUILD);
+    h.send(Msg::Run(Operation::UpdateFlake { inputs: vec!["nixpkgs".into()] }));
+    settle(&mut h, |a| a.job.is_none());
+    assert_eq!(ran.lock().unwrap().len(), 1);
+    assert!(click_last(&mut h, w, "Build and Update"));
+    settle(&mut h, |a| a.job.as_ref().is_some_and(|j| j.outcome.is_some()));
+    let operations = ran.lock().unwrap();
+    assert_eq!(operations.len(), 2);
+    let Operation::CheckedUpdate { operation, report } = &operations[1] else { panic!("unchecked update") };
+    assert_eq!(**operation, Operation::UpdateFlake { inputs: vec!["nixpkgs".into()] });
+    assert_eq!(report.lock.to_str(), Some("/nix/store/checked.lock"));
+    assert_eq!(report.source, "/nix/store/checked-source");
+}
+
+#[test]
+fn failed_or_unreadable_checks_never_start_an_update() {
+    for check in [FAILS, "echo unreadable"] {
+        let (mut h, _, ran) = sample_with_check(WORKS, check);
+        h.send(Msg::Run(Operation::UpdateSekka { inputs: vec![] }));
+        settle(&mut h, |a| a.job.as_ref().is_some_and(|j| j.outcome.is_some()));
+        assert!(matches!(h.program().job.as_ref().unwrap().outcome, Some(Outcome::Failed(_))));
+        assert_eq!(ran.lock().unwrap().len(), 1);
+    }
+}
+
+#[test]
+fn cancellation_wins_over_a_check_result_already_in_flight() {
+    let (mut h, _, ran) = sample_with_check(WORKS, "sleep 10");
+    h.send(Msg::Run(Operation::UpdateSekka { inputs: vec![] }));
+    let id = h.program().job.as_ref().unwrap().id;
+    h.send(Msg::StopJob);
+    h.send(Msg::Job(
+        id,
+        aizome_yukimi::job::JobEvent::Done(Ok(
+            r#"{"source":"/nix/store/checked-source","lock":"/nix/store/checked.lock","builds":[]}"#.into(),
+        )),
+    ));
+    assert_eq!(ran.lock().unwrap().len(), 1);
+    assert!(matches!(h.program().job.as_ref().unwrap().outcome, Some(Outcome::Failed(_))));
 }
 
 #[test]
@@ -426,6 +508,40 @@ fn going_back_and_cleaning_up_ask_first() {
     assert!(has(&h, w, "Clean up the store?"));
     assert!(click_last(&mut h, w, "Clean up"));
     assert_eq!(ran.lock().unwrap().last(), Some(&Operation::Clean { older_than_days: Some(90) }));
+}
+
+/// A keyboard-only person's Return on Clean Up…, held: it asks, and its
+/// repeats don't answer the alert's default button for them. Let go and
+/// pressed again, Return answers.
+#[test]
+fn a_return_held_on_clean_up_asks_and_cleans_nothing() {
+    let (mut h, w, ran) = sample(WORKS);
+    h.send(Msg::Show(Page::Storage));
+    h.send(Msg::Older(2));
+    // Tab to Clean Up…, which the focus scrolls into view.
+    let on_it = |h: &Harness<Yukimi>| match (h.focused_rect(w), h.find(w, "Clean Up…")) {
+        (Some(focus), Some(button)) => button.contains(focus.center()),
+        _ => false,
+    };
+    for _ in 0..80 {
+        if on_it(&h) {
+            break;
+        }
+        h.named(w, NamedKey::Tab, Modifiers::NONE);
+    }
+    assert!(on_it(&h), "Tab reaches Clean Up…");
+    let enter = Key::Named(NamedKey::Enter);
+    h.key_down(w, enter.clone(), Modifiers::NONE);
+    assert!(has(&h, w, "Clean up the store?"), "Return on the button asks");
+    for _ in 0..40 {
+        h.key_repeat(w, enter.clone(), Modifiers::NONE);
+    }
+    let cleaned = ran.lock().unwrap().clone();
+    assert!(cleaned.is_empty(), "the held Return answered the alert: {cleaned:?}");
+    assert!(has(&h, w, "Clean up the store?"), "the alert still asks");
+    h.key_up(w, enter, Modifiers::NONE);
+    h.named(w, NamedKey::Enter, Modifiers::NONE);
+    assert_eq!(ran.lock().unwrap().as_slice(), [Operation::Clean { older_than_days: Some(90) }]);
 }
 
 #[test]
@@ -745,13 +861,16 @@ fn early_updates_ask_then_follow_sekkas_main() {
     assert!(has(&h, w, "Turn on early updates?"), "{:?}", h.texts(w));
     assert!(ran.lock().unwrap().is_empty());
     assert!(click_last(&mut h, w, "Turn On"));
-    assert_eq!(ran.lock().unwrap().as_slice(), [Operation::Early { on: true }]);
+    assert_eq!(
+        ran.lock().unwrap().as_slice(),
+        [Operation::CheckUpdate { operation: Box::new(Operation::Early { on: true }) }]
+    );
     settle(&mut h, |a| a.job.as_ref().is_some_and(|j| j.outcome.is_some()));
     // Already following the nightly: nothing to ask.
     h.advance(Duration::from_secs(1));
     h.send(Msg::Early(false));
     assert!(h.program().notes.iter().any(|(_, n)| n == "Sekka updates from the nightly already"));
-    assert_eq!(ran.lock().unwrap().len(), 1);
+    assert_eq!(ran.lock().unwrap().len(), 2);
 }
 
 #[test]
@@ -762,9 +881,12 @@ fn a_launch_proposes_and_changes_nothing_by_itself() {
         Launch { page: None, choose: vec![("calamares.loginScreen".into(), vec!["aizome".into()])], early: Some(true) }
     );
     assert_eq!(launch_from_args(&args(&["--page", "desktops"])).unwrap().page, Some(Page::Desktops));
-    for bad in [&["--choose"][..], &["--choose", "x"], &["--choose", "a b=c"], &["--choose", "a="], &["--page", "x"]] {
+    for bad in [&["--choose"][..], &["--choose", "x"], &["--choose", "a b=c"], &["--page", "x"]] {
         assert!(launch_from_args(&args(bad)).is_err(), "{bad:?}");
     }
+    // No value: the empty one (no one logs in by themselves).
+    let no_one = launch_from_args(&args(&["--choose", "calamares.autoLogin="])).unwrap();
+    assert_eq!(no_one.choose, [("calamares.autoLogin".to_owned(), vec![String::new()])]);
     assert!(launch_from_args(&args(&["--choose", "a=b", "--choose", "a=c"])).is_err(), "once each");
 
     // A running Yukimi handed a launch shows what it proposes.
@@ -812,6 +934,57 @@ fn settei_proposes_the_boot_splash_and_apply_writes_it() {
     h.send(Msg::Launched(args(&["--choose", "calamares.bootSplash.enable=yes"])));
     let notes: Vec<&str> = h.program().notes.iter().map(|(_, n)| n.as_str()).collect();
     assert!(notes.iter().any(|n| n.contains("\"yes\" isn't one of the choices")), "{notes:?}");
+}
+
+#[test]
+fn an_automatic_login_the_configuration_already_has_does_not_hold_back_other_choices() {
+    use yukimi_system::people::Person;
+    use yukimi_system::setup::{Choice, ChoiceValue};
+    // The system's own configuration starts the computer straight into
+    // "kiosk": an account outside the people Yukimi offers (a system
+    // account, say), which the choice reports as it is.
+    let mut model = aizome_yukimi::fixture::model();
+    model.setup.facts.choices.push(Choice {
+        setting: "calamares.autoLogin".into(),
+        title: "Log in automatically".into(),
+        many: false,
+        boolean: false,
+        value: ChoiceValue::One("kiosk".into()),
+        options: Vec::new(),
+        within: None,
+        people: true,
+    });
+    model.setup.facts.offer_people(&[Person { name: "adama".into(), full_name: Some("William Adama".into()) }]);
+    model.configured.choices.insert("calamares.autoLogin".into(), vec!["kiosk".into()]);
+    let ran = Arc::new(Mutex::new(Vec::new()));
+    let seen = ran.clone();
+    let runner = Runner::Mock(Arc::new(move |op: &Operation| {
+        seen.lock().unwrap().push(op.clone());
+        vec![script(WORKS)]
+    }));
+    let app = Yukimi::with(Source::Sample(Arc::new(model)), runner, Clock::Fixed(aizome_yukimi::fixture::NOW, 21));
+    let mut h = Harness::new(app);
+    let w = h.window();
+    h.send(Msg::Show(Page::Desktops));
+    // It shows as the configuration has it, and is no problem to leave.
+    assert!(h.program().choice_problems().is_empty(), "{:?}", h.program().choice_problems());
+    assert!(has(&h, w, "kiosk"), "{:?}", h.texts(w));
+    // Someone Yukimi offers can take its place, and it can be put back,
+    // which is no change.
+    h.send(pick("calamares.autoLogin", "adama", true));
+    assert_eq!(h.program().chosen("calamares.autoLogin"), ["adama"]);
+    h.send(pick("calamares.autoLogin", "kiosk", true));
+    assert!(h.program().choice_changes().is_empty(), "{:?}", h.program().choice_changes());
+    // Another choice is applied alone: what isn't changed isn't written.
+    h.send(pick("calamares.bootSplash.enable", "true", true));
+    h.send(Msg::ApplyChoices);
+    assert!(has(&h, w, "Apply these changes?"), "{:?}", h.texts(w));
+    assert!(click_last(&mut h, w, "Apply"));
+    let expected = Operation::Choose {
+        choices: vec![("calamares.bootSplash.enable".into(), vec!["true".into()])],
+        what: "the boot splash".into(),
+    };
+    assert_eq!(ran.lock().unwrap().as_slice(), std::slice::from_ref(&expected));
 }
 
 #[test]

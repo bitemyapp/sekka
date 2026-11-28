@@ -2,6 +2,7 @@
   pkgs,
   inputs,
   applicationCatalog,
+  references,
   aquamarine,
   hyprland,
   hyprtoolkit,
@@ -10,13 +11,6 @@
 let
   inherit (pkgs) lib;
   system = pkgs.stdenv.hostPlatform.system;
-  references = import ./reference-systems.nix {
-    inherit inputs applicationCatalog;
-    desktops = [
-      "hyprland"
-      "tatami"
-    ];
-  };
   evaluate =
     modules:
     inputs.nixpkgs.lib.nixosSystem {

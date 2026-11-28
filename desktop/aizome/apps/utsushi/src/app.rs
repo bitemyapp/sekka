@@ -17,12 +17,24 @@ use std::time::{Duration, Instant};
 use aizome_kit::MsgSender;
 use aizome_kit::WindowState;
 use aizome_kit::prelude::*;
-use aizome_media::{AudioChoice, Cue, CueBody, Event, MediaInfo, Options, Pipeline, PlayState, Player, StreamKind};
+use aizome_media::{AudioChoice, Cue, Cues, Event, MediaInfo, Options, Pipeline, PlayState, Player, StreamKind};
+use aizome_mpris::{self as mpris, Mpris};
 
-use crate::mpris::{self, Mpris};
 use crate::store::{Recent, Store};
 
 pub const APP_ID: &str = "org.aizome.Utsushi";
+/// Utsushi on the desktop's media controls: it opens files and streams,
+/// and plays at half to twice the speed.
+const MPRIS: mpris::Identity = mpris::Identity {
+    bus: "utsushi",
+    name: "Utsushi",
+    desktop_entry: APP_ID,
+    uri_schemes: &["file", "http", "https"],
+    mime_types: &["video/mp4", "video/x-matroska", "video/webm", "audio/mpeg", "audio/flac", "audio/ogg", "audio/mp4"],
+    can_quit: true,
+    can_raise: true,
+    rates: (0.5, 2.0),
+};
 /// The window's one video.
 pub const VIDEO: aizome_kit::video::VideoId = 1;
 /// How long full-screen controls stay after the pointer stops.
@@ -102,6 +114,9 @@ pub enum Msg {
     CueTick,
     ShowInfo,
     InfoTick,
+    ShowStats,
+    StatsTick,
+    CloseStats,
     /// `UTSUSHI_STATS=1`: the pipeline and frame counts to the log, every
     /// five seconds (for measuring).
     LogStats,
@@ -146,6 +161,7 @@ pub struct Utsushi {
     pub null_audio: bool,
     pub window: WindowKey,
     pub sheet: Option<WindowKey>,
+    pub statistics: Option<WindowKey>,
     pub player: Option<Player>,
     sender: Option<MsgSender<Msg>>,
     pub queue: Vec<PathBuf>,
@@ -170,7 +186,7 @@ pub struct Utsushi {
     pub audio_track: Option<usize>,
     pub sub_track: Option<usize>,
     /// The subtitle track's cues, in order, and the time they're shown at.
-    pub cues: Vec<Cue>,
+    pub cues: Cues,
     pub cue_pos: f64,
     /// Seconds the subtitles are moved later (earlier when negative):
     /// for a subtitle file timed to another cut of the film.
@@ -191,6 +207,7 @@ pub struct Utsushi {
     tick: Option<TimerHandle>,
     cue_timer: Option<TimerHandle>,
     info_timer: Option<TimerHandle>,
+    stats_timer: Option<TimerHandle>,
     pub show_remaining: bool,
     /// Started where it was left: shown for a while, with Start Over.
     pub resumed: Option<f64>,
@@ -219,6 +236,7 @@ impl Utsushi {
             null_audio: false,
             window: WindowKey::NONE,
             sheet: None,
+            statistics: None,
             player: None,
             sender: None,
             queue: Vec::new(),
@@ -239,7 +257,7 @@ impl Utsushi {
             repeat: Repeat::Off,
             audio_track: None,
             sub_track: None,
-            cues: Vec::new(),
+            cues: Cues::default(),
             cue_pos: 0.0,
             sub_delay: 0.0,
             fullscreen: false,
@@ -253,6 +271,7 @@ impl Utsushi {
             tick: None,
             cue_timer: None,
             info_timer: None,
+            stats_timer: None,
             show_remaining: true,
             resumed: None,
             resumed_timer: None,
@@ -296,7 +315,7 @@ impl Utsushi {
     /// The cues showing now.
     pub fn active_cues(&self) -> Vec<&Cue> {
         let p = self.cue_pos - self.sub_delay;
-        self.cues.iter().filter(|c| c.start <= p + 1e-3 && p < c.end).collect()
+        self.cues.at(p)
     }
 
     pub fn chapters(&self) -> Rc<Vec<(f64, Option<String>)>> {
@@ -416,13 +435,7 @@ impl Utsushi {
         let speed = self.speed.max(0.1);
         // Subtitles: their next start or end.
         let delay = self.sub_delay;
-        let next_cue = self
-            .cues
-            .iter()
-            .flat_map(|c| [c.start + delay, c.end + delay])
-            .filter(|t| *t > pos + 1e-3 && t.is_finite())
-            .fold(f64::INFINITY, f64::min);
-        if next_cue.is_finite() {
+        if let Some(next_cue) = self.cues.next_change(pos - delay).map(|t| t + delay) {
             self.cue_timer = Some(cx.after(Duration::from_secs_f64((next_cue - pos) / speed + 0.002), Msg::CueTick));
         }
         // The time and the knob, while they show.
@@ -492,7 +505,7 @@ impl Utsushi {
             title: info.map(|i| i.title.clone()).unwrap_or_default(),
             artist: info.and_then(|i| i.artist.clone()),
             album: info.and_then(|i| i.album.clone()),
-            url: self.current_path().map(crate::ui::url_of),
+            url: self.current_path().map(aizome_mpris::url_of),
             art: None,
             status: match self.status {
                 Status::Playing => "Playing",
@@ -614,19 +627,8 @@ impl Utsushi {
                 }
                 self.schedule(cx);
             }
-            Event::Cues(mut cues) => {
-                cues.retain(|c| !self.cues.iter().any(|o| o.start == c.start && o.body == c.body));
-                self.cues.extend(cues);
-                self.cues.sort_by(|a, b| a.start.total_cmp(&b.start));
-                // An open-ended cue ends when the next of its track starts.
-                for i in 0..self.cues.len() {
-                    if self.cues[i].end.is_infinite()
-                        && let Some(n) = self.cues[i + 1..].iter().find(|c| c.start > self.cues[i].start)
-                    {
-                        self.cues[i].end = n.start;
-                    }
-                }
-                self.cues.retain(|c| c.body != CueBody::Clear);
+            Event::Cues(cues) => {
+                self.cues.add(cues);
                 self.cue_pos = self.player().map_or(self.cue_pos, Player::position);
                 self.schedule(cx);
             }
@@ -671,14 +673,6 @@ pub fn display_name(path: &Path) -> String {
 
 /// Whether a file looks like something Utsushi plays (for folders and
 /// drops: by its extension).
-pub fn playable(path: &Path) -> bool {
-    const KINDS: &[&str] = &[
-        "mp4", "m4v", "mkv", "webm", "mov", "avi", "wmv", "mpg", "mpeg", "ts", "m2ts", "mts", "ogv", "flv", "3gp",
-        "mp3", "m4a", "aac", "flac", "ogg", "oga", "opus", "wav", "aiff", "aif", "wv", "ape", "wma", "mka", "alac",
-    ];
-    path.extension().and_then(|e| e.to_str()).is_some_and(|e| KINDS.contains(&e.to_ascii_lowercase().as_str()))
-}
-
 /// Paths to play from what was given: files as they are, folders' playable
 /// files in order.
 pub fn expand(paths: Vec<PathBuf>) -> Vec<PathBuf> {
@@ -686,7 +680,8 @@ pub fn expand(paths: Vec<PathBuf>) -> Vec<PathBuf> {
     for p in paths {
         if p.is_dir() {
             let Ok(entries) = std::fs::read_dir(&p) else { continue };
-            let mut files: Vec<PathBuf> = entries.flatten().map(|e| e.path()).filter(|f| playable(f)).collect();
+            let mut files: Vec<PathBuf> =
+                entries.flatten().map(|e| e.path()).filter(|f| aizome_media::is_playable(f)).collect();
             files.sort_by(|a, b| natural(&a.to_string_lossy(), &b.to_string_lossy()));
             out.extend(files);
         } else {
@@ -760,6 +755,7 @@ impl Program for Utsushi {
             let mtx = tx.clone();
             let clock = self.player.as_ref().map(Player::clock);
             self.mpris = Some(Mpris::start(
+                MPRIS,
                 move |a| {
                     mtx.send(Msg::Mpris(a));
                 },
@@ -794,10 +790,10 @@ impl Program for Utsushi {
                 cx.activate(self.window);
             }
             Msg::OpenPanel => {
-                let dialog = FileDialog::new().title("Open").multiple().filter("Videos and music", &[
-                    "mp4", "m4v", "mkv", "webm", "mov", "avi", "mpg", "ts", "ogv", "mp3", "m4a", "flac", "ogg", "opus",
-                    "wav", "aac",
-                ]);
+                // What the engine plays, as the folders opened are read.
+                let kinds: Vec<&str> =
+                    aizome_media::VIDEO_EXTENSIONS.iter().chain(aizome_media::AUDIO_EXTENSIONS).copied().collect();
+                let dialog = FileDialog::new().title("Open").multiple().filter("Videos and music", &kinds);
                 cx.open_panel(self.window, dialog, Msg::Chosen);
             }
             Msg::Chosen(Some(paths)) => cx.send(Msg::Open(paths)),
@@ -951,14 +947,9 @@ impl Program for Utsushi {
             }
             Msg::StageClick(n) => {
                 if n >= 2 {
-                    // The first click toggled; a double click is for full
-                    // screen, so it goes back.
-                    self.toggle(cx);
                     if self.has_video() {
                         cx.set_fullscreen(self.window, !self.fullscreen);
                     }
-                } else if self.info.is_some() {
-                    self.toggle(cx);
                 } else if self.status == Status::Empty {
                     cx.send(Msg::OpenPanel);
                 }
@@ -1012,6 +1003,25 @@ impl Program for Utsushi {
                 }
             }
             Msg::InfoTick => {}
+            Msg::ShowStats => {
+                if let Some(w) = self.statistics {
+                    cx.activate(w);
+                } else if self.info.is_some() {
+                    self.statistics = Some(cx.open_window(
+                        WindowSpec::new("Playback Statistics").size(560.0, 680.0).min_size(400.0, 300.0),
+                    ));
+                    self.stats_timer = Some(cx.every(Duration::from_secs(1), Msg::StatsTick));
+                }
+            }
+            Msg::StatsTick => {}
+            Msg::CloseStats => {
+                if let Some(w) = self.statistics.take() {
+                    cx.close_window(w);
+                }
+                if let Some(t) = self.stats_timer.take() {
+                    cx.cancel(t);
+                }
+            }
             Msg::LogStats => {
                 if let Some(p) = self.player() {
                     eprintln!("utsushi: {:?} {:?} at {:.2}", self.pipeline, p.stats(), p.position());
@@ -1101,6 +1111,9 @@ impl Program for Utsushi {
                 }
             }
             Msg::ClearRecent => self.store.clear_recent(),
+            Msg::Close if self.statistics.is_some() && cx.key_window() == self.statistics => {
+                cx.send(Msg::CloseStats);
+            }
             Msg::Close => {
                 self.leave();
                 if let Some(p) = self.player() {
@@ -1125,6 +1138,9 @@ impl Program for Utsushi {
     }
 
     fn view(&self, window: WindowKey) -> Element<Msg> {
+        if Some(window) == self.statistics {
+            return crate::ui::statistics(self);
+        }
         if Some(window) == self.sheet {
             return crate::ui::info_sheet(self);
         }
@@ -1136,6 +1152,16 @@ impl Program for Utsushi {
     }
 
     fn window_state(&mut self, window: WindowKey, state: WindowState, cx: &mut Cx<Msg>) {
+        if Some(window) == self.statistics {
+            if state.suspended {
+                if let Some(t) = self.stats_timer.take() {
+                    cx.cancel(t);
+                }
+            } else if self.stats_timer.is_none() {
+                self.stats_timer = Some(cx.every(Duration::from_secs(1), Msg::StatsTick));
+            }
+            return;
+        }
         if window != self.window {
             return;
         }
@@ -1178,6 +1204,10 @@ impl Program for Utsushi {
     }
 
     fn close_requested(&mut self, window: WindowKey, cx: &mut Cx<Msg>) -> bool {
+        if Some(window) == self.statistics {
+            cx.send(Msg::CloseStats);
+            return false;
+        }
         if Some(window) == self.sheet {
             cx.send(Msg::CloseSheet);
             return false;
@@ -1200,13 +1230,5 @@ mod tests {
         let mut v = vec!["Episode 10.mkv", "episode 2.mkv", "Episode 1.mkv", "Extras.mkv"];
         v.sort_by(|a, b| natural(a, b));
         assert_eq!(v, ["Episode 1.mkv", "episode 2.mkv", "Episode 10.mkv", "Extras.mkv"]);
-    }
-
-    #[test]
-    fn what_plays_is_known_by_its_name() {
-        assert!(playable(Path::new("/a/B.MKV")));
-        assert!(playable(Path::new("song.flac")));
-        assert!(!playable(Path::new("notes.txt")));
-        assert!(!playable(Path::new("folder")));
     }
 }

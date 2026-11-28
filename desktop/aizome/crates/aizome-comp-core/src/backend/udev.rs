@@ -19,7 +19,7 @@ use smithay::backend::allocator::dumb::DumbAllocator;
 use smithay::backend::allocator::format::FormatSet;
 use smithay::backend::allocator::gbm::{GbmAllocator, GbmBufferFlags, GbmDevice};
 use smithay::backend::allocator::{Format as DrmFormat, Modifier};
-use smithay::backend::drm::compositor::FrameFlags;
+use smithay::backend::drm::compositor::{FrameFlags, PrimaryPlaneElement};
 use smithay::backend::drm::exporter::gbm::GbmFramebufferExporter;
 use smithay::backend::drm::output::{DrmOutput, DrmOutputManager, DrmOutputRenderElements};
 use smithay::backend::drm::{DrmDevice, DrmDeviceFd, DrmEvent, DrmEventMetadata, DrmEventTime, DrmNode, NodeType};
@@ -32,14 +32,16 @@ use smithay::backend::renderer::gles::{GlesRenderbuffer, GlesRenderer};
 use smithay::backend::renderer::multigpu::gbm::GbmGlesBackend;
 use smithay::backend::renderer::multigpu::{GpuManager, MultiRenderer};
 use smithay::backend::renderer::pixman::PixmanRenderer;
-use smithay::backend::renderer::{ImportDma, ImportMemWl};
+use smithay::backend::renderer::sync::{Interrupted, SyncPoint};
+use smithay::backend::renderer::{ImportDma, ImportMemWl, Renderer};
 use smithay::backend::session::libseat::LibSeatSession;
 use smithay::backend::session::{Event as SessionEvent, Session};
 use smithay::backend::udev::{UdevBackend, UdevEvent, all_gpus, primary_gpu};
 use smithay::desktop::utils::OutputPresentationFeedback;
 use smithay::input::keyboard::LedState;
 use smithay::output::{Mode as WlMode, Output, PhysicalProperties, Subpixel};
-use smithay::reexports::calloop::{EventLoop, RegistrationToken};
+use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
+use smithay::reexports::calloop::{EventLoop, LoopHandle, RegistrationToken};
 use smithay::reexports::drm::control::{Device as _, ModeTypeFlags, connector, crtc};
 use smithay::reexports::input::{self as libinput, DeviceCapability, Libinput};
 use smithay::reexports::rustix::fs::OFlags;
@@ -97,6 +99,67 @@ enum Redraw {
     Idle,
     /// A frame is queued; the next waits for its vblank.
     WaitingForVBlank,
+    /// A failed synchronization submitted no frame, so a timer replaces
+    /// its missing vblank. Other events must not retry it in a tight loop.
+    RetryAt {
+        at: Instant,
+        holds: Holds,
+    },
+}
+
+/// How many times in a row a failed wait has held an output's frame back.
+/// Each time the frame is tried again a refresh later; after
+/// [`Holds::MOST`] it goes ahead without the wait. That frame may show
+/// another output's tiles or be shown unfinished, but a wait that never
+/// works again must not leave the display frozen.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct Holds(u8);
+
+impl Holds {
+    const MOST: u8 = 2;
+
+    fn may_hold(self) -> bool {
+        self.0 < Self::MOST
+    }
+
+    fn another(self) -> Holds {
+        Holds(self.0.saturating_add(1))
+    }
+}
+
+impl Redraw {
+    fn due(self, now: Instant) -> bool {
+        match self {
+            Self::Idle => true,
+            Self::WaitingForVBlank => false,
+            Self::RetryAt { at, .. } => now >= at,
+        }
+    }
+
+    /// How often a failed wait has held this output's frame back so far.
+    fn holds(self) -> Holds {
+        match self {
+            Self::RetryAt { holds, .. } => holds,
+            Self::Idle | Self::WaitingForVBlank => Holds::default(),
+        }
+    }
+
+    /// Holds the frame back once more: it is tried again after `delay`.
+    fn retry<D: 'static>(
+        &mut self,
+        holds: Holds,
+        queued: &mut bool,
+        handle: &LoopHandle<'static, D>,
+        delay: Duration,
+    ) -> Result<(), String> {
+        let at = Instant::now() + delay.max(Duration::from_millis(1));
+        *self = Self::RetryAt { at, holds: holds.another() };
+        *queued = true;
+        // Only wake the loop. A stale timer must not change the state of
+        // an output since powered off, removed, or successfully redrawn.
+        handle.insert_source(Timer::from_deadline(at), |_, _, _| TimeoutAction::Drop).map_err(|e| e.to_string())?;
+        Ok(())
+    }
 }
 
 struct Surface {
@@ -131,6 +194,11 @@ struct Device {
     surfaces: HashMap<crtc::Handle, Surface>,
     /// Coalesces output configuration changes until the whole batch ends.
     tiles_pending: bool,
+    /// Off the primary GPU: when the last frame's copy onto this GPU is
+    /// done. smithay reuses one intermediate for this pair of GPUs while
+    /// size and format match, so the next frame mustn't draw into it
+    /// before the copy has read it (#277).
+    copied: Option<SyncPoint>,
 }
 
 pub struct Udev {
@@ -142,8 +210,8 @@ pub struct Udev {
     /// channel order.
     thumbs: crate::thumbs::ThumbCache,
     devices: HashMap<DrmNode, Device>,
-    // Kept so the context lives as long as the backend.
-    #[allow(dead_code)]
+    /// The context, for what it queued while not being watched
+    /// ([`drain_libinput`]).
     libinput: Libinput,
     input_devices: Vec<libinput::Device>,
     /// Outputs turned off, by name: the device, connector and CRTC kept
@@ -181,38 +249,7 @@ impl Udev {
         let backend = LibinputInputBackend::new(libinput.clone());
         event_loop
             .handle()
-            .insert_source(backend, |event, _, state: &mut State| {
-                if let InputEvent::DeviceAdded { device } = &event {
-                    let mut d = device.clone();
-                    if let crate::backend::Backend::Udev(u) = &mut state.backend {
-                        apply_device_settings(&mut d, &state.az.settings.input);
-                        if d.has_capability(DeviceCapability::Keyboard)
-                            && let Some(kb) = state.az.seat.get_keyboard()
-                        {
-                            d.led_update(kb.led_state().into());
-                        }
-                        u.input_devices.push(d.clone());
-                    }
-                    // One that types (a space bar and letters), not a power
-                    // button.
-                    if d.has_capability(DeviceCapability::Keyboard)
-                        && crate::keyboards::types(|k| d.keyboard_has_key(k) == Ok(true))
-                    {
-                        let bustype = smithay::backend::input::Device::syspath(&d)
-                            .and_then(|p| std::fs::read_to_string(p.join("device/id/bustype")).ok())
-                            .and_then(|s| u16::from_str_radix(s.trim(), 16).ok());
-                        let bus = crate::keyboards::bus(bustype, d.id_vendor());
-                        let k = crate::keyboards::Keyboard::new(d.name(), d.id_vendor(), d.id_product(), bus);
-                        state.keyboard_added(d.sysname().to_owned(), k);
-                    }
-                } else if let InputEvent::DeviceRemoved { device } = &event {
-                    if let crate::backend::Backend::Udev(u) = &mut state.backend {
-                        u.input_devices.retain(|d| d != device);
-                    }
-                    state.keyboard_removed(device.sysname());
-                }
-                state.process_input(event);
-            })
+            .insert_source(backend, |event, _, state: &mut State| libinput_event(state, event))
             .map_err(|e| e.to_string())?;
 
         let li = libinput.clone();
@@ -264,6 +301,8 @@ impl Udev {
                         state.az.queue_redraw_all();
                         // Another session may have left its own gamma.
                         state.update_night_light(true);
+                        // The devices back, and the lid as it is now.
+                        drain_libinput(state);
                     }
                 }
             })
@@ -285,6 +324,9 @@ impl Udev {
     /// Opens every GPU, sets up the outputs connected now, the dmabuf
     /// global, and watches for hotplug.
     pub fn init(state: &mut State) {
+        // The input devices and the lid first: a panel behind a closed lid
+        // needn't be lit (`connector_connected_as`).
+        drain_libinput(state);
         let crate::backend::Backend::Udev(u) = &mut state.backend else { return };
         let udev = match UdevBackend::new(&u.seat) {
             Ok(b) => b,
@@ -371,14 +413,24 @@ impl Udev {
         }
     }
 
-    /// With GLES on one GPU the early import copied wl_shm pixels into
-    /// textures already; import again (a no-op then) to know it worked.
-    pub fn import_shm_copies(&mut self, surface: &WlSurface) -> bool {
+    /// With GLES on one GPU, imports a surface tree in the primary GPU's
+    /// context, where every frame and capture is drawn, so that wl_shm
+    /// pixels are copied into its textures now, and says whether `fresh`
+    /// were. (smithay's early import does nothing for wl_shm: it leaves the
+    /// copy to the draw, which may come after the client has the buffer
+    /// back.)
+    pub fn import_shm_copies(
+        &mut self,
+        surface: &WlSurface,
+        fresh: &[smithay::reexports::wayland_server::protocol::wl_buffer::WlBuffer],
+    ) -> bool {
         if self.devices.len() > 1 {
             return false;
         }
         match &mut self.renderers {
-            Renderers::Gles(g) => g.early_import(self.primary_gpu, surface).is_ok(),
+            Renderers::Gles(g) => {
+                g.single_renderer(&self.primary_gpu).is_ok_and(|mut r| super::import_fresh(&mut r, surface, fresh))
+            }
             Renderers::Pixman(_) => false,
         }
     }
@@ -429,7 +481,7 @@ impl Udev {
         let Some(id) = output.user_data().get::<UdevOutputId>().copied() else { return false };
         let Some(device) = self.devices.get(&id.node) else { return false };
         let Some(surface) = device.surfaces.get(&id.crtc) else { return false };
-        surface.redraw != Redraw::WaitingForVBlank
+        surface.redraw.due(Instant::now())
     }
 
     /// Draws an output's scene and queues it for the next vblank.
@@ -446,20 +498,43 @@ impl Udev {
         let Some(device) = self.devices.get_mut(&id.node) else { return };
         let render_node = device.render_node.unwrap_or(primary);
         let Some(surface) = device.surfaces.get_mut(&id.crtc) else { return };
-        if surface.redraw == Redraw::WaitingForVBlank {
+        if !surface.redraw.due(Instant::now()) {
             return;
         }
+        // A wait that fails holds this frame back, but only so many times.
+        let holds = surface.redraw.holds();
+        surface.redraw = Redraw::Idle;
         if let Some(o) = az.out.get_mut(output) {
             o.redraw_queued = false;
         }
         let result = match (&mut self.renderers, &mut surface.drm) {
             (Renderers::Gles(gpus), SurfaceOutput::Gles(drm)) => {
-                let renderer = if render_node == primary {
-                    gpus.single_renderer(&render_node)
-                } else {
+                let cross_gpu = render_node != primary;
+                let renderer = if cross_gpu {
                     let format = drm.format();
                     gpus.renderer(&primary, &render_node, format)
+                } else {
+                    gpus.single_renderer(&render_node)
                 };
+                // Off the primary, what this renderer draws (the frame, and
+                // before it a mirror's picture of its source) goes through
+                // the buffer the last copy read: the primary GPU waits for
+                // that copy first (this thread does, if it can't take the
+                // fence).
+                let renderer = renderer.map_err(|e| format!("renderer: {e:?}")).and_then(|mut r| {
+                    match wait_for_copy(&mut device.copied, |copied| r.wait(copied)) {
+                        Ok(()) => Ok(r),
+                        Err(e) if holds.may_hold() => {
+                            retry_sync(az, output, &mut surface.redraw, holds);
+                            Err(format!("waiting for {render_node}'s last copy: {e:?}"))
+                        }
+                        Err(e) => {
+                            warn!("drawing {} without waiting for {render_node}'s last copy: {e:?}", output.name());
+                            device.copied = None;
+                            Ok(r)
+                        }
+                    }
+                });
                 match renderer {
                     Ok(mut r) => {
                         let (mut elements, clear) = scene_for::<_, GlesRenderbuffer>(&mut r, az, output, &scene, clear);
@@ -467,16 +542,38 @@ impl Udev {
                         match drm.render_frame(&mut r, &elements, clear, frame_flags(az)) {
                             Ok(res) => {
                                 let damaged = !res.is_empty;
+                                let needs_sync = damaged && res.needs_sync();
+                                // An empty frame drew nothing: its plane still
+                                // names the previous frame's fence.
+                                let sync = match &res.primary_element {
+                                    PrimaryPlaneElement::Swapchain(e) if damaged => Some(&e.sync),
+                                    _ => None,
+                                };
                                 let states = res.states;
-                                queue(az, output, damaged, &states, |fb| {
-                                    drm.queue_frame(fb).map_err(|e| format!("{e:?}"))
-                                })
-                                .map(|q| (q, states))
+                                match wait_before_scanout(&mut device.copied, cross_gpu, sync, needs_sync) {
+                                    Err(e) if holds.may_hold() => {
+                                        // Leave the prepared frame unsubmitted. smithay
+                                        // drops it at the next render; every buffer
+                                        // repaints in full.
+                                        drm.with_compositor(|c| c.reset_buffer_ages());
+                                        retry_sync(az, output, &mut surface.redraw, holds);
+                                        Err(format!("waiting before scan-out: {e}"))
+                                    }
+                                    waited => {
+                                        if let Err(e) = waited {
+                                            warn!("showing {} without waiting for its frame: {e}", output.name());
+                                        }
+                                        queue(az, output, damaged, &states, |fb| {
+                                            drm.queue_frame(fb).map_err(|e| format!("{e:?}"))
+                                        })
+                                        .map(|q| (q, states))
+                                    }
+                                }
                             }
                             Err(e) => Err(format!("{e:?}")),
                         }
                     }
-                    Err(e) => Err(format!("renderer: {e:?}")),
+                    Err(e) => Err(e),
                 }
             }
             (Renderers::Pixman(r), SurfaceOutput::Pixman(drm)) => {
@@ -702,6 +799,45 @@ impl Udev {
     }
 }
 
+/// Before anything draws into the shared intermediate: order its last copy
+/// before the renderer's work, unless that copy is already done. Keep the
+/// fence on error for the next attempt.
+fn wait_for_copy<E>(copied: &mut Option<SyncPoint>, wait: impl FnOnce(&SyncPoint) -> Result<(), E>) -> Result<(), E> {
+    if let Some(sync) = copied.as_ref()
+        && !sync.is_reached()
+    {
+        wait(sync)?;
+    }
+    *copied = None;
+    Ok(())
+}
+
+/// Remember the new copy's fence, then make the CPU wait scan-out needs
+/// where KMS takes no fence. The fence is kept even if that wait fails.
+fn wait_before_scanout(
+    copied: &mut Option<SyncPoint>,
+    cross_gpu: bool,
+    sync: Option<&SyncPoint>,
+    needs_sync: bool,
+) -> Result<(), Interrupted> {
+    let Some(sync) = sync else { return Ok(()) };
+    if cross_gpu {
+        *copied = Some(sync.clone());
+    }
+    if needs_sync {
+        sync.wait()?;
+    }
+    Ok(())
+}
+
+fn retry_sync(az: &mut Aizome, output: &Output, redraw: &mut Redraw, holds: Holds) {
+    if let Some(o) = az.out.get_mut(output)
+        && let Err(e) = redraw.retry(holds, &mut o.redraw_queued, &az.lh, o.refresh)
+    {
+        warn!("arming redraw after synchronization failed on {}: {e}", output.name());
+    }
+}
+
 /// Queues a damaged frame for scan-out with its presentation feedback.
 fn queue(
     az: &mut Aizome,
@@ -811,6 +947,7 @@ fn device_added(state: &mut State, node: DrmNode, path: &Path) -> Result<(), Str
             connectors: HashMap::new(),
             surfaces: HashMap::new(),
             tiles_pending: false,
+            copied: None,
         },
     );
     device_changed(state, node);
@@ -846,9 +983,13 @@ fn device_changed(state: &mut State, node: DrmNode) {
         .map(|(_, c)| *c)
         .collect();
     infos.retain(|(i, _)| i.state() == connector::State::Connected);
-    // Try a panel's first tile before its siblings, but never evict a
-    // working sibling merely to attempt a full-panel modeset.
-    infos.sort_by_key(|(_, t)| t.is_some_and(|t| t.single_monitor && !t.first()));
+    // Other displays before a laptop's panel, so a panel behind a closed lid
+    // can be left dark when one of them is lit. Try a panel's first tile
+    // before its siblings, but never evict a working sibling merely to
+    // attempt a full-panel modeset.
+    infos.sort_by_key(|(i, t)| {
+        (crate::power::is_laptop_panel(&connector_name(i)), t.is_some_and(|t| t.single_monitor && !t.first()))
+    });
     // Finish cleanup before assigning any freed CRTC: disconnect also
     // removes its connector mapping, including for disabled outputs.
     for crtc in gone {
@@ -1064,20 +1205,61 @@ pub fn auto_scale(width_px: i32, width_mm: i32) -> f64 {
     if dpi > 180.0 { 2.0 } else { 1.0 }
 }
 
+/// An output's entries in the two lists of outputs turned off (the
+/// backend's, with what turning it on needs, and the session's), taken out
+/// while it is turned on: setting it up afresh must not find them, and an
+/// attempt that fails must not lose them.
+struct TurningOn<T> {
+    name: String,
+    at: T,
+    /// The session's entry and where it stood in its list.
+    listed: Option<(usize, Output)>,
+}
+
+impl<T> TurningOn<T> {
+    fn take(off: &mut HashMap<String, T>, listed: &mut Vec<Output>, name: &str) -> Option<Self> {
+        let at = off.remove(name)?;
+        let place = listed.iter().position(|o| o.name() == name);
+        let kept = place.map(|i| (i, listed[i].clone()));
+        listed.retain(|o| o.name() != name);
+        Some(TurningOn { name: name.to_owned(), at, listed: kept })
+    }
+
+    /// The attempt is over. An output that didn't come on is still off: it
+    /// goes back on both lists as it was, for a later attempt to find.
+    fn settle(self, off: &mut HashMap<String, T>, listed: &mut Vec<Output>, came_on: bool) {
+        if came_on {
+            return;
+        }
+        off.insert(self.name, self.at);
+        if let Some((i, output)) = self.listed {
+            listed.insert(i.min(listed.len()), output);
+        }
+    }
+}
+
 /// Turns an output that was turned off back on: set up afresh, at the
-/// place asked for or right of the others.
+/// place asked for or right of the others. One that doesn't come on stays
+/// off and listed, to be tried again.
 pub fn enable_output(state: &mut State, name: &str, position: Option<(i32, i32)>) -> Result<(), String> {
     let crate::backend::Backend::Udev(u) = &mut state.backend else { return Err("not on udev".into()) };
-    let (node, conn, crtc) = u.disabled.remove(name).ok_or_else(|| format!("{name} isn't off"))?;
+    // Looked up, not taken yet: one that can't be tried at all stays listed.
+    let (node, conn, crtc) = *u.disabled.get(name).ok_or_else(|| format!("{name} isn't off"))?;
     let device = u.devices.get(&node).ok_or("its device is gone")?;
     let drm = match &device.manager {
         Manager::Gles(m) => m.device(),
         Manager::Pixman(m) => m.device(),
     };
     let info = drm.get_connector(conn, true).map_err(|e| e.to_string())?;
-    state.az.disabled_outputs.retain(|o| o.name() != name);
+    let Some(turning_on) = TurningOn::take(&mut u.disabled, &mut state.az.disabled_outputs, name) else {
+        return Err(format!("{name} isn't off"));
+    };
     connector_connected_as(state, node, info, crtc, true, position);
-    if state.az.output_by_name(name).is_none() {
+    let came_on = state.az.output_by_name(name).is_some();
+    if let crate::backend::Backend::Udev(u) = &mut state.backend {
+        turning_on.settle(&mut u.disabled, &mut state.az.disabled_outputs, came_on);
+    }
+    if !came_on {
         return Err(format!("{name} didn't come on"));
     }
     info!("output {name} turned on");
@@ -1138,9 +1320,28 @@ fn connector_connected_as(
     output.user_data().insert_if_missing(|| OutputSerial(serial.clone()));
     let wl_mode = WlMode::from(drm_mode);
     output.change_current_state(Some(wl_mode), None, None, None);
-    if off {
+    // A laptop's panel behind its closed lid, with another display lit:
+    // left dark from the start, as the lid's layout would turn it off a
+    // moment later (`power.rs`), without the second or two of its modeset.
+    // Opening the lid lights it.
+    let behind_lid = !force_on
+        && !off
+        && state.az.power.lid_closed
+        && crate::power::is_laptop_panel(&name)
+        && state.az.outputs.iter().any(|o| !crate::power::is_laptop_panel(&o.name()));
+    if off || behind_lid {
         // Known, so Settings can turn it on, but not driven.
-        info!("{name} is off in the settings");
+        if behind_lid {
+            info!("{name} stays dark behind the closed lid");
+            state.az.power.lid_disabled.retain(|saved| saved.name != name);
+            state.az.power.lid_disabled.push(OutputChange {
+                name: name.clone(),
+                enabled: Some(true),
+                ..Default::default()
+            });
+        } else {
+            info!("{name} is off in the settings");
+        }
         device.connectors.insert(info.handle(), crtc);
         u.disabled.insert(name.clone(), (node, info.handle(), crtc));
         state.az.disabled_outputs.retain(|o| o.name() != name);
@@ -1292,6 +1493,67 @@ fn device_scroll(input: &aizome_config::Input, touchpad: bool) -> DeviceScroll {
 
 /// Pointer acceleration, scrolling, tapping and the rest, from the
 /// settings.
+/// One of libinput's events: a device's settings and keyboard noted as it
+/// comes, then the event handled as any backend's.
+fn libinput_event(state: &mut State, event: InputEvent<LibinputInputBackend>) {
+    if let InputEvent::DeviceAdded { device } = &event {
+        let mut d = device.clone();
+        if let crate::backend::Backend::Udev(u) = &mut state.backend {
+            apply_device_settings(&mut d, &state.az.settings.input);
+            if d.has_capability(DeviceCapability::Keyboard)
+                && let Some(kb) = state.az.seat.get_keyboard()
+            {
+                d.led_update(kb.led_state().into());
+            }
+            u.input_devices.push(d.clone());
+        }
+        // One that types (a space bar and letters), not a power button.
+        if d.has_capability(DeviceCapability::Keyboard)
+            && crate::keyboards::types(|k| d.keyboard_has_key(k) == Ok(true))
+        {
+            let bustype = smithay::backend::input::Device::syspath(&d)
+                .and_then(|p| std::fs::read_to_string(p.join("device/id/bustype")).ok())
+                .and_then(|s| u16::from_str_radix(s.trim(), 16).ok());
+            let bus = crate::keyboards::bus(bustype, d.id_vendor());
+            let k = crate::keyboards::Keyboard::new(d.name(), d.id_vendor(), d.id_product(), bus);
+            state.keyboard_added(d.sysname().to_owned(), k);
+        }
+    } else if let InputEvent::DeviceRemoved { device } = &event {
+        if let crate::backend::Backend::Udev(u) = &mut state.backend {
+            u.input_devices.retain(|d| d != device);
+        }
+        state.keyboard_removed(device.sysname());
+    }
+    state.process_input(event);
+}
+
+/// What libinput queued as it took the seat or came back to it: the
+/// devices, and the lid's state (it says a closed lid as the switch's
+/// device comes). Its fd tells only of what the kernel sends after, so
+/// these used to wait for the first key or movement: a session started
+/// with the lid closed lit the panel behind it, and the TV account's
+/// Chanoma, driven by a game controller that libinput doesn't hear, stayed
+/// on that panel rather than the television. Without `dispatch`, the queue
+/// holds nothing else (but a tablet's pen held near it).
+fn drain_libinput(state: &mut State) {
+    use smithay::reexports::input::event::{DeviceEvent, EventTrait, SwitchEvent, TabletToolEvent};
+    let crate::backend::Backend::Udev(u) = &mut state.backend else { return };
+    let mut li = u.libinput.clone();
+    for event in &mut li {
+        let event = match event {
+            libinput::Event::Device(DeviceEvent::Added(e)) => InputEvent::DeviceAdded { device: e.device() },
+            libinput::Event::Device(DeviceEvent::Removed(e)) => InputEvent::DeviceRemoved { device: e.device() },
+            libinput::Event::Switch(SwitchEvent::Toggle(event)) => InputEvent::SwitchToggle { event },
+            libinput::Event::Tablet(TabletToolEvent::Proximity(event)) => InputEvent::TabletToolProximity { event },
+            _ => {
+                warn!("libinput queued an unexpected event before its first dispatch; dropped");
+                continue;
+            }
+        };
+        libinput_event(state, event);
+    }
+}
+
 fn apply_device_settings(d: &mut libinput::Device, input: &aizome_config::Input) {
     use aizome_config::{AccelProfile, ClickMethod};
     let touchpad = d.config_tap_finger_count() > 0;
@@ -1310,6 +1572,11 @@ fn apply_device_settings(d: &mut libinput::Device, input: &aizome_config::Input)
         let _ = d.config_left_handed_set(input.pointer.left_handed);
     }
     if touchpad {
+        let _ = d.config_send_events_set_mode(if input.touchpad.enabled() {
+            libinput::SendEventsMode::ENABLED
+        } else {
+            libinput::SendEventsMode::DISABLED
+        });
         let _ = d.config_tap_set_enabled(input.touchpad.tap);
         if d.config_dwt_is_available() {
             let _ = d.config_dwt_set_enabled(input.touchpad.disable_while_typing);
@@ -1330,6 +1597,207 @@ fn frame_flags(az: &Aizome) -> FrameFlags {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use smithay::backend::renderer::sync::Fence;
+    use std::collections::VecDeque;
+    use std::os::fd::OwnedFd;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::{Arc, Mutex};
+
+    /// The fences waited on, by id, in order.
+    type Waited = Arc<Mutex<Vec<u8>>>;
+
+    /// A real Smithay SyncPoint whose underlying fence can be interrupted,
+    /// without EGL, DRM or a physical GPU. Unscripted waits fail the test.
+    #[derive(Debug)]
+    struct ScriptedFence {
+        id: u8,
+        waits: Mutex<VecDeque<bool>>,
+        reached: AtomicBool,
+        waited: Waited,
+    }
+
+    impl Fence for ScriptedFence {
+        fn is_signaled(&self) -> bool {
+            self.reached.load(Ordering::SeqCst)
+        }
+
+        fn wait(&self) -> Result<(), Interrupted> {
+            self.waited.lock().unwrap().push(self.id);
+            if self.waits.lock().unwrap().pop_front().expect("unexpected fence wait") {
+                self.reached.store(true, Ordering::SeqCst);
+                Ok(())
+            } else {
+                Err(Interrupted)
+            }
+        }
+
+        fn is_exportable(&self) -> bool {
+            false
+        }
+
+        fn export(&self) -> Option<OwnedFd> {
+            None
+        }
+    }
+
+    fn scripted_fence(id: u8, waits: &[bool], waited: &Waited) -> SyncPoint {
+        ScriptedFence {
+            id,
+            waits: Mutex::new(waits.iter().copied().collect()),
+            reached: AtomicBool::new(false),
+            waited: waited.clone(),
+        }
+        .into()
+    }
+
+    fn assert_same_fence(pending: &Option<SyncPoint>, expected: &SyncPoint) {
+        assert!(std::ptr::eq(
+            pending.as_ref().expect("copy fence was lost").get::<ScriptedFence>().unwrap(),
+            expected.get::<ScriptedFence>().unwrap(),
+        ));
+    }
+
+    #[test]
+    fn failed_copy_wait_keeps_fence_until_a_retry_succeeds() {
+        let waited = Waited::default();
+        let fence = scripted_fence(1, &[false, true], &waited);
+        let mut copied = Some(fence.clone());
+        // The caller draws nothing after an error.
+        assert!(wait_for_copy(&mut copied, |sync| sync.wait()).is_err());
+        assert_same_fence(&copied, &fence);
+        assert_eq!(*waited.lock().unwrap(), [1]);
+        wait_for_copy(&mut copied, |sync| sync.wait()).unwrap();
+        assert!(copied.is_none());
+        assert_eq!(*waited.lock().unwrap(), [1, 1]);
+
+        // Once the copy is ordered, a frame with no new copy needs no wait.
+        wait_for_copy(&mut copied, |_| -> Result<(), Interrupted> { panic!("waited without a pending copy") }).unwrap();
+    }
+
+    #[test]
+    fn finished_copy_is_not_waited_for_again() {
+        let waited = Waited::default();
+        let fence = scripted_fence(5, &[true], &waited);
+        let mut copied = None;
+        // The scan-out wait sees the copy through,
+        wait_before_scanout(&mut copied, true, Some(&fence), true).unwrap();
+        assert_same_fence(&copied, &fence);
+        // so the next frame has nothing left to wait for: the fence has no
+        // second wait scripted, and one would fail the test.
+        wait_for_copy(&mut copied, |sync| sync.wait()).unwrap();
+        assert!(copied.is_none());
+        assert_eq!(*waited.lock().unwrap(), [5]);
+    }
+
+    #[test]
+    fn interrupted_scanout_keeps_new_copy_and_blocks_the_next_output() {
+        let waited = Waited::default();
+        let fence = scripted_fence(2, &[false, false, true], &waited);
+        let mut copied = None;
+        // The caller submits nothing after an error (until it gives up).
+        assert!(wait_before_scanout(&mut copied, true, Some(&fence), true).is_err());
+        assert_same_fence(&copied, &fence);
+        assert_eq!(*waited.lock().unwrap(), [2]);
+
+        // Another output on this GPU must still wait for the unpresented
+        // frame's copy; an interrupted wait cannot let it overwrite it.
+        assert!(wait_for_copy(&mut copied, |sync| sync.wait()).is_err());
+        assert_same_fence(&copied, &fence);
+        assert_eq!(*waited.lock().unwrap(), [2, 2]);
+
+        wait_for_copy(&mut copied, |sync| sync.wait()).unwrap();
+        assert!(copied.is_none());
+        wait_before_scanout(&mut copied, true, Some(&SyncPoint::signaled()), true).unwrap();
+        assert_eq!(*waited.lock().unwrap(), [2, 2, 2]);
+    }
+
+    #[test]
+    fn single_gpu_scanout_waits_without_recording_a_cross_gpu_copy() {
+        let waited = Waited::default();
+        let fence = scripted_fence(3, &[false, true], &waited);
+        let mut copied = None;
+        assert!(wait_before_scanout(&mut copied, false, Some(&fence), true).is_err());
+        assert!(copied.is_none());
+        assert_eq!(*waited.lock().unwrap(), [3]);
+        wait_before_scanout(&mut copied, false, Some(&fence), true).unwrap();
+        assert!(copied.is_none());
+        assert_eq!(*waited.lock().unwrap(), [3, 3]);
+    }
+
+    #[test]
+    fn empty_direct_scanout_and_kms_fenced_frames_need_no_cpu_wait() {
+        let waited = Waited::default();
+        let fence = scripted_fence(4, &[], &waited);
+        // No script: any CPU wait here fails. An empty frame and direct
+        // scan-out bring no fence; a frame KMS takes with its fence has it
+        // remembered, not waited for.
+        for sync in [None, Some(&fence)] {
+            let mut copied = None;
+            wait_before_scanout(&mut copied, true, sync, false).unwrap();
+            if sync.is_some() {
+                assert_same_fence(&copied, &fence);
+            } else {
+                assert!(copied.is_none());
+            }
+        }
+        assert!(waited.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn failing_wait_holds_a_frame_back_only_so_often() {
+        let event_loop = EventLoop::<()>::try_new().unwrap();
+        let mut redraw = Redraw::Idle;
+        let mut queued = false;
+        let mut held = 0;
+        // Each failed try starts as `Udev::redraw` does: it reads how often
+        // the frame has been held back, and may hold it once more.
+        while redraw.holds().may_hold() {
+            let holds = redraw.holds();
+            redraw = Redraw::Idle;
+            redraw.retry(holds, &mut queued, &event_loop.handle(), Duration::from_millis(1)).unwrap();
+            held += 1;
+            assert!(held <= Holds::MOST, "a wait that keeps failing would hold the output back for good");
+        }
+        assert_eq!(held, Holds::MOST);
+        assert!(matches!(redraw, Redraw::RetryAt { .. }), "the try that goes ahead is still timed");
+
+        // A frame that got through starts the count afresh.
+        redraw = Redraw::WaitingForVBlank;
+        assert!(redraw.holds().may_hold());
+    }
+
+    #[test]
+    fn synchronization_retry_wakes_without_input_and_does_not_spin() {
+        let mut event_loop = EventLoop::<bool>::try_new().unwrap();
+        let mut timed_out = false;
+        event_loop
+            .handle()
+            .insert_source(Timer::from_duration(Duration::from_secs(1)), |_, _, timed_out| {
+                *timed_out = true;
+                TimeoutAction::Drop
+            })
+            .unwrap();
+        let mut redraw = Redraw::Idle;
+        let mut queued = false;
+        redraw.retry(Holds::default(), &mut queued, &event_loop.handle(), Duration::from_millis(20)).unwrap();
+        let Redraw::RetryAt { at, .. } = redraw else { panic!("no retry deadline") };
+        assert!(queued, "no vblank will requeue an unsubmitted frame");
+        assert!(!redraw.due(at - Duration::from_nanos(1)), "unrelated events must not retry early");
+        assert!(redraw.due(at));
+        event_loop.dispatch(None, &mut timed_out).unwrap();
+        assert!(!timed_out, "the retry did not wake the loop before the safety timer");
+        assert!(redraw.due(Instant::now()), "the timer must wake the loop without input or vblank");
+        assert!(queued);
+
+        // A reset or successful redraw can supersede a retry before its
+        // timer fires. The old timer must not make another frame eligible.
+        redraw.retry(Holds::default(), &mut queued, &event_loop.handle(), Duration::from_millis(1)).unwrap();
+        redraw = Redraw::WaitingForVBlank;
+        event_loop.dispatch(None, &mut timed_out).unwrap();
+        assert!(!timed_out);
+        assert!(!redraw.due(Instant::now()));
+        assert_eq!(redraw, Redraw::WaitingForVBlank);
+    }
 
     #[test]
     fn libinput_never_turns_scrolling_round_itself() {
@@ -1394,6 +1862,39 @@ mod tests {
         assert_eq!(covered_by(None, [("DP-1", Some(left), Some((5120, 2880)))]), None);
         let wall = Some(Tile { single_monitor: false, ..right });
         assert_eq!(covered_by(wall, [("DP-1", Some(left), Some((5120, 2880)))]), None);
+    }
+
+    fn output(name: &str) -> Output {
+        let physical = PhysicalProperties {
+            size: (0, 0).into(),
+            subpixel: Subpixel::Unknown,
+            make: "Unknown".into(),
+            model: "Unknown".into(),
+        };
+        Output::new(name.into(), physical)
+    }
+
+    #[test]
+    fn an_output_that_fails_to_turn_on_stays_off_to_be_tried_again() {
+        let (panel, monitor) = (output("eDP-1"), output("DP-2"));
+        let mut off = HashMap::from([("eDP-1".to_string(), 1), ("DP-2".to_string(), 2)]);
+        let mut listed = vec![panel.clone(), monitor.clone()];
+
+        // Out of both lists while it is set up afresh.
+        let turning_on = TurningOn::take(&mut off, &mut listed, "eDP-1").expect("eDP-1 is off");
+        assert!(!off.contains_key("eDP-1"));
+        assert_eq!(listed, std::slice::from_ref(&monitor));
+        // The modeset failed: nothing came on.
+        turning_on.settle(&mut off, &mut listed, false);
+        assert_eq!(off.get("eDP-1"), Some(&1), "the backend forgot an output that didn't come on");
+        assert_eq!(listed, [panel, monitor.clone()], "an output that didn't come on is no longer listed as off");
+
+        // So a later attempt finds it, and one that works takes it off for good.
+        let again = TurningOn::take(&mut off, &mut listed, "eDP-1").expect("still off, to be tried again");
+        again.settle(&mut off, &mut listed, true);
+        assert_eq!(off, HashMap::from([("DP-2".to_string(), 2)]));
+        assert_eq!(listed, [monitor]);
+        assert!(TurningOn::take(&mut off, &mut listed, "eDP-1").is_none(), "an output that is on isn't off");
     }
 
     #[test]

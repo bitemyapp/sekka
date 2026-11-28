@@ -26,10 +26,12 @@ use wayland_client::protocol::{
     wl_surface,
 };
 use wayland_client::{Connection, Dispatch, EventQueue, QueueHandle, WEnum};
+use wayland_protocols::wp::idle_inhibit::zv1::client::{zwp_idle_inhibit_manager_v1, zwp_idle_inhibitor_v1};
 use wayland_protocols::wp::text_input::zv3::client::{zwp_text_input_manager_v3, zwp_text_input_v3};
 use wayland_protocols::xdg::decoration::zv1::client::{zxdg_decoration_manager_v1, zxdg_toplevel_decoration_v1};
 use wayland_protocols::xdg::foreign::zv2::client::{zxdg_exported_v2, zxdg_exporter_v2};
 use wayland_protocols::xdg::shell::client::{xdg_surface, xdg_toplevel, xdg_wm_base};
+use wayland_protocols::xdg::toplevel_tag::v1::client::xdg_toplevel_tag_manager_v1;
 
 static COUNTER: AtomicU32 = AtomicU32::new(0);
 
@@ -46,6 +48,11 @@ pub struct Options<'a> {
     pub renderer: Option<&'a str>,
     /// settings.toml contents.
     pub settings: &'a str,
+    /// Keep the settings in `$HOME/.config`, with no `XDG_CONFIG_HOME`: the
+    /// person's own settings, as a headless or nested compositor started
+    /// inside their session finds them, rather than a configuration
+    /// directory of the test's own (`config`).
+    pub persons_settings: bool,
     /// The compositor to run (default: this package's `aizome`).
     pub exe: Option<&'a Path>,
     /// The logic library to load (default: the one beside the binary).
@@ -61,6 +68,7 @@ impl Default for Options<'_> {
             outputs: &["1280x800@1"],
             renderer: None,
             settings: "[appearance]\neffects = \"austere\"\n",
+            persons_settings: false,
             exe: None,
             logic: None,
             args: &[],
@@ -79,7 +87,9 @@ impl Compositor {
         std::fs::create_dir_all(dir.join("home")).unwrap();
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).unwrap();
-        std::fs::write(dir.join("config/aizome/settings.toml"), opts.settings).unwrap();
+        let config = if opts.persons_settings { dir.join("home/.config") } else { dir.join("config") };
+        std::fs::create_dir_all(config.join("aizome")).unwrap();
+        std::fs::write(config.join("aizome/settings.toml"), opts.settings).unwrap();
         let socket = format!("aztest-{}-{n}", std::process::id());
         let log = dir.join("aizome.log");
         let mut cmd = Command::new(opts.exe.unwrap_or(Path::new(env!("CARGO_BIN_EXE_aizome"))));
@@ -122,6 +132,9 @@ impl Compositor {
             .env("AIZOME_LOG", "info,smithay=warn")
             .stdout(Stdio::null())
             .stderr(std::fs::File::create(&log).unwrap());
+        if opts.persons_settings {
+            cmd.env_remove("XDG_CONFIG_HOME");
+        }
         let child = cmd.spawn().expect("start aizome");
         let ipc = dir.join(format!("aizome.{socket}.sock"));
         let c = Compositor { child, dir, socket, ipc, log };
@@ -386,6 +399,9 @@ pub struct Spec {
     /// while the window has the keys, a commit applied only by a `done`
     /// whose serial counts its own commits.
     pub text_input: bool,
+    /// The tag it gives its toplevel before the first commit
+    /// (xdg-toplevel-tag), as Aizome's kit tags a utility window.
+    pub tag: Option<String>,
 }
 
 impl Spec {
@@ -404,10 +420,15 @@ impl Spec {
             animated: false,
             defer_mapping: false,
             text_input: false,
+            tag: None,
         }
     }
     pub fn text_input(mut self) -> Spec {
         self.text_input = true;
+        self
+    }
+    pub fn tag(mut self, tag: &str) -> Spec {
+        self.tag = Some(tag.into());
         self
     }
     pub fn pixel_pattern(mut self, pattern: fn(i32, i32) -> u32) -> Spec {
@@ -498,6 +519,25 @@ pub enum Cmd {
     /// Exports the window (xdg-foreign v2), as an app does for a portal
     /// dialog: its handle comes in `Seen::exported`.
     Export,
+    /// Takes an idle inhibitor on the window's surface (true), as a video
+    /// player does while it plays, or lets it go (false), as it does
+    /// paused.
+    InhibitIdle(bool),
+    /// Gives the window's toplevel this tag now (xdg-toplevel-tag), as an
+    /// app may at any time.
+    Tag(String),
+    /// Unmaps the window (a commit with no buffer). Its toplevel stays,
+    /// and nothing is drawn until `Remap`, or `Renew` and `Map`.
+    Unmap,
+    /// Maps an unmapped window's toplevel again: the tag if any, the
+    /// commit that asks for a configure, and a frame once that comes, of
+    /// this size unless the compositor names one.
+    Remap { tag: Option<String>, size: (i32, i32) },
+    /// Gives the window's surface a new toplevel (and `xdg_surface`) in
+    /// place of the one it has, which is destroyed: this title, the tag if
+    /// any, and the commit that asks for a configure. A surface that has
+    /// drawn must be unmapped first.
+    Renew { title: String, tag: Option<String>, size: (i32, i32) },
     Quit,
 }
 
@@ -562,6 +602,9 @@ struct App {
     toplevel: Option<xdg_toplevel::XdgToplevel>,
     dialog: Option<(wl_surface::WlSurface, xdg_surface::XdgSurface, xdg_toplevel::XdgToplevel)>,
     exported: Option<zxdg_exported_v2::ZxdgExportedV2>,
+    inhibitor: Option<zwp_idle_inhibitor_v1::ZwpIdleInhibitorV1>,
+    /// The toplevel's decoration object, which must go before it does.
+    decoration: Option<zxdg_toplevel_decoration_v1::ZxdgToplevelDecorationV1>,
     pending_size: Option<(i32, i32)>,
     size: (i32, i32),
     needs_draw: bool,
@@ -602,6 +645,8 @@ fn run_client(stream: UnixStream, spec: Spec, rx: Receiver<Cmd>, seen: Arc<Mutex
         toplevel: None,
         dialog: None,
         exported: None,
+        inhibitor: None,
+        decoration: None,
         pending_size: None,
         needs_draw: false,
         configured: false,
@@ -622,12 +667,24 @@ fn run_client(stream: UnixStream, spec: Spec, rx: Receiver<Cmd>, seen: Arc<Mutex
     if let Some((w, h)) = spec.min_size {
         tl.set_min_size(w, h);
     }
-    if let Some(d) = &deco {
-        let td = d.get_toplevel_decoration(&tl, &qh, ());
-        td.set_mode(zxdg_toplevel_decoration_v1::Mode::ServerSide);
-    }
+    let decorate = |tl: &xdg_toplevel::XdgToplevel| {
+        deco.as_ref().map(|d| {
+            let td = d.get_toplevel_decoration(tl, &qh, ());
+            td.set_mode(zxdg_toplevel_decoration_v1::Mode::ServerSide);
+            td
+        })
+    };
+    let set_tag = |tl: &xdg_toplevel::XdgToplevel, tag: String| {
+        let tags: xdg_toplevel_tag_manager_v1::XdgToplevelTagManagerV1 =
+            globals.bind(&qh, 1..=1, ()).expect("xdg_toplevel_tag_manager_v1");
+        tags.set_toplevel_tag(tl, tag);
+    };
+    app.decoration = decorate(&tl);
     if spec.fullscreen {
         tl.set_fullscreen(spec.fullscreen_output.and_then(|i| outputs.get(i)));
+    }
+    if let Some(tag) = &spec.tag {
+        set_tag(&tl, tag.clone());
     }
     surface.commit();
     app.surface = Some(surface);
@@ -667,6 +724,66 @@ fn run_client(stream: UnixStream, spec: Spec, rx: Receiver<Cmd>, seen: Arc<Mutex
                     let exporter: zxdg_exporter_v2::ZxdgExporterV2 =
                         globals.bind(&qh, 1..=1, ()).expect("zxdg_exporter_v2");
                     app.exported = Some(exporter.export_toplevel(app.surface.as_ref().unwrap(), &qh, ()));
+                }
+                Cmd::InhibitIdle(true) if app.inhibitor.is_none() => {
+                    let manager: zwp_idle_inhibit_manager_v1::ZwpIdleInhibitManagerV1 =
+                        globals.bind(&qh, 1..=1, ()).expect("zwp_idle_inhibit_manager_v1");
+                    app.inhibitor = Some(manager.create_inhibitor(app.surface.as_ref().unwrap(), &qh, ()));
+                }
+                Cmd::InhibitIdle(true) => {}
+                Cmd::InhibitIdle(false) => {
+                    if let Some(inhibitor) = app.inhibitor.take() {
+                        inhibitor.destroy();
+                    }
+                }
+                Cmd::Tag(tag) => set_tag(app.toplevel.as_ref().unwrap(), tag),
+                Cmd::Unmap => {
+                    let s = app.surface.as_ref().unwrap();
+                    s.attach(None, 0, 0);
+                    s.commit();
+                    // No frame until it's asked for and configured again:
+                    // a configure sent before this arrived asks for none.
+                    app.spec.defer_mapping = true;
+                    app.configured = false;
+                    app.needs_draw = false;
+                }
+                Cmd::Remap { tag, size } => {
+                    if let Some(tag) = tag {
+                        set_tag(app.toplevel.as_ref().unwrap(), tag);
+                    }
+                    app.size = size;
+                    app.pending_size = None;
+                    app.spec.defer_mapping = false;
+                    app.configured = false;
+                    app.needs_draw = false;
+                    app.surface.as_ref().unwrap().commit();
+                }
+                Cmd::Renew { title, tag, size } => {
+                    if let Some(td) = app.decoration.take() {
+                        td.destroy();
+                    }
+                    if let Some(t) = app.toplevel.take() {
+                        t.destroy();
+                    }
+                    if let Some(x) = app.xdg_surface.take() {
+                        x.destroy();
+                    }
+                    let s = app.surface.clone().unwrap();
+                    let xs = wm.get_xdg_surface(&s, &qh, ());
+                    let tl = xs.get_toplevel(&qh, ());
+                    tl.set_app_id(app.spec.app_id.clone());
+                    tl.set_title(title);
+                    app.decoration = decorate(&tl);
+                    if let Some(tag) = tag {
+                        set_tag(&tl, tag);
+                    }
+                    app.size = size;
+                    app.pending_size = None;
+                    app.configured = false;
+                    app.needs_draw = false;
+                    s.commit();
+                    app.xdg_surface = Some(xs);
+                    app.toplevel = Some(tl);
                 }
                 Cmd::Quit => app.quit = true,
             }
@@ -762,7 +879,10 @@ ignore!(
     zxdg_decoration_manager_v1::ZxdgDecorationManagerV1,
     wl_seat::WlSeat,
     zwp_text_input_manager_v3::ZwpTextInputManagerV3,
-    zxdg_exporter_v2::ZxdgExporterV2
+    zxdg_exporter_v2::ZxdgExporterV2,
+    zwp_idle_inhibit_manager_v1::ZwpIdleInhibitManagerV1,
+    zwp_idle_inhibitor_v1::ZwpIdleInhibitorV1,
+    xdg_toplevel_tag_manager_v1::XdgToplevelTagManagerV1
 );
 
 impl Dispatch<zxdg_exported_v2::ZxdgExportedV2, ()> for App {

@@ -97,6 +97,34 @@ pub struct Cx<'a, Msg> {
 }
 
 impl<Msg: Clone + Send + 'static> Cx<'_, Msg> {
+    /// This `Program::update` did not change any window's view. Keep
+    /// processing its messages, menus and window operations, but omit its
+    /// automatic whole-app view/layout pass. Earlier refresh requests and
+    /// the kit's own invalidations are preserved.
+    ///
+    /// This applies only to the current message. Without this call (or
+    /// [`refresh_window`](Cx::refresh_window)), an update still refreshes
+    /// every window. Call it only when the views' data did not change.
+    pub fn skip_view_refresh(&mut self) {
+        self.core.refresh_all_after_update = false;
+    }
+
+    /// Refresh this window's view after the current update, instead of
+    /// automatically refreshing every window. Repeated calls add windows;
+    /// a sheet refreshes the window that contains it. Other messages in
+    /// the same batch keep their own refresh requests.
+    ///
+    /// Include every window that displays the changed state. Window
+    /// operations and theme changes can still require additional views.
+    pub fn refresh_window(&mut self, window: WindowKey) {
+        self.skip_view_refresh();
+        if let Some(win) = self.core.window_of(window)
+            && let Some(w) = self.core.wins.get_mut(&win)
+        {
+            w.dirty = true;
+        }
+    }
+
     // Windows.
 
     /// Open a window; its view is asked for once it's shown.

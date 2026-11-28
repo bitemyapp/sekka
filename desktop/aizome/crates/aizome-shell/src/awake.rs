@@ -1,6 +1,7 @@
 //! Keep Awake in the shell (`aizome-awake`; docs/keep-awake.md): its cup
 //! in the systray while it's on, its switch in the cup's panel and the
-//! Battery panel, and the palette's command.
+//! Battery panel, and the palette's command. The cup shows for apps
+//! holding the screen on as well, in another colour (`holders.rs`).
 //!
 //! The shell only asks `aizome-awake` to turn it on or off, and watches
 //! whether logind lists the locks. The locks belong to a user service, so
@@ -12,7 +13,6 @@ use std::time::Duration;
 use aizome_awake::Status;
 use aizome_kit::prelude::*;
 
-use crate::menubar::TrayWidget;
 use crate::shell::{Msg, Shell};
 
 impl Shell {
@@ -29,6 +29,12 @@ impl Shell {
             self.keep_awake_status(if on { Status::On } else { Status::Off }, cx);
             return;
         }
+        // The service takes its hold on the compositor before
+        // `aizome-awake on` comes back, and may still have it as the
+        // watcher sees the setting go: that hold is Keep Awake's all the
+        // while, never somebody's row in between.
+        self.awake_changing = true;
+        self.holders_may_be_renamed();
         cx.spawn(move || {
             let out = std::process::Command::new("aizome-awake").arg(if on { "on" } else { "off" }).output();
             Msg::AwakeSet(match out {
@@ -44,6 +50,8 @@ impl Shell {
 
     /// `aizome-awake` finished.
     pub fn keep_awake_set(&mut self, result: Result<bool, String>, cx: &mut Cx<Msg>) {
+        self.awake_changing = false;
+        self.holders_may_be_renamed();
         match result {
             Ok(on) => self.keep_awake_status(if on { Status::On } else { Status::Off }, cx),
             Err(e) => {
@@ -67,11 +75,12 @@ impl Shell {
             return;
         }
         self.awake = status;
-        self.tray.awake = (status != Status::Off).then_some(status);
-        // The cup goes with it: so does its panel.
-        if status == Status::Off && self.panel.as_ref().is_some_and(|p| p.widget == TrayWidget::Awake) {
-            self.close_panel(cx);
-        }
+        // Whether its service's hold is Keep Awake's, or somebody's row,
+        // goes by whether Keep Awake is on (`holders.rs`).
+        self.holders_may_be_renamed();
+        // Off, the cup goes with it and so does its panel, unless apps
+        // hold the screen on: then both stay, for them.
+        self.cup_changed(cx);
     }
 }
 

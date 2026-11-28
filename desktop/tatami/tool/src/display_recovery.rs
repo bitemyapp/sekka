@@ -7,7 +7,7 @@
 //! in monitor position only (WorkspacePlacementController.cpp), which can
 //! put them beyond the remaining screens. And keeps the scale X11
 //! applications draw at to the main display's (xwayland.rs).
-use crate::{display_policy, displays, hypr, lid, util, window, xwayland};
+use crate::{aizome_displays, display_policy, displays, hypr, lid, util, window, xwayland};
 use serde_json::Value;
 use std::{
     fs::{self, File, OpenOptions},
@@ -180,8 +180,9 @@ fn settings_for(store: &Value, monitor: &Value, all: &Value) -> Option<displays:
         .or_else(|| displays::Settings::from_monitor(monitor).filter(|s| !s.mode.starts_with("0x")))
 }
 
-/// Turn a display on with its kept settings, then its preferred mode. It
-/// mirrors what it mirrored only while that stays on.
+/// Turn a display on with its kept settings (or Aizome's, without them),
+/// then its preferred mode. It mirrors what it mirrored only while that
+/// stays on.
 fn turn_on(
     name: &str,
     all: &Value,
@@ -189,6 +190,21 @@ fn turn_on(
     mirror_ok: &dyn Fn(&str) -> bool,
 ) -> util::Result<displays::Settings> {
     let monitor = find(all, name).ok_or_else(|| format!("{name} is not connected"))?;
+    if displays::kept_for(store, monitor, all).is_none()
+        && let Some(mut aizome) = aizome_displays::for_connector(name)
+    {
+        if aizome
+            .mirror
+            .as_deref()
+            .is_some_and(|source| !mirror_ok(source))
+        {
+            aizome.mirror = None;
+        }
+        if let Ok(restored) = evaluate(&aizome.rule()).and_then(|_| wait_enabled(name)) {
+            return displays::Settings::from_monitor(&restored)
+                .ok_or_else(|| format!("Cannot read {name}"));
+        }
+    }
     let settings = settings_for(store, monitor, all).map(|mut settings| {
         settings.enabled = true;
         if settings
@@ -691,6 +707,7 @@ pub fn watch() -> util::Result<()> {
     // window-placement policy or a rescue of unrelated windows.
     let mut network_fit_until = Instant::now() + Duration::from_secs(3);
     let mut scale = XScale::new();
+    let mut aizome_pending = false;
     loop {
         if changed || last_check.elapsed() >= Duration::from_secs(1) {
             lid.poll(changed);
@@ -710,7 +727,19 @@ pub fn watch() -> util::Result<()> {
                     if screens.is_some() {
                         rescue_until = Instant::now() + Duration::from_secs(3);
                     }
+                    // A display connected now, or gone, that Aizome has
+                    // settings for: the configuration loads them again,
+                    // without rules for displays no longer there. At the
+                    // first look too: a display may have come or gone since
+                    // the session wrote the rules, before this watcher
+                    // started. Rules that still hold are left, and nothing
+                    // is reloaded.
+                    aizome_pending |= aizome_displays::write();
                     screens = Some(now);
+                }
+                // Until a reload has loaded them: the file is written already.
+                if aizome_pending {
+                    aizome_pending = matches!(window::reload_hyprland(), window::Reload::Failed);
                 }
                 scale.keep(&all);
             }

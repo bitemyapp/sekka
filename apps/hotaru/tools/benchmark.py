@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Validate exact corpus state, then compare serial in-process feed timings.
 
-The Zig and Rust adapters read input before timing and create fresh zero-history
-terminals per iteration. This is a terminal-core workload comparison, never an
-application-wide performance certification.
+The Zig and Rust adapters read input before timing and create fresh terminals
+per iteration, with zero history unless --scrollback selects another preset.
+This is a terminal-core workload comparison, never an application-wide
+performance certification.
 """
 import argparse
 import datetime
@@ -19,6 +20,29 @@ import sys
 
 from differential import Oracle, differences, digest
 from corpus import PATTERNS
+
+# History each engine keeps. Zero scrollback turns off much of libghostty-vt's
+# fast path for primary-screen output, so it flatters neither engine there.
+# `libghostty-default` leaves each library's own default (Hotaru's native
+# 10,000 rows within hotaru-core's 50 MB); `ghostty-gui` is the Ghostty
+# application's 50 MB default, and Hotaru keeps its most rows (1,000,000)
+# within the same 50 MB, as the terminal GUI comparisons do.
+SCROLLBACK = {
+    "zero": {"ghostty": {"scrollback": 0},
+             "hotaru": {"scrollback": 0, "scrollback_bytes": None}},
+    "libghostty-default": {"ghostty": {"scrollback": "default"},
+                           "hotaru": {"scrollback": 10_000, "scrollback_bytes": 50_000_000}},
+    "ghostty-gui": {"ghostty": {"scrollback": 50_000_000},
+                    "hotaru": {"scrollback": 1_000_000, "scrollback_bytes": 50_000_000}},
+}
+
+
+def scrollback_args(engine, preset):
+    config = SCROLLBACK[preset][engine]
+    if engine == "ghostty":
+        return ["--scrollback-bytes", str(config["scrollback"])]
+    return ["--scrollback", str(config["scrollback"]), "--scrollback-bytes",
+            "none" if config["scrollback_bytes"] is None else str(config["scrollback_bytes"])]
 
 
 def state_hash(snapshot):
@@ -41,6 +65,7 @@ def main():
     parser.add_argument("--cols", type=int, default=120)
     parser.add_argument("--chunk", type=int, default=65536)
     parser.add_argument("--grapheme-width", choices=("legacy", "unicode"), default="legacy")
+    parser.add_argument("--scrollback", choices=tuple(SCROLLBACK), default="zero")
     parser.add_argument("--rounds", type=int, default=4)
     parser.add_argument("--iterations", type=int, default=5)
     parser.add_argument("--warmup", type=int, default=3)
@@ -108,14 +133,15 @@ def main():
             "candidate_build_environment": candidate_metadata["environment"],
             "library_sha256": digest(args.library), "data": str(args.data.resolve()),
             "data_bytes": len(data), "data_sha256": corpus_hash,
-            "rows": args.rows, "cols": args.cols, "scrollback": 0, "chunk_bytes": args.chunk,
+            "rows": args.rows, "cols": args.cols, "scrollback": args.scrollback,
+            "scrollback_configuration": SCROLLBACK[args.scrollback], "chunk_bytes": args.chunk,
             "grapheme_width_method": args.grapheme_width,
             "reference_state_sha256": state_hash(expected), "candidate_state_sha256": state_hash(actual),
             "state_matched": not delta, "differences": delta,
             "unsupported_workload_features": unsupported,
             "reviewed_workload": workload,
             "performance_comparable": not delta and not unsupported,
-            "scope": "in-process VT feed with zero history; identical compared snapshot precedes timing",
+            "scope": f"in-process VT feed, {args.scrollback} scrollback; identical compared snapshot precedes timing",
             "state_styles_compared": ["basic attributes", "underline variants", "overline"],
             "state_omissions": ["hyperlinks", "other modes/effects", "pending wrap", "graphics", "scrollback", "renderer"],
             "host": platform.node(), "platform": platform.platform(), "cpu_affinity": sorted(os.sched_getaffinity(0)),
@@ -123,8 +149,10 @@ def main():
             "timed_response_count_check": {},
         }
         if not delta and not unsupported:
-            commands = {"ghostty": [str(args.reference.resolve()), *command_args, "--bench-json"],
-                        "hotaru": [str(args.replay.resolve()), *command_args, "--bench-json"]}
+            commands = {"ghostty": [str(args.reference.resolve()), *command_args,
+                                    *scrollback_args("ghostty", args.scrollback), "--bench-json"],
+                        "hotaru": [str(args.replay.resolve()), *command_args,
+                                   *scrollback_args("hotaru", args.scrollback), "--bench-json"]}
             samples = {engine: {"samples_ns": [], "setup_ns": [], "teardown_ns": []} for engine in commands}
 
             def measure(engine, iterations):
@@ -135,7 +163,8 @@ def main():
                     raise RuntimeError(f"Unicode benchmark configuration was not confirmed: {engine}")
                 for key, expected_value in (("schema", 1), ("engine", engine), ("timed_scope", "feed-only"),
                                             ("input_bytes", len(data)), ("rows", args.rows), ("cols", args.cols),
-                                            ("scrollback", 0), ("chunk_bytes", args.chunk)):
+                                            *SCROLLBACK[args.scrollback][engine].items(),
+                                            ("chunk_bytes", args.chunk)):
                     if value[key] != expected_value:
                         raise RuntimeError(f"benchmark configuration mismatch: {engine}.{key}")
                 for key in ("samples_ns", "setup_ns", "teardown_ns"):

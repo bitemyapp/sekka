@@ -371,7 +371,8 @@ pub trait Pane: 'static {
     }
 
     /// The sub-page showing, which the title strip puts after the pane's
-    /// title ("General › About"); Back then returns from it.
+    /// title ("General › About"); Back, or the title pressed there, then
+    /// returns from it.
     fn crumb(&self) -> Option<&'static str> {
         None
     }
@@ -602,6 +603,12 @@ impl<'a, 'c, Msg: Clone + Send + Sync + 'static> PaneCx<'a, 'c, Msg> {
     /// every test. Nothing done in the sample changes the machine.
     pub fn sample(&self) -> bool {
         self.shared.sample
+    }
+
+    /// Where the system's own choices are read from, to read them off the
+    /// main thread: none in the sample, unless a test gave it some.
+    pub fn choices(&self) -> Option<crate::system::choices::Files> {
+        self.shared.choices.clone()
     }
 
     /// The keyboard the launch opening this pane named (`--keyboard`):

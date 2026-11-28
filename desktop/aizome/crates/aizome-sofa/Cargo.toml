@@ -1,0 +1,15 @@
+[package]
+name = "aizome-sofa"
+description = "Aizome's look from the sofa: controller buttons drawn as each maker prints them, the on-screen keyboard and the PIN pad, on a 1920 × 1080 design scaled to the screen; Chanoma's and the login screen's"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+aizome-kit.workspace = true
+# The mark's colours.
+aizome-theme.workspace = true
+# Buttons by where they are, and which of them a controller has.
+aizome-gamepad.workspace = true

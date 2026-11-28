@@ -326,6 +326,10 @@ pub(crate) struct Core {
     pub bg_tx: Sender<AnyMsg>,
     pub bg_rx: Receiver<AnyMsg>,
     pub stats: Stats,
+    /// This application's current update uses the default, whole-app
+    /// refresh. Explicit refresh requests only add dirty windows; they
+    /// never clear work requested by an earlier message or by the kit.
+    pub refresh_all_after_update: bool,
     pub alerts: HashMap<u64, AlertState>,
     pub panels: HashMap<u64, crate::dialogs::PanelState>,
     pub next_id: u64,
@@ -337,6 +341,9 @@ pub(crate) struct Core {
     /// Lazy elements built and kept in the windows' trees, for whoever
     /// counts.
     pub lazies: crate::tree::LazyCounts,
+    /// The keys that are down, by their codes and what they are, since the
+    /// keyboard last came to a window or left one ([`Core::first_press`]).
+    keys_down: Vec<(u32, Key)>,
 }
 
 impl Core {
@@ -361,6 +368,7 @@ impl Core {
             bg_tx,
             bg_rx,
             stats: Stats::default(),
+            refresh_all_after_update: true,
             alerts: HashMap::new(),
             panels: HashMap::new(),
             next_id: 1,
@@ -368,6 +376,7 @@ impl Core {
             quit: false,
             wm: None,
             lazies: Default::default(),
+            keys_down: Vec::new(),
         }
     }
 
@@ -1230,10 +1239,13 @@ impl Core {
         }
     }
 
-    /// The compositor dismissed popup `win` (it's closed already).
+    /// Popup `win` is dismissed: by the compositor (a press in another
+    /// app; it's closed already), or by a press elsewhere in this app
+    /// ([`dismiss_outside`](Self::dismiss_outside)).
     pub fn popup_dismissed(&mut self, win: WinId, platform: &mut dyn Platform) {
         // A popup of the program's own is gone: the program hears it as a
-        // close request (whatever it answers).
+        // close request (whatever it answers), ahead of what the press
+        // that dismissed it goes on to send.
         if let Some(WinKind::App { key, .. }) = self.wins.get(&win).map(|w| &w.kind) {
             let key = *key;
             self.close_key(key, platform);
@@ -1253,29 +1265,101 @@ impl Core {
         self.close_popup(win, platform);
     }
 
+    fn is_menu(&self, win: WinId) -> bool {
+        matches!(self.wins.get(&win).map(|w| &w.kind), Some(WinKind::Popup { kind: PopupKind::Menu { .. }, .. }))
+    }
+
+    /// Whether `win` is a popup that holds a grab: a menu, a popover, or a
+    /// popup of the program's own opened with `grab` (the Shell's systray
+    /// panels). A press outside it dismisses it, wherever in the app the
+    /// press lands.
+    fn grabs(&self, win: WinId) -> bool {
+        match self.wins.get(&win).map(|w| &w.kind) {
+            Some(WinKind::Popup { kind, .. }) => matches!(kind, PopupKind::Menu { .. } | PopupKind::Popover { .. }),
+            Some(WinKind::App { spec, .. }) => matches!(spec.kind, WindowKind::Popup { grab: true, .. }),
+            None => false,
+        }
+    }
+
+    /// The window popup `win` is open over: a menu's or a popover's owner,
+    /// the parent of a popup of the program's own.
+    fn popup_parent(&self, win: WinId) -> Option<WinId> {
+        match &self.wins.get(&win)?.kind {
+            WinKind::Popup { owner, .. } => Some(*owner),
+            WinKind::App { spec, .. } => match &spec.kind {
+                WindowKind::Popup { parent, .. } => self.window_of(*parent),
+                _ => None,
+            },
+        }
+    }
+
+    /// The window `win`'s menus hang from: itself, or the first window
+    /// under it that isn't a menu.
+    fn menu_owner(&self, mut win: WinId) -> WinId {
+        while let Some(WinKind::Popup { owner, kind: PopupKind::Menu { .. } }) = self.wins.get(&win).map(|w| &w.kind) {
+            win = *owner;
+        }
+        win
+    }
+
+    /// The grabbing popups (menus, popovers, the program's own) a press in
+    /// `win` is outside of: those over `win`, and those hanging from the
+    /// app's other windows, each chain by its root (closing it closes what's
+    /// over it). The compositor dismisses them for a press in another app
+    /// only; one in another window of this app (the Shell opens the
+    /// desktop's menu, and a systray panel, over the bar) is the app's to
+    /// answer (#207).
+    fn popups_outside(&self, win: WinId) -> Vec<WinId> {
+        // `win` and the windows under it, out to the first that isn't a
+        // grabbing popup: a press in a submenu is inside its menu, and one
+        // in a menu over a panel is inside the panel.
+        let mut chain = vec![win];
+        while let Some(under) = chain.last().filter(|&&w| self.grabs(w)).and_then(|&w| self.popup_parent(w)) {
+            chain.push(under);
+        }
+        self.wins
+            .keys()
+            .copied()
+            .filter(|&id| self.grabs(id))
+            .filter(|&id| {
+                let parent = self.popup_parent(id);
+                parent == Some(win) || (!parent.is_some_and(|p| self.grabs(p)) && !chain.contains(&id))
+            })
+            .collect()
+    }
+
+    /// A press in `win`, or a menu opening over it, dismisses the grabbing
+    /// popups it's outside of ([`popups_outside`](Self::popups_outside)) as
+    /// the compositor does for a press in another app: a menu closes, a
+    /// popover tells its program, a popup of the program's own closes and
+    /// its program hears a close request. `keep` stays open: the popover
+    /// whose anchor the press is on.
+    fn dismiss_outside(&mut self, win: WinId, keep: Option<WinId>, platform: &mut dyn Platform) {
+        for p in self.popups_outside(win) {
+            if Some(p) != keep {
+                self.popup_dismissed(p, platform);
+            }
+        }
+    }
+
+    /// The popover over `win` whose anchor is under `p`: a press there is
+    /// its program's to answer (the button that opened it, pressed again),
+    /// not a dismissal.
+    fn popover_anchored_at(&self, win: WinId, p: Point) -> Option<WinId> {
+        let w = self.wins.get(&win)?;
+        let path = w.tree.path_under(p, w.modal());
+        w.popups.iter().copied().find(|q| match self.wins.get(q).map(|pw| &pw.kind) {
+            Some(WinKind::Popup { kind: PopupKind::Popover { node, .. }, .. }) => {
+                w.tree.get(*node).is_some_and(|i| path.contains(&i))
+            }
+            _ => false,
+        })
+    }
+
     /// The menus open from `win` (and over them) close.
     fn close_menus(&mut self, win: WinId, platform: &mut dyn Platform) {
-        // Up to the first window that isn't a menu.
-        let mut top = win;
-        while let Some(WinKind::Popup { owner, kind: PopupKind::Menu { .. } }) = self.wins.get(&top).map(|w| &w.kind) {
-            top = *owner;
-        }
-        let menus: Vec<WinId> = self
-            .wins
-            .get(&top)
-            .map(|w| {
-                w.popups
-                    .iter()
-                    .copied()
-                    .filter(|p| {
-                        matches!(
-                            self.wins.get(p).map(|w| &w.kind),
-                            Some(WinKind::Popup { kind: PopupKind::Menu { .. }, .. })
-                        )
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
+        let top = self.menu_owner(win);
+        let menus = self.menu_popups_of(top);
         let had = !menus.is_empty();
         for m in menus {
             self.close_win(m, platform);
@@ -1313,7 +1397,10 @@ impl Core {
         mapper: Option<Mapper>,
         platform: &mut dyn Platform,
     ) -> WinId {
-        self.close_menus(win, platform);
+        // One menu at a time: the app's other menus (and popovers, and
+        // popups of its own that hold a grab) make way, in whichever of its
+        // windows they're open.
+        self.dismiss_outside(win, None, platform);
         self.settle_menu(&mut spec);
         let root = MenuView::element(spec.clone(), look.clone());
         let keyboard = look.keyboard;
@@ -1352,7 +1439,7 @@ impl Core {
 
     /// Open the in-window menu bar's menu `index`.
     pub fn open_bar_menu(&mut self, win: WinId, index: usize, anchor: Rect, platform: &mut dyn Platform) {
-        self.close_menus(win, platform);
+        self.dismiss_outside(win, None, platform);
         let Some(mut spec) = self.menubar.get(index).cloned() else { return };
         self.settle_app_menu(&mut spec, Some(win));
         let root = MenuView::element(spec.clone(), MenuLook::default());
@@ -1388,23 +1475,10 @@ impl Core {
         Some((spec, look))
     }
 
-    /// The menu popups opened from `win` (its submenus).
+    /// The menu popups opened from `win`: a window's menus, a menu's
+    /// submenus.
     fn menu_popups_of(&self, win: WinId) -> Vec<WinId> {
-        self.wins
-            .get(&win)
-            .map(|w| {
-                w.popups
-                    .iter()
-                    .copied()
-                    .filter(|p| {
-                        matches!(
-                            self.wins.get(p).map(|w| &w.kind),
-                            Some(WinKind::Popup { kind: PopupKind::Menu { .. }, .. })
-                        )
-                    })
-                    .collect()
-            })
-            .unwrap_or_default()
+        self.wins.get(&win).map(|w| w.popups.iter().copied().filter(|&p| self.is_menu(p)).collect()).unwrap_or_default()
     }
 
     fn menu_sub(&mut self, win: WinId, node: NodeId, path: Vec<usize>, anchor: Rect, platform: &mut dyn Platform) {
@@ -1586,6 +1660,7 @@ impl Core {
                 id: Some(crate::shell::WINDOW_LIST + win),
                 icon: None,
                 swatch: None,
+                yields_to_text: false,
             }));
         }
         spec.items.splice(at..at + 1, items);
@@ -2277,21 +2352,16 @@ impl Core {
         }
         let mods = self.mods;
         if pressed {
-            // A press in a window closes the menus over it (outside them).
-            let menus: Vec<WinId> = self.wins[&win]
-                .popups
-                .iter()
-                .copied()
-                .filter(|p| {
-                    matches!(
-                        self.wins.get(p).map(|w| &w.kind),
-                        Some(WinKind::Popup { kind: PopupKind::Menu { .. }, .. })
-                    )
-                })
-                .collect();
-            for m in menus {
-                self.close_win(m, platform);
-            }
+            // A press dismisses the grabbing popups it's outside of: the
+            // menus, popovers and the program's own popups over this window,
+            // and those open elsewhere in the app (the compositor sees to a
+            // press in another app). A popover's own anchor pressed is its
+            // program's to answer. A popup of the program's own has no such
+            // widget (it opens against a rectangle), so it goes whatever of
+            // its parent is pressed: its program hears the close request
+            // before anything the press itself sends.
+            let keep = self.popover_anchored_at(win, p);
+            self.dismiss_outside(win, keep, platform);
             self.update_hot(win, p, platform);
             let Some(w) = self.wins.get_mut(&win) else { return };
             w.press_under = None;
@@ -2473,6 +2543,9 @@ impl Core {
     }
 
     pub fn window_focus(&mut self, win: WinId, on: bool, platform: &mut dyn Platform) {
+        // A key let go while no window has the keyboard is never heard of:
+        // none counts as down across a change of the keyboard's window.
+        self.keys_down.clear();
         let Some(w) = self.wins.get_mut(&win) else { return };
         w.has_keyboard = on;
         if let Some(f) = w.focused {
@@ -2496,17 +2569,46 @@ impl Core {
         }
     }
 
+    /// Whether `ev` is a key going down that wasn't down: not a repeat of a
+    /// held key, whether the platform marked it as one or only sent the
+    /// press again with no release since the last. Hears every key event,
+    /// to know which keys are down.
+    fn first_press(&mut self, ev: &KeyEvent) -> bool {
+        // By its code where the platform gives one (the layout can make a
+        // key's release something other than its press); by what it is
+        // where it doesn't (the testing harness).
+        let at = self.keys_down.iter().position(|(code, key)| match (*code, ev.code) {
+            (0, 0) => *key == ev.key,
+            (down, code) => down == code,
+        });
+        if !ev.pressed {
+            if let Some(i) = at {
+                self.keys_down.swap_remove(i);
+            }
+            return false;
+        }
+        if at.is_none() {
+            self.keys_down.push((ev.code, ev.key.clone()));
+        }
+        at.is_none() && !ev.repeat
+    }
+
     /// A key: menus' shortcuts, then the focused widget and its parents,
-    /// then the kit's own keys (Tab, Escape, Return in sheets).
+    /// then the kit's own keys (Tab, Escape, Return in sheets). The
+    /// shortcut of an item that yields to text isn't taken while text
+    /// has the keyboard.
     pub fn key(&mut self, win: WinId, ev: KeyEvent, platform: &mut dyn Platform) {
         let started = Instant::now();
         self.mods = ev.modifiers;
+        let first_press = self.first_press(&ev);
         if !self.wins.contains_key(&win) {
             return;
         }
         let m = ev.modifiers;
         if ev.pressed && (m.super_key() || m.control()) {
             let found = self.menubar.iter().find_map(|menu| menu.find_shortcut(&ev).cloned());
+            // A key text is edited with stays the text's.
+            let found = found.filter(|a| !(a.yields_to_text && self.editing_text(win)));
             if let Some(a) = found {
                 let mut a = a;
                 // Settle Edit items against the focused widget.
@@ -2533,9 +2635,15 @@ impl Core {
             None => false,
         };
         if !handled && ev.pressed {
-            self.default_key(win, &ev, focused, platform);
+            self.default_key(win, &ev, focused, first_press, platform);
         }
         self.stats.event(started.elapsed());
+    }
+
+    /// Whether a text field or editor has `win`'s keyboard.
+    fn editing_text(&self, win: WinId) -> bool {
+        let Some(w) = self.wins.get(&win) else { return false };
+        w.focused.and_then(|f| w.input_node(f)).is_some_and(|i| w.tree.nodes[i].widget.edits_text())
     }
 
     /// The app window a popup (or the window itself) belongs to.
@@ -2558,7 +2666,19 @@ impl Core {
         Some(drag)
     }
 
-    fn default_key(&mut self, win: WinId, ev: &KeyEvent, focused: Option<usize>, platform: &mut dyn Platform) {
+    /// The kit's own keys. Return and Space press a button (the focused
+    /// control, or for Return the sheet's default button) only on a key's
+    /// `first_press`: a key held since before the button got the focus, or
+    /// before its sheet opened, presses nothing however long it repeats, so
+    /// one held key can't both ask and answer. Tab and Escape repeat.
+    fn default_key(
+        &mut self,
+        win: WinId,
+        ev: &KeyEvent,
+        focused: Option<usize>,
+        first_press: bool,
+        platform: &mut dyn Platform,
+    ) {
         let m = ev.modifiers;
         match &ev.key {
             Key::Named(NamedKey::Tab) if !m.control() && !m.super_key() => self.move_focus(win, !m.shift(), platform),
@@ -2577,6 +2697,7 @@ impl Core {
                     self.activate(win, i, platform);
                 }
             }
+            Key::Named(NamedKey::Enter) | Key::Character(_) if !first_press => {}
             Key::Named(NamedKey::Enter) => {
                 if let Some(f) = focused
                     && self.activate(win, f, platform)
@@ -2851,12 +2972,7 @@ impl Core {
                     Some(WinKind::Popup { owner, kind: PopupKind::Menu { .. } }) => Some(*owner),
                     _ => None,
                 };
-                if owner.is_some_and(|o| {
-                    matches!(
-                        self.wins.get(&o).map(|w| &w.kind),
-                        Some(WinKind::Popup { kind: PopupKind::Menu { .. }, .. })
-                    )
-                }) {
+                if owner.is_some_and(|o| self.is_menu(o)) {
                     self.close_win(window, platform);
                 }
             }

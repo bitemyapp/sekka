@@ -196,6 +196,9 @@ pub enum Msg {
     /// A drag has waited over a folder: open it (if it still waits there).
     Spring(WindowKey, Target, u64),
     DropUrls(WindowKey, Dest, Vec<String>),
+    /// A drag began on the picture in the window's preview: the file it
+    /// previews goes out of the window.
+    DragPreview(WindowKey),
     SetLayout(WindowKey, Layout),
     SortBy(SortKey),
     SortAscending(bool),

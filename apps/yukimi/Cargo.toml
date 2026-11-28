@@ -24,6 +24,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rusqlite = "0.40"
 rnix = "0.14"
+fluent-uri = "0.4.1"
 # rnix's syntax trees; the version rnix itself uses, for its `AstNode` trait.
 rowan = "0.16"
 libc = "0.2"

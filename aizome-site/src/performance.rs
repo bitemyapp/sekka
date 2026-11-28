@@ -2,8 +2,8 @@
 //! measurements behind it. Every number here comes from docs/performance/
 //! (its README, design.md, desktops.md, terminals.md, media.md, pdf.md, the
 //! why-*.md analyses, pdf-verdicts.md and their data/), measured on one
-//! desktop on 2 November 2026. When those records change, change this with
-//! them.
+//! desktop on 2 November 2026, with idle-update follow-ups on 6–7 November.
+//! When those records change, change this with them.
 
 use crate::chart::{Bar, Chart, label_width, other, ours};
 use crate::html::{Menu, Page, esc};
@@ -76,7 +76,7 @@ fn desktops() -> String {
 <tr><th scope="row">The photo viewer's memory, MiB</th><td>326</td><td>436</td><td>166</td></tr>
 </tbody></table></div>
 <p>Under load, a window drawing on every frame lost 0.84% of its frames in GNOME and 0.09% in one of Plasma's three runs. Aizome didn't lose any.</p>
-<p>Not everything went Aizome's way. In this VM its shell woke about 47 times a second while idle (53 in the headless session measured further down), more than all of GNOME put together, though its CPU time at idle was as low as the others'. Hotaru, Aizome's terminal, took more memory than Konsole, KDE's terminal (57 MiB with its fish shell, against 37 MiB with bash). Shashin, Aizome's image viewer, held twice as much memory as Gwenview, KDE's image viewer, and Aizome's installed system (8.5 GB) is no smaller than GNOME's. With only 2 GiB of RAM, all three still boot and log in fine, and each desktop uses about as much memory as it did with 4 GiB. These numbers come from a VM rendering on the CPU, and on real graphics hardware all three desktops would behave differently. {doc} {why}</p>"#,
+<p>Not everything went Aizome's way. In this VM its shell woke about 47 times a second while idle (48–55 in the 7 November headless rerun below), more than all of GNOME put together, though its CPU time at idle was as low as the others'. Hotaru, Aizome's terminal, took more memory than Konsole, KDE's terminal (57 MiB with its fish shell, against 37 MiB with bash). Shashin, Aizome's image viewer, held twice as much memory as Gwenview, KDE's image viewer, and Aizome's installed system (8.5 GB) is no smaller than GNOME's. With only 2 GiB of RAM, all three still boot and log in fine, and each desktop uses about as much memory as it did with 4 GiB. These numbers come from a VM rendering on the CPU, and on real graphics hardware all three desktops would behave differently. {doc} {why}</p>"#,
         ram = chart("desk-ram", "Memory used by the desktop itself, MiB (lower is better)", "MiB", 0, &ram,
             "Memory in use 190 s after login, minus the 370 MiB the system uses with no desktop. Median of three boots at 4 GiB, each desktop as Sekka sets it up."),
         key = chart("desk-key", "Keystroke to screen with the CPU busy, median, in frames (lower is better)", "frames", 2, &key,
@@ -181,7 +181,7 @@ fn apps() -> String {
 <p>We put Aizome's apps up against the GNOME and KDE apps that do the same jobs, six runs each, all outside their own desktops in the same neutral compositor (sway) on the processor's built-in Radeon graphics. The document apps all opened the same files, a 6000 × 4000 photo, the 756-page PDF specification and a folder of 2,000 files. GNOME's apps took 145–190 ms to show a window, and KDE's took 66–201 ms. Every Aizome app took about 19 ms, because the kit puts the window up first and does the decoding, parsing and reading on other threads. That's the time until the window appears, not until what's in it is ready. Shashin, Aizome's image viewer, is still decoding the photo when its window comes up, and Shiori, Aizome's PDF reader, draws its first page after its window is already showing. For time to a finished window, see the VM results above, where most of Aizome's apps had stopped changing by about 0.11 s and the photo viewer by 0.32 s.</p>
 <p class="chart-title">Time from launch until the window appears, ms (lower is better), all on the same scale</p>
 <div class="charts multiples">{multiples}</div>
-<div class="table-wrap"><table class="numbers apps-table"><caption>Medians of six runs. PSS counts shared memory once and splits it between the processes using it. Private memory is the part no other process shares. Wakeups are context switches per second over 15 seconds with nothing happening.</caption><thead><tr><th scope="col">Job</th><th scope="col">App</th><th scope="col">Window appears, ms</th><th scope="col">PSS, MiB</th><th scope="col">Private, MiB</th><th scope="col">Wakeups a second at rest</th></tr></thead><tbody>{rows}</tbody></table></div>
+<div class="table-wrap"><table class="numbers apps-table"><caption>2 November 2026, medians of six runs. PSS counts shared memory once and splits it between the processes using it. Private memory is the part no other process shares. Wakeups are context switches per second over 15 seconds with nothing happening.</caption><thead><tr><th scope="col">Job</th><th scope="col">App</th><th scope="col">Window appears, ms</th><th scope="col">PSS, MiB</th><th scope="col">Private, MiB</th><th scope="col">Wakeups a second at rest</th></tr></thead><tbody>{rows}</tbody></table></div>
 <p>The biggest single difference is that GTK 4 and Qt Quick start a GPU API before they draw anything, and Aizome's apps never do. After that come each toolkit's own set-up, such as parsing its theme's CSS, and loading and linking 100–200 shared libraries. Two things about this machine and Sekka's setup make the others slower than they'd be elsewhere. GTK's Vulkan loader loads every Vulkan driver installed here (14 of them, NVIDIA's among them) to ask what it offers, about 50 ms of GTK's time. And Sekka's session has every Qt app, KDE's included, load Qt's GTK 3 platform theme, which costs about 23–29 ms and 4.7 MiB at startup. Neither changes the order, but on another machine or setup the gaps would be smaller. Aizome's apps have room to get faster too, since 12 of the kit's 19 ms go to asking about every installed font at startup.</p>
 <p>Memory mostly follows the same pattern. The one exception comes down to where the document is kept rather than the toolkit. Shashin holds the decoded photo (92 MiB of pixels) in its own memory, while Loupe, GNOME's image viewer, shares it with its sandboxed decoders and hands it off to the GPU. Counted by PSS, which splits shared memory between the processes using it, Shashin still uses the least. Where Aizome's apps fall behind is waking up while idle. Tokei, the clock, and Sumi, the text editor, are supposed to, since one shows seconds and the other blinks its cursor. But the wakeups in Hako, the file manager, and in Shiori are housekeeping timers, and six of GNOME's eight apps didn't wake at all. System monitors are always reading the system, and Myaku, Aizome's system monitor, checks every process every second. It used the most CPU doing it, about 23 ms per second compared with 18 for GNOME's monitor and 13 for Plasma's. {doc} {why}</p>"#,
         doc = doc("design.md#2-whole-apps-beside-gnomes-and-kdes", "Full results and how they were measured."),
@@ -204,17 +204,17 @@ fn fmt(v: f64) -> String {
 
 fn idle() -> String {
     format!(
-        r##"<p class="headline">Left alone, the whole desktop drew one frame a minute, and that was the clock turning over.</p>
-<p>We started a headless Aizome session the way a login would (the compositor, its shell and xwayland-satellite, with a fresh user and default settings), let it settle, and then left it alone for a minute. We did that three times at 1920 × 1080 and three times at 3840 × 2160. According to the compositor's own statistics, in five of the six runs the only thing it drew was the menu bar clock changing. The sixth, at 1080p, drew four frames.</p>
+        r##"<p class="headline">An idle desktop only draws when a clock or meter changes.</p>
+<p>On 7 November 2026 we reran the headless session with a fresh user and default settings: 30 seconds to settle, then one minute at idle, three times at each resolution. The compositor drew a median of five frames at 1920 × 1080 and one at 3840 × 2160; the ranges were 1–9 and 1–3.</p>
 {tiles}
-<p>We also looked at the test machine's own desktop while it was in use, driving a 3840 × 2160 display at 240 Hz, with our test tools writing into a terminal window the whole time. In the 4.8 hours after login it drew 146,990 frames, 8.5 a second out of a possible 240, because it only draws when something changes. Each frame took about half a millisecond of CPU time, and 99% took under 1.3 ms.</p>
-<p>The shell still isn't completely quiet. It only does about a millisecond of work per second, but it wakes up around 53 times a second here (47 in the VM above, a different setup), mostly because its system-service watchers check for a stop request every 250 ms. That, and the way its memory grew over that long session, are covered under <a href="#costs">what it costs</a>. {doc} {live}</p>"##,
+<p>Removing settings polling and unrelated view rebuilds left idle package power within run-to-run variation: 19.97 → 20.07 W at 1080p and 19.82 → 19.84 W at 4K, compared with the preceding revision. The shell used 0.63–0.69 ms of CPU per second and woke 48–55 times a second; system-service watchers still check for a stop request every 250 ms. {doc}</p>
+<p>In the separate 2 November measurement of the machine's working desktop, driving a 3840 × 2160 display at 240 Hz, it drew 146,990 frames in 4.8 hours: 8.5 a second out of a possible 240. Each frame took about half a millisecond of CPU time, and 99% took under 1.3 ms. {live}</p>"##,
         tiles = stats(&[
-            ("1", "frame drawn in a minute at idle, the median at both 1080p and 4K"),
-            ("0.19 ms", "of compositor CPU time per second at idle"),
-            ("172 MiB", "for the whole session (PSS) at 1920 × 1080, and 193 MiB at 4K"),
+            ("5 / 1", "frames drawn in a minute at idle, medians at 1080p / 4K"),
+            ("0.13 ms", "of compositor CPU time per second at 1080p; 0.12 ms at 4K"),
+            ("181 MiB", "for the whole session (PSS) at 1920 × 1080, and 214 MiB at 4K"),
         ]),
-        doc = doc("design.md#3-an-idle-desktop-draws-nothing", "The idle runs and how they were measured."),
+        doc = doc("design.md#9-idle-updates-november-2026", "Rerun results and method."),
         live = doc("design.md#4-a-working-session-at-240-hz", "The working session."),
     )
 }
@@ -245,28 +245,44 @@ fn compositor() -> String {
 
 fn budget() -> String {
     let rows = [
-        ("Toggle a switch", "0.03", "0.04", "0.06"),
-        ("Type a character in a 2,000-line editor", "0.22", "0.37", "1.75"),
-        ("Scroll a 10,000-row list a notch", "0.12", "0.16", "0.30"),
-        ("The menu bar's clock ticking", "0.07", "0.12", "0.18"),
-        ("A window opening and closing (the shell)", "0.24", "0.38", "1.38"),
-        ("A key typed in the palette", "0.40", "0.81", "0.83"),
-        ("Typing in Sumi, the text editor", "0.38", "0.47", "0.81"),
-        ("Hako, the file manager: ↓ in a column of 10,000 files", "1.20", "1.32", "1.37"),
-        ("Hako: scrolling that column", "0.28", "0.29", "0.41"),
-        ("Myaku, the system monitor: a new reading of 600 processes", "2.26", "2.58", "2.69"),
-        ("Myaku: clicking a row", "0.19", "0.25", "4.36"),
+        ("Toggle a switch", "0.050", "0.050", "0.23", "6 Nov"),
+        ("Type a character in a 2,000-line editor", "0.285", "0.450", "2.55", "6 Nov"),
+        ("Scroll a 10,000-row list a notch", "0.145", "0.235", "0.69", "6 Nov"),
+        ("The menu bar's clock updating", "0.021", "0.040", "0.114", "6 Nov"),
+        ("A menu bar meter updating", "0.020", "0.030", "0.06", "6 Nov"),
+        ("A window opening and closing (the shell)", "0.295", "0.555", "2.05", "6 Nov"),
+        ("A key typed in the palette", "0.455", "0.865", "1.30", "6 Nov"),
+        ("Typing in Sumi, the text editor", "0.38", "0.47", "0.81", "2 Nov"),
+        ("Hako, the file manager: ↓ in a column of 10,000 files", "1.20", "1.32", "1.37", "2 Nov"),
+        ("Hako: scrolling that column", "0.28", "0.29", "0.41", "2 Nov"),
+        ("Myaku, the system monitor: a new reading of 600 processes", "2.26", "2.58", "2.69", "2 Nov"),
+        ("Myaku: clicking a row", "0.19", "0.25", "4.36", "2 Nov"),
     ];
     let mut body = String::new();
-    for (what, p50, p95, max) in rows {
-        let _ = write!(body, r#"<tr><th scope="row">{}</th><td>{p50}</td><td>{p95}</td><td>{max}</td></tr>"#, esc(what));
+    for (what, p50, p95, max, date) in rows {
+        let _ = write!(body, r#"<tr><th scope="row">{}</th><td>{p50}</td><td>{p95}</td><td>{max}</td><td>{date}</td></tr>"#, esc(what));
     }
     format!(
         r#"<p class="headline">Everything we timed fits within the 4 ms budget, at the median and at the 95th percentile.</p>
-<p>Each app has its own tests that run it headlessly and time a frame all the way from the input event through updating, layout and drawing whatever changed, at 2× scale. That's the CPU time the 4 ms budget is meant to cover. We used release builds and ran each test alone on the machine.</p>
-<div class="table-wrap"><table class="numbers"><caption>CPU time per frame in milliseconds: the median, the 95th percentile and the slowest frame of each test.</caption><thead><tr><th scope="col">Interaction</th><th scope="col">Median</th><th scope="col">95th</th><th scope="col">Slowest</th></tr></thead><tbody>{body}</tbody></table></div>
-<p>The slowest regular case is Myaku, Aizome's system monitor, reading 600 processes, at 2.3 ms (2.6 ms at the 95th percentile). The single slowest frame was one of 30 clicks on Myaku's process list, which took 4.4 ms. The budget is judged at the 95th percentile, and these test timings are upper bounds. {doc}</p>"#,
-        doc = doc("design.md#8-the-4-ms-budget-on-this-machine", "Full results and how they were measured."),
+<p>Each app's tests time its CPU-side frame work from the input event through updating, layout and drawing the damage, offscreen at 2× scale, in release builds. The 6 November reruns took turns across eight paired runs; unrelated background jobs were active. The clock row now exercises the real clock-update message.</p>
+<div class="table-wrap"><table class="numbers"><caption>Elapsed frame time in milliseconds, measured in November 2026. For reruns, Median and 95th are the medians of the eight runs' percentiles; Slowest is the maximum across them.</caption><thead><tr><th scope="col">Interaction</th><th scope="col">Median</th><th scope="col">95th</th><th scope="col">Slowest</th><th scope="col">Date</th></tr></thead><tbody>{body}</tbody></table></div>
+<p>The slowest regular case remains Myaku reading 600 processes, at 2.3 ms (2.6 ms at the 95th percentile). Its single slowest row click took 4.4 ms. The budget is judged at the 95th percentile. {doc}</p>"#,
+        doc = doc("design.md#9-idle-updates-november-2026", "Rerun data and the original frame tests."),
+    )
+}
+
+fn updates() -> String {
+    format!(
+        r#"<p>6–7 November 2026: settings now wait for file changes, and clock and meter updates rebuild only the views that use them.</p>
+<div class="table-wrap"><table class="numbers"><caption>Before → after, against the preceding code revision. Latency and wakeups measured 6 November; energy measured 7 November after background jobs stopped.</caption><thead><tr><th scope="col">Measurement</th><th scope="col">Before</th><th scope="col">After</th><th scope="col">Change</th></tr></thead><tbody>
+<tr><th scope="row">Idle kit window, wakeups/s</th><td>1</td><td>0</td><td>−100%</td></tr>
+<tr><th scope="row">Meter frame, median, ms</th><td>0.055</td><td>0.020</td><td>−64%</td></tr>
+<tr><th scope="row">Clock frame, median, ms</th><td>0.049</td><td>0.021</td><td>−57%</td></tr>
+<tr><th scope="row">Settings save → notification, median, ms</th><td>447</td><td>3.17</td><td>−99.3%</td></tr>
+<tr><th scope="row">100,000 meter updates, energy above background, J</th><td>43.46</td><td>20.17</td><td>−53.6%</td></tr>
+</tbody></table></div>
+<p>All six paired energy trials improved (48–59%). This is CPU-package and integrated-GPU energy for the update workload; idle power showed no detectable saving. {doc}</p>"#,
+        doc = doc("design.md#9-idle-updates-november-2026", "Data and method."),
     )
 }
 
@@ -376,7 +392,7 @@ fn terminals() -> String {
 <tr><th scope="row">Cursor-heavy output</th><td>1.67×</td><td>1.44×</td></tr>
 <tr><th scope="row">Hyperlinks</th><td>1.17×</td><td>not measured</td></tr>
 </tbody></table></div>
-<p>Sitting idle with a steady cursor, Hotaru wakes once a second. foot, gnome-terminal and Konsole don't wake at all, while Ghostty wakes 28 times a second and keeps the GPU busy for 4.3 ms of every second even though nothing changes. With default settings, Hotaru's cursor blinks forever, whereas GNOME's terminals stop blinking after ten seconds. At startup Hotaru uses 47 MiB of memory, about the same as Console and two thirds of what Konsole uses here, where Konsole runs outside Plasma and its libraries count in full. foot needs just 7. Hotaru's CPU-drawn buffers also cost the compositor more. Scrolling a row at 60 Hz cost sway 0.76 ms of CPU time per update with Hotaru, against 0.36 ms with Ghostty. {doc}</p>"#,
+<p>In the 2 November runs, sitting idle with a steady cursor, Hotaru woke once a second. foot, gnome-terminal and Konsole don't wake at all, while Ghostty wakes 28 times a second and keeps the GPU busy for 4.3 ms of every second even though nothing changes. With default settings, Hotaru's cursor blinks forever, whereas GNOME's terminals stop blinking after ten seconds. At startup Hotaru uses 47 MiB of memory, about the same as Console and two thirds of what Konsole uses here, where Konsole runs outside Plasma and its libraries count in full. foot needs just 7. Hotaru's CPU-drawn buffers also cost the compositor more. Scrolling a row at 60 Hz cost sway 0.76 ms of CPU time per update with Hotaru, against 0.36 ms with Ghostty. {doc}</p>"#,
         start = chart("term-start", "Launch to first frame, ms (lower is better)", "ms", 1, &start,
             "Ten fresh launches each, with warm caches, timed until the first captured frame that shows the whole first screen."),
         key = chart("term-key", "Keystroke to screen, median, ms (lower is better)", "ms", 1, &key,
@@ -447,7 +463,7 @@ fn costs() -> String {
     format!(
         r##"<p class="headline">What the design costs, and what isn't finished yet.</p>
 <ul class="costs">
-<li><strong>Not quiet enough at idle.</strong> In these tests, six of GNOME's eight apps didn't wake up at all while idle. Aizome's woke between about one and nine times a second (its system monitor more often), and the shell about 53 times. Every app checks its settings file once a second (about 0.02 ms of CPU each time), the system-service watchers each check for a stop request four times a second, Shiori's watchdog keeps ticking even when no page is being drawn, and the blinking cursors in Sumi, the text editor, and Hotaru, the terminal, never stop. None of these costs much on its own, but together they keep CPU cores from reaching their deepest sleep states. Simple fixes would take most of them to zero.</li>
+<li><strong>Not quiet enough at idle.</strong> In the 2 November app comparison, six of GNOME's eight apps did not wake at all. Aizome's settings polling has since been removed: the idle kit window now records zero wakeups. The shell still wakes 48–55 times a second. Its system-service watchers check for a stop request four times a second, Shiori's watchdog keeps ticking while no page is being drawn, and the blinking cursors in Sumi and Hotaru never stop.</li>
 <li><strong>No shared libraries.</strong> Each app is a single Rust program with the toolkit compiled in, 13–24 MB on disk. Two Aizome apps running side by side each load their own copy of the toolkit code (10–13 MiB each), where two GTK apps would share one.</li>
 <li><strong>Pictures stay in RAM.</strong> Because the shell draws on the CPU, its bar, Deskbar and desktop are pictures in system memory, so a bigger screen costs RAM: at 3840 × 2160 the shell held 16 MiB more private memory than at 1920 × 1080. Its wallpaper is an 8 MiB picture, but it costs the shell about 24 MiB.</li>
 <li><strong>The shell grew over a long session.</strong> Over four unattended hours, the live shell's private memory went from 372 MiB to 693 MiB, and it kept growing more slowly, to about 785 MiB nine hours later. The growth is in its worker threads' allocator arenas, and a freshly started shell uses 55 MiB. We haven't tracked down the cause yet.</li>
@@ -463,11 +479,11 @@ pub fn page(_site: &Site) -> Result<Page> {
     let mut b = head(
         "Performance",
         &format!(
-            r#"<p class="eyebrow">Performance</p><h1>Fast because it does less.</h1><p class="lead">Aizome only redraws what has changed, and its apps draw on the CPU into memory they share with the compositor, without starting OpenGL or Vulkan. An idle desktop draws about one frame a minute, and every part of the desktop has a budget of 4 ms to turn an event into a frame. This page has the measurements behind all that, taken on 2 November 2026 on a single desktop machine, comparing Aizome with GNOME, KDE Plasma and other programs people often use alongside it, including where Aizome loses. Each section links to its full write-up, with the raw data and how to repeat the test.</p>{tiles}"#,
+            r#"<p class="eyebrow">Performance</p><h1>Fast because it does less.</h1><p class="lead">Aizome only redraws what has changed, and its apps draw on the CPU into memory they share with the compositor, without starting OpenGL or Vulkan. An idle desktop draws only a few frames a minute, and every part of the desktop has a budget of 4 ms to turn an event into a frame. This page has the measurements behind all that, taken on one desktop on 2 November 2026, with idle and update measurements refreshed on 6–7 November, comparing Aizome with GNOME, KDE Plasma and other programs people often use alongside it, including where Aizome loses. Each section links to its full write-up, with the raw data and how to repeat the test.</p>{tiles}"#,
             tiles = stats(&[
                 ("19 ms", r##"for an Aizome app's window to appear, with its content following, where GNOME's and KDE's apps took 66–201 ms as Sekka sets them up (<a href="#apps">apps</a>)"##),
                 ("+221 MiB", r##"of RAM for the whole desktop in a small VM, against +567 for GNOME and +875 for Plasma as Sekka sets them up (<a href="#desktops">desktops</a>)"##),
-                ("1 frame", r##"drawn in a minute by an idle desktop, for the menu bar's clock (<a href="#idle">idle</a>)"##),
+                ("1–5 frames", r##"drawn in a minute by an idle desktop, medians at 4K and 1080p (<a href="#idle">idle</a>)"##),
                 ("0.48×", r##"PDFium's time for Shiori's renderer to draw the same 1,179 test pages, and 0.78× on real documents (<a href="#pdf">PDF</a>)"##),
             ]),
         ),
@@ -479,6 +495,7 @@ pub fn page(_site: &Site) -> Result<Page> {
     b += &win("idle", "An idle desktop", "", &idle());
     b += &win("compositor", "The compositor's frames", "", &compositor());
     b += &win("budget", "The 4 ms budget", "", &budget());
+    b += &win("updates", "Less work per update", "", &updates());
     b += &win("terminals", "Terminals", "", &terminals());
     b += &win("media", "Media", "", &media());
     b += &win("pdf", "PDF", "", &pdf());
@@ -489,13 +506,13 @@ pub fn page(_site: &Site) -> Result<Page> {
         "How it was measured",
         "",
         &format!(
-            r#"<div class="cols"><p>Everything was measured on one machine, an AMD Ryzen 7 9800X3D (8 cores, 16 threads) with 62 GiB of RAM, its built-in Radeon graphics, and an NVIDIA RTX 5090 driving a 3840 × 2160 display, running Sekka on Linux 7.3. Every program we compared came from Sekka's own Nixpkgs, at the same versions a Sekka install would get, except Ghostty's main branch, which we built. Each ran with Sekka's default settings unless a section says otherwise.</p><p>Only one measurement ran at a time, and each one held a lock that kept other tests and builds off the machine. Programs took turns rather than running all of one and then all of the next, each started with an unmeasured warm-up run, and the figures shown are medians. A desktop has no battery to measure, so power came from the CPU socket's own sensor (PPT, which covers the cores, the Radeon graphics and the I/O die), cross-checked against its RAPL energy counter.</p></div>
+            r#"<div class="cols"><p>Everything was measured on one machine, an AMD Ryzen 7 9800X3D (8 cores, 16 threads) with 62 GiB of RAM, its built-in Radeon graphics, and an NVIDIA RTX 5090 driving a 3840 × 2160 display, running Sekka on Linux 7.3. Every program we compared came from Sekka's own Nixpkgs, at the same versions a Sekka install would get, except Ghostty's main branch, which we built. Each ran with Sekka's default settings unless a section says otherwise.</p><p>Measurements ran one at a time under a benchmark lock; the 6 November latency rerun had unrelated background jobs, which were stopped for the 7 November energy measurements. Programs took turns, with warm-up or settling before measurement, and the figures shown are medians. A desktop has no battery to measure, so power came from the CPU socket's own sensor (PPT, which covers the cores, the Radeon graphics and the I/O die), cross-checked against its RAPL energy counter. The 7 November idle runs read RAPL only at the interval boundaries, without adding a polling loop.</p></div>
 <p>These are measurements of headless compositors and virtual machines rather than of light coming off a real screen, and they all come from a single machine. The {readme} explains how each one was taken, and the data and test harnesses sit next to it in the repository.</p>
 <details class="chart-table"><summary>Versions of everything measured</summary><div class="table-wrap"><table class="numbers versions"><thead><tr><th scope="col">Software</th><th scope="col">Version</th></tr></thead><tbody>
-<tr><th scope="row">Aizome (compositor, shell and apps, including Hotaru, Utsushi and Shiori)</th><td>0.1.0, Sekka d7ecbac</td></tr>
+<tr><th scope="row">Aizome (compositor, shell and apps, including Hotaru, Utsushi and Shiori)</th><td>0.1.0, Sekka d7ecbac (2 Nov); idle/update reruns 2711942e → 553dc6af (6–7 Nov)</td></tr>
 <tr><th scope="row">Shiori's renderer, hayro (Aizome's fork), and upstream hayro</th><td>a2e9e62b, 04a801de</td></tr>
 <tr><th scope="row">Sekka's Nixpkgs, where everything else comes from</th><td>26.11 (1c89083)</td></tr>
-<tr><th scope="row">Linux, systemd</th><td>7.3.0, 262</td></tr>
+<tr><th scope="row">Linux, systemd</th><td>7.3.0 (2 Nov), 7.3.1 (6–7 Nov); systemd 262</td></tr>
 <tr><th scope="row">Mesa (Radeon), NVIDIA driver</th><td>26.2.6, 615.78.08</td></tr>
 <tr><th scope="row">GNOME Shell, Mutter, GDM</th><td>50.4, 50.5, 50.2</td></tr>
 <tr><th scope="row">GTK 4, libadwaita, GTK 3 (gnome-terminal), VTE</th><td>4.22.4, 1.9.3, 3.24, 0.84</td></tr>

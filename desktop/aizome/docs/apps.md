@@ -25,6 +25,7 @@ the Toolchest, the palette and the Deskbar show beside it and search by.
 | Utsushi 映し | Media Player | `apps/utsushi` | `aizome-utsushi` | `org.aizome.Utsushi` | projecting, as onto a screen (the 映 of 映画, film) |
 | Annai 案内 | Welcome | `apps/annai` | `aizome-annai` | `org.aizome.Annai` | guidance |
 | Koe 声 | Dictation | `apps/koe` | `aizome-koe` | `org.aizome.Koe` | voice |
+| Chanoma 茶の間 | TV | `apps/chanoma` | `aizome-chanoma` | `org.aizome.Chanoma` | the family room, where the television is (and the low table it stands on) |
 
 Also part of the session, not separate apps: the Toolchest, the command
 palette, notifications, the lock screen and the polkit dialog (all in
@@ -126,7 +127,24 @@ palette. Search filters the sidebar and highlights options.
   screen off, show the clock.
 - **Users & Groups**: the current user's name, picture, password; other
   accounts (AccountsService), admin or standard, add and remove, automatic
-  login.
+  login. On Sekka automatic login is the system's `calamares.autoLogin`,
+  which every login screen it offers reads: Settei proposes it in Yukimi
+  (`aizome-yukimi --choose calamares.autoLogin=NAME`, or empty for no one),
+  and it applies from the next start. It leaves out people who still have
+  a password to set at their first login (Yukimi's helper refuses them,
+  and a locked or expired account), and
+  removing the person it names waits until it has been turned off, which
+  the remove sheet proposes in Yukimi (the choice is read again when Remove
+  is pressed, so one made in Yukimi meanwhile counts). Elsewhere on NixOS,
+  and under greetd anywhere, only the
+  configuration sets it, so the row shows it without changing it (greetd's
+  `[initial_session]` from the active service's configuration, including
+  NixOS's store path). Only other systems use AccountsService's flag
+  (GDM's). Where Chanoma is installed, the pane also has the TV account
+  (set up, how it signs in: nothing, a PIN or a password; forget its Chanoma's
+  PIN; remove), through `aizome-tv-account` as root (`docs/chanoma.md`, "The TV
+  account"). Its shell is nologin, so it isn't among those offered for
+  automatic login.
 - **Keyboard**: layouts (searchable list from `aizome-sys`'s xkb data, with
   variants), switching shortcut, key repeat delay and rate, modifier keys
   (swap Alt/Super, Control/Super or Control/Alt on both sides or just one),
@@ -163,7 +181,8 @@ palette. Search filters the sidebar and highlights options.
   with that keyboard chosen.
 - **Mouse** and **Trackpad**: pointer speed and acceleration, natural
   scrolling, tap to click, two-finger or corner right-click, disable while
-  typing, scroll speed.
+  typing, scroll speed. Trackpad can also turn every touchpad off; its
+  other settings are greyed out and kept until it's on again.
 - **Printers & Scanners**: printers with status, add (discovered or by
   address), remove, default, test page, queue.
 - **General**: About (the mark, Sekka version, hardware summary, hostname
@@ -293,9 +312,10 @@ It also changes what used to take typing `sudo` commands:
   Sekka keeps that choice through later updates.
 - **Desktops**: the system's own choices, as Sekka declares them
   (`programs.yukimi.choices` in `/etc/yukimi/system.json`): which
-  desktops are installed, which starts by default, the login screen, and
-  the boot splash (a `boolean` choice, `true` or `false`, which the helper
-  writes as a Nix boolean).
+  desktops are installed, which starts by default, the login screen, who
+  logs in by themselves (a `people` choice: anyone with an account, or no
+  one), and the boot splash (a `boolean` choice, `true` or `false`, which
+  the helper writes as a Nix boolean).
   - Picking changes nothing. Apply asks, then builds once
     (`change --choose SETTING=VALUE[,VALUE]… --mode auto`).
   - A change the running system can't take now, such as another login
@@ -322,12 +342,19 @@ Desktop and the Shelf, image thumbnails cached in
 `$XDG_CACHE_HOME/thumbnails` (the freedesktop spec), hidden files toggle,
 sorting. Tabs are Aizome's own tab groups, so no tabs inside.
 
+The picture (or icon) in the column view's preview is something to drag
+the file by: it goes out of the window as a drag of the file's row does
+once it leaves, under the same chip, as a copy for whatever takes it. A
+click there is the click it was.
+
 Refreshing a listing keeps a still-selected folder's deeper columns
 open. If that folder leaves the listing (including Put Back from Trash),
 its obsolete columns close and keyboard focus returns to the surviving
 parent when needed.
 
 Encrypted removable volumes stay in the file sidebar after unlocking. Hako asks for a volume passphrase before mounting a locked one; Cancel leaves it locked, and an incorrect passphrase can be retried. While unlocking, the prompt waits for the device operation to finish. System volumes and devices hidden by UDisks policy stay excluded from the removable list.
+
+The sidebar also lists, after the system's disk, the volumes of built-in drives the system doesn't run from (a second internal drive; `DisksState::internal_volumes`). UDisks treats them as system devices, so mounting or unlocking one asks for an administrator's password; the sidebar unmounts them and never ejects their drive. Everything on a drive the system uses (a filesystem mounted outside `/run/media`, `/media` and `/mnt`, or active swap), EFI, boot, recovery and swap partitions on any drive, and devices hidden by UDisks policy stay out, as does every built-in volume when `/` can't be traced to a drive (LVM, a live image). The desktop's icons are as before. `nix build .#aizome-checks.encrypted-volumes` checks both lists against real UDisks on disposable VM disks.
 
 ### Sumi (Text Editor)
 
@@ -925,6 +952,13 @@ is put together, is in `docs/shiori.md`.
 
 ### Utsushi (Media Player)
 
+**View → Playback Statistics** (⇧❖I, or I over the picture) opens a separate
+window that updates once a second while visible. It shows the current file,
+position, chapter, speed and bit rate, video dimensions and decoder, frame
+path and counts, display feedback, and the audio track and output. Playback
+remains usable with the window open. Frame counters accumulate since Utsushi
+started; presentation feedback and refresh rate depend on the compositor.
+
 Films, clips and music, played with as little work as the machine can
 do them with. It opens what FFmpeg reads (MP4, Matroska, WebM, QuickTime,
 AVI, MPEG transport streams, MP3, AAC, FLAC, Ogg, Opus, WAV and the
@@ -950,7 +984,7 @@ rest); folders play their files in Hako's natural order.
   subtitles, Z and X them a tenth of a second earlier and later; F full
   screen; ⇧N and ⇧P the next and previous item; S the picture to
   Pictures/Screenshots, ❖C to the clipboard. A click
-  on the picture plays and pauses, a double click is full screen, the
+  on the picture focuses the player without pausing, a double click is full screen, the
   wheel is volume. The keys stay with the picture after a click in the
   bar (Tab moves them into it). Files dropped on the window play.
 - **Subtitles**: embedded text (SubRip, ASS/SSA, WebVTT, MP4's) and
@@ -963,15 +997,26 @@ rest); folders play their files in Hako's natural order.
   Timing or the next item.
 - **Where it was**: a film over five minutes long opens where it was
   left (with Start Over for a few seconds), unless that was in its first
-  or last thirty seconds. Open Recent keeps twenty items.
-- **The desktop**: MPRIS (`org.mpris.MediaPlayer2.utsushi`) for the menu
-  bar's media widget and the media keys; one instance, later launches
+  thirty seconds or its last (half a minute, or the last twentieth of a
+  long one: the engine's `resume_point`, which Chanoma follows too).
+  Open Recent keeps twenty items.
+- **The desktop**: MPRIS (`org.mpris.MediaPlayer2.utsushi`, served by
+  `crates/aizome-mpris`, shared with Chanoma) for the menu bar's media
+  widget and the media keys; one instance, later launches
   handing their files over; Media Info (❖I) says what the file is and how
   it's being played.
 
+Utsushi is Aizome's default for all the video and music formats it advertises,
+including WMV, 3GPP2, OGM, AIFF, Monkey's Audio, WavPack and WMA. Your own
+Open With/default-application choices take priority, and other desktop
+sessions keep their defaults.
+
 **Why it's light.** The engine is `crates/aizome-media` (FFmpeg through
 `ffmpeg-sys-next`, PipeWire through `pipewire-rs`); the window shows its
-frames through the kit's video element (`docs/kit.md`, Video).
+frames through the kit's video element (`docs/kit.md`, Video). Chanoma
+plays through it too, and both take from it what it plays (`files`: by
+name, and where to carry on) and the subtitles' cues as they come
+(`Cues`).
 
 - Video decodes on the GPU through VA-API where the codec and driver
   allow (H.264, HEVC, VP9 and AV1 on recent Intel and AMD), on the
@@ -1092,6 +1137,170 @@ the compositor's IPC after checking the focus and the lock, and keeps
 audio and transcripts in memory. `aizome-koe` also has the commands
 scripts and agents use (`record`, `status`, `watch`, `model`, `packs`,
 `words`, `examples`, `enable`, `disable`).
+
+### Chanoma (TV)
+
+The family television: streaming services, films and shows from the
+disk, and games, all from a game controller, with a grown-up's PIN on
+what the kids may watch and play, and for how long. It comes with Aizome,
+with its game cores and, where unfree packages are allowed, Google
+Chrome for its streaming services (`programs.aizome.chanoma.enable =
+false` leaves it out); the television's own account is made in Settings
+(below, and [docs/chanoma.md](chanoma.md) for how it works).
+
+- **Home** is shelves of tiles under spaced captions: *Keep playing*
+  (games where they were left, with a picture of where; shows and films
+  part watched), *Watch* (the services), *Games*, *Films and shows*, and
+  the grown-ups' door. A shelf with more than shows starts with the way
+  to all of it (*All games*, *Everything*). While folders are read, the
+  header says which, how far through, and how many files so far. The
+  Games screen's systems are tabs that scroll to keep the chosen one in
+  sight, named beside the title too. It's Aizome's look at twice the
+  size, for a room: the theme's colours (Night, Day or High contrast,
+  and the focus colour from Settings), square flat faces, Archivo and IBM
+  Plex Mono, the kit's icons. A service's tile is its colour on a square
+  with its initial and its name, never its logo. The tile the controller
+  is on wears the focus ring, its name under it. The arrows or the left
+  stick move, held they repeat; the confirm button opens. The hints along the foot show the
+  controller's own buttons: Xbox's letters in their colours, PlayStation's
+  shapes, Nintendo's letters (with A, on the right, saying yes), or for
+  any other controller the four buttons as a diamond with the one meant
+  filled in; keycaps for a keyboard. The header is the menu bar's without
+  the bar: Aizome's mark and Chanoma's name, then at the right grown-up
+  mode, each controller with its player number and battery, the time left
+  today, and the clock as the menu bar sets it (24 or 12 hours).
+- **Only a controller**: Bluetooth controllers, paired once in the
+  settings, reconnect by themselves when switched on. Chanoma holds them
+  exclusively while it runs. The Home button (or, on a controller
+  without one, Select and Start held for a second) always brings up a
+  menu with the way back: over a game it pauses it; over a service, a
+  film, a menu, Home. Without a controller a banner says how to wake
+  one; a game whose player 1 goes away pauses until they're back. A
+  keyboard and a mouse always find the way home too: Home or F1 (even
+  over a service's page, which never hears them) and Esc; the hints along
+  the foot are buttons to click; and the pointer brings a bar with *Home*
+  down from the top of the screen over a game, a film or a page.
+- **Games** play through libretro cores that Chanoma drives itself (the
+  emulators RetroArch uses, without its menus): the NES, Super NES, Nintendo 64, Game
+  Boy, Game Boy Color and Advance, Mega Drive, Master System and Game
+  Gear, PC Engine, PlayStation, Atari 2600 and Lynx, Neo Geo Pocket and
+  WonderSwan. Games are found in the folders by their system's folder
+  name (`snes`, `Super Nintendo`, `gba`…) or their extension. Each shows
+  its box: one beside it (`Game.png`, Batocera's `Game-thumb.png`, what
+  EmulationStation's `gamelist.xml` names, or in `media/`, `boxart/`,
+  `images/` or libretro-thumbnails' `Named_Boxarts/`), else one fetched
+  from libretro-thumbnails by the name its database knows it by and kept
+  (a switch turns that off), else where it was left, else a sprite of
+  squares in its system's colour made from its title. Y, or typing on a
+  keyboard, searches by name: Home searches games, films and shows;
+  Games searches its current tab's games; films search films and shows.
+  Only titles the viewer may open appear. A game's own
+  saves are kept as they change; leaving it keeps exactly where it was,
+  and the next start carries on from there. The picture is enlarged with
+  square pixels and letterboxed to the console's shape; sound plays with
+  short latency; controllers rumble where the game asks. PlayStation
+  games play with OpenBIOS, a free stand-in for the console's own BIOS,
+  which can't be shipped: forty games checked against Sony's started and
+  played alike, some a few seconds slower to load. A BIOS dumped from a
+  grown-up's own console, put in `~/.local/share/aizome/chanoma/system`,
+  comes first. A big collection stays manageable: a whole system turned
+  off with one switch, demos, betas and prototypes left out, and each
+  game shown once, in the household's region's release, read from the
+  tags in No-Intro's and Redump's names. *Search every drive for games*
+  lists the folders of games at home and on every drive plugged in, each
+  a switch. Folders are read through Aizome's shared files index
+  (`docs/files-index.md`), so a second look reads only what changed; a
+  slow drive's first look takes minutes, and happens once a folder is
+  added, not while browsing. Games may be zipped, as cartridge sets
+  come, in a folder named for their system. Each game says its year,
+  genre and how many can play (from libretro-database's game databases,
+  installed with Chanoma, found by name or, for a renamed file, by
+  what's in it), and with two controllers on, Home offers the games two
+  can play together.
+- **Services** open full screen in Google Chrome (or Chromium), each in a
+  browser profile of its own, so a grown-up signs in once (in grown-up
+  mode) and kids never see a sign-in, an address bar or a tab. The controller drives the page: the left stick moves the pointer
+  and the confirm button clicks, the right stick scrolls, the arrows are
+  arrow keys (seeking in players), Back is Escape (held, the browser's
+  Back), X or Start plays and pauses, Y is full screen, the shoulders move
+  between a page's controls. YouTube opens its television interface,
+  driven with the arrows. Windows a page opens are closed. Grown-ups can
+  add any website. Under each service that needs an account, the Watch
+  settings say what to set up in it for kids: a kids' profile in most,
+  YouTube TV's own ratings filter, and for Fubo that it has neither. In
+  kids' mode a page stays on its service: a link or
+  a button that would go anywhere else leaves the page where it is, and a
+  note says that's outside the service (a website a grown-up added stays
+  on its own site). In grown-up mode, where a grown-up signs in, a page
+  goes anywhere until kids' mode comes back.
+- **Chanoma's keyboard** comes up along the foot of the screen when the
+  controller chooses a text box on a service's page (a search, a
+  sign-in), or with Select. What's in the box shows above its keys
+  (dots for a password), as the box may be under it. The arrows or the
+  stick move between keys and the confirm button types one; X deletes, Y
+  is a space, the shoulders move along what's typed, LT is capitals, RT
+  the symbols, and Start is Enter, which sends it and puts the keyboard
+  away; B puts it away too. YouTube's television interface has a keyboard
+  of its own, which the arrows work, so Chanoma's doesn't come there. A
+  box inside another site's frame on a page (some sign-ins) takes Select.
+- **Films and shows** from the folders: a folder of episodes is a show
+  (with its `poster.jpg`, past its seasons' folders), a lone video a
+  film; videos in a system's folder (`roms/snes/videos`) are games'
+  clips, and left out. New ones wait for a grown-up's approval by default,
+  as games do; each film and show is a switch for kids. They play
+  through Utsushi's engine; the confirm button plays and pauses, left
+  and right skip ten seconds, the shoulders go to the previous or next
+  episode, and the next plays by itself. Where each was left is kept,
+  and a film carries on where Utsushi would carry it on. Back is the
+  film's menu: its subtitles (a subtitle file beside it counts) and its
+  language, where it has more than one, chosen there and kept for the
+  show's next episodes and the next time. Subtitles show in large type
+  on a dark band, under the picture where there's room. The media keys
+  and the menu bar's media controls play, pause, skip and stop a film,
+  as they do Utsushi's.
+- **Grown-ups** unlock with the PIN, pressed on the controller as a
+  console's passcode is: four to eight presses of the arrows, the
+  shoulders and the top and left face buttons. Each press shows as the
+  same dot and nothing lights, so a kid watching sees that a button went
+  but not which; the no button takes the last press back. A PIN is the
+  buttons' places, so it's the same presses on any controller (Xbox's Y
+  is Nintendo's X: the pad marks where each is). Each button in the
+  legend is numbered 1 to 8, and on a keyboard those digits press them,
+  as do the arrows, Page Up and Down, Tab and Space. Three wrong ones
+  are free, then the pad waits, longer each time, and a restart doesn't
+  reset that. A forgotten PIN is chosen again after signing in with the
+  password of the computer's account (*Forgot it?* on the pad, Start).
+  In grown-up mode everything shows, nothing counts against today's
+  time, and the settings open: limits for weekdays and for the weekend,
+  bedtime and waking, more time today; which services kids see; which
+  games show, and which kids may play, a system at a time (new ones wait
+  for a grown-up's say, unless set to show at once); the folders, one
+  list for games, films and shows, each saying what it holds, how far a
+  look through it has got, or that its drive is out (a folder is added
+  with the controller in a picker of Chanoma's own: it opens on
+  *Suggested*, the folders that look like a collection, a drive's `roms`
+  or a `Movies`, found from the top two levels of home and each drive,
+  so a drive just plugged in answers at once; or any folder is browsed
+  to, places down the left and a folder's folders on the right, each
+  saying what's directly in it); pairing controllers and setting up the
+  buttons of one Chanoma doesn't know; the PIN; leaving Chanoma.
+  Grown-up mode locks itself after a while untouched (never in the
+  middle of a film or game).
+- **Time** counts only while something plays. Five minutes before the
+  end, and one, a note says so. At the end the game is kept where it was
+  left and the service or film closed, and a friendly screen says that's
+  all for today (or, at bedtime, goodnight, with when it opens again). A
+  grown-up's PIN there gives fifteen minutes, half an hour or an hour, or
+  carries on in grown-up mode.
+- **A television** (`programs.aizome.chanoma.autostart`, with
+  `services.displayManager.autoLogin`): it comes on with the computer and
+  starts again if it ever stops unasked. Kids can't close it; leaving
+  takes the PIN.
+
+`aizome-chanoma --reset-pin`, from a grown-up's terminal, forgets the PIN
+(the next start asks for a new one). Chanoma keeps its settings in
+`$XDG_CONFIG_HOME/aizome/chanoma.json` (JSON rather than TOML: a day
+without a limit is a null in a list, which TOML can't hold).
 
 ### The file chooser (portal)
 

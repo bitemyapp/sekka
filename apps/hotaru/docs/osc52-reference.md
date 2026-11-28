@@ -3,7 +3,7 @@
 These observations use the unchanged Ghostty commit
 `6ba144158577d033ccb6ed4b574e4013957c9161`, its GTK application and its
 exported OSC parser. They are reference evidence, not Hotaru qualification.
-The [receipt and raw results](../upstream/osc52-reference/receipt.json) identify
+The [receipt and raw results](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/osc52-reference/receipt.json) identify
 the binaries, harnesses, source files and selected runs. Everything ran on
 `wx-workstation` under the shared lock, in private headless Sway sessions.
 PRIMARY was advertised and worked in those sessions; availability on other

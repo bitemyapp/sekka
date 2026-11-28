@@ -75,6 +75,27 @@ impl Row {
             memory_charge: crate::memory::Charge::default(),
         }
     }
+    /// Prefetch the shared header of a row history will evict soon: its
+    /// reference count and the fields eviction and `reset` read first.
+    #[inline]
+    pub(crate) fn prefetch_header(row: &crate::RowRef) {
+        // triomphe keeps the count immediately before the value. A wrong
+        // guess would only fetch the wrong line; a prefetch reads nothing.
+        let count = std::mem::size_of::<usize>();
+        crate::prefetch::range(
+            crate::RowRef::as_ptr(row).cast::<u8>().wrapping_sub(count),
+            count + std::mem::size_of::<Self>(),
+        );
+    }
+    /// Prefetch what recycling this row writes: its style table and every
+    /// cell `reset` blanks, through the first clean cell, where a rewrite of
+    /// the same length ends. Reads the header, so fetch that first.
+    #[inline]
+    pub(crate) fn prefetch_storage(&self) {
+        let cells = (usize::from(self.dirty_end) + 1).min(self.cells.len());
+        crate::prefetch::range(self.cells.as_ptr(), cells * std::mem::size_of::<Cell>());
+        crate::prefetch::line(self.styles.as_ptr());
+    }
     /// Archive bound includes the full row-local link table, including entries
     /// retained for reuse but not currently referenced by a visible run.
     pub(crate) fn history_size_bound(&self) -> usize {

@@ -101,12 +101,14 @@ impl WinitBackend {
         self.backend.renderer().import_dmabuf(dmabuf, None).is_ok()
     }
 
-    /// Imports a surface tree (GLES copies wl_shm pixels).
+    /// Imports a surface tree (GLES copies wl_shm pixels), and says whether
+    /// `fresh` were copied.
     pub fn import_shm_copies(
         &mut self,
         surface: &smithay::reexports::wayland_server::protocol::wl_surface::WlSurface,
+        fresh: &[smithay::reexports::wayland_server::protocol::wl_buffer::WlBuffer],
     ) -> bool {
-        smithay::backend::renderer::utils::import_surface_tree(self.backend.renderer(), surface).is_ok()
+        super::import_fresh(self.backend.renderer(), surface, fresh)
     }
 
     pub fn redraw(

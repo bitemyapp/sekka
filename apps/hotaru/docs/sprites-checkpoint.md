@@ -11,7 +11,7 @@ It was built from product commit `73ea25d` on `ssh wx-workstation`.
 - ELF SHA-256: `64e7975b8d52e7c825544751640589eb7e44ed48165e88bce47c91865d241e86`
 - Wrapper SHA-256: `3f93fb648898205338936899991fa32a8fc42d532e7f746592f2de9ce95c3774`
 
-The [package record](../upstream/nix-sprites-checkpoint.json) includes its
+The [package record](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/nix-sprites-checkpoint.json) includes its
 derivation, source NAR, release profile and installed-file inventory. Nix
 passed 56 native tests; two timing diagnostics and five environment-sensitive
 integrations remain explicitly ignored by that invocation. The output and
@@ -41,8 +41,8 @@ installed wrapper with ambient font and library overrides cleared:
 | Pixel scrolling | All 28 captured frames exactly equal the corresponding full-redraw RGBA frames |
 | Sprites | All 612 glyph instances across scales 1, 1.25, 2 and 1 match the pinned Ghostty raster oracle byte for byte |
 
-The [runtime reports](../upstream/native-sprites-checkpoint/package-runtime.json)
-and [validation record](../upstream/native-sprites-checkpoint/validation.json)
+The [runtime reports](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/native-sprites-checkpoint/package-runtime.json)
+and [validation record](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/native-sprites-checkpoint/validation.json)
 preserve exact hashes and source comparisons. The fractional-scale sprite and
 final scrolling captures were visually inspected and retained at original
 resolution. Complete logs and captures remain in local

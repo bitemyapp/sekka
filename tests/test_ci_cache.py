@@ -2,6 +2,7 @@
 private candidate state."""
 import fcntl
 import importlib.util
+import json
 import os
 from pathlib import Path
 import shutil
@@ -101,6 +102,18 @@ class Retention(unittest.TestCase):
         retain.prune(root, self.now, 0)
         self.assertTrue((outside / "1-old").exists())
 
+    def test_input_records_expire_after_a_week_unused(self):
+        closures = self.root / retain.CLOSURES
+        closures.mkdir()
+        old, recent = closures / "old.drv", closures / "recent.drv"
+        for record, age in ((old, 8 * retain.DAY), (recent, retain.DAY)):
+            record.touch()
+            os.utime(record, (self.now - age, self.now - age))
+        (closures / "link.drv").symlink_to(self.root / "elsewhere")
+        retain.prune(self.root, self.now, PLENTY)
+        self.assertEqual((old.exists(), recent.exists()), (False, True))
+        self.assertTrue((closures / "link.drv").is_symlink())
+
     def test_locks_refuse_fifos_and_links_without_blocking(self):
         os.mkfifo(self.root / "fifo")
         with self.assertRaises(OSError):
@@ -127,16 +140,45 @@ class Wrapper(unittest.TestCase):
         bin_dir = base / "bin"
         bin_dir.mkdir()
         bash = shutil.which("bash")
+        # Every call, one per line, beside the last call's arguments. `eval`
+        # answers with the flake's checks; a `build` may have a status of its
+        # own, as the second attempt of a retry does.
+        self.calls = base / "nix-calls"
+        self.checks = {name: {"derivation": f"/nix/store/{drv * 32}-{name}.drv", "output": f"/nix/store/{out * 32}-{name}"}
+                       for name, drv, out in (("alpha", "a", "c"), ("beta", "b", "d"))}
+        (base / "checks.json").write_text(json.dumps(self.checks))
         (bin_dir / "nix").write_text(f"""#!{bash}
+echo "$*" >> {self.calls}
+if [[ $1 == eval ]]; then
+  [[ -z ${{FAKE_EVAL_FAILS:-}} ]] || exit 1
+  exec cat {base / "checks.json"}
+fi
 printf '%s\\n' "$@" > {self.args}
+status=${{FAKE_STATUS:-0}}
+[[ $1 == build ]] && status=${{FAKE_BUILD_STATUS:-$status}}
 while (($#)); do [[ $1 == --out-link ]] && ln -s {self.store_path} "$2"; shift; done
+exit "$status"
+""")
+        (bin_dir / "nix-fast-build").write_text(f"""#!{bash}
+printf '%s\\n' "$@" > {self.args}
+echo "$TMPDIR" > {base / "fast-build-tmpdir"}
+while (($#)); do
+  [[ $1 == --out-link ]] && for attr in alpha beta; do ln -s {self.store_path} "$2-$attr"; done
+  shift
+done
 exit "${{FAKE_STATUS:-0}}"
 """)
+        self.queries = base / "nix-store-queries"
         (bin_dir / "nix-store").write_text(f"""#!{bash}
+echo "$*" >> {self.queries}
 [[ -z ${{FAKE_QUERY_FAILS:-}} ]] || exit 1
+if [[ $1 == --check-validity ]]; then
+  for path in ${{FAKE_INVALID:-}}; do echo "$path"; done
+  exit
+fi
 echo {self.store_path}
 """)
-        for tool in ("nix", "nix-store"):
+        for tool in ("nix", "nix-store", "nix-fast-build"):
             (bin_dir / tool).chmod(0o755)
         self.env = dict(os.environ, PATH=f"{bin_dir}:{os.environ['PATH']}",
                         SEKKA_CI_ROOTS=str(self.roots), SEKKA_CI_MIN_FREE_BYTES="0")
@@ -162,6 +204,43 @@ echo {self.store_path}
         self.assertFalse(retain.building(generation))
         self.assertEqual(self.args.read_text().split("\n")[:3], ["flake", "check", "--keep-going"])
 
+    def test_a_rerun_reuses_recorded_build_inputs(self):
+        for _ in range(2):
+            result = self.run_retain("pr", "checks", "flake", "check", "--keep-going")
+            self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("(queried 0 of 1 derivations)", result.stderr)
+        queries = self.queries.read_text().splitlines()
+        self.assertEqual(sum("--requisites" in q for q in queries), 1)
+        name = Path(self.store_path).name
+        for generation in self.generations("pr-checks"):
+            self.assertEqual(os.readlink(generation / "dependencies" / name), self.store_path)
+        # Another group building the same derivation reuses the record too.
+        result = self.run_retain("main", "checks", "flake", "check", "--keep-going")
+        self.assertIn("(queried 0 of 1 derivations)", result.stderr)
+
+    def test_fast_build_links_each_check_and_roots_its_evaluation(self):
+        result = self.run_retain("pr", "checks", "fast-build", "--flake", ".#checks.x86_64-linux", FAKE_STATUS="1")
+        self.assertEqual(result.returncode, 1)
+        [generation] = self.generations("pr-checks")
+        self.assertEqual(sorted(p.name for p in generation.glob("result*")), ["result-alpha", "result-beta"])
+        self.assertTrue((generation / "dependencies" / Path(self.store_path).name).is_symlink())
+        self.assertFalse((generation / "success").exists())
+        nix = str(self.args.parent / "bin" / "nix")
+        self.assertEqual(self.args.read_text().split(),
+                         ["--nix", nix, *retain.FAST_BUILD, "--flake", ".#checks.x86_64-linux", "--no-nom",
+                          "--out-link", str(generation / "result")])
+        tmpdir = (self.args.parent / "fast-build-tmpdir").read_text().strip()
+        self.assertEqual(tmpdir, str(generation))
+
+    def test_fast_build_falls_back_to_flake_check_on_an_older_runner(self):
+        (self.args.parent / "bin" / "nix-fast-build").unlink()
+        result = self.run_retain("pr", "checks", "fast-build", "--flake", "path:/src#checks.x86_64-linux", "-j", "8")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("nix-fast-build is missing", result.stderr)
+        [generation] = self.generations("pr-checks")
+        self.assertEqual(self.args.read_text().split(), [
+            "flake", "check", "path:/src", "--keep-going", "--print-build-logs", "--out-link", str(generation / "result")])
+
     def test_failure_keeps_its_status_and_passing_results(self):
         result = self.run_retain("main", "uta", "build", ".#uta", FAKE_STATUS="23")
         self.assertEqual(result.returncode, 23)
@@ -185,6 +264,10 @@ echo {self.store_path}
         self.assertEqual(self.args.read_text().split(), ["build", ".#uta", "--no-link"])
         result = self.run_retain("pr", "checks", "flake", "check")
         self.assertEqual(self.args.read_text().split(), ["flake", "check"])
+        result = self.run_retain("pr", "checks", "fast-build", "--flake", ".#checks.x86_64-linux")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.args.read_text().split()[2 + len(retain.FAST_BUILD):],
+                         ["--flake", ".#checks.x86_64-linux", "--no-nom"])
         self.assertEqual(self.run_retain("prune").returncode, 0)
         self.assertEqual(list(self.roots.iterdir()), [])
 
@@ -192,6 +275,113 @@ echo {self.store_path}
         result = self.run_retain("pr", "uta", "build", ".#uta", "--out-link", "elsewhere")
         self.assertEqual(result.returncode, 2)
         self.assertFalse(self.args.exists())
+
+    # The nightly's second attempt. The first attempt fails; `nix eval` then
+    # names alpha and beta, and the store says which of them has no result.
+
+    def retry(self, **env):
+        return self.run_retain("--retry-failed", "main", "checks", "fast-build",
+                               "--flake", ".#checks.x86_64-linux", **env)
+
+    def nix_calls(self):
+        return [line.split() for line in self.calls.read_text().splitlines()] if self.calls.exists() else []
+
+    def without_nix_fast_build(self):
+        (self.args.parent / "bin" / "nix-fast-build").unlink()
+
+    def one_failed_check_runs_once_more(self):
+        beta = self.checks["beta"]
+        result = self.retry(FAKE_STATUS="1", FAKE_BUILD_STATUS="0", FAKE_INVALID=beta["output"])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("::warning::Running failed checks once more: beta. One that passes now is flaky", result.stderr)
+        generations = self.generations("main-checks")
+        [second] = [g for g in generations if (g / "success").is_file()]
+        self.assertEqual(len(generations), 2)
+        evaluation, build = self.nix_calls()[-2:]
+        self.assertEqual(evaluation, ["eval", "--json", "--no-update-lock-file", ".#checks.x86_64-linux",
+                                      "--apply", *retain.CHECKS.split()])
+        self.assertEqual(build, ["build", "--keep-going", "--print-build-logs", beta["derivation"] + "^*",
+                                 "--out-link", str(second / "result")])
+        self.assertIn(f"--check-validity --print-invalid {self.checks['alpha']['output']} {beta['output']}",
+                      self.queries.read_text().splitlines())
+        return result
+
+    def test_one_failed_check_runs_once_more(self):
+        self.one_failed_check_runs_once_more()
+        self.assertEqual(len(self.nix_calls()), 2)
+
+    def test_one_failed_check_runs_once_more_without_nix_fast_build(self):
+        self.without_nix_fast_build()
+        result = self.one_failed_check_runs_once_more()
+        self.assertIn("nix-fast-build is missing", result.stderr)
+        self.assertEqual(self.nix_calls()[0][:2], ["flake", "check"])
+        self.assertEqual(len(self.nix_calls()), 3)
+
+    def test_a_retry_needs_no_mounted_roots(self):
+        del self.env["SEKKA_CI_ROOTS"]
+        beta = self.checks["beta"]
+        result = self.retry(FAKE_STATUS="1", FAKE_BUILD_STATUS="0", FAKE_INVALID=beta["output"])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.nix_calls()[-1],
+                         ["build", "--keep-going", "--print-build-logs", beta["derivation"] + "^*", "--no-link"])
+
+    def test_a_check_that_fails_twice_fails(self):
+        for missing in (False, True):
+            with self.subTest(nix_fast_build_missing=missing):
+                if missing:
+                    self.without_nix_fast_build()
+                result = self.retry(FAKE_STATUS="1", FAKE_BUILD_STATUS="7",
+                                    FAKE_INVALID=" ".join(c["output"] for c in self.checks.values()))
+                self.assertEqual(result.returncode, 7)
+                self.assertIn("once more: alpha beta.", result.stderr)
+                self.assertEqual([c["derivation"] + "^*" for c in self.checks.values()], self.nix_calls()[-1][3:5])
+                self.assertFalse(any((g / "success").exists() for g in self.generations("main-checks")))
+
+    def test_a_check_that_does_not_evaluate_is_not_run_again(self):
+        for missing in (False, True):
+            with self.subTest(nix_fast_build_missing=missing):
+                if missing:
+                    self.without_nix_fast_build()
+                self.calls.unlink(missing_ok=True)
+                result = self.retry(FAKE_STATUS="3", FAKE_EVAL_FAILS="1", FAKE_INVALID=self.checks["beta"]["output"])
+                self.assertEqual(result.returncode, 3)
+                self.assertIn("::error::A check failed to evaluate; running it again cannot help.", result.stderr)
+                self.assertEqual([call[0] for call in self.nix_calls()], ["flake", "eval"] if missing else ["eval"])
+
+    def test_a_pass_stays_a_pass_and_asks_nothing(self):
+        for missing in (False, True):
+            with self.subTest(nix_fast_build_missing=missing):
+                if missing:
+                    self.without_nix_fast_build()
+                self.calls.unlink(missing_ok=True)
+                result = self.retry(FAKE_INVALID=self.checks["beta"]["output"])
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertNotIn("once more", result.stderr)
+                self.assertEqual([call[0] for call in self.nix_calls()], ["flake"] if missing else [])
+                self.assertNotIn("--check-validity", self.queries.read_text())
+        self.assertTrue(all((g / "success").is_file() for g in self.generations("main-checks")))
+
+    def test_a_failure_with_every_check_built_is_not_retried(self):
+        self.without_nix_fast_build()
+        result = self.retry(FAKE_STATUS="1")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("::error::Every check has its result", result.stderr)
+        self.assertEqual([call[0] for call in self.nix_calls()], ["flake", "eval"])
+
+    def test_no_retry_when_the_store_cannot_say_what_failed(self):
+        self.without_nix_fast_build()
+        result = self.retry(FAKE_STATUS="1", FAKE_QUERY_FAILS="1")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("::error::Cannot tell which checks failed", result.stderr)
+        self.assertEqual([call[0] for call in self.nix_calls()], ["flake", "eval"])
+
+    def test_only_fast_build_of_named_checks_can_retry(self):
+        for command in (["build", ".#uta"], ["flake", "check"], ["fast-build"], ["fast-build", "--flake", "."]):
+            with self.subTest(command=command):
+                result = self.run_retain("--retry-failed", "main", "checks", *command)
+                self.assertEqual(result.returncode, 2)
+                self.assertIn("--retry-failed needs fast-build", result.stderr)
+        self.assertEqual(self.nix_calls(), [])
 
 
 class GitCache(unittest.TestCase):

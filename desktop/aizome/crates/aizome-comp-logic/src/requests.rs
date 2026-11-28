@@ -154,40 +154,27 @@ fn wm_request(st: &mut State, req: Request) -> Result<Option<Response>, String> 
         Request::AddDesk { name, folder, index } => {
             st.lg.m().wm.add_desk(name, folder, index);
             st.emit_desks();
+            crate::config::save_desks(st);
             Response::Ok
         }
         Request::RenameDesk { desk, name } => {
             let desk = desk_arg(st, &desk)?;
             st.lg.m().wm.rename_desk(desk, name);
             st.emit_desks();
+            crate::config::save_desks(st);
             Response::Ok
         }
         Request::SetDeskFolder { desk, folder } => {
             let desk = desk_arg(st, &desk)?;
             st.lg.m().wm.set_desk_folder(desk, folder);
             st.emit_desks();
+            crate::config::save_desks(st);
             Response::Ok
         }
         Request::RemoveDesk { desk } => {
             let desk = desk_arg(st, &desk)?;
-            let l = st.lg.m();
-            let before = l.wm.current_desk();
-            let shown = l.wm.is_visible(desk);
-            let r = l.wm.remove_desk(desk).ok_or("every display keeps a Desk, and the last Desk stays")?;
-            let changed = shown || l.wm.current_desk() != before;
-            let ids: Vec<WinId> = l.wm.windows().map(|w| w.id).collect();
-            for id in ids {
-                l.window_changed(id);
-            }
-            if changed {
-                st.az.window_outputs_dirty = true;
-                st.az.queue_redraw_all();
-            }
-            st.apply_refocus(r);
-            if st.lg.r().wm.current_desk() != before {
-                crate::actions::current_desk_changed(st);
-            } else {
-                st.emit_desks();
+            if !st.remove_desk(desk) {
+                return Err("every display keeps a Desk, and the last Desk stays".into());
             }
             Response::Ok
         }
@@ -195,6 +182,7 @@ fn wm_request(st: &mut State, req: Request) -> Result<Option<Response>, String> 
             let desk = desk_arg(st, &desk)?;
             st.lg.m().wm.move_desk(desk, index);
             st.emit_desks();
+            crate::config::save_desks(st);
             Response::Ok
         }
         Request::Stack { a, b } => {

@@ -122,9 +122,10 @@ jobs:
       - name: Build and test components
         run: |
           set -euo pipefail
-          # Every check runs even after one fails, so one push reports them
-          # all, and the passing checks stay rooted for the next push.
-          python3 "$RUNNER_TEMP/ci-retain.py" pr checks flake check --keep-going --no-update-lock-file --print-build-logs
+          # Each check builds as soon as it is evaluated, and every check runs
+          # even after one fails, so one push reports them all; the passing
+          # checks stay rooted for the next push (DEVELOPERS.md).
+          python3 "$RUNNER_TEMP/ci-retain.py" pr checks fast-build --flake .#checks.x86_64-linux
           git diff --exit-code
 
   result:

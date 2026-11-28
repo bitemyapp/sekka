@@ -84,13 +84,24 @@ def launch(name, app):
     focus(app)
 
 
-def text_element(text):
-    return next((e for e in elements() if e.get("text") == text), None)
-
-
 def button(label):
     return next((e for e in elements() if e.get("role") == "button"
                  and (e.get("label") == label or e.get("text") == label)), None)
+
+
+# Groups the session itself runs under an application's name, as the
+# inspector describes each. They started at login, so with the table sorted
+# by name they come before a launch of that name. Hako's show-in-folder
+# service is one: no window, its own unit.
+SESSION_GROUPS = {"Hako": ["Application · aizome-file-manager.service"]}
+
+
+def inspector_header():
+    """The inspector's heading and the line under it."""
+    shown = elements()
+    start = next((i for i, e in enumerate(shown) if e.get("name") == "inspector"), len(shown))
+    labels = [e.get("text", "") for e in shown[start:] if e.get("role") == "label"]
+    return labels[:2] if len(labels) >= 2 else ["", ""]
 
 
 def choose_group(name):
@@ -98,15 +109,22 @@ def choose_group(name):
     input_("chord super+a")
     input_("type " + shlex.quote(name))
     # The virtual table paints cells without exposing them as inspection nodes.
-    # Filter to one group, then click its first row below the 24px header.
-    e = until(name + " single group row", lambda: next(
+    # Filter to the groups of that name, then click their 24px rows below the
+    # 24px header: the session's own first, each one named by the inspector,
+    # then the launch.
+    session = SESSION_GROUPS.get(name, [])
+    rows = len(session) + 1
+    e = until(f"{name}: {rows} group rows", lambda: next(
         (e for e in elements() if e.get("name") == "processes"
-         and e.get("value", "").startswith("1 rows,")), None))
+         and e.get("value", "").startswith(f"{rows} rows,")), None))
     g = window("org.aizome.Myaku")["geometry"]
-    click(g["x"] + 60, g["y"] + e["rect"][1] + 36)
-    until(name + " inspector heading", lambda: text_element(name))
-    until(name + " independent single window", lambda: any(
-        e.get("text", "").startswith("Application · 1 window") for e in elements()))
+    for row, detail in enumerate(session):
+        click(g["x"] + 60, g["y"] + e["rect"][1] + 36 + 24 * row)
+        until(f"{name}: {detail}", lambda detail=detail: inspector_header() == [name, detail])
+    click(g["x"] + 60, g["y"] + e["rect"][1] + 36 + 24 * len(session))
+    until(name + " inspector heading", lambda: inspector_header()[0] == name)
+    until(name + " independent single window", lambda: inspector_header()[1].startswith(
+        "Application · 1 window"))
     observations.append({"selected_group": name, "inspector": elements()})
 
 
@@ -118,6 +136,24 @@ def alive(pids):
     for pid in pids:
         status = proc(pid)
         assert "State:\tT" not in status and "State:\tZ" not in status, status
+
+
+def file_manager_run():
+    """The run of the session's show-in-folder service, which must be active.
+
+    Its unit restarts on failure, so "active" alone doesn't say the service
+    is the one that was running before: systemd gives each run its own
+    InvocationID.
+    """
+    shown = dict(
+        line.split("=", 1)
+        for line in user(
+            "systemctl --user show -p ActiveState -p InvocationID aizome-file-manager.service"
+        ).splitlines()
+        if "=" in line
+    )
+    assert shown.get("ActiveState") == "active" and shown.get("InvocationID"), shown
+    return shown["InvocationID"]
 
 
 machine.start()
@@ -141,7 +177,12 @@ try:
         input_("key Return")
         until("Sumi opened by Hako", lambda: window("org.aizome.Sumi"))
         sumi = window("org.aizome.Sumi")["pid"]
-        assert f"PPid:\t{hako}\n" in proc(sumi), "Sumi must be Hako's actual child"
+        # Hako starts Sumi through the launcher's waiting shell
+        # (aizome_sys::apps::launch): the shell is Hako's child, Sumi the shell's.
+        waiting = machine.succeed(f"awk '/^PPid:/ {{ print $2 }}' /proc/{sumi}/status").strip()
+        launcher = proc(waiting)
+        assert "Name:\tsh\n" in launcher, "Sumi must be the child of the launcher's waiting shell"
+        assert f"PPid:\t{hako}\n" in launcher, "Hako must have started the shell Sumi waits under"
         launch("Firefox", "firefox")
         firefox = window("firefox")["pid"]
         launch("Myaku", "org.aizome.Myaku")
@@ -202,10 +243,14 @@ try:
         alive([hako, sumi, firefox, myaku])
         click_element(button("Quit"))
         until("Quit confirmation again", lambda: button("Cancel"))
+        service_run = file_manager_run()
         input_("key Return")
         until("only Hako exits", lambda: window("org.aizome.Hako") is None)
         machine.wait_until_fails(f"test -d /proc/{hako}")
         alive([sumi, firefox, myaku])
+        # Quit took the launch alone: the session's show-in-folder service,
+        # the other group named Hako, is still the run it was before Quit.
+        assert file_manager_run() == service_run, "Quit restarted aizome-file-manager.service"
         machine.screenshot("07-hako-exited-others-survive")
         observations.append({"after": windows()})
     machine.fail("coredumpctl --no-pager list aizome-myaku")

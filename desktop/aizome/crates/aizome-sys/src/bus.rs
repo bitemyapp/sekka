@@ -66,6 +66,11 @@ impl Bus {
         Bus::shared(&SYSTEM, zbus::connection::Builder::system)
     }
 
+    /// A separate system-bus connection for work BlueZ associates with its caller's lifetime.
+    pub(crate) fn private_system() -> Result<Bus> {
+        Ok(Bus { conn: connect(zbus::connection::Builder::system()?)? })
+    }
+
     /// The session bus, connected once per process and shared.
     pub fn session() -> Result<Bus> {
         Bus::shared(&SESSION, zbus::connection::Builder::session)

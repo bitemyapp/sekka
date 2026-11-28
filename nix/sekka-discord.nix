@@ -9,17 +9,27 @@ pkgs.rustPlatform.buildRustPackage {
       ../services/sekka-discord/Cargo.lock
       ../services/sekka-discord/src
       ../services/sekka-discord/migrations
+      ../services/sekka-discord/monitor.py
+      ../services/sekka-discord/test_monitor.py
+      ../services/sekka-discord/deploy.py
+      ../services/sekka-discord/test_deploy.py
     ];
   };
   cargoLock.lockFile = ../services/sekka-discord/Cargo.lock;
   nativeBuildInputs = [ pkgs.pkg-config ];
   buildInputs = [ pkgs.sqlite ];
+  nativeCheckInputs = [ pkgs.python3 ];
   doCheck = true;
+  postCheck = ''
+    python3 -m unittest discover -s . -p 'test_*.py'
+  '';
   postInstall = ''
-    install -Dm644 ${../services/sekka-discord/sekka-discord.service} \
-      "$out/share/systemd/user/sekka-discord.service"
-    install -Dm644 ${../services/sekka-discord/sekka-discord-tunnel.service} \
-      "$out/share/systemd/user/sekka-discord-tunnel.service"
+    install -Dm755 monitor.py "$out/bin/sekka-discord-monitor"
+    substituteInPlace "$out/bin/sekka-discord-monitor" \
+      --replace-fail '#!/usr/bin/env python3' '#!${pkgs.python3}/bin/python3'
+    install -Dm755 deploy.py "$out/bin/sekka-discord-deploy"
+    substituteInPlace "$out/bin/sekka-discord-deploy" \
+      --replace-fail '#!/usr/bin/env python3' '#!${pkgs.python3}/bin/python3'
   '';
   meta = {
     description = "Discord notifications for the Sekka GitHub repository";

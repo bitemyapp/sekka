@@ -28,6 +28,35 @@ pub enum Tone {
     Error,
 }
 
+/// What the screen says under the field.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Said {
+    /// What was typed was refused. The screen words it, for what the
+    /// account signs in with.
+    Refused,
+    /// PAM's or greetd's own words, or ours about them.
+    Words(String),
+}
+
+/// What an account signs in with, as the screen names it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Secret {
+    Password,
+    /// The TV account's, typed or pressed on a controller.
+    Pin,
+}
+
+impl Said {
+    /// As the screen says it to someone who signs in with `secret`.
+    pub fn words(&self, secret: Secret) -> String {
+        match (self, secret) {
+            (Said::Refused, Secret::Password) => "That password didn't work. Try again.".to_owned(),
+            (Said::Refused, Secret::Pin) => "That PIN didn't work. Try again.".to_owned(),
+            (Said::Words(words), _) => words.clone(),
+        }
+    }
+}
+
 /// What each request still waiting for its answer was.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Asked {
@@ -49,7 +78,7 @@ pub struct Login {
     pub user: Option<String>,
     pub step: Step,
     /// What PAM or greetd said, or why the last try failed.
-    pub message: Option<(String, Tone)>,
+    pub message: Option<(Said, Tone)>,
     /// A wrong answer: the field shakes.
     pub failed: u32,
     /// The requests waiting for their answers, oldest first, each with
@@ -146,7 +175,7 @@ impl Login {
                     let tone = if auth_message_type == AuthMessageType::Error { Tone::Error } else { Tone::Info };
                     let text = auth_message.trim().to_owned();
                     if !text.is_empty() {
-                        self.message = Some((text, tone));
+                        self.message = Some((Said::Words(text), tone));
                     }
                     self.step = Step::Waiting;
                     vec![self.ask(Asked::Answer, Request::PostAuthMessageResponse { response: None })]
@@ -164,15 +193,15 @@ impl Login {
                 vec![self.ask(Asked::Start, Request::StartSession { cmd: launch.cmd.clone(), env: launch.env.clone() })]
             }
             Response::Error { error_type, description } => {
-                let text = match (error_type, asked) {
+                let said = match (error_type, asked) {
                     (ErrorType::AuthError, _) => {
                         self.failed += 1;
-                        "That password didn't work. Try again.".to_owned()
+                        Said::Refused
                     }
-                    (_, Some(Asked::Start)) => format!("The session didn't start: {}", tidy(&description)),
-                    _ => tidy(&description),
+                    (_, Some(Asked::Start)) => Said::Words(format!("The session didn't start: {}", tidy(&description))),
+                    _ => Said::Words(tidy(&description)),
                 };
-                self.message = Some((text, Tone::Error));
+                self.message = Some((said, Tone::Error));
                 // greetd may still hold the session (it does after a wrong
                 // password, and refuses a new one: "a session is already
                 // being configured"), so beginning again cancels it first;
@@ -192,7 +221,7 @@ impl Login {
 
     /// greetd went away (it restarts the greeter itself).
     pub fn lost(&mut self, why: &str) {
-        self.message = Some((format!("Lost the login service: {why}"), Tone::Error));
+        self.message = Some((Said::Words(format!("Lost the login service: {why}")), Tone::Error));
         self.step = Step::Waiting;
         self.asked.clear();
         self.open = false;
@@ -260,7 +289,7 @@ mod tests {
         );
         assert_eq!(next, [Request::CancelSession, Request::CreateSession { username: "alice".into() }]);
         assert_eq!(l.failed, 1);
-        assert_eq!(l.message, Some(("That password didn't work. Try again.".into(), Tone::Error)));
+        assert_eq!(l.message, Some((Said::Refused, Tone::Error)));
         // greetd answers the cancel, then asks again.
         assert!(l.heard(Response::Success, &launch()).is_empty());
         l.heard(secret("Password: "), &launch());
@@ -272,6 +301,14 @@ mod tests {
     }
 
     #[test]
+    fn a_refusal_is_worded_for_what_the_account_signs_in_with() {
+        assert_eq!(Said::Refused.words(Secret::Password), "That password didn't work. Try again.");
+        assert_eq!(Said::Refused.words(Secret::Pin), "That PIN didn't work. Try again.");
+        // PAM's words are PAM's, whatever the account signs in with.
+        assert_eq!(Said::Words("Your password has expired".into()).words(Secret::Pin), "Your password has expired");
+    }
+
+    #[test]
     fn info_is_shown_and_acknowledged_and_more_questions_are_asked() {
         let mut l = Login::default();
         l.begin("alice");
@@ -280,7 +317,7 @@ mod tests {
             &launch(),
         );
         assert_eq!(next, [Request::PostAuthMessageResponse { response: None }]);
-        assert_eq!(l.message, Some(("Touch your key".into(), Tone::Info)));
+        assert_eq!(l.message, Some((Said::Words("Touch your key".into()), Tone::Info)));
         l.heard(
             Response::AuthMessage { auth_message_type: AuthMessageType::Visible, auth_message: "Code: ".into() },
             &launch(),
@@ -313,7 +350,7 @@ mod tests {
         assert!(matches!(next[..], [Request::StartSession { .. }]));
         let next =
             l.heard(Response::Error { error_type: ErrorType::Error, description: "exec failed".into() }, &launch());
-        assert_eq!(l.message, Some(("The session didn't start: Exec failed".into(), Tone::Error)));
+        assert_eq!(l.message, Some((Said::Words("The session didn't start: Exec failed".into()), Tone::Error)));
         assert_eq!(next, [Request::CancelSession, Request::CreateSession { username: "kiosk".into() }]);
     }
 
@@ -325,7 +362,7 @@ mod tests {
             l.heard(Response::Error { error_type: ErrorType::Error, description: "unknown user".into() }, &launch());
         assert!(next.is_empty());
         assert_eq!(l.step, Step::Failed);
-        assert_eq!(l.message, Some(("Unknown user".into(), Tone::Error)));
+        assert_eq!(l.message, Some((Said::Words("Unknown user".into()), Tone::Error)));
         // Return tries again, cancelling whatever greetd kept first.
         assert_eq!(l.begin("ghost"), [Request::CancelSession, Request::CreateSession { username: "ghost".into() }]);
     }

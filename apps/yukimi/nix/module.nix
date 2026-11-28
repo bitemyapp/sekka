@@ -105,6 +105,18 @@ let
         example = "calamares.desktops";
         description = "Another choice (a list) whose values this one's must be among; Yukimi offers only those.";
       };
+      people = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = ''
+          Whether it names one of the computer's people, or no one (the
+          empty string), such as who logs in by themselves. Yukimi offers
+          everyone with an account (uid 1000 to 59999, with a login shell)
+          and checks the account exists when it writes it, so people added
+          after the system was built may be chosen too. Its options may be
+          empty.
+        '';
+      };
     };
   };
 in

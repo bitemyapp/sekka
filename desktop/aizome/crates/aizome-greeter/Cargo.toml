@@ -17,6 +17,9 @@ aizome-sys.workspace = true
 aizome-kit.workspace = true
 aizome-theme.workspace = true
 aizome-face.workspace = true
+# Game controllers, and the keyboard and PIN pad drawn for them (Chanoma's).
+aizome-gamepad.workspace = true
+aizome-sofa.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 toml.workspace = true

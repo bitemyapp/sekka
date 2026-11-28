@@ -1816,6 +1816,7 @@ impl DropdownWidget {
                     id: None,
                     icon: None,
                     swatch: o.swatch,
+                    yields_to_text: false,
                 })
             })
             .collect();

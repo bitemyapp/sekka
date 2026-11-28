@@ -11,6 +11,7 @@ gdk-pixbuf = "=0.22.0"
 libc = "=0.2.177"
 serde_json = "=1.0.145"
 serde = { version = "=1.0.229", features = ["derive"] }
+toml = { version = "=1.1.8", default-features = false, features = ["std", "parse", "serde"] }
 
 [[bin]]
 name = "tatami"

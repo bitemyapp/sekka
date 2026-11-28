@@ -42,11 +42,13 @@
 //! | [`mpris`] | media players, media keys | MPRIS on the session bus | — |
 //! | [`notifications`] | the notification server (the shell) and a client (apps) | `org.freedesktop.Notifications` | — |
 //! | [`statusnotifier`] | apps' status icons and their menus (the watcher, for the shell) | `org.kde.StatusNotifierWatcher`, `com.canonical.dbusmenu` | — |
+//! | [`screensaver`] | apps keeping the screen awake over the session bus (for the shell) | `org.freedesktop.ScreenSaver` | — |
 //! | [`polkit`] | the authentication agent | polkit's helper | `security.polkit.enable` |
 //! | [`sysinfo`] | CPU, memory, processes, I/O, sensors, hardware | `/proc`, `/sys` | `pkgs.hwdata` for GPU names |
 //! | [`apps`] | desktop entries, icons, default apps (`aizome-apps`), and launching | XDG files, `systemd-run` | — |
 //! | [`keyboard`] | layouts, variants, XKB options | xkeyboard-config's `evdev.xml` | — |
 //! | [`location`] | where the computer is, for sunrise and sunset | GeoClue 2 | `services.geoclue2.enable` |
+//! | [`tv`] | the TV account: the one that opens straight into Chanoma | `aizome-tv-account` through pkexec | `programs.aizome.chanoma.enable` |
 //!
 //! Each module's documentation says more about what it needs and how it
 //! degrades without it.
@@ -65,14 +67,25 @@ pub mod mpris;
 pub mod network;
 pub mod notifications;
 mod oneshot;
+#[cfg(feature = "pam")]
+pub mod pam;
 pub mod polkit;
 pub mod power;
 pub mod printers;
+pub mod screensaver;
 mod service;
 pub mod statusnotifier;
 pub mod sysinfo;
+pub mod tv;
 pub mod users;
 
 pub use bus::{Bus, Takeover};
 pub use error::{Error, Result};
 pub use service::{Task, Wake};
+
+// Share the private-bus fixture with tests of internal served interfaces.
+#[cfg(test)]
+extern crate self as aizome_sys;
+#[cfg(test)]
+#[path = "../tests/common/mod.rs"]
+mod test_bus;

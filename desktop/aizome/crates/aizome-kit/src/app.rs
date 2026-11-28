@@ -158,14 +158,17 @@ impl<P: Program> Runtime<P> {
                 self.core.queue.push_back(m);
             }
             let mut updated = false;
+            let mut refresh_all = false;
             while let Some(msg) = self.core.queue.pop_front() {
                 match msg.downcast::<KitMsg>() {
                     Ok(k) => self.kit(*k, platform),
                     Err(msg) => match msg.downcast::<P::Msg>() {
                         Ok(m) => {
                             let started = Instant::now();
+                            self.core.refresh_all_after_update = true;
                             let mut cx = Cx { core: &mut self.core, platform, pool: &mut self.pool, _m: PhantomData };
                             self.program.update(*m, &mut cx);
+                            refresh_all |= self.core.refresh_all_after_update;
                             self.core.stats.update(started.elapsed());
                             updated = true;
                         }
@@ -174,7 +177,9 @@ impl<P: Program> Runtime<P> {
                 }
             }
             if updated {
-                self.core.mark_all_dirty();
+                if refresh_all {
+                    self.core.mark_all_dirty();
+                }
                 self.refresh_menus(platform);
             }
             let dirty = self.core.dirty_windows();
@@ -223,6 +228,9 @@ impl<P: Program> Runtime<P> {
                 if self.program.close_requested(key, &mut cx) {
                     self.core.close_key(key, platform);
                 }
+                // The close handler can change shared state (the Shell's
+                // open panel), even when no program message follows.
+                self.core.mark_all_dirty();
             }
             KitMsg::DragStarted { window, drag } => {
                 let mut cx = Cx { core: &mut self.core, platform, pool: &mut self.pool, _m: PhantomData };
@@ -253,7 +261,14 @@ impl<P: Program> Runtime<P> {
 
     /// Ask the program for its menus again; publish them if they changed.
     pub fn refresh_menus(&mut self, platform: &mut dyn Platform) {
-        self.core.menubar = self.program.menus().into_specs();
+        let menus = self.program.menus().into_specs();
+        // In-window bars retain their titles in the widget tree. Menu
+        // actions are looked up in `menubar` when opened, but changing
+        // the strip's titles/count still requires rebuilding its window.
+        if self.core.in_window_menus && !self.core.menubar.iter().map(|m| &m.title).eq(menus.iter().map(|m| &m.title)) {
+            self.core.mark_all_dirty();
+        }
+        self.core.menubar = menus;
         if self.shell.is_some() {
             let published = crate::shell::published(&mut self.core);
             let h = hash_of(&serde_json::to_string(&published).unwrap_or_default());
@@ -392,13 +407,38 @@ struct Maps {
     pictures: HashMap<WinId, Kept>,
 }
 
-/// A hidden window's picture drawn ahead, kept for its next showing.
+/// A hidden window's picture drawn ahead, kept through its next showing.
 struct Kept {
     picture: crate::ahead::Picture,
     /// It shows, and its first frame is still to come.
     shown: bool,
     /// What changed since it showed, to draw over the picture.
     changed: Vec<Rect>,
+}
+
+impl Maps {
+    /// Draw a frame of window `win`. The first since it showed starts
+    /// from its picture drawn ahead, at the size and scale drawn, with
+    /// what changed since painted over it; any other is `paint`'s.
+    ///
+    /// The picture stays kept after the frame that draws it, until the
+    /// window hides, closes or is drawn ahead again. Sidestep sends a
+    /// frame to its render thread once this returns, and the render thread
+    /// rasterizes it later still, caching the images it draws until their
+    /// owner drops them. A picture dropped here would say so before its
+    /// frame was sent: the frame would then cache its pixels with no owner
+    /// left to have them forgotten, one picture more at every showing.
+    fn draw(&mut self, win: WinId, canvas: &mut Canvas, mut paint: impl FnMut(&mut Canvas)) {
+        if let Some(k) = self.pictures.get_mut(&win)
+            && std::mem::take(&mut k.shown)
+            && k.picture.fits(canvas.size(), canvas.scale(), &canvas.damage())
+            && let Some(changed) = crate::ahead::changed(&k.changed, canvas.size())
+        {
+            crate::ahead::draw(&k.picture, &changed, canvas, paint);
+            return;
+        }
+        paint(canvas);
+    }
 }
 
 struct Glue<P: Program> {
@@ -442,7 +482,7 @@ impl Platform for SidestepPlatform<'_> {
                     o = o.max_size(m.width, m.height);
                 }
                 if *utility {
-                    o = o.minimizable(false);
+                    o = o.minimizable(false).tag(crate::platform::UTILITY_TAG);
                 }
                 if let Some(p) = parent.and_then(|p| self.maps.to_side.get(&p)) {
                     o = o.transient_for(*p);
@@ -818,8 +858,11 @@ impl<P: Program> sidestep_ui::Handler for Glue<P> {
                 core.pinch(win, position, 1.0 + magnification, phase, &mut p);
             }
             WindowEvent::StateChanged(s) => {
-                let state =
-                    crate::program::WindowState { fullscreen: s.fullscreen, maximized: s.maximized, suspended: s.suspended };
+                let state = crate::program::WindowState {
+                    fullscreen: s.fullscreen,
+                    maximized: s.maximized,
+                    suspended: s.suspended,
+                };
                 rt.window_state(win, state, &mut p);
                 return;
             }
@@ -841,17 +884,8 @@ impl<P: Program> sidestep_ui::Handler for Glue<P> {
 
     fn draw(&mut self, _cx: &mut sidestep_ui::Cx, window: WindowId, canvas: &mut Canvas) {
         let Some(&win) = self.maps.to_kit.get(&window) else { return };
-        // The first frame of a window drawn ahead, at the size and scale
-        // drawn: the picture, and what changed since drawn over it.
-        if let Some(k) = self.maps.pictures.remove(&win).filter(|k| k.shown)
-            && k.picture.fits(canvas.size(), canvas.scale(), &canvas.damage())
-            && let Some(changed) = crate::ahead::changed(&k.changed, canvas.size())
-        {
-            let core = &mut self.rt.core;
-            crate::ahead::draw(&k.picture, &changed, canvas, |c| core.paint(win, c));
-            return;
-        }
-        self.rt.core.paint(win, canvas);
+        let core = &mut self.rt.core;
+        self.maps.draw(win, canvas, |c| core.paint(win, c));
     }
 
     fn timer(&mut self, cx: &mut sidestep_ui::Cx, timer: TimerId) {
@@ -947,5 +981,67 @@ impl<P: Program> sidestep_ui::Handler for Glue<P> {
         let took = rt.core.drop(win, drag.position, drag.urls.clone(), text, &mut p);
         rt.flush(&mut p);
         took
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The bytes of pictures' pixels still held once their windows have
+    /// hidden, after `showings` of a window `size` points big drawn ahead
+    /// at `scale`: each showing draws a first frame from its picture and a
+    /// second without it, then the window hides. Frames are drawn as a
+    /// window's are, recorded and then rasterized once the draw returns,
+    /// but offscreen: on this thread, through the image cache Sidestep's
+    /// render thread keeps for windows' frames.
+    fn held_after(showings: usize, size: Size, scale: f64) -> usize {
+        let win: WinId = 1;
+        let whole = Rect::from_origin_size(crate::layout::Point::ZERO, size);
+        let mut maps = Maps::default();
+        let mut pixels = Vec::new();
+        for _ in 0..showings {
+            // Drawn ahead in the engine's bands, opaque white.
+            let bands = crate::ahead::bands(size, scale)
+                .into_iter()
+                .map(|band| {
+                    let (w, h) = ((band.width() * scale).round() as u32, (band.height() * scale).round() as u32);
+                    let px: Arc<[u8]> = vec![255; w as usize * h as usize * 4].into();
+                    pixels.push((Arc::downgrade(&px), px.len()));
+                    (band, sidestep_ui::Image::from_premultiplied_rgba(w, h, px).expect("a band's pixels"))
+                })
+                .collect();
+            let picture = crate::ahead::Picture { size, scale, bands };
+            // Kept, and the window shows (`keep_picture`, `show_window`).
+            maps.pictures.insert(win, Kept { picture, shown: true, changed: Vec::new() });
+            let mut frame = || {
+                let black = |c: &mut Canvas| c.fill_rect(whole, sidestep_ui::Color::BLACK);
+                let drawn = sidestep_ui::offscreen::render(size, scale, sidestep_ui::Appearance::LIGHT, |c| {
+                    maps.draw(win, c, black);
+                });
+                drawn.to_rgba8().expect("the frame's pixels")[..4].to_vec()
+            };
+            assert_eq!(frame(), [255; 4], "the first frame is the picture");
+            assert_eq!(frame(), [0, 0, 0, 255], "later frames are painted");
+            // It hides (`show_window`).
+            maps.pictures.remove(&win);
+        }
+        // Sidestep frees big pixels on a thread of their own: given a
+        // moment, whatever is still held then has no one to let it go.
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            let held: usize = pixels.iter().filter(|(px, _)| px.strong_count() > 0).map(|(_, bytes)| bytes).sum();
+            if held == 0 || Instant::now() > deadline {
+                return held;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    }
+
+    /// The shell's palette, 723 × 483 points, is 5.6 MB of picture at 2×.
+    #[test]
+    fn a_window_shown_from_its_picture_leaves_none_of_it_in_the_renderers_cache() {
+        let held = held_after(8, Size::new(723.0, 483.0), 2.0);
+        assert_eq!(held, 0, "{:.1} MB of pictures still held after 8 showings", held as f64 / 1e6);
     }
 }

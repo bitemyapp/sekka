@@ -6,7 +6,7 @@ This remains an acceptance gap. No global allocator change, `malloc_trim`, or
 forced collection was used in these measurements.
 
 The exact build is recorded in
-[`history-budget-memory/build.json`](../upstream/history-budget-memory/build.json):
+[`hotaru-benchmark-data/history-budget-memory/build.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/history-budget-memory/build.json):
 source manifest SHA-256
 `2173606ace6a89542a27e35f2fd1b819b84fce09e96b1a9e533d91ce532fc387`,
 based on checkpoint `c9801d6` plus owner-only budget atomics, the wide-overwrite
@@ -50,8 +50,8 @@ reads vary with the corpus. The measured short-run feed times are preserved in
 the reports and are not the separate paired throughput acceptance benchmark.
 
 Raw samples and commands are in
-[`common-report.json`](../upstream/history-budget-memory/common-report.json) and
-[`uri-report.json`](../upstream/history-budget-memory/uri-report.json).
+[`common-report.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/history-budget-memory/common-report.json) and
+[`uri-report.json`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/history-budget-memory/uri-report.json).
 The latter uses four unique links per row because the original eight-link
 workload exposed the reference limitation below.
 
@@ -85,7 +85,7 @@ At 120×24, print one `x` for each of the OSC 8 URIs `https://x/0` through
 but Ghostty returns an empty URI. Hotaru returns the requested URI. Adding the
 next link also loses that URI in Ghostty. Raw input fixtures, per-cell omitted
 positions, reference commit/library hashes and both full digests are retained
-under [`upstream/hyperlink-capacity`](../upstream/hyperlink-capacity/report.json).
+under [`upstream/hyperlink-capacity`](https://github.com/bitemyapp/hotaru-benchmark-data/blob/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/hyperlink-capacity/report.json).
 
 The source mechanism is page-local: `page.Capacity.hyperlink_bytes` uses
 `size.HyperlinkCountInt`, a `u16`, although the field counts bytes. Dividing its

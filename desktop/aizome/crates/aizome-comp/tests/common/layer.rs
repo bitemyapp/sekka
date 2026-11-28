@@ -78,6 +78,11 @@ pub enum ShellCmd {
         name: &'static str,
         size: (u32, u32),
     },
+    /// Changes when a layer surface has the keyboard, as it shows.
+    Keyboard {
+        name: &'static str,
+        keyboard: KeyboardInteractivity,
+    },
     /// A menu on a layer surface, at a place relative to it; `grab` asks
     /// for an explicit grab with the latest input serial (0 without one,
     /// as after a shortcut that came over IPC).
@@ -245,6 +250,11 @@ fn run(stream: UnixStream, rx: Receiver<ShellCmd>, seen: Arc<Mutex<ShellSeen>>) 
                 ShellCmd::Resize { name, size } => {
                     let s = shell.surfaces.get(name).expect("layer to resize");
                     s.layer.as_ref().unwrap().set_size(size.0, size.1);
+                    s.surface.commit();
+                }
+                ShellCmd::Keyboard { name, keyboard } => {
+                    let s = shell.surfaces.get(name).expect("layer to change the keyboard of");
+                    s.layer.as_ref().unwrap().set_keyboard_interactivity(keyboard);
                     s.surface.commit();
                 }
                 ShellCmd::Layer(spec) => {

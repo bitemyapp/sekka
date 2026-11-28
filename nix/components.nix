@@ -32,7 +32,7 @@ rec {
     outPath = ../apps/yukimi;
     nixosModules.default = import ../apps/yukimi/nix/module.nix yukimi;
     packages.${system}.yukimi = pkgs.callPackage ../apps/yukimi/nix/package.nix {
-      nativeYukimi = aizome.packages.${system}.aizome.yukimi;
+      nativeYukimi = aizome.packages.${system}.aizome-yukimi;
     };
   };
   kakehashi = {

@@ -3,14 +3,13 @@
 //! the bar's network icon, Super+Ctrl+W and Setup › Wi-Fi. It shows the wired
 //! connection, the Wi-Fi networks, and the DNS provider of the connection in
 //! use (DHCP, Cloudflare, Google or custom servers, as in Omarchy), over
-//! NetworkManager. Passwords are asked for in Walker and reach nmcli in a
-//! file only the user can read, never on a command line; the connections it
-//! creates keep their key root-only, like the installer's.
+//! NetworkManager. Passwords are asked for in Walker and reach nmcli through
+//! a pipe on its standard input, never on a command line or in a file; the
+//! connections it creates keep their key root-only, like the installer's.
 use crate::util;
 use std::{
     fs,
     io::Write,
-    path::PathBuf,
     process::{Command, Stdio},
 };
 
@@ -478,12 +477,39 @@ fn saved(ssid: &str) -> Option<String> {
 
 /// Run nmcli; the error is its message.
 fn nmcli(args: &[&str]) -> Result<(), String> {
-    let out = Command::new("nmcli")
-        .args(args)
-        .stdin(Stdio::null())
+    let mut command = Command::new("nmcli");
+    command.args(args);
+    run(command, None)
+}
+
+/// Run nmcli with a Wi-Fi key, which it reads from a pipe on its standard
+/// input (`passwd-file /dev/stdin`).
+fn nmcli_with(args: &[&str], secret: &Secret) -> Result<(), String> {
+    let mut command = Command::new("nmcli");
+    command.args(args).args(["passwd-file", "/dev/stdin"]);
+    run(command, Some(secret))
+}
+
+/// Run `command`, with `secret` written to its standard input (else that is
+/// empty); the error is its message.
+fn run(mut command: Command, secret: Option<&Secret>) -> Result<(), String> {
+    let mut child = command
+        .stdin(if secret.is_some() {
+            Stdio::piped()
+        } else {
+            Stdio::null()
+        })
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
-        .output()
+        .spawn()
+        .map_err(|error| error.to_string())?;
+    if let (Some(secret), Some(mut stdin)) = (secret, child.stdin.take()) {
+        // nmcli reads it all before it activates anything; closing the pipe
+        // here ends what it reads. An nmcli that exits first says why.
+        let _ = stdin.write_all(secret.0.as_bytes());
+    }
+    let out = child
+        .wait_with_output()
         .map_err(|error| error.to_string())?;
     if out.status.success() {
         Ok(())
@@ -493,38 +519,36 @@ fn nmcli(args: &[&str]) -> Result<(), String> {
     }
 }
 
-/// A Wi-Fi key for `nmcli … passwd-file`, in the user's runtime directory
-/// (memory only, mode 0700) and removed again when dropped.
-struct Secret(PathBuf);
+/// A Wi-Fi key, as a line of `nmcli … passwd-file`. It is only ever written
+/// to a pipe nmcli reads (`nmcli_with`): a file would stay behind, key and
+/// all, when this program is killed before it is removed.
+struct Secret(String);
 
 impl Secret {
+    /// The line nmcli reads back as exactly `password`. Reading a key, nmcli
+    /// takes a backslash as the start of an escape and drops whitespace at
+    /// either end, so backslashes are doubled and whitespace at the ends is
+    /// written as escapes. None for a key with a line break, which would end
+    /// the line early.
     fn new(password: &str) -> Option<Secret> {
-        use std::os::unix::fs::OpenOptionsExt;
-        let dir = std::env::var("XDG_RUNTIME_DIR")
-            .ok()
-            .filter(|dir| dir.starts_with('/'))?;
-        let path = PathBuf::from(dir).join(format!("tatami-wifi-{}", std::process::id()));
-        let _ = fs::remove_file(&path);
-        let mut file = fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .mode(0o600)
-            .open(&path)
-            .ok()?;
-        let secret = Secret(path);
-        file.write_all(format!("802-11-wireless-security.psk:{password}\n").as_bytes())
-            .ok()?;
-        Some(secret)
-    }
-
-    fn path(&self) -> &str {
-        self.0.to_str().unwrap_or_default()
-    }
-}
-
-impl Drop for Secret {
-    fn drop(&mut self) {
-        let _ = fs::remove_file(&self.0);
+        if password.contains(['\n', '\r']) {
+            return None;
+        }
+        let dropped = |c: char| matches!(c, ' ' | '\t' | '\x0b' | '\x0c');
+        let leading = password.len() - password.trim_start_matches(dropped).len();
+        let trailing = password.trim_end_matches(dropped).len();
+        let mut line = String::from("802-11-wireless-security.psk:");
+        for (at, c) in password.char_indices() {
+            match c {
+                '\\' => line.push_str(r"\\"),
+                c if dropped(c) && (at < leading || at >= trailing) => {
+                    line.push_str(&format!(r"\{:03o}", u32::from(c)));
+                }
+                c => line.push(c),
+            }
+        }
+        line.push('\n');
+        Some(Secret(line))
     }
 }
 
@@ -562,7 +586,7 @@ fn join_with_password(device: &str, network: &Network, key_mgmt: &str, existing:
         return;
     };
     let Some(secret) = Secret::new(&password) else {
-        return failed(&network.ssid, "Cannot hand the password to NetworkManager");
+        return failed(&network.ssid, "A password cannot contain a line break");
     };
     let (uuid, created) = match existing {
         Some(uuid) => (uuid, false),
@@ -598,16 +622,10 @@ fn join_with_password(device: &str, network: &Network, key_mgmt: &str, existing:
         }
     };
     util::notify(ICON, &format!("Connecting to {}…", network.ssid), "");
-    match nmcli(&[
-        "--wait",
-        "30",
-        "connection",
-        "up",
-        "uuid",
-        &uuid,
-        "passwd-file",
-        secret.path(),
-    ]) {
+    match nmcli_with(
+        &["--wait", "30", "connection", "up", "uuid", &uuid],
+        &secret,
+    ) {
         Ok(()) => connected(&network.ssid),
         Err(error) => {
             if created {
@@ -944,5 +962,54 @@ mod tests {
         );
         assert_eq!(custom_servers("dns.quad9.net"), None);
         assert_eq!(custom_servers("  "), None);
+    }
+
+    #[test]
+    fn a_key_reaches_nmcli_through_its_standard_input() {
+        let dir = std::env::temp_dir().join(format!("tatami-wifi-key-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let read = dir.join("read");
+        // As nmcli reads `passwd-file /dev/stdin`: to the end, which comes
+        // only once the pipe is closed.
+        let mut command = Command::new("sh");
+        command
+            .args(["-c", r#"cat "$1" > "$0""#])
+            .arg(&read)
+            .arg("/dev/stdin");
+        let secret = Secret::new("pass: word").unwrap();
+        assert_eq!(run(command, Some(&secret)), Ok(()));
+        assert_eq!(
+            fs::read_to_string(&read).unwrap(),
+            "802-11-wireless-security.psk:pass: word\n"
+        );
+        assert!(Secret::new("two\nlines").is_none());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_key_line_is_read_back_as_the_key() {
+        let line = |key: &str| Secret::new(key).map(|secret| secret.0);
+        let written = |key: &str| Some(format!("802-11-wireless-security.psk:{key}\n"));
+        // As typed, when nmcli would change nothing: inner spaces, and the
+        // colons and equals signs that end only the setting's name.
+        assert_eq!(line("correct horse"), written("correct horse"));
+        assert_eq!(line("pass: word=#1"), written("pass: word=#1"));
+        // A backslash starts an escape for nmcli.
+        assert_eq!(line(r"back\slash1"), written(r"back\\slash1"));
+        assert_eq!(line(r"ends\"), written(r"ends\\"));
+        // Whitespace at either end is dropped unless escaped.
+        assert_eq!(line(" leading1"), written(r"\040leading1"));
+        assert_eq!(line("trailing1 "), written(r"trailing1\040"));
+        assert_eq!(line(" both ends "), written(r"\040both ends\040"));
+        assert_eq!(
+            line("  tab\tinside\t "),
+            written("\\040\\040tab\tinside\\011\\040")
+        );
+        assert_eq!(line(r" \ "), written(r"\040\\\040"));
+        assert_eq!(line("   "), written(r"\040\040\040"));
+        // A line break would end the line.
+        assert_eq!(line("two\nlines"), None);
+        assert_eq!(line("carriage\rreturn"), None);
     }
 }

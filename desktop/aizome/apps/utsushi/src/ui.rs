@@ -24,10 +24,39 @@ pub fn window(app: &Utsushi) -> Element<Msg> {
     let stage = stage(app);
     // A column either way, so the picture keeps its place in the tree and
     // the keyboard with it as full screen comes and goes.
-    if app.fullscreen && app.has_video() {
-        return column![stage].into();
+    let content = if app.fullscreen && app.has_video() {
+        column![stage].into()
+    } else {
+        column![stage, bar(app, false)].into()
+    };
+    Element::new(PlaybackKeys, vec![content]).width(Fill).height(Fill)
+}
+
+// Space belongs to playback throughout the main window, including when
+// Tab or a click leaves focus on a control. Sheets and file panels have
+// their own roots, so typing a space there keeps its ordinary meaning.
+struct PlaybackKeys;
+
+impl Widget for PlaybackKeys {
+    fn name(&self) -> &'static str {
+        "utsushi-playback-keys"
     }
-    column![stage, bar(app, false)].into()
+
+    fn event(&mut self, cx: &mut EventCx, event: &Event) -> EventStatus {
+        if let Event::Key(k) = event
+            && !k.modifiers.shift()
+            && !k.modifiers.control()
+            && !k.modifiers.alt()
+            && !k.modifiers.super_key()
+            && matches!(&k.key, Key::Character(s) if s == " ")
+        {
+            if k.pressed && !k.repeat {
+                cx.emit(&aizome_kit::element::MsgFn::new(Msg::Toggle));
+            }
+            return EventStatus::Handled;
+        }
+        EventStatus::Ignored
+    }
 }
 
 /// The picture, the cover, or what to do; what's over them; and the
@@ -170,13 +199,14 @@ fn keys(k: &aizome_kit::sidestep_ui::KeyEvent) -> Option<Msg> {
         Key::Named(NamedKey::PageDown) => Some(Msg::Chapter(1)),
         Key::Named(NamedKey::Escape) => Some(Msg::Escape),
         Key::Character(s) => match s.to_lowercase().as_str() {
-            " " | "k" => Some(Msg::Toggle),
+            "k" => Some(Msg::Toggle),
             "j" => Some(Msg::SeekBy(-10.0)),
             "l" => Some(Msg::SeekBy(10.0)),
             "f" => Some(Msg::ToggleFullscreen),
             "m" => Some(Msg::Mute),
             "c" => Some(Msg::CycleSubtitles),
             "s" => Some(Msg::SavePicture),
+            "i" => Some(Msg::ShowStats),
             "z" => Some(Msg::SubtitleDelay(Some(-0.1))),
             "x" => Some(Msg::SubtitleDelay(Some(0.1))),
             "," | "<" => Some(Msg::Step(false)),
@@ -556,7 +586,7 @@ pub fn menus(app: &Utsushi) -> MenuBar<Msg> {
         .item(
             MenuItem::new("Close", Msg::Close)
                 .shortcut(Shortcut::cmd('W'))
-                .enabled(have || app.status == Status::Failed),
+                .enabled(have || app.status == Status::Failed || app.statistics.is_some()),
         );
     let mut repeat = Menu::new("Repeat");
     for (label, r) in [("Off", Repeat::Off), ("This Item", Repeat::One), ("All", Repeat::All)] {
@@ -658,6 +688,10 @@ pub fn menus(app: &Utsushi) -> MenuBar<Msg> {
         MenuItem::new(if app.fullscreen { "Exit Full Screen" } else { "Enter Full Screen" }, Msg::ToggleFullscreen)
             .shortcut(key(ShortcutKey::Char('F')))
             .enabled(video),
+    ).item(
+        MenuItem::new("Playback Statistics", Msg::ShowStats)
+            .shortcut(Shortcut::cmd('I').shift())
+            .enabled(have),
     );
     let edit = Menu::new("Edit")
         .item(MenuItem::new("Copy Picture", Msg::CopyPicture).shortcut(Shortcut::cmd('C')).enabled(video))
@@ -767,6 +801,81 @@ pub fn info_sheet(app: &Utsushi) -> Element<Msg> {
         .into()
 }
 
+/// A separate window: playback and its controls remain usable while these
+/// counters update. Only measurements the engine actually reports appear.
+pub fn statistics(app: &Utsushi) -> Element<Msg> {
+    let row_ = |label: &str, value: String| -> Element<Msg> {
+        form_row(label, text(value).role(Role::Text2).selectable().wrap()).into()
+    };
+    let Some(info) = &app.info else {
+        return container(text("Open a video or some music to see its statistics.").wrap()).padding(18.0).into();
+    };
+    let pos = app.player.as_ref().map_or(app.pos, aizome_media::Player::position);
+    let mut file = vec![
+        row_("File", info.path.as_ref().map_or_else(|| info.url.clone(), |p| p.display().to_string())),
+        row_("Format", info.format.clone()),
+        row_("Position", format!("{} / {}", clock(pos), info.duration.map(clock).unwrap_or_else(|| "Unknown".into()))),
+        row_("Playback", format!("{:?} · {}×", app.status, trim(app.speed))),
+    ];
+    if let Some(size) = info.size {
+        file.push(row_("File size", size_text(size)));
+    }
+    if info.bit_rate > 0 {
+        file.push(row_("Bit rate", format!("{:.3} Mbit/s", info.bit_rate as f64 / 1e6)));
+    }
+    if let Some((i, chapter)) = info.chapters.iter().enumerate().rev().find(|(_, c)| c.start <= pos) {
+        file.push(row_("Chapter", format!("{} / {} · {}", i + 1, info.chapters.len(), chapter.title.as_deref().unwrap_or("Untitled"))));
+    }
+    let mut sections = vec![
+        text(info.title.clone()).size(17.0).semibold().wrap().into(),
+        form_section("Media", file),
+    ];
+    if let Some(v) = &info.video {
+        let mut rows = vec![
+            row_("Codec", format!("{} · {}-bit", v.codec.to_uppercase(), v.bit_depth)),
+            row_("Resolution", format!("{} × {}", v.width, v.height)),
+            row_("Display size", format!("{} × {}", trim(v.display.0), trim(v.display.1))),
+            row_("Frame rate", v.fps.map_or_else(|| "Unknown".into(), |f| format!("{f:.3} fps"))),
+            row_("Decoder", app.pipeline.video_decoder.clone().unwrap_or_else(|| "Starting".into())),
+        ];
+        if v.hdr {
+            rows.push(row_("Range", "HDR, shown as standard range".into()));
+        }
+        if let Some(p) = &app.player {
+            let s = p.stats();
+            rows.extend([
+                row_("Hardware decoding", if s.path == FramePath::None {
+                    "No frames yet"
+                } else if s.gpu { "VA-API" } else { "Off (software)" }.into()),
+                row_("Frame path", match s.path {
+                    FramePath::None => "No frames yet",
+                    FramePath::Dmabuf => "GPU frames (dmabuf)",
+                    FramePath::Software => "Software (shared memory)",
+                    FramePath::Downloaded => "Copied from GPU",
+                }.into()),
+                row_("Frames decoded", s.decoded.to_string()),
+                row_("Frames submitted", s.shown.to_string()),
+                row_("Frames dropped by player", s.dropped.to_string()),
+                row_("Presentation feedback", format!("{} presented, {} discarded", s.presented, s.discarded)),
+                row_("Display refresh", s.refresh_hz.map_or_else(|| "Not reported".into(), |f| format!("{f:.3} Hz"))),
+                row_("Video decoding", format!("{} · suspended {} times", if s.suspended { "Suspended" } else { "Enabled" }, s.suspensions)),
+            ]);
+        }
+        sections.push(form_section("Video", rows));
+    }
+    if let Some(t) = app.audio_track.and_then(|i| info.audio.get(i)) {
+        sections.push(form_section("Audio", vec![
+            row_("Track", t.label(app.audio_track.unwrap_or(0) + 1)),
+            row_("Codec", t.codec.to_uppercase()),
+            row_("Decoder", app.pipeline.audio_decoder.clone().unwrap_or_else(|| "Starting".into())),
+            row_("Output", app.pipeline.audio_output.clone()),
+        ]));
+    }
+    sections.push(text("Counters are since the player started. Presentation feedback depends on the compositor.").role(Role::Text3).wrap().into());
+    sections.push(row![spacer(), button("Close").on_press(Msg::CloseStats)].into());
+    scroll(aizome_kit::widgets::layout::column(sections).spacing(14.0).padding(18.0)).into()
+}
+
 fn size_text(bytes: u64) -> String {
     let b = bytes as f64;
     if b >= 1e9 {
@@ -801,26 +910,6 @@ pub fn file_path(url: &str) -> Option<PathBuf> {
     Some(PathBuf::from(std::ffi::OsString::from_vec(out)))
 }
 
-/// What's playing as a URL, for the desktop's media controls: an address
-/// as it was given, a file as a `file://` URL escaped as GLib escapes it
-/// (spaces, `#` and `%` included).
-pub fn url_of(path: &std::path::Path) -> String {
-    use std::os::unix::ffi::OsStrExt;
-    let bytes = path.as_os_str().as_bytes();
-    if !bytes.starts_with(b"/") && path.to_string_lossy().contains("://") {
-        return path.to_string_lossy().into_owned();
-    }
-    let mut s = String::from("file://");
-    for &b in bytes {
-        if b.is_ascii_alphanumeric() || b"!$&'()*+,-./:=@_~".contains(&b) {
-            s.push(b as char);
-        } else {
-            s.push_str(&format!("%{b:02X}"));
-        }
-    }
-    s
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -841,11 +930,9 @@ mod tests {
     }
 
     #[test]
-    fn what_plays_is_a_url_the_media_controls_can_read() {
+    fn the_media_controls_url_comes_back_to_the_file() {
         let film = PathBuf::from("/home/u/My Film #2 (100%).mkv");
-        assert_eq!(url_of(&film), "file:///home/u/My%20Film%20%232%20(100%25).mkv");
-        assert_eq!(file_path(&url_of(&film)), Some(film));
-        assert_eq!(url_of(&PathBuf::from("/m/\u{6620}.flac")), "file:///m/%E6%98%A0.flac");
-        assert_eq!(url_of(&PathBuf::from("https://example.org/a.mp4")), "https://example.org/a.mp4");
+        // The media controls' URL (aizome_mpris::url_of) comes back to the file.
+        assert_eq!(file_path(&aizome_mpris::url_of(&film)), Some(film));
     }
 }

@@ -1,6 +1,7 @@
 # Resolve the catalog against maintained, locked application sources.
 { inputs }:
 let
+  inherit (inputs.nixpkgs) lib;
   system = "x86_64-linux";
   # Genkan's source as a path: reading through it needs no store copy (see
   # nix/calamares.nix).
@@ -41,14 +42,23 @@ let
       ];
     };
   all = evaluate (map (app: app.id) catalog);
+  # No application chosen; uta-installation checks the same system.
+  empty = evaluate [ ];
   # Catalog visibility and offline media contents are separate policies.
   # Download-only apps remain selectable and eligible for the binary cache.
   preloaded = builtins.filter (app: app.preload or true) catalog;
   # Every preloaded app installed: the ISO's offline application cache.
   preloadedSystem = evaluate (map (app: app.id) preloaded);
   withKeyring = import (genkan + "/rust/src/keyring.nix") {
-    inherit (inputs.nixpkgs) lib;
+    inherit lib;
     pkgs = specialArgs.applicationPkgs;
+  };
+  # Steam is the one `programs.steam` builds, as the module installs it
+  # (`fromPrograms` there). It follows the system it is built for: the
+  # media carry the preloaded system's (`cache` below), so that one is
+  # listed.
+  fromPrograms = lib.optionalAttrs (builtins.any (app: app.id == "steam") preloaded) {
+    steam = preloadedSystem.config.programs.steam.package;
   };
   packageList =
     app:
@@ -56,8 +66,28 @@ let
       [ specialArgs.ompPackage ]
     else
       map (
-        name: withKeyring app (sources.${app.source or "nixpkgs"} or specialArgs.applicationPkgs).${name}
+        name:
+        withKeyring app (
+          if (app.source or "nixpkgs") == "nixpkgs" && fromPrograms ? ${name} then
+            fromPrograms.${name}
+          else
+            (sources.${app.source or "nixpkgs"} or specialArgs.applicationPkgs).${name}
+        )
       ) app.packages;
+  # What the system the media carry installs.
+  carried = map toString (
+    builtins.filter lib.isDerivation preloadedSystem.config.environment.systemPackages
+  );
+  # The Steams among a system's packages.
+  steams =
+    config:
+    lib.unique (
+      map toString (
+        builtins.filter (
+          package: lib.isDerivation package && lib.getName package == "steam"
+        ) config.environment.systemPackages
+      )
+    );
 in
 {
   inherit
@@ -67,15 +97,25 @@ in
     packageList
     preloaded
     preloadedSystem
+    empty
     ;
   cache = preloadedSystem.config.system.build.installerApplications;
   # The generated per-choice matrix runs in separate evaluator processes.
   # Retaining all those complete NixOS systems here exhausts small builders.
   check =
+    # A system has one Steam, the one `programs.steam` builds. The catalog's
+    # plain package beside it wins every file: the module's is then built on
+    # each machine and linked nowhere, so the binary cache never has it.
+    assert steams all.config == [ (toString all.config.programs.steam.package) ];
+    # The media list each preloaded application's packages as the system
+    # they carry installs them.
+    assert lib.all (package: builtins.elem (toString package) carried) (
+      lib.concatMap packageList preloaded
+    );
     builtins.deepSeq
       (map (c: c.config.system.build.toplevel.drvPath) ([
         all
-        (evaluate [ ])
+        empty
       ]))
       (
         all.pkgs.writeText "application-catalog.json" (

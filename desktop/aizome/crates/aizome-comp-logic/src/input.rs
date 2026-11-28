@@ -303,7 +303,10 @@ impl InputExt for State {
             .and_then(|k| k.current_focus())
             .and_then(|f| self.az.seat.keyboard_shortcuts_inhibitor_for_surface(&f.0))
             .is_some_and(|i| i.is_active());
-        if let Some(action) = self.lg.r().bindings.find(m, syms).cloned() {
+        // A kiosk's program has every key: there's no desktop to reach
+        // (the core's VT keys still work).
+        let bindings = !self.az.options.kiosk;
+        if let Some(action) = self.lg.r().bindings.find(m, syms).filter(|_| bindings).cloned() {
             // A bare F10 opens the menu bar only over Aizome's apps and the
             // desktop; other apps (mc, htop) keep it.
             let f10 = m == Mods::default() && syms.iter().any(|s| s.raw() == keysyms::KEY_F10);

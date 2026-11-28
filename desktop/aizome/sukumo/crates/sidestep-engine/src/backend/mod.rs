@@ -32,11 +32,17 @@
 //! for a callback on the content's surface and on one tile or overlay, and
 //! the first to fire counts: compositors send none to a surface they
 //! consider hidden, and tiles can cover the content's surface completely.
+//!
+//! The main thread's messages are handled a frame at a time, with a look for
+//! the compositor's events between frames ([`inbox`]): a main thread that
+//! sends frames without waiting, as one resizing its window does, would
+//! otherwise keep the compositor's events waiting.
 
 mod decor;
 mod dnd;
 mod drag_out;
 mod foreign;
+mod inbox;
 mod keyboard;
 mod layer;
 mod lock;
@@ -47,6 +53,7 @@ mod primary;
 mod seat;
 mod selection;
 mod sheet;
+mod tag;
 mod textinput;
 mod tiles;
 mod video;
@@ -69,7 +76,9 @@ pub fn median(mut f: impl FnMut()) -> f64 {
     runs[3]
 }
 
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::mpsc;
 
@@ -77,6 +86,7 @@ use smithay_client_toolkit::activation::{ActivationHandler, ActivationState, Req
 use smithay_client_toolkit::compositor::{CompositorHandler, CompositorState, Region};
 use smithay_client_toolkit::output::{OutputHandler, OutputState};
 use smithay_client_toolkit::reexports::calloop::channel::{self, Channel, Event as ChannelEvent};
+use smithay_client_toolkit::reexports::calloop::ping;
 use smithay_client_toolkit::reexports::calloop::{EventLoop, LoopHandle};
 use smithay_client_toolkit::reexports::calloop_wayland_source::WaylandSource;
 use smithay_client_toolkit::reexports::client::backend::ObjectId;
@@ -241,27 +251,43 @@ fn run(channel: Channel<ToRender>, to_main: MainSender) {
     let qh = queue.handle();
     let mut event_loop: EventLoop<'static, State> = EventLoop::try_new().expect("sidestep: event loop");
     WaylandSource::new(conn.clone(), queue).insert(event_loop.handle()).expect("sidestep: Wayland event source");
+    // The main thread's messages wait in an inbox as they arrive, and are
+    // handled a turn at a time, with a look for the compositor's events
+    // between turns (see `inbox`). A ping stands for "a turn is due".
+    let inbox = Rc::new(RefCell::new(inbox::Inbox::default()));
+    let (turn_due, turns) = ping::make_ping().expect("sidestep: event loop ping");
     event_loop
         .handle()
-        .insert_source(channel, |event, _, state: &mut State| match event {
-            ChannelEvent::Msg(msg) if crate::trace::tracing() => {
-                let kind = match &msg {
-                    ToRender::Paint { target: Target::Tiles(_), .. } => "a tiles paint",
-                    ToRender::Paint { target: Target::Overlay(_), .. } => "an overlay paint",
-                    ToRender::Paint { target: Target::Root, .. } => "a window paint",
-                    ToRender::Paint { target: Target::Content(_), .. } => "a layer canvas paint",
-                    ToRender::Present { .. } => "a present",
-                    ToRender::Commit(_) => "a layer commit",
-                    _ => "another message",
-                };
-                let started = std::time::Instant::now();
-                state.handle(msg);
-                tiles::note_busy(started.elapsed(), kind);
+        .insert_source(channel, {
+            let (inbox, turn_due) = (inbox.clone(), turn_due.clone());
+            move |event, _, _: &mut State| {
+                match event {
+                    ChannelEvent::Msg(msg) => inbox.borrow_mut().push(msg),
+                    ChannelEvent::Closed => inbox.borrow_mut().close(),
+                }
+                turn_due.ping();
             }
-            ChannelEvent::Msg(msg) => state.handle(msg),
-            ChannelEvent::Closed => state.exit = true,
         })
         .expect("sidestep: channel event source");
+    event_loop
+        .handle()
+        .insert_source(turns, {
+            let inbox = inbox.clone();
+            move |(), _, state: &mut State| {
+                // Nothing reaches the inbox while a turn is taken: its
+                // other borrower is the source above, which this loop runs.
+                let mut inbox = inbox.borrow_mut();
+                for msg in inbox.turn(ends_turn) {
+                    state.handle_timed(msg);
+                }
+                if !inbox.is_empty() {
+                    turn_due.ping();
+                } else if inbox.finished() {
+                    state.exit = true;
+                }
+            }
+        })
+        .expect("sidestep: turn event source");
 
     let compositor = CompositorState::bind(&globals, &qh).expect("sidestep: wl_compositor is required");
     let subcompositor = SubcompositorState::bind(compositor.wl_compositor().clone(), &globals, &qh)
@@ -293,6 +319,7 @@ fn run(channel: Channel<ToRender>, to_main: MainSender) {
         viewporter,
         fractional,
         foreign: foreign::Foreign::new(&globals, &qh),
+        tags: tag::Tags::new(&globals, &qh),
         xdg,
         shm,
         pool,
@@ -329,7 +356,11 @@ fn run(channel: Channel<ToRender>, to_main: MainSender) {
             eprintln!("sidestep: Wayland protocol error: {error}");
             break;
         }
-        state.rasterize_tiles();
+        // Not while messages wait their turn: a present comes before a
+        // slice of tiles, as it did when every message was handled at once.
+        if inbox.borrow().is_empty() {
+            state.rasterize_tiles();
+        }
     }
     // A program that stops while it holds the session lock leaves the
     // session locked: the lock goes with the connection, not destroyed
@@ -337,6 +368,14 @@ fn run(channel: Channel<ToRender>, to_main: MainSender) {
     if let Some(lock) = state.session_lock.take().filter(SessionLock::is_locked) {
         std::mem::forget(lock);
     }
+}
+
+/// Whether handling `msg` puts a frame on a surface, which ends a turn of
+/// the main thread's messages (see `inbox`): the next frame's wait until
+/// the compositor's events have been looked for, among them the release of
+/// the buffer this frame replaced.
+fn ends_turn(msg: &ToRender) -> bool {
+    matches!(msg, ToRender::Present { .. } | ToRender::Commit(_) | ToRender::Composite { .. })
 }
 
 /// How long the render thread rasterizes tiles between looks for events:
@@ -362,6 +401,9 @@ pub struct State {
     fractional: Option<WpFractionalScaleManagerV1>,
     /// xdg-foreign v2, to keep windows over other programs' (see `foreign`).
     foreign: foreign::Foreign,
+    /// xdg-toplevel-tag v1, to tell the compositor which of the program's
+    /// windows a window is (see `tag`).
+    tags: tag::Tags,
     xdg: XdgShell,
     shm: Shm,
     pool: SlotPool,
@@ -960,6 +1002,26 @@ impl State {
         let _ = self.to_main.send(msg);
     }
 
+    /// [`handle`](Self::handle), with how long it took noted for
+    /// `SIDESTEP_TRACE_FRAMES` when that's on.
+    fn handle_timed(&mut self, msg: ToRender) {
+        if !crate::trace::tracing() {
+            return self.handle(msg);
+        }
+        let kind = match &msg {
+            ToRender::Paint { target: Target::Tiles(_), .. } => "a tiles paint",
+            ToRender::Paint { target: Target::Overlay(_), .. } => "an overlay paint",
+            ToRender::Paint { target: Target::Root, .. } => "a window paint",
+            ToRender::Paint { target: Target::Content(_), .. } => "a layer canvas paint",
+            ToRender::Present { .. } => "a present",
+            ToRender::Commit(_) => "a layer commit",
+            _ => "another message",
+        };
+        let started = std::time::Instant::now();
+        self.handle(msg);
+        tiles::note_busy(started.elapsed(), kind);
+    }
+
     /// `ToRender::ReserveBuffers`: a slot of `bytes` taken from the pool
     /// (which grows if they don't fit), its pages faulted in, and the slot
     /// given back, so the buffers made next are carved from memory that's
@@ -1003,8 +1065,9 @@ impl State {
                 layer,
                 lock,
                 transparent,
+                tag,
             } => {
-                self.create_window(window, width, height, title, style, limits, popup, sheet_of, layer, lock);
+                self.create_window(window, width, height, title, style, limits, popup, sheet_of, layer, lock, tag);
                 if let Some(w) = self.windows.get_mut(&window) {
                     w.transparent = transparent;
                 }
@@ -1197,6 +1260,7 @@ impl State {
         sheet_of: Option<WindowId>,
         layer: Option<LayerPlacement>,
         lock: Option<u32>,
+        tag: Option<String>,
     ) {
         let mut scale = self.initial_scale();
         let sheet = match sheet_of {
@@ -1254,6 +1318,11 @@ impl State {
                 let w = self.xdg.create_window(frame.clone(), decorations, &self.qh);
                 w.set_title(title);
                 w.set_app_id(app_id());
+                // Before the first commit below, which the compositor
+                // answers with the window's first size.
+                if let Some(tag) = tag {
+                    self.tags.set(w.xdg_toplevel(), tag);
+                }
                 if let Some(token) = self.startup_token.take()
                     && let Some(activation) = &self.activation
                 {

@@ -47,8 +47,9 @@ struct Hover {
 
 /// The knob's size, as the kit's sliders.
 const KNOB: (f64, f64) = (10.0, 16.0);
-const HEIGHT: f64 = 34.0;
-const TRACK_Y: f64 = 23.0;
+// Take the bar's height so the hover label fits above a centred track.
+// A shorter box with a fixed low track misaligned it with every control.
+const HEIGHT: f64 = crate::ui::BAR;
 
 impl Timeline {
     fn usable(&self) -> bool {
@@ -94,7 +95,8 @@ impl Widget for Timeline {
         let t = cx.theme();
         let usable = self.usable();
         let (a, b) = self.track();
-        let track = Rect::new(a, TRACK_Y - 2.0, b, TRACK_Y + 2.0);
+        let track_y = (cx.bounds().height() / 2.0).round();
+        let track = Rect::new(a, track_y - 2.0, b, track_y + 2.0);
         draw::sunken(cx.canvas, t, track, t.sunk(), if usable { t.line2() } else { t.line() });
         let x = self.x_of(self.position).round();
         if usable {
@@ -125,7 +127,7 @@ impl Widget for Timeline {
             cx.canvas.draw_text(&layout, Point::new(left, 1.0));
         }
         if usable {
-            let knob = Rect::new(x - KNOB.0 / 2.0, TRACK_Y - KNOB.1 / 2.0, x + KNOB.0 / 2.0, TRACK_Y + KNOB.1 / 2.0);
+            let knob = Rect::new(x - KNOB.0 / 2.0, track_y - KNOB.1 / 2.0, x + KNOB.0 / 2.0, track_y + KNOB.1 / 2.0);
             let face = if cx.is_pressed() {
                 t.sunk()
             } else if cx.is_hovered() {

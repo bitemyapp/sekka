@@ -9,7 +9,7 @@ hyperlink removal still update their charges independently and in their
 original order. This changes no representation, allocation order or budget
 policy and adds no unsafe code.
 
-The [evidence](../upstream/grapheme-charge/) records a broader experiment that
+The [evidence](https://github.com/bitemyapp/hotaru-benchmark-data/tree/fd4a57cec89dc8f78fb4bff85bb749bdc80a4602/grapheme-charge) records a broader experiment that
 also skipped unchanged charges while extending graphemes, separate experiments
 for each operation, and the selected retain-only implementation. The broader
 version regressed other paths and was rejected. Independent review found no

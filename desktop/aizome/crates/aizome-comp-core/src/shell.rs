@@ -153,10 +153,34 @@ impl CompositorHandler for State {
 
         self.commit_layer(surface);
         self.commit_misc(surface);
+        self.point_at_new_surface();
     }
 }
 
 impl State {
+    /// Something drawn under a pointer resting on nothing (a login screen
+    /// or a kiosk's program as it starts) hears the pointer now, not at its
+    /// next move: its own cursor shows (or none, if it hides it).
+    fn point_at_new_surface(&mut self) {
+        if !self.az.pointer_resting {
+            return;
+        }
+        let Some(pointer) = self.az.seat.get_pointer() else { return };
+        if pointer.current_focus().is_some() || pointer.is_grabbed() {
+            return;
+        }
+        let pos = self.az.pointer_pos;
+        if crate::fallback::surface_at(self, pos).is_none() {
+            return;
+        }
+        let time = self.az.start.elapsed().as_millis() as u32;
+        if self.lg.healthy() {
+            self.lg_call((), |vt, st| (vt.pointer_motion)(st, pos, time));
+        } else {
+            crate::fallback::pointer_motion(self, pos, time);
+        }
+    }
+
     fn commit_unmapped(&mut self, i: usize) {
         let window = self.az.unmapped[i].window.clone();
         let toplevel = window.toplevel().expect("toplevel").clone();
@@ -182,6 +206,7 @@ impl State {
         let surface = toplevel.wl_surface().clone();
         let (app_id, title) = toplevel_ids(&toplevel);
         let parent = toplevel.parent().and_then(|p| self.az.window_for_surface(&p));
+        let tag = crate::protocols::toplevel_tag::tag(&toplevel);
         let pid =
             self.az.dh.get_client(surface.id()).ok().and_then(|c| c.get_credentials(&self.az.dh).ok()).map(|c| c.pid);
         let ssd = toplevel.current_state().decoration_mode == Some(DecorationMode::ServerSide);
@@ -194,7 +219,7 @@ impl State {
         let committed = toplevel.current_state();
         let fullscreen = committed.states.contains(xdg_toplevel::State::Fullscreen);
         let fullscreen_output = committed.fullscreen_output.as_ref().and_then(Output::from_resource);
-        let info = MapInfo { app_id, title, pid, parent, ssd, size, fullscreen, fullscreen_output };
+        let info = MapInfo { app_id, title, pid, parent, tag, ssd, size, fullscreen, fullscreen_output };
         if self.lg.healthy() {
             self.lg_call((), |vt, st| (vt.window_mapped)(st, id, &info));
         } else {
@@ -219,8 +244,10 @@ impl State {
         let toplevel = m.toplevel().clone();
         let has_buffer = with_renderer_surface_state(toplevel.wl_surface(), |s| s.buffer().is_some()).unwrap_or(false);
         if !has_buffer {
-            // Unmapped: back to waiting for a first frame.
+            // Unmapped: back to waiting for a first frame, and without the
+            // tag it had, which was that mapping's.
             self.unmap_window(id);
+            crate::protocols::toplevel_tag::clear(&toplevel);
             self.az.unmapped.push(Unmapped { window, wants_csd: false });
             return;
         }
@@ -603,6 +630,8 @@ impl XdgShellHandler for State {
             crate::recovery::windows_changed(self);
         }
         self.az.unmapped.retain(|u| u.window.toplevel().is_some_and(|t| t != &surface));
+        // Its surface may get another toplevel, which isn't this one.
+        crate::protocols::toplevel_tag::clear(&surface);
     }
 
     fn popup_destroyed(&mut self, _surface: PopupSurface) {
@@ -679,6 +708,14 @@ impl WlrLayerShellHandler for State {
             surface.send_close();
             return;
         };
+        // In a shell restart the old shell opens nothing more: the new one
+        // replaces what it shows, and a surface it opened again (its
+        // Deskbar, closed for the new one's) would hold the restart open.
+        if self.of_retiring_shell(surface.wl_surface()) {
+            debug!(namespace, "the old shell's layer surface, in a restart: closed");
+            surface.send_close();
+            return;
+        }
         debug!(namespace, output = output.name(), "layer surface");
         // A client that destroys the surface with its role (in one go, as
         // Sidestep does) takes its buffer away before the role's end is

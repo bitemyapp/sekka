@@ -6,7 +6,7 @@
 pub use aizome_apps::{
     Action, App, AppIndex, DESKTOP_NAME, DefaultRole, DesktopEntry, EntryKind, Exec, ExecContext, IconLookup,
     IconTheme, Locale, TerminalMove, Watcher, XdgDirs, file_uri_to_path, find_program, parse_desktops,
-    path_to_file_uri,
+    path_to_file_uri, program_name,
 };
 
 mod launch;

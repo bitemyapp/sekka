@@ -118,6 +118,19 @@
           ./modules/installer.nix
         ];
       };
+      # The installed systems the media carries (nix/reference-systems.nix),
+      # evaluated once for all the checks that inspect them: each evaluating
+      # its own copy repeated the same seven NixOS evaluations.
+      referenceSystems = import ./nix/reference-systems.nix {
+        inherit inputs applicationCatalog;
+        desktops = installer.config.respin.referenceDesktops;
+      };
+      # An installed system with Genkan's defaults and no desktop chosen.
+      installedDefault = nixpkgs.lib.nixosSystem {
+        inherit system;
+        inherit (applicationCatalog) specialArgs;
+        modules = [ inputs.calamares.nixosModules.default ];
+      };
       # Googlebook construction is temporarily disabled. Its module, builders
       # and fixture remain in source, without configuration/package/check outputs.
       etc = installer.config.environment.etc;
@@ -148,6 +161,7 @@
         tatami = inputs.tatami.nixosModules.default;
         yukimi = inputs.yukimi.nixosModules.default;
         aizome = inputs.aizome.nixosModules.default;
+        sekka-discord = import ./nix/sekka-discord-service.nix;
       };
       lib = {
         inherit installedLock;
@@ -182,7 +196,27 @@
       # Aizome's own VM checks (desktop/aizome/nix), under the names its
       # flake gave them: `nix build .#aizome-checks.session`. Not among
       # `checks`, which CI runs, as they weren't in Aizome's repository.
-      legacyPackages.${system}.aizome-checks = inputs.aizome.checks.${system};
+      legacyPackages.${system} = {
+        aizome-checks = inputs.aizome.checks.${system};
+        # The ISO's own checks, which the manual ISO workflow (and a release)
+        # runs with the image: `nix build .#iso-checks.desktop-references`.
+        # Not among `checks`: evaluating the media means evaluating every
+        # prebuilt desktop system, which alone took most of a CI evaluation.
+        iso-checks = {
+          desktop-references = import ./nix/iso-desktop-references-test.nix {
+            inherit pkgs fixture installer;
+            references = referenceSystems;
+          };
+          copytoram = import ./nix/iso-copytoram-test.nix { inherit pkgs; };
+          store-integrity = import ./nix/iso-integrity-test.nix { inherit pkgs; };
+          copytoram-initrd = import ./nix/iso-copytoram-initrd-test.nix {
+            inherit pkgs installer;
+          };
+          application-cache = import ./nix/iso-application-cache-test.nix {
+            inherit pkgs applicationCatalog installer;
+          };
+        };
+      };
       apps.${system} = {
         update = {
           type = "app";
@@ -254,35 +288,57 @@
         inherit (inputs.yukimi.packages.${system}) yukimi;
         installed-lock = pkgs.writeText "sekka-installed-flake.lock" (builtins.toJSON installedLock);
         # An installed system for every desktop the media offers, one with all
-        # of those desktops together, and one with every free application in
-        # the catalog, with unfree packages refused.
+        # of those desktops together, one with every catalog application
+        # anyone may redistribute, and one with NVIDIA's driver for each
+        # kernel Genkan offers. All allow only the unfree packages whose
+        # licences let anyone redistribute them.
         # push-cache publishes their closures, so whatever Sekka's modules
-        # change (Hyprland, Hyprtoolkit and all that uses them) and
-        # whatever a catalog application needs downloads rather than compiles.
+        # change (Hyprland, Hyprtoolkit and all that uses them), whatever a
+        # catalog application needs, and whatever unfree but redistributable
+        # package cache.nixos.org leaves out (NVIDIA's driver, Steam,
+        # Chanoma's snes9x and Genesis Plus GX) downloads rather than
+        # compiles.
         installed-systems =
           let
+            inherit (pkgs) lib;
             reference =
-              desktops: applications:
-              import ./nix/reference-systems.nix {
-                inherit
-                  inputs
-                  applicationCatalog
-                  desktops
-                  applications
-                  ;
-                free = true;
-              };
-            desktops = reference installer.config.respin.referenceDesktops [ "firefox" ];
-            applications = reference [ "plasma" ] (
-              map (app: app.id) (builtins.filter (app: !(app.unfree or false)) applicationCatalog.catalog)
-            );
+              desktops: arguments:
+              import ./nix/reference-systems.nix (
+                {
+                  inherit inputs applicationCatalog desktops;
+                  redistributable = true;
+                }
+                // arguments
+              );
+            desktops = reference installer.config.respin.referenceDesktops { };
+            # The catalog's `unfree` flag says what is unfree: a package with
+            # no licence (Superluminal) tells nothing. An unfree application
+            # comes only when each of its packages names licences that all
+            # let anyone redistribute it (Steam; not Chrome or VS Code).
+            redistributes = import ./nix/redistributable.nix { inherit lib; };
+            redistributable =
+              app:
+              !(app.unfree or false)
+              || builtins.all (package: (package.meta.license or [ ]) != [ ] && redistributes package) (
+                applicationCatalog.packageList app
+              );
+            applications = reference [ "plasma" ] {
+              applications = map (app: app.id) (builtins.filter redistributable applicationCatalog.catalog);
+            };
+            first = builtins.head installer.config.respin.referenceDesktops;
+            nvidia =
+              kernel:
+              (reference [ first ] {
+                inherit kernel;
+                nvidia = true;
+              }).systems.${first};
           in
           pkgs.linkFarm "sekka-installed-systems" (
             map (desktop: {
               name = desktop;
               path = desktops.systems.${desktop}.config.system.build.toplevel;
             }) desktops.desktops
-            ++ pkgs.lib.optional (desktops.together != null) {
+            ++ lib.optional (desktops.together != null) {
               name = "together";
               path = desktops.together.config.system.build.toplevel;
             }
@@ -292,6 +348,16 @@
                 path = applications.systems.plasma.config.system.build.toplevel;
               }
             ]
+            ++
+              map
+                (kernel: {
+                  name = "nvidia-${kernel}";
+                  path = (nvidia kernel).config.system.build.toplevel;
+                })
+                [
+                  "latest"
+                  "lts"
+                ]
           );
         application-cache = applicationCatalog.cache;
         # sekka.computer and aizome.computer, ready to upload; the sites
@@ -312,13 +378,22 @@
       };
       checks.${system} = {
         cargo-geiger = self.packages.${system}.cargo-geiger;
-        pipewire-packages = import ./nix/pipewire-packages-test.nix {
+        aizome-media-defaults = import ./nix/aizome-media-defaults-test.nix {
+          inherit pkgs inputs installer;
+        };
+        aizome-chanoma-defaults = import ./nix/aizome-chanoma-defaults-test.nix {
           inherit
             pkgs
             inputs
             installer
             applicationCatalog
             ;
+          references = referenceSystems;
+        };
+        pipewire-packages = import ./nix/pipewire-packages-test.nix {
+          inherit pkgs installer;
+          references = referenceSystems;
+          installed = installedDefault;
           patched = pipewirePkgs.sekka-pipewire-daemon;
         };
         pipewire-x11-disconnect = import ./nix/pipewire-x11-disconnect-test.nix {
@@ -326,12 +401,9 @@
           patched = pipewirePkgs.sekka-pipewire-daemon;
         };
         avahi-packages = import ./nix/avahi-packages-test.nix {
-          inherit
-            pkgs
-            inputs
-            installer
-            applicationCatalog
-            ;
+          inherit pkgs installer;
+          references = referenceSystems;
+          installed = installedDefault;
           patched = avahiPkgs.sekka-avahi-daemon;
         };
         avahi-startup = import ./nix/avahi-startup-test.nix {
@@ -356,6 +428,11 @@
           nixPackage = runnerNix;
         };
         libsecret-dh = import ./nix/libsecret-dh-test.nix { inherit pkgs; };
+        sekka-discord-deploy = import ./nix/sekka-discord-deploy-test.nix {
+          inherit pkgs;
+          module = self.nixosModules.sekka-discord;
+          package = self.packages.${system}.sekka-discord;
+        };
         session-environment = import ./nix/session-environment-vm-test.nix {
           inherit pkgs;
           desktopsModule = inputs.calamares.nixosModules.desktops;
@@ -367,6 +444,7 @@
             applicationCatalog
             installer
             ;
+          references = referenceSystems;
           patched = xappPkgs.xdg-desktop-portal-xapp;
         };
         xapp-settings = import ./nix/xapp-settings-test.nix {
@@ -375,7 +453,6 @@
         };
         hyprlauncher-software = import ./nix/hyprlauncher-software-test.nix { pkgs = hyprlandPkgs; };
         aizome-ibus = import ./nix/aizome-ibus-test.nix { inherit pkgs inputs; };
-        aizome-ibus-policy = import ./nix/aizome-ibus-policy-test.nix { inherit pkgs inputs; };
         aizome-memory-policy = import ./nix/aizome-memory-policy-test.nix { inherit pkgs inputs; };
         # Aizome's toolkit's own tests, under a headless sway
         # (desktop/aizome/sukumo).
@@ -385,25 +462,11 @@
         };
         ibus-wayland-serial = import ./nix/ibus-wayland-serial-test.nix { inherit pkgs; };
         mpv-software = import ./nix/mpv-software-test.nix { inherit pkgs inputs; };
-        iso-desktop-references = import ./nix/iso-desktop-references-test.nix {
-          inherit
-            pkgs
-            inputs
-            applicationCatalog
-            fixture
-            installer
-            ;
-        };
-        iso-copytoram = import ./nix/iso-copytoram-test.nix { inherit pkgs; };
         genkan-live-media = import ./nix/genkan-live-media-test.nix { inherit pkgs; };
         genkan-preflight = import ./nix/genkan-preflight-test.nix {
           inherit pkgs;
           helper = calamares.helper;
           nixPackage = runnerNix;
-        };
-        iso-store-integrity = import ./nix/iso-integrity-test.nix { inherit pkgs; };
-        iso-copytoram-initrd = import ./nix/iso-copytoram-initrd-test.nix {
-          inherit pkgs installer;
         };
         chatgpt-plugins = import ./nix/chatgpt/test.nix {
           inherit pkgs;
@@ -411,6 +474,7 @@
         };
         hyprland-packages = import ./nix/hyprland-packages-test.nix {
           inherit pkgs inputs applicationCatalog;
+          references = referenceSystems;
           inherit (hyprlandPkgs)
             aquamarine
             hyprland
@@ -646,6 +710,10 @@
               python3 -m unittest discover -s tests -p test_cache_coverage.py -v
               touch $out
             '';
+        cache-publication = import ./nix/cache-publication-test.nix {
+          inherit pkgs;
+          nixPackage = runnerNix;
+        };
         # Tatami's login entry starts uwsm and tatami from the system profile.
         # A store path in it would change display-manager.service with every
         # Tatami build, and Yukimi would stage each such update for the next
@@ -695,6 +763,7 @@
         tuning-policy = import ./nix/scheduling/policy-test.nix { inherit nixpkgs system; };
         boot-splash = import ./nix/boot-splash-test.nix { inherit pkgs; };
         boot-splash-choice = import ./nix/boot-splash-choice-test.nix { inherit pkgs inputs; };
+        auto-login-choice = import ./nix/auto-login-choice-test.nix { inherit pkgs inputs; };
         prebuilt-binaries = import ./nix/prebuilt-binaries-vm-test.nix { inherit pkgs; };
         fish = import ./nix/fish-vm-test.nix {
           inherit pkgs;
@@ -758,12 +827,7 @@
           inherit pkgs;
           # The live session, in each of its boot entries, and an installed
           # system.
-          systems = liveConfigs ++ [
-            (import ./nix/reference-systems.nix {
-              inherit inputs applicationCatalog;
-              desktops = [ "plasma" ];
-            }).systems.plasma.config
-          ];
+          systems = liveConfigs ++ [ referenceSystems.systems.plasma.config ];
         };
         activity-vm = import ./nix/activity-vm-test.nix {
           inherit pkgs;
@@ -773,7 +837,15 @@
           inherit pkgs;
           desktopsModule = inputs.calamares.nixosModules.desktops;
         };
+        aizome-automatic-login = import ./nix/aizome-automatic-login-vm-test.nix {
+          inherit pkgs;
+          desktopsModule = inputs.calamares.nixosModules.desktops;
+        };
         aizome-greeter-desktops = import ./nix/aizome-greeter-desktops-vm-test.nix {
+          inherit pkgs;
+          desktopsModule = inputs.calamares.nixosModules.desktops;
+        };
+        tatami-aizome-displays = import ./nix/tatami-aizome-displays-vm-test.nix {
           inherit pkgs;
           desktopsModule = inputs.calamares.nixosModules.desktops;
         };
@@ -864,6 +936,31 @@
             '';
         yukimi = self.packages.${system}.yukimi;
         yukimi-tatami = self.packages.${system}.yukimi-discover;
+        yukimi-preflight =
+          pkgs.runCommand "yukimi-preflight-tests"
+            {
+              nativeBuildInputs = [
+                pkgs.python3
+                pkgs.bubblewrap
+                pkgs.nix
+                pkgs.bash
+                pkgs.git
+              ];
+              YUKIMI_TEST_RUNTIME = "${
+                pkgs.closureInfo {
+                  rootPaths = [
+                    self.packages.${system}.yukimi.helper
+                    pkgs.nix
+                    pkgs.bash
+                    pkgs.git
+                  ];
+                }
+              }/store-paths";
+            }
+            ''
+              python3 ${./tests/test_yukimi_preflight.py} ${self.packages.${system}.yukimi.helper}/bin -v
+              touch $out
+            '';
         yukimi-x11 = import ./nix/yukimi-x11-test.nix {
           inherit pkgs;
           desktopsModule = inputs.calamares.nixosModules.desktops;
@@ -949,7 +1046,9 @@
             ${tools}/bin/respin-tools check-config settings ${lts} ${latest}
             touch $out
           '';
-      };
+      }
+      # aizome-ibus-policy and one check per system it evaluates.
+      // import ./nix/aizome-ibus-policy-test.nix { inherit pkgs inputs; };
       formatter.${system} = pkgs.nixfmt;
     };
 }

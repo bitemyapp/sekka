@@ -93,6 +93,7 @@ pkgs.testers.runNixOSTest {
     assert changed_scale_fits, "Network exceeded usable workspace after changing to scale1.25"
 
     import os, re, subprocess
+    from datetime import timedelta
     from pathlib import Path
     def text(expected):
         # The driver's legacy + LSTM engine and enlarged, posterized
@@ -131,7 +132,14 @@ pkgs.testers.runNixOSTest {
         machine.send_key("meta_l-ctrl-w")
         wait_for(lambda: '"namespace": "walker"' in json.dumps(json.loads(user("hyprctl -j layers"))))
         # At the largest scale, search for the row below the initial viewport.
-        machine.send_chars("Network settings")
+        # QEMU delivers each key's press and release 10 ms apart from a queue,
+        # so at send_chars' default pace it returns with half the keys still
+        # queued. A screenshot taken then stalls that queue, on a busy host
+        # for longer than Tatami's 250 ms repeat delay, and the key that is
+        # down repeats, after the frame in which OCR reads the row. The search
+        # then matches nothing and Return opens nothing. At this pace every
+        # key is released before the next is sent, and before the screenshot.
+        machine.send_chars("Network settings", delay=timedelta(milliseconds=100))
         text("Network settings")
         machine.send_key("ret")
         wait_for(lambda: fits(centered=True))

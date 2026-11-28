@@ -160,6 +160,7 @@ pub struct WindowOptions {
     background: Background,
     kind: Kind,
     foreign_parent: Option<String>,
+    tag: Option<String>,
 }
 
 impl WindowOptions {
@@ -181,6 +182,7 @@ impl WindowOptions {
             background: Background::System,
             kind: Kind::Toplevel { parent: None },
             foreign_parent: None,
+            tag: None,
         }
     }
 
@@ -328,6 +330,20 @@ impl WindowOptions {
         self
     }
 
+    /// Tell the compositor which of the program's windows this is
+    /// (xdg-toplevel-tag v1): a name that is the same from one run to the
+    /// next and isn't translated ("main window", "settings"), which the
+    /// compositor may keep its rules for the window by. It goes with the
+    /// window's first commit, so the compositor knows it before it sizes
+    /// and places the window. Nothing where the compositor has no tag
+    /// manager, and nothing for a popup or a desktop surface.
+    pub fn tag(mut self, tag: impl Into<String>) -> Self {
+        if let Kind::Toplevel { .. } = self.kind {
+            self.tag = Some(tag.into());
+        }
+        self
+    }
+
     pub(crate) fn is_visible(&self) -> bool {
         self.visible
     }
@@ -364,6 +380,7 @@ pub(crate) struct WindowData {
     pub close_on_request: bool,
     pub kind: Kind,
     pub foreign_parent: Option<String>,
+    pub tag: Option<String>,
     pub size: Size,
     pub scale: f64,
     pub state: WindowState,
@@ -466,6 +483,7 @@ impl WindowData {
             close_on_request: options.close_on_request,
             kind: options.kind.clone(),
             foreign_parent: options.foreign_parent.clone(),
+            tag: options.tag.clone(),
             size: options.size,
             scale: 1.0,
             state: WindowState::default(),
@@ -558,6 +576,7 @@ impl WindowData {
                 layer: self.layer().map(LayerOptions::placement),
                 lock: self.lock_output(),
                 transparent: self.background == Background::Transparent,
+                tag: self.tag.clone(),
             },
         );
         if let (Kind::Toplevel { parent: Some(_) }, Some(parent)) = (&self.kind, parent) {

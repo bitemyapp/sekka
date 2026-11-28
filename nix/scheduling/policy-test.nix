@@ -32,9 +32,13 @@ assert custom.nix.daemonCPUSchedPolicy == "batch";
 assert custom.systemd.services.nix-daemon.serviceConfig.CPUWeight == 50;
 assert custom.systemd.user.slices.app-background.sliceConfig.CPUWeight == 30;
 pkgs.runCommand "sekka-scheduling-policy" { nativeBuildInputs = [ pkgs.python3 ]; } ''
+  test -d ${enabled.services.ananicy.rulesProvider}/etc/ananicy.d
   mkdir -p source/nix/scheduling source/tests
   cp ${./agent-workloads.py} source/nix/scheduling/agent-workloads.py
   cp ${../../tests/test_agent_workloads.py} source/tests/test_agent_workloads.py
+  cp ${./filter-rules.py} source/nix/scheduling/filter-rules.py
+  cp ${../../tests/test_ananicy_rules.py} source/tests/test_ananicy_rules.py
   python3 -m unittest discover -s source/tests -p test_agent_workloads.py -v
+  python3 -m unittest discover -s source/tests -p test_ananicy_rules.py -v
   touch $out
 ''

@@ -297,7 +297,9 @@ impl Model {
     /// the desktop over IPC; a stalled compositor can take several seconds
     /// to time out, so this must never run on the interface thread.
     pub fn quick(paths: &Paths) -> Model {
-        let setup = Setup::detect_in(&paths.etc_nixos(), paths.facts(), &yukimi_system::info::hostname());
+        let mut setup = Setup::detect_in(&paths.etc_nixos(), paths.facts(), &yukimi_system::info::hostname());
+        // Who logs in by themselves may be anyone with an account now.
+        setup.facts.offer_people(&paths.people());
         let mut model = Model {
             info: SystemInfo::read(),
             completion: yukimi_system::completion::read(),

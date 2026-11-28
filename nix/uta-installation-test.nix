@@ -1,4 +1,5 @@
-# Check optional installation separately from the ISO's offline app cache.
+# Check optional installation separately from the ISO's offline app cache,
+# whose contents iso-checks.application-cache checks with the media.
 {
   pkgs,
   applicationCatalog,
@@ -10,7 +11,7 @@ let
   catalog = applicationCatalog.catalog;
   entry = lib.findFirst (app: app.id == "uta") null catalog;
   selected = (applicationCatalog.evaluate [ "uta" ]).config;
-  empty = (applicationCatalog.evaluate [ ]).config;
+  empty = applicationCatalog.empty.config;
   preloaded = applicationCatalog.preloadedSystem.config;
   # Inspect the JSON values without turning every mentioned package into a
   # dependency of the parser; the report below retains Uta's real reference.
@@ -27,9 +28,6 @@ assert entry != null && entry.source == "sekka" && !entry.preload && !(entry.unf
 assert hasUta selected && (manifest selected).selected == [ "uta" ];
 assert !hasUta empty && !hasUta preloaded && !hasUta iso;
 assert !(builtins.elem "uta" (manifest preloaded).selected);
-assert builtins.elem (toString applicationCatalog.cache) (map toString iso.isoImage.storeContents);
-assert
-  !(lib.any (file: file.target == "/calamares/closures/application-uta.paths") iso.isoImage.contents);
 assert uta.meta.license.spdxId == "GPL-3.0-only";
 pkgs.writeText "uta-installation.json" (
   builtins.toJSON {

@@ -313,6 +313,9 @@ pub struct Aizome {
     /// Where the pointer is (kept beside smithay's, which sits behind a lock
     /// held during pointer callbacks).
     pub pointer_pos: Point<f64, Logical>,
+    /// The pointer hasn't moved since the compositor started: what's drawn
+    /// under it hears it as it appears (`point_at_new_surface`).
+    pub pointer_resting: bool,
     /// Shown in the stack-drop feedback and the grab cursors.
     pub dnd_icon: Option<WlSurface>,
     /// Where the drag icon is, relative to the pointer.
@@ -331,8 +334,8 @@ pub struct Aizome {
     pub translated_keys: HashSet<Keycode>,
     /// The keyboards that type, and whose keymap is in force.
     pub keyboards: crate::keyboards::Keyboards,
-    /// Surfaces that keep the screen awake (idle-inhibit).
-    pub idle_inhibitors: HashSet<WlSurface>,
+    /// Surfaces that keep the screen awake (idle-inhibit): apps' holds.
+    pub idle_inhibitors: crate::idle::IdleInhibitors,
     /// Activation tokens that may move focus.
     pub valid_tokens: HashSet<String>,
     pub idle: crate::idle::IdleState,
@@ -360,6 +363,8 @@ impl State {
     ) -> State {
         let dh = display.handle();
         let clock = Clock::new();
+        // A kiosk (the TV) shows no pointer until a mouse moves it.
+        let first_cursor = if options.kiosk { CursorImageStatus::Hidden } else { CursorImageStatus::default_named() };
 
         let socket = match &options.socket {
             Some(name) => ListeningSocketSource::with_name(name).expect("bind the Wayland socket"),
@@ -425,6 +430,7 @@ impl State {
         let content_type = ContentTypeState::new::<State>(&dh);
         let tablet = TabletManagerState::new::<State>(&dh);
         crate::protocols::toplevel_icon::create_global(&dh);
+        crate::protocols::toplevel_tag::create_global(&dh);
         let system_bell = smithay::wayland::xdg_system_bell::XdgSystemBellState::new::<State>(&dh);
         let alpha_modifier = AlphaModifierState::new::<State>(&dh);
         let fifo = FifoManagerState::new::<State>(&dh);
@@ -544,9 +550,10 @@ impl State {
             palette,
             startup_renderer: settings.renderer_choice(),
             settings,
-            cursor_status: CursorImageStatus::default_named(),
+            cursor_status: first_cursor,
             cursor_override: None,
             pointer_pos: Point::from((0.0, 0.0)),
+            pointer_resting: true,
             cursor_theme,
             dnd_icon: None,
             dnd_offset: (0, 0).into(),
@@ -557,7 +564,7 @@ impl State {
             suppressed_keys: HashSet::new(),
             translated_keys: HashSet::new(),
             keyboards,
-            idle_inhibitors: HashSet::new(),
+            idle_inhibitors: Default::default(),
             valid_tokens: HashSet::new(),
             idle: Default::default(),
             power: Default::default(),

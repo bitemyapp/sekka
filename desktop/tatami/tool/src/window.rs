@@ -356,6 +356,8 @@ pub fn reload_hyprland() -> Reload {
     if hypr::config_pinned() {
         return Reload::Pinned;
     }
+    // Aizome's settings as they are now, for displays without Tatami's own.
+    crate::aizome_displays::write();
     let Ok(all) = hypr::json_args(&["monitors", "all"]) else {
         return Reload::Failed;
     };

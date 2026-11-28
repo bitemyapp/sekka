@@ -76,6 +76,61 @@ what you can't. See [its README](desktop/aizome/README.md) for what is done
 and what isn't, and [aizome.computer](https://aizome.computer/) for every app
 in detail.
 
+**Chanoma 茶の間** turns a Sekka computer into the family television. It
+comes with Aizome, with nothing to turn on. Kids use it with nothing but
+a Bluetooth game controller: streaming services open full screen in
+Google Chrome, which comes with it where unfree software is allowed,
+films and shows play from your own folders, and retro games play
+through emulator cores, kept just where they were left: cartridge
+consoles, and the PlayStation, Saturn, Dreamcast and PlayStation 2 from
+their discs, each told apart by what's on it. Drives plugged
+in are opened by themselves, as it starts and as they come, and it says
+once if one can't be. Add a folder, or one it suggests on a drive (a
+`roms`, a `Movies`), and it finds the games, films and shows inside
+however deep, zipped sets
+included; it shows each game once, in your region's release, says when it
+came out and how many can play, and offers the games two can play when a
+second controller comes on. Every game shows its box, from beside it or
+fetched by name from libretro-thumbnails, or else a sprite of its own; Y
+finds any game, film or show by name. A grown-up's PIN decides which
+services, games, films and shows the kids see and for how long each day,
+with a bedtime (forgotten, it's chosen again with the computer account's
+password); when time runs out the game is saved and a friendly screen
+says goodnight. It wears the desktop's own look, made large enough to
+read from the sofa, so it's as much at home with the grown-ups. A
+keyboard and mouse work too, with a way back to Home from anywhere, a
+streaming page included. The kids' rules are made for a kid holding a
+controller: a keyboard or mouse on a streaming page works the browser
+itself too, its shortcuts and menus included, and those aren't closed
+off. Opened in a grown-up's own account, Chanoma is one app on that
+desktop, and a keyboard there still reaches the desktop's shortcuts and
+everything else the account opens. A grown-up can give the
+television an account of
+its own in Settings, under Users & Groups: it opens straight into Chanoma
+in kids' mode and can't open anything else, it signs in with nothing, a
+PIN or a password, as you choose, and leaving Chanoma logs out. The
+drives it opens everyone else's accounts can read but not change, even
+after it logs out. The login
+screen takes a game controller too, so the whole evening needs no
+keyboard: nothing changes there until a button is pressed, then the
+controller chooses who logs in and types a password on an on-screen
+keyboard, or presses the TV's PIN on its buttons. So that a controller
+finds its way back without one, a Bluetooth device that has forgotten
+the computer pairs with it again without anyone confirming, and that
+holds for every Bluetooth device, not controllers alone. Chanoma has been tested in a
+virtual machine with a virtual controller and with real emulator cores,
+and used on a television with a physical controller; Netflix-style
+services haven't been checked. The Dreamcast and PlayStation 2 draw on
+the GPU; Dreamcast games from a household's drive have been played in
+the tests, but neither console's games on a television yet. The
+PlayStation 2's best core needs the console's own BIOS, copied from your
+console into a `bios` folder by the games; without it, fewer games play.
+If a game's emulator crashes, Chanoma starts again by itself and says
+what happened, and a game that fails to start says why rather than
+closing Chanoma. Nintendo 64 cartridges play through Mupen64Plus-Next,
+with up to four controllers. GameCube and later consoles aren't supported. See
+[docs/chanoma.md](desktop/aizome/docs/chanoma.md).
+
 **Super + Return** opens Hotaru 蛍, Aizome's own terminal, and programs that
 need a terminal open in it too. Hotaru draws with the processor. It doesn't
 implement synchronized output (DEC mode 2026), in-band resize (2048), the
@@ -157,6 +212,12 @@ you turn it on again or log in again. If a display change leaves a window off
 screen, Tatami brings it back, and **Super + Ctrl + D** always brings the Displays
 window to the screen you are using.
 
+A display you set up in Aizome's Settings, such as one turned to portrait,
+comes up the same way in Tatami: its resolution, scale, rotation and place in
+the arrangement follow Aizome. Once you apply a change in **Displays**, every
+display that is on at the time keeps its own settings in Tatami from then on,
+and so does a display you scale with **Super + /**.
+
 [![The Displays window](docs/images/sekka/displays.png)](docs/images/sekka/displays.png)
 
 Docked, the laptop stays awake with its lid closed on battery power too. With
@@ -223,7 +284,10 @@ sekka-update
 ```
 
 Enter your administrator password when asked. Sekka downloads the update,
-builds your system, and applies changes safely. When a restart or sign-out is
+builds your system, and applies changes safely. Your computer keeps a copy of
+Sekka's source, so an update downloads only what changed in it since the last
+one; the first update downloads all of it, a few hundred megabytes. Yukimi
+shows what it is downloading and how much has arrived. When a restart or sign-out is
 needed, Yukimi shows one completion message with a button to finish when you
 are ready. A restart also finishes desktop changes; you will not be asked to
 restart again for that same prepared update. Once preparation finishes,
@@ -266,6 +330,16 @@ screen and the boot splash can be changed after installing too: in Aizome's
 `sekka-update --choose calamares.loginScreen=aizome`. Yukimi asks for your
 password, builds the new system, and offers a restart when the change needs
 one, as an update does.
+
+To have the computer start straight into someone's account without asking
+for a password, pick them under **Log in automatically as** in Aizome's
+**Settei → Users & Groups**. Anyone with an account can be picked, including
+people you added after installing; someone added without a password has to
+set one first. Yukimi makes the change, which asks for an administrator
+password, and it applies from the next start, whichever login screen you use.
+Their saved passwords (the keyring) stay locked until their password is typed
+once. If the account can't be logged in to when the computer starts, the
+login screen shows instead.
 
 ## Questions, bugs, and contributions
 
