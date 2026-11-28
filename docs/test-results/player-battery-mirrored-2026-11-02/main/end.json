@@ -1,0 +1,38 @@
+{
+  "battery": {
+    "energy_wh": 37.09,
+    "full_wh": 58.02,
+    "power_w": 7.073,
+    "capacity": 64,
+    "status": "Discharging",
+    "online": {
+      "ucsi-source-psy-USBC000:002": 0,
+      "ucsi-source-psy-USBC000:003": 0,
+      "ucsi-source-psy-USBC000:001": 0,
+      "AC": 0
+    }
+  },
+  "brightness": {
+    "intel_backlight": {
+      "brightness": 149,
+      "actual_brightness": 149,
+      "max_brightness": 496
+    }
+  },
+  "displays": [
+    {
+      "name": "eDP-1",
+      "make": "SDC",
+      "model": "ATNA40HQ10-0",
+      "enabled": true,
+      "powered": true,
+      "current_mode": {
+        "width": 2880,
+        "height": 1800,
+        "refresh": 120000,
+        "preferred": false
+      },
+      "scale": 2.0
+    }
+  ]
+}

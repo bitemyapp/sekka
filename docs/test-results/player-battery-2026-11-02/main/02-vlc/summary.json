@@ -1,0 +1,18 @@
+{
+  "player": "vlc",
+  "round": 2,
+  "segment_start_s": 2400,
+  "measured_movie_start_s": 2462.796435,
+  "seconds": 119.98716779900133,
+  "samples": 61,
+  "mean_power_w": 7.3090661524689,
+  "endpoint_power_w": 6.600705846534598,
+  "slope_power_w": 6.937355584777744,
+  "energy_used_wh": 0.21999999999999886,
+  "full_wh": 58.02,
+  "projected_full_minutes": 476.28519531514974,
+  "start_energy_wh": 43.36,
+  "end_energy_wh": 43.14,
+  "projected_run_start_minutes": 355.94150411694056,
+  "power_energy_disagreement_pct": 9.691529549161741
+}

@@ -1,0 +1,20 @@
+[
+  {
+    "player": "utsushi",
+    "round": 1,
+    "segment_start_s": 2435.0,
+    "measured_movie_start_s": 2460.007438,
+    "seconds": 59.99439075400005,
+    "samples": 31,
+    "mean_power_w": 6.960285202603767,
+    "endpoint_power_w": 7.200673172453431,
+    "slope_power_w": 6.619437383560212,
+    "energy_used_wh": 0.12000000000000455,
+    "full_wh": 58.02,
+    "projected_full_minutes": 500.1519188750658,
+    "start_energy_wh": 38.45,
+    "end_energy_wh": 38.33,
+    "projected_run_start_minutes": 331.45193520762285,
+    "power_energy_disagreement_pct": 3.4537086175683904
+  }
+]
