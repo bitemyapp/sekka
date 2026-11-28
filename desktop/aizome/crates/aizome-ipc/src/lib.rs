@@ -472,6 +472,12 @@ pub enum Request {
     /// once with `ok`. Keep Awake's service asks it; any program of the
     /// session can, and is listed as the holder it is.
     KeepAwake,
+    /// The calling process uses native command-key shortcuts: its windows
+    /// keep Super instead of receiving Ctrl (Ctrl+Shift for terminals).
+    /// Applies while this connection stays open, to the PID authenticated
+    /// by the socket, without changing the app's desktop identity. Answered
+    /// with `ok`; clients should wait for it before opening their windows.
+    NativeCommandKeys,
 }
 
 /// What kind of hold on idleness one is.
@@ -834,8 +840,9 @@ pub struct WindowInfo {
     pub output: Option<String>,
     /// Draws its own title bar; Aizome adds only the tab.
     pub client_side_decorations: bool,
-    /// Uses Aizome's kit (app_id `org.aizome.…`, or Genkan's): no
-    /// command-key translation.
+    /// Uses native command keys: a live `native-command-keys` connection
+    /// for its process, or a legacy Aizome/Genkan app ID. No command-key
+    /// translation.
     pub kit_app: bool,
     /// The window this one is a dialog of.
     pub parent: Option<WindowId>,
@@ -1292,6 +1299,8 @@ mod tests {
         assert_eq!(r, Request::HideApp { app: AppSel { app_id: Some("foot".into()), pid: None } });
         let r: Request = serde_json::from_str(r#"{"request":"spawn","argv":["foot"]}"#).unwrap();
         assert_eq!(r, Request::Spawn { argv: vec!["foot".into()], cwd: None, in_desk_folder: true });
+        let r: Request = serde_json::from_str(r#"{"request":"native-command-keys"}"#).unwrap();
+        assert_eq!(r, Request::NativeCommandKeys);
     }
 
     #[test]

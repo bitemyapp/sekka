@@ -89,6 +89,7 @@ Protocol version: **1** (`version` reports it).
 | `keyboards` | | `keyboards {keyboards: [KeyboardInfo]}`: the keyboards that type (a space bar and the letters: not a power button, nor a keyboard's media keys), each once however many devices it has, `{name, id, bus, last}`: `id` is vendor and product as `lsusb` writes them (`05ac:029c`), `bus` `usb`, `bluetooth`, `built-in` or `other` (a VM's, uinput), `last` whether it typed last |
 | `catch-key` | `tag?` | `ok` at once (an error on a connection that hasn't subscribed); the next key pressed (unless the screen is locked) is swallowed, press and release, and sent as `key-caught` with this tag to the connection that asked alone: what Settei's keyboard setup asks, as no app hears a modifier key alone. It waits only while that connection stays open, until it asks again without a tag (another connection's asking without one changes nothing) or another connection asks for a key in its place |
 | `catch-keys` | `tag`, `keys` (names, as `synthesize` takes them, or evdev codes), `windows` | `ok` at once (an error on a connection that hasn't subscribed, or for a key it doesn't know); while one of `windows` has the keyboard, a press of one of `keys` with no Ctrl, Alt or ❖ held (unless the screen is locked) is swallowed, press and release, and sent as `key-caught` with this tag to the connection that asked alone: an app keeping a way back out of another program's window it opened, as Chanoma keeps Home and F1 over its browser. Kept while that connection stays open, until it asks again (in place of before; with no `keys` or no `windows`, to stop) |
+| `native-command-keys` | | `ok`; the calling process's windows keep ❖ untranslated while this connection stays open. The compositor gets its PID from the socket credentials; no app ID or PID argument is needed. Kit apps wait up to a second for the reply before opening windows; unanswered by then, they keep the connection, and a busy compositor registers them when it reads it. The last connection closing restores ordinary translation and updates `kit_app` in window events. The shell need not be running |
 | `debug-stall` | `seconds` | `ok` after blocking the main loop that long (at most 60 s), to try the watchdog (`docs/recovery.md`) |
 | `pick-area` | `tag?`, `prompt?`, `targets?` | `ok` at once; the screenshot picker opens (drag over an area, click for the whole display under the pointer, Space and a click for a window, Esc to give up), says `pick-started` with this tag, and its pick is sent to subscribers as `area-picked` with it, not taken as a screenshot. `targets` narrows what may be picked (`area`, `display`, `window`; all when left out): without `area` a drag picks the display under the pointer, with `window` alone the picker starts at windows, and in window mode a click on no window keeps picking. `prompt` puts a banner at the top of each display saying what the pick is for, with the keys. The shell uses it to choose what to record, `aizome-share-picker` what to share |
 | `shares` | | `shares {shares: [ShareInfo]}`: what's being shared through ext-image-copy-capture (browsers' screen and window sharing): sessions that have shown frames for a second (so not a screenshot tool's single frame), `{id, output?, window?, cursor}` |
@@ -239,7 +240,7 @@ apply are left out.
 | `geometry {x,y,w,h}` | the content rectangle in the global layout |
 | `output` | the output showing most of it |
 | `client_side_decorations` | it draws its own title bar; Aizome adds only the tab |
-| `kit_app` | app_id starts with `org.aizome.`: ❖ isn't translated for it |
+| `kit_app` | its process holds a `native-command-keys` connection, or its app ID has the legacy `org.aizome.` prefix or is `org.calamares.NixOSRust`: ❖ isn't translated for it |
 | `parent` | the window it's a dialog of |
 
 ### DeskInfo
@@ -348,7 +349,7 @@ Sent to subscribers as `binding` events, for the shell:
 |---|---|
 | ❖Space | `palette` |
 | ❖⌥Space | `toolchest` |
-| ❖⌥M; F10 over Aizome's apps (`org.aizome.…`) and the desktop (other apps keep F10) | `menu-bar` (focus the menu bar) |
+| ❖⌥M; F10 over kit apps (`kit_app`) and the desktop (other apps keep F10) | `menu-bar` (focus the menu bar) |
 | ⌃❖D | `deskbar` (fold the Deskbar into the bar, or bring it back) |
 | XF86PowerOff (the power key, when logind leaves it to the session) | `power-key` |
 | a client rings xdg-system-bell | `bell`, with the `output` (its window's, else the pointer's) |

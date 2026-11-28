@@ -2040,6 +2040,23 @@ nix develop .#aizome
 nix build .#aizome-checks.session -L
 ```
 
+Kit applications announce their native command-key handling to the compositor
+before opening windows. The `native-command-keys` IPC request belongs to its
+connection and uses the socket's process credentials, so third-party app IDs
+work without an allowlist. Closing the last announcing connection restores
+ordinary command-key translation for that process. An app waits up to a
+second for the compositor's reply before opening windows, and keeps the
+connection if none comes, so a compositor busy at that moment still registers
+it when it catches up. This works without the shell; older Aizome apps and
+Genkan retain their app-ID compatibility fallback.
+The `aizome-comp` `keys` regression launches a real kit app with
+`org.example.Test`, checks that ❖Z performs its menu action and F10 reaches
+the menu bar, then checks an ordinary client using the same ID still gets Ctrl.
+
+```sh
+nix develop .#aizome -c cargo test --locked --manifest-path desktop/aizome/Cargo.toml -p aizome-comp --test keys
+```
+
 ### Tansu and removable Btrfs compression
 
 Aizome sets UDisks's `btrfs_defaults` to `compress=zstd:1`, matching Genkan's

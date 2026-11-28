@@ -101,6 +101,7 @@ dependencies = [
  "aizome-comp-core",
  "aizome-comp-logic",
  "aizome-ipc",
+ "aizome-kit",
  "libc",
  "png 0.18.1",
  "serde_json",

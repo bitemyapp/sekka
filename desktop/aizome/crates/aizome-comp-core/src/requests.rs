@@ -38,6 +38,7 @@ impl State {
             }
             Request::IdleInhibitors => Response::IdleInhibitors { inhibitors: self.idle_inhibitors() },
             Request::KeepAwake => return Err("the connection that holds as Keep Awake asks".into()),
+            Request::NativeCommandKeys => return Err("the connection that uses native command keys asks".into()),
             Request::Spawn { argv, cwd, in_desk_folder } => {
                 let cwd = cwd.map(|c| aizome_config::expand_home(&c)).or_else(|| {
                     if in_desk_folder { self.az.view.desk_folder.clone().filter(|p| p.is_dir()) } else { None }

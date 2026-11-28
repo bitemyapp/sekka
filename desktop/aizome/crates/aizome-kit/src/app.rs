@@ -37,6 +37,9 @@ pub fn run<P: Program>(program: P) {
 
 /// Run `program`, and give it back when it stops.
 pub fn try_run<P: Program>(program: P) -> Result<P, sidestep_ui::Error> {
+    // Keep this connection until the app has stopped. Waiting for the
+    // acknowledgement here makes the very first window's shortcuts native.
+    let _command_keys = crate::command_key::register();
     crate::fonts::install();
     let info = program.info();
     let quit = program.quit_when_last_window_closes();

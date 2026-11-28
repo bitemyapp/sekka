@@ -34,6 +34,7 @@
 pub mod a11y;
 pub mod ahead;
 mod app;
+mod command_key;
 pub mod cx;
 pub mod dialogs;
 pub mod draw;
