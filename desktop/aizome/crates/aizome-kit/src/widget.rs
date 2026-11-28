@@ -520,13 +520,11 @@ impl LayoutCx<'_, '_> {
     }
 
     /// Lay child `i` out as a selected row: its text and icons take the
-    /// colour on the selection.
+    /// colour on the selection. (A row laid out last on the other side of
+    /// it is laid out again: the layout cache is keyed on it.)
     pub fn layout_child_selected(&mut self, i: usize, bc: Constraints, selected: bool) -> Size {
         let before = std::mem::replace(&mut self.env.on_selection, selected);
         let child = self.tree.nodes[self.node].children[i];
-        if before != selected {
-            self.tree.uncache(child);
-        }
         let s = self.tree.layout(child, bc, self.env);
         self.env.on_selection = before;
         s

@@ -111,6 +111,10 @@ pub trait Lazy {
 
     /// What it shows, built from its value.
     fn build(&mut self) -> RawElement;
+
+    /// Take `flex`, its content's share of a row's or column's leftover
+    /// room as mounted, for its own.
+    fn stand_for(&mut self, flex: Option<NonZeroU16>);
 }
 
 /// Proof that a lazy element's value and function are those its node was
@@ -122,7 +126,8 @@ struct LazyWidget<D, Msg> {
     value: D,
     build: fn(&D) -> Element<Msg>,
     /// Its content's share of a row's or column's leftover room, as of when
-    /// it was built: a lazy element stands where its content would.
+    /// the content was mounted: a lazy element stands where its content
+    /// would.
     flex: Option<NonZeroU16>,
 }
 
@@ -137,9 +142,11 @@ impl<D: PartialEq + 'static, Msg: 'static> Lazy for LazyWidget<D, Msg> {
     }
 
     fn build(&mut self) -> RawElement {
-        let content = (self.build)(&self.value).into_raw();
-        self.flex = content.widget.flex();
-        content
+        (self.build)(&self.value).into_raw()
+    }
+
+    fn stand_for(&mut self, flex: Option<NonZeroU16>) {
+        self.flex = flex;
     }
 }
 

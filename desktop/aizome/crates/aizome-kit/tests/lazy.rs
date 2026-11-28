@@ -1180,3 +1180,136 @@ mod coming_and_going {
         assert_eq!(check.differing_pixels, 0, "{check:?}");
     }
 }
+
+/// The pixels that differ between two pictures of one size.
+fn differing(a: &(u32, u32, Vec<u8>), b: &(u32, u32, Vec<u8>)) -> usize {
+    assert_eq!((a.0, a.1), (b.0, b.1), "the pictures' sizes");
+    a.2.chunks(4).zip(b.2.chunks(4)).filter(|(x, y)| x != y).count()
+}
+
+#[test]
+fn lazy_rows_in_a_list_take_the_selection_s_colours_as_it_comes_and_goes() {
+    aizome_kit::fonts::install();
+    // A kept row that loses the selection, or whose list loses the
+    // keyboard, is given the room it had: it's laid out again all the
+    // same, in the colours off the selection, as a row built outright is.
+    struct Picked {
+        lazy: bool,
+        selected: usize,
+    }
+    fn label(n: &usize) -> Element<usize> {
+        text(format!("first or second word {n}")).into()
+    }
+    impl Program for Picked {
+        type Msg = usize;
+        fn info(&self) -> AppInfo {
+            AppInfo::new("org.aizome.LazyPicked", "Lazy Picked", "Test")
+        }
+        fn launched(&mut self, cx: &mut Cx<usize>) {
+            cx.open_window(WindowSpec::new("Picked").size(400.0, 200.0));
+        }
+        fn update(&mut self, msg: usize, _cx: &mut Cx<usize>) {
+            self.selected = msg;
+        }
+        fn view(&self, _w: WindowKey) -> Element<usize> {
+            let rows = (0..2).map(|n| if self.lazy { lazy(n, label) } else { label(&n) }).collect();
+            list(rows).selected([self.selected]).on_select(|rows| rows[0]).into()
+        }
+    }
+    let open = |lazy: bool| {
+        let mut h = Harness::new(Picked { lazy, selected: 0 });
+        let w = h.window();
+        h.focus_window(w, true);
+        (h, w)
+    };
+    let (mut a, aw) = open(true);
+    let (mut b, bw) = open(false);
+    type Act = Box<dyn Fn(&mut Harness<Picked>, WindowKey)>;
+    let steps: Vec<(&str, Act)> = vec![
+        ("a click on the first row", Box::new(|h, w| h.click(w, Point::new(15.0, 12.0)))),
+        ("the first row again", Box::new(|h, _| h.send(0))),
+        ("the second row", Box::new(|h, _| h.send(1))),
+        ("the first row", Box::new(|h, _| h.send(0))),
+        ("the window losing the keyboard", Box::new(|h, w| h.focus_window(w, false))),
+        ("a view without it", Box::new(|h, _| h.send(0))),
+        ("the keyboard back", Box::new(|h, w| h.focus_window(w, true))),
+    ];
+    for (name, act) in steps {
+        act(&mut a, aw);
+        act(&mut b, bw);
+        let d = differing(&a.render_rgba(aw, 1.0), &b.render_rgba(bw, 1.0));
+        assert_eq!(d, 0, "after {name}: pixels that differ between lazy rows and rows built outright");
+        let check = a.check_frame_exact(aw, 1.0);
+        assert_eq!(check.differing_pixels, 0, "after {name}: {check:?}");
+    }
+}
+
+#[test]
+fn a_lazy_element_built_of_another_stands_where_their_content_would() {
+    aizome_kit::fonts::install();
+    // Content that is a lazy element in turn is sized as it's built: the
+    // outer element stands as the inner one does, whether both are built,
+    // both kept, or the outer one alone built again around a kept inner.
+    struct Nested {
+        lazy: bool,
+        outer: u32,
+    }
+    fn gap(_: &()) -> Element<bool> {
+        spacer().into()
+    }
+    fn filler(_: &()) -> Element<bool> {
+        container(text("fill")).width(Fill).into()
+    }
+    fn around_gap(_: &u32) -> Element<bool> {
+        lazy((), gap)
+    }
+    fn around_filler(_: &u32) -> Element<bool> {
+        lazy((), filler)
+    }
+    impl Program for Nested {
+        type Msg = bool;
+        fn info(&self) -> AppInfo {
+            AppInfo::new("org.aizome.LazyNested", "Lazy Nested", "Test")
+        }
+        fn launched(&mut self, cx: &mut Cx<bool>) {
+            cx.open_window(WindowSpec::new("Nested").size(400.0, 200.0));
+        }
+        fn update(&mut self, again: bool, _cx: &mut Cx<bool>) {
+            self.outer += u32::from(again);
+        }
+        fn view(&self, _w: WindowKey) -> Element<bool> {
+            let (middle, first) = if self.lazy {
+                (lazy(self.outer, around_gap), lazy(self.outer, around_filler))
+            } else {
+                (gap(&()), filler(&()))
+            };
+            column(vec![
+                aizome_kit::row![text("left"), middle, text("right").id("right")].width(Fill).into(),
+                aizome_kit::row![first, text("after").id("after")].width(Fill).into(),
+            ])
+            .into()
+        }
+    }
+    let mut a = Harness::new(Nested { lazy: true, outer: 0 });
+    let mut b = Harness::new(Nested { lazy: false, outer: 0 });
+    let (aw, bw) = (a.window(), b.window());
+    let same = |a: &mut Harness<Nested>, b: &mut Harness<Nested>, after: &str| {
+        for name in ["right", "after"] {
+            assert_eq!(a.find_id(aw, name), b.find_id(bw, name), "{name}, after {after}");
+        }
+        assert_eq!(differing(&a.render_rgba(aw, 1.0), &b.render_rgba(bw, 1.0)), 0, "after {after}");
+    };
+    same(&mut a, &mut b, "opening");
+    assert_eq!(a.lazies().built, 4, "each element once");
+    a.send(false);
+    b.send(false);
+    same(&mut a, &mut b, "a view that keeps them all");
+    assert_eq!(a.lazies().built, 4);
+    a.send(true);
+    b.send(true);
+    same(&mut a, &mut b, "a view that builds the outer ones alone");
+    assert_eq!(a.lazies().built, 6, "the outer ones built, the inner ones kept");
+    a.resize(aw, Size::new(520.0, 200.0));
+    b.resize(bw, Size::new(520.0, 200.0));
+    same(&mut a, &mut b, "a resize");
+}

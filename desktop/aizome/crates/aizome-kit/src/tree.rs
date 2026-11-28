@@ -71,8 +71,10 @@ pub(crate) struct Node {
     lazy: LazyNode,
     /// The view that mounted it or last kept it.
     viewed: View,
-    /// The last constraints it was laid out with, and the size it took.
-    pub cache: Option<(Constraints, Size)>,
+    /// The last constraints it was laid out with, whether it was laid out
+    /// on a selection (inherited, and read by its layout: text and icons
+    /// take their colour from it), and the size it took.
+    pub cache: Option<(Constraints, bool, Size)>,
 }
 
 /// Whether a node is a lazy element's, with what the element built under
@@ -316,7 +318,7 @@ impl Tree {
     }
 
     fn mount_under(&mut self, el: RawElement, parent: Option<usize>, index: usize, base: NodeId) -> usize {
-        let RawElement { mut widget, mut common, mut children } = el;
+        let RawElement { mut widget, common, mut children } = el;
         let kind = widget.as_ref().type_id();
         let mut id = match common.key {
             // A key preserves state across moves only for the same widget
@@ -342,7 +344,7 @@ impl Tree {
             AtMount::Popover(content) => (LazyNode::No, Some(content)),
             AtMount::Lazy(element) => {
                 let lazy = LazyNode::of(&common);
-                children = self.build_lazy(element, &mut common);
+                children = self.build_lazy(element);
                 self.lazies += 1;
                 (lazy, None)
             }
@@ -376,18 +378,36 @@ impl Tree {
         let kids: Vec<usize> =
             children.into_iter().enumerate().map(|(i, c)| self.mount_under(c, Some(idx), i, id)).collect();
         self.nodes[idx].children = kids;
+        if lazy != LazyNode::No {
+            self.size_after_content(idx);
+        }
         idx
     }
 
-    /// What a lazy element shows, built now, as its node's children, with
-    /// the element sized after it. (Out of line: mounting is every build's
-    /// path for every element, and nearly none of them is one of these.)
+    /// What a lazy element shows, built now, as its node's children.
+    /// (Out of line: mounting is every build's path for every element, and
+    /// nearly none of them is one of these.)
     #[inline(never)]
-    fn build_lazy(&mut self, element: &mut dyn Lazy, common: &mut Common) -> Vec<RawElement> {
+    fn build_lazy(&mut self, element: &mut dyn Lazy) -> Vec<RawElement> {
         let content = element.build();
-        take_after(common, Lengths::of(&content.common));
         self.counts.built += 1;
         vec![content]
+    }
+
+    /// Size lazy node `idx` as its content is sized, now that the content
+    /// is mounted under it: its lengths, where the element was given none,
+    /// and its share of a row's or column's leftover room. Read from the
+    /// content's node, not its element: content that is a lazy element in
+    /// turn is sized only as it's mounted.
+    #[inline(never)]
+    fn size_after_content(&mut self, idx: usize) {
+        let Some(&content) = self.nodes[idx].children.first() else { return };
+        let (lengths, flex) = (Lengths::of(&self.nodes[content].common), self.nodes[content].widget.flex());
+        let n = &mut self.nodes[idx];
+        take_after(&mut n.common, lengths);
+        if let AtMount::Lazy(element) = n.widget.at_mount() {
+            element.stand_for(flex);
+        }
     }
 
     /// Bring the tree up to `root`, the next view of what it was mounted
@@ -456,7 +476,7 @@ impl Tree {
                     return self.keep(node, same, &mut el.common);
                 }
                 let lazy = LazyNode::of(&el.common);
-                el.children = self.build_lazy(element, &mut el.common);
+                el.children = self.build_lazy(element);
                 (lazy, None)
             }
         };
@@ -533,6 +553,9 @@ impl Tree {
             }
         }
         self.nodes[idx].children = kids;
+        if lazy != LazyNode::No {
+            self.size_after_content(idx);
+        }
         idx
     }
 
@@ -594,14 +617,6 @@ impl Tree {
                 n.lazy = LazyNode::Spoiled;
             }
             at = n.parent;
-        }
-    }
-
-    /// Forget the layout of `idx` and what's under it.
-    pub fn uncache(&mut self, idx: usize) {
-        self.nodes[idx].cache = None;
-        for k in self.nodes[idx].children.clone() {
-            self.uncache(k);
         }
     }
 
@@ -724,8 +739,10 @@ impl Tree {
     /// Lay `idx` out within `bc`, as narrowed by its own lengths.
     pub fn layout(&mut self, idx: usize, bc: Constraints, env: &mut Env) -> Size {
         let bc = narrow(&self.nodes[idx].common, bc);
-        if let Some((c, s)) = self.nodes[idx].cache
+        let on_selection = env.on_selection;
+        if let Some((c, on, s)) = self.nodes[idx].cache
             && c == bc
+            && on == on_selection
         {
             // (A node kept from another view has no size till it's laid
             // out, as one newly mounted has none: here it has it again.)
@@ -742,7 +759,7 @@ impl Tree {
         let size = bc.constrain(node.common.clamp(size));
         let size = Size::new(size.width.max(0.0), size.height.max(0.0));
         node.size = size;
-        node.cache = Some((bc, size));
+        node.cache = Some((bc, on_selection, size));
         node.unsettled = true;
         size
     }
@@ -876,7 +893,7 @@ impl Tree {
             // size is as `keep` left it): its parent no longer shows it.
             // As nodes newly mounted and never laid out are, it and what's
             // under it have no size.
-            if node.size == Size::ZERO && node.cache.is_some_and(|(_, s)| s != Size::ZERO) {
+            if node.size == Size::ZERO && node.cache.is_some_and(|(_, _, s)| s != Size::ZERO) {
                 self.unlay(idx);
             }
             self.settled.push(idx);
