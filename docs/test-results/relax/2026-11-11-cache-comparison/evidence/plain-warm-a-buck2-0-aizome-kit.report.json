@@ -1,0 +1,26 @@
+{
+  "trace_id": "b011dbe2-150b-4a4c-91fe-0f38cefda933",
+  "success": true,
+  "results": {
+    "root//desktop/aizome/crates/aizome-kit:aizome_kit-test-test-lib": {
+      "success": "SUCCESS",
+      "outputs": {},
+      "other_outputs": {},
+      "configured_graph_size": null,
+      "configured": {
+        "prelude//platforms:default#a8ac7ec86a6bee54": {
+          "errors": [],
+          "success": "SUCCESS",
+          "outputs": {},
+          "other_outputs": {},
+          "configured_graph_size": null
+        }
+      },
+      "errors": []
+    }
+  },
+  "failures": {},
+  "project_root": "/home/callen/sekka-work/relax-experiment-20261111/buck2",
+  "truncated": false,
+  "strings": {}
+}

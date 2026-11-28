@@ -1,0 +1,26 @@
+{
+  "trace_id": "46650bd6-f4b9-4cf2-b6e3-1263f7f15cb2",
+  "success": true,
+  "results": {
+    "root//desktop/aizome/apps/soroban:aizome_soroban-test-test-lib": {
+      "success": "SUCCESS",
+      "outputs": {},
+      "other_outputs": {},
+      "configured_graph_size": null,
+      "configured": {
+        "prelude//platforms:default#a8ac7ec86a6bee54": {
+          "errors": [],
+          "success": "SUCCESS",
+          "outputs": {},
+          "other_outputs": {},
+          "configured_graph_size": null
+        }
+      },
+      "errors": []
+    }
+  },
+  "failures": {},
+  "project_root": "/home/callen/sekka-work/relax-experiment-20261111/buck2",
+  "truncated": false,
+  "strings": {}
+}

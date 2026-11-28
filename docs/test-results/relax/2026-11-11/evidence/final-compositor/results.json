@@ -1,0 +1,74 @@
+{
+  "mode": "check",
+  "status": "complete",
+  "runs": [
+    {
+      "label": "aizome-comp-rustc-1",
+      "engine": "rustc",
+      "command": [
+        "cargo",
+        "check",
+        "--locked",
+        "--release",
+        "-p",
+        "aizome-comp",
+        "--bin",
+        "aizome"
+      ],
+      "exit_code": 0,
+      "seconds": 27.764,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 0,
+      "expected_tests": null,
+      "test_summaries": [],
+      "log": "aizome-comp-rustc-1.log.gz"
+    },
+    {
+      "label": "aizome-comp-relax-1",
+      "engine": "relax",
+      "command": [
+        "$EXPERIMENT/relax/target/release/relax",
+        "check",
+        "--no-serve",
+        "--allow-c",
+        "aizome-comp",
+        "--bin",
+        "aizome"
+      ],
+      "exit_code": 1,
+      "seconds": 13.388,
+      "timed_out": false,
+      "passed": false,
+      "expected_diagnostic": null,
+      "startup_error": null,
+      "lockfiles_unchanged": true,
+      "tests_passed": 0,
+      "expected_tests": null,
+      "test_summaries": [],
+      "log": "aizome-comp-relax-1.log.gz"
+    }
+  ],
+  "inputs": {
+    "sekka": {
+      "commit": "7dcf88e3b7f3391ec498a53a28555d02ba8fb14a",
+      "status": " M flake.nix\n"
+    },
+    "relax": {
+      "commit": "5339a68b8c3e7e9aadfce8deb7e9367c8b436e18",
+      "status": ""
+    },
+    "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13) (built from a source tarball)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.3\n",
+    "runner_sha256": "6d923a041ea10dadc1bc67f4b55479c5e4cb886c31d75d572d034201c8a5a290",
+    "cpu_budget": "8",
+    "lockfiles": {
+      "apps/hotaru/Cargo.lock": "4f6322fac4e99a444a5fd15c01b55b96290ee87e3091470c825f5ca55e1faa83",
+      "desktop/aizome/Cargo.lock": "7d5e3d4cf544cee4bf18ce39d694cbeb1ac67bf39a933b9c086b19df78de84fc",
+      "installer/genkan/rust/system/session-env/Cargo.lock": "9f003f886509a52e92a065607ebb1978df254a32048e7b8a661ba362f7e24b92",
+      "rust/Cargo.lock": "29540938499a63d4edb8bcbcad595257c5125b50feef0f74b295b6370bd3573a"
+    }
+  }
+}

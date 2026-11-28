@@ -1,0 +1,284 @@
+[
+  {
+    "engine": "buck2",
+    "repeat": 0,
+    "commands": [
+      {
+        "package": "aizome-kit",
+        "command": [
+          "/home/callen/sekka-work/relax-experiment-20261111/buck2/scripts/sekka-buck2",
+          "--isolation-dir",
+          "cache-compare-20261111",
+          "--cache",
+          "cache",
+          "--cache-write",
+          "--config-file",
+          "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+          "--local-content-store",
+          "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+          "-j",
+          "16",
+          "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/plain-warm-a-buck2-0-aizome-kit.report.json",
+          "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/plain-warm-a-buck2-0-aizome-kit.events.json-lines.gz",
+          "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/plain-warm-a-buck2-0-aizome-kit.build-id",
+          "test",
+          "//desktop/aizome/crates/aizome-kit:aizome_kit-test-test-lib"
+        ],
+        "seconds": 0.40297020900015923,
+        "exit_status": 0,
+        "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/plain-warm-a-buck2-0-aizome-kit.log"
+      },
+      {
+        "package": "aizome-soroban",
+        "command": [
+          "/home/callen/sekka-work/relax-experiment-20261111/buck2/scripts/sekka-buck2",
+          "--isolation-dir",
+          "cache-compare-20261111",
+          "--cache",
+          "cache",
+          "--cache-write",
+          "--config-file",
+          "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+          "--local-content-store",
+          "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+          "-j",
+          "16",
+          "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/plain-warm-a-buck2-0-aizome-soroban.report.json",
+          "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/plain-warm-a-buck2-0-aizome-soroban.events.json-lines.gz",
+          "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/plain-warm-a-buck2-0-aizome-soroban.build-id",
+          "test",
+          "//desktop/aizome/apps/soroban:aizome_soroban-test-test-lib"
+        ],
+        "seconds": 0.3050477079996199,
+        "exit_status": 0,
+        "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/plain-warm-a-buck2-0-aizome-soroban.log"
+      }
+    ],
+    "seconds": 0.7080179169997791
+  },
+  {
+    "engine": "relax",
+    "repeat": 0,
+    "commands": [
+      {
+        "package": "aizome-kit",
+        "command": [
+          "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+          "test",
+          "--no-live",
+          "--allow-c",
+          "--offline",
+          "aizome-kit",
+          "--lib"
+        ],
+        "seconds": 0.9377316390000487,
+        "exit_status": 0,
+        "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/plain-warm-a-relax-0-aizome-kit.log"
+      },
+      {
+        "package": "aizome-soroban",
+        "command": [
+          "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+          "test",
+          "--no-live",
+          "--allow-c",
+          "--offline",
+          "aizome-soroban",
+          "--lib"
+        ],
+        "seconds": 0.7622518930002116,
+        "exit_status": 0,
+        "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/plain-warm-a-relax-0-aizome-soroban.log"
+      }
+    ],
+    "seconds": 1.6999835320002603
+  },
+  {
+    "engine": "relax",
+    "repeat": 1,
+    "commands": [
+      {
+        "package": "aizome-kit",
+        "command": [
+          "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+          "test",
+          "--no-live",
+          "--allow-c",
+          "--offline",
+          "aizome-kit",
+          "--lib"
+        ],
+        "seconds": 0.7895595449999746,
+        "exit_status": 0,
+        "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/plain-warm-a-relax-1-aizome-kit.log"
+      },
+      {
+        "package": "aizome-soroban",
+        "command": [
+          "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+          "test",
+          "--no-live",
+          "--allow-c",
+          "--offline",
+          "aizome-soroban",
+          "--lib"
+        ],
+        "seconds": 0.6500886520002496,
+        "exit_status": 0,
+        "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/plain-warm-a-relax-1-aizome-soroban.log"
+      }
+    ],
+    "seconds": 1.4396481970002242
+  },
+  {
+    "engine": "buck2",
+    "repeat": 1,
+    "commands": [
+      {
+        "package": "aizome-kit",
+        "command": [
+          "/home/callen/sekka-work/relax-experiment-20261111/buck2/scripts/sekka-buck2",
+          "--isolation-dir",
+          "cache-compare-20261111",
+          "--cache",
+          "cache",
+          "--cache-write",
+          "--config-file",
+          "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+          "--local-content-store",
+          "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+          "-j",
+          "16",
+          "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/plain-warm-a-buck2-1-aizome-kit.report.json",
+          "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/plain-warm-a-buck2-1-aizome-kit.events.json-lines.gz",
+          "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/plain-warm-a-buck2-1-aizome-kit.build-id",
+          "test",
+          "//desktop/aizome/crates/aizome-kit:aizome_kit-test-test-lib"
+        ],
+        "seconds": 0.3808271379998587,
+        "exit_status": 0,
+        "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/plain-warm-a-buck2-1-aizome-kit.log"
+      },
+      {
+        "package": "aizome-soroban",
+        "command": [
+          "/home/callen/sekka-work/relax-experiment-20261111/buck2/scripts/sekka-buck2",
+          "--isolation-dir",
+          "cache-compare-20261111",
+          "--cache",
+          "cache",
+          "--cache-write",
+          "--config-file",
+          "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+          "--local-content-store",
+          "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+          "-j",
+          "16",
+          "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/plain-warm-a-buck2-1-aizome-soroban.report.json",
+          "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/plain-warm-a-buck2-1-aizome-soroban.events.json-lines.gz",
+          "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/plain-warm-a-buck2-1-aizome-soroban.build-id",
+          "test",
+          "//desktop/aizome/apps/soroban:aizome_soroban-test-test-lib"
+        ],
+        "seconds": 0.34724574399979247,
+        "exit_status": 0,
+        "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/plain-warm-a-buck2-1-aizome-soroban.log"
+      }
+    ],
+    "seconds": 0.7280728819996511
+  },
+  {
+    "engine": "buck2",
+    "repeat": 2,
+    "commands": [
+      {
+        "package": "aizome-kit",
+        "command": [
+          "/home/callen/sekka-work/relax-experiment-20261111/buck2/scripts/sekka-buck2",
+          "--isolation-dir",
+          "cache-compare-20261111",
+          "--cache",
+          "cache",
+          "--cache-write",
+          "--config-file",
+          "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+          "--local-content-store",
+          "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+          "-j",
+          "16",
+          "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/plain-warm-a-buck2-2-aizome-kit.report.json",
+          "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/plain-warm-a-buck2-2-aizome-kit.events.json-lines.gz",
+          "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/plain-warm-a-buck2-2-aizome-kit.build-id",
+          "test",
+          "//desktop/aizome/crates/aizome-kit:aizome_kit-test-test-lib"
+        ],
+        "seconds": 0.37523264399987966,
+        "exit_status": 0,
+        "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/plain-warm-a-buck2-2-aizome-kit.log"
+      },
+      {
+        "package": "aizome-soroban",
+        "command": [
+          "/home/callen/sekka-work/relax-experiment-20261111/buck2/scripts/sekka-buck2",
+          "--isolation-dir",
+          "cache-compare-20261111",
+          "--cache",
+          "cache",
+          "--cache-write",
+          "--config-file",
+          "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+          "--local-content-store",
+          "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+          "-j",
+          "16",
+          "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/plain-warm-a-buck2-2-aizome-soroban.report.json",
+          "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/plain-warm-a-buck2-2-aizome-soroban.events.json-lines.gz",
+          "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/plain-warm-a-buck2-2-aizome-soroban.build-id",
+          "test",
+          "//desktop/aizome/apps/soroban:aizome_soroban-test-test-lib"
+        ],
+        "seconds": 0.3357117929999731,
+        "exit_status": 0,
+        "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/plain-warm-a-buck2-2-aizome-soroban.log"
+      }
+    ],
+    "seconds": 0.7109444369998528
+  },
+  {
+    "engine": "relax",
+    "repeat": 2,
+    "commands": [
+      {
+        "package": "aizome-kit",
+        "command": [
+          "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+          "test",
+          "--no-live",
+          "--allow-c",
+          "--offline",
+          "aizome-kit",
+          "--lib"
+        ],
+        "seconds": 0.8488186599997789,
+        "exit_status": 0,
+        "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/plain-warm-a-relax-2-aizome-kit.log"
+      },
+      {
+        "package": "aizome-soroban",
+        "command": [
+          "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+          "test",
+          "--no-live",
+          "--allow-c",
+          "--offline",
+          "aizome-soroban",
+          "--lib"
+        ],
+        "seconds": 0.7282049089999418,
+        "exit_status": 0,
+        "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/plain-warm-a-relax-2-aizome-soroban.log"
+      }
+    ],
+    "seconds": 1.5770235689997207
+  }
+]

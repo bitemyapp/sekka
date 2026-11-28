@@ -1,0 +1,592 @@
+{
+  "normalization": {
+    "/home/callen/.codex/worktrees/sekka-relax-experiment/sekka": "$SEKKA",
+    "/home/callen/sekka-work/relax-experiment-20261111": "$EXPERIMENT",
+    "/home/callen/sekka-work/relax-followup-20261111": "$FOLLOWUP",
+    "/home/callen/work/relax-atomic-followup": "$LOCAL_ATOMIC",
+    "/home/callen/work/makepad-relax-dylib": "$LOCAL_MAKEPAD_PRIVATE",
+    "/home/callen/work/sekka-relax-import": "$IMPORT",
+    "/home/callen/work/makepad-relax": "$LOCAL_MAKEPAD",
+    "/home/callen/work/relax": "$LOCAL_RELAX",
+    "/home/callen/.cargo": "$CARGO_HOME",
+    "/home/callen": "$HOME"
+  },
+  "logs": "gzip, mtime=0, no filename; JSON log links adjusted to .gz",
+  "files": {
+    "followup-local/atomic-cache-baseline.log.gz": {
+      "source": "$IMPORT/followup-local/atomic-cache-baseline.log",
+      "raw_sha256": "a0f9bcbabfb43c7fa95c1dda0a99a461caad80863349cf5511d64f0738459faf",
+      "stored_sha256": "666b4b9186f215c35b84163a97a5db8121394bd9696890c1123caeaf7fc5776f"
+    },
+    "followup-local/atomic-cache-focused.log.gz": {
+      "source": "$IMPORT/followup-local/atomic-cache-focused.log",
+      "raw_sha256": "9e703cbc59cbcd531780abeed5a6aab1786a30a933e98ad5d11b604ed9bdc9b7",
+      "stored_sha256": "d053d09ec7ebad40d4bb8a9bfb6b83fa40c01ce97d476247318b9005586f99c0"
+    },
+    "followup-local/atomic-cache-front.log.gz": {
+      "source": "$IMPORT/followup-local/atomic-cache-front.log",
+      "raw_sha256": "731bac5b34e774c7a24b1bcc5a83e43195d62fc14d4325e288e5e4f6e7cb5cf3",
+      "stored_sha256": "a80863b97dc378eeb60007f948ac9b9cd7d9c03365982062c4caf16c69fbd4e7"
+    },
+    "followup-local/atomic-cache-revision.log.gz": {
+      "source": "$IMPORT/followup-local/atomic-cache-revision.log",
+      "raw_sha256": "ce4d6a04933b71afd9e6163eb9f75a045ca45fb34ca0368bbdca81f6b05d383f",
+      "stored_sha256": "763f170bc2c9bdf1aa0b37746d0245456b625c9f15885f76294996f23602c787"
+    },
+    "followup-local/atomic-cache-toolchain.log.gz": {
+      "source": "$IMPORT/followup-local/atomic-cache-toolchain.log",
+      "raw_sha256": "67528e96ca3f24cebe26a3a1be2c6264781e5f36be06d0f677fcde4dbbc11391",
+      "stored_sha256": "6c1d77c958dbba280df905a791e9e7957f99427d0aaa0e3e38050ee164a0604d"
+    },
+    "followup-local/atomic-cpu-baseline-idle.log.gz": {
+      "source": "$IMPORT/followup-local/atomic-cpu-baseline-idle.log",
+      "raw_sha256": "6a37db6d9473a28cb90cd3736233e897cb4051205af60264d11ebd2e33fba41b",
+      "stored_sha256": "95d1846f2fbbfdca80b17f0a0d35e34f03a0098212badf160575043442fe54ad"
+    },
+    "followup-local/atomic-cpu-baseline-normal.log.gz": {
+      "source": "$IMPORT/followup-local/atomic-cpu-baseline-normal.log",
+      "raw_sha256": "6155b5a14132f28cd7f70b59838e5b580ea1a88bf6dd617cb93bea36b3a81159",
+      "stored_sha256": "fa00f992b9eb2ab1710cabcb4b6b505899d3e5aa2944ef4e8cc817ab4edfdc31"
+    },
+    "followup-local/atomic-cpu-baseline.log.gz": {
+      "source": "$IMPORT/followup-local/atomic-cpu-baseline.log",
+      "raw_sha256": "b2479bc92efaaf7960d2a4293fc556cd3abedd888be47f8e952de4f6708b9ec2",
+      "stored_sha256": "f491fd089b61b12d82e43d89253bb75f3f76f9eb7453aab44d0d2d59f614021f"
+    },
+    "followup-local/atomic-cpu-fixed-idle.log.gz": {
+      "source": "$IMPORT/followup-local/atomic-cpu-fixed-idle.log",
+      "raw_sha256": "e547e98335f14f374ea77fb5f42089cb3044e68c84213ab55bfd30f85495fb68",
+      "stored_sha256": "4a7a54c8283790c7674552556d56c6a3d622b404452af5e109f8b3eca8ceb175"
+    },
+    "followup-local/atomic-cpu-fixed-normal.log.gz": {
+      "source": "$IMPORT/followup-local/atomic-cpu-fixed-normal.log",
+      "raw_sha256": "bd6e3dce683600d6ac3328e74217cd1e32f5f83c9236667e494b61702cd5a13e",
+      "stored_sha256": "09aa31569fb6252984bbe83e63a2d76e8a3f9556271cffc00549885c094ddc0e"
+    },
+    "followup-local/atomic-cpu-full.log.gz": {
+      "source": "$IMPORT/followup-local/atomic-cpu-full.log",
+      "raw_sha256": "1c5c0813378a8ba94380f698ae5de5a609016c6bf7ebd484caef508d2bcad200",
+      "stored_sha256": "71e3e701bf3aedc50c63b415e0a49a7d427160e114fea1d7e58dd8d074708f11"
+    },
+    "followup-local/atomic-heap-focused.log.gz": {
+      "source": "$IMPORT/followup-local/atomic-heap-focused.log",
+      "raw_sha256": "d9d7ada5010ddae2d2bf7eebfd7c86804f2a0a42f7823f6bf7f6002f9c254da1",
+      "stored_sha256": "756c1c81294341ff103db94edb42b098092282dfcc8c605c69728648a35f43c4"
+    },
+    "followup-local/atomic-heap-revision.log.gz": {
+      "source": "$IMPORT/followup-local/atomic-heap-revision.log",
+      "raw_sha256": "bf2ca4465f7f8ceb6c21cb0454727c6128fb2547f2050d3961e3dd148e778b1f",
+      "stored_sha256": "13c0fb0bd462a74e2f42cf0d2a3557a55e017cc98c3248686ec8950041b1b436"
+    },
+    "followup-local/atomic-parent-build.log.gz": {
+      "source": "$IMPORT/followup-local/atomic-parent-build.log",
+      "raw_sha256": "9b756e7cbe58bd5a85bb3e2ec538406952060847a082479070f60d8695fc81f7",
+      "stored_sha256": "be52153871bd15c7f810d0342c96777eef64af55ba7b57e2da9e11df6fdc75c1"
+    },
+    "followup-local/atomic-parent-shadow-baseline.log.gz": {
+      "source": "$IMPORT/followup-local/atomic-parent-shadow-baseline.log",
+      "raw_sha256": "c22d79b4acf4a4b186f60632295bfeda4cd05711f0ec1828c02f71380883c339",
+      "stored_sha256": "a5ffafc005d918c234700630f63a18cab61fbdbfd4d4f34628aa31584284273a"
+    },
+    "followup-local/atomic-parent-shadow-build.log.gz": {
+      "source": "$IMPORT/followup-local/atomic-parent-shadow-build.log",
+      "raw_sha256": "284f272518f4973833f75d381fa68ab4ffeaafe8578c9ec5b31148dff36c752f",
+      "stored_sha256": "e144bd2174bdf8094c8516937b1cffae91ed9c8d55472a8d085036b5b3efb415"
+    },
+    "followup-local/atomic-parent-shadow-validation.log.gz": {
+      "source": "$IMPORT/followup-local/atomic-parent-shadow-validation.log",
+      "raw_sha256": "2eedf8331f07b79b6225569ce847ff9a67076303d1853e33cfcc1a7634a674ed",
+      "stored_sha256": "8335fb1df3394f122cb0edca0b9584bc1429352086993f5993688c3943870cd5"
+    },
+    "followup-local/atomic-parent-validation.log.gz": {
+      "source": "$IMPORT/followup-local/atomic-parent-validation.log",
+      "raw_sha256": "d98cc5d554c49b168956dab7559714d4a8f36bdc03b4e272003bdc25b844d64e",
+      "stored_sha256": "8f911613064ecb64c04d6955bb8aabca1e9800082fbf06eb1734aa0a3ea9f995"
+    },
+    "followup-remote/atomic-inner-independent.log.gz": {
+      "source": "$IMPORT/followup-remote/atomic-inner-independent.log",
+      "raw_sha256": "ad4747461a136d9ed369db21df1df2690d537eaa3c3dc6441ea4d44fbf457784",
+      "stored_sha256": "be2d0b8d6c919c169a0ed926bd8a52c1b5c618284a3c75a4d693597c36c24ec4"
+    },
+    "followup-remote/backcompat-regressions/attribute-macro-private-module-relax.log.gz": {
+      "source": "$IMPORT/followup-remote/backcompat-regressions/attribute-macro-private-module-relax.log",
+      "raw_sha256": "952f262d9ee9ac7b591240cb4077f801d48eef48bf1e97a8c358d7ad11bf32c1",
+      "stored_sha256": "0bf68683be266a3cab8487f3f7e680eeef1affbab4bd2d5785d388ae65f92b70"
+    },
+    "followup-remote/backcompat-regressions/attribute-macro-private-module-rustc.log.gz": {
+      "source": "$IMPORT/followup-remote/backcompat-regressions/attribute-macro-private-module-rustc.log",
+      "raw_sha256": "16cca0b49afa078c8a403815e4eb16dd0b0bb261ae7c79ed01312bbd6a8c26a7",
+      "stored_sha256": "2101520b5283ece6d4aa4c16a973abe4886110486ffcdfb0b581490eba1bf2c9"
+    },
+    "followup-remote/backcompat-regressions/exported_macro_absolute_import_reject-relax.log.gz": {
+      "source": "$IMPORT/followup-remote/backcompat-regressions/exported_macro_absolute_import_reject-relax.log",
+      "raw_sha256": "4840b9b76b84a6f3f3442cc607905eae07d96a62be64420fae31b28f5dd48ae9",
+      "stored_sha256": "15b30bf4058999e010d1c815426bf45f000c6c74217b1662cbefbc528ac5465e"
+    },
+    "followup-remote/backcompat-regressions/exported_macro_absolute_import_reject-rustc-compile.log.gz": {
+      "source": "$IMPORT/followup-remote/backcompat-regressions/exported_macro_absolute_import_reject-rustc-compile.log",
+      "raw_sha256": "a990a0ec94f3f4a66d4fbefa5fed7e5bd9dde690eebe29b8e56b3d4712d4a12a",
+      "stored_sha256": "c4826f7671661d4b837c8c648f77dae939ad5039d7fe8abff57e0c1d03d00a3b"
+    },
+    "followup-remote/backcompat-regressions/exported_macro_and_value_reexport-relax.log.gz": {
+      "source": "$IMPORT/followup-remote/backcompat-regressions/exported_macro_and_value_reexport-relax.log",
+      "raw_sha256": "7cd1716972b701c4d3a21d363fa1de8c7afc75d7d880ac8d46cbeaccbde68635",
+      "stored_sha256": "cfabc352dbd78f4bdf49cb36350b88da6bb6b7403d580f08bd15b72f04e4690f"
+    },
+    "followup-remote/backcompat-regressions/exported_macro_and_value_reexport-rustc-compile.log.gz": {
+      "source": "$IMPORT/followup-remote/backcompat-regressions/exported_macro_and_value_reexport-rustc-compile.log",
+      "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stored_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    "followup-remote/backcompat-regressions/exported_macro_and_value_reexport-rustc.log.gz": {
+      "source": "$IMPORT/followup-remote/backcompat-regressions/exported_macro_and_value_reexport-rustc.log",
+      "raw_sha256": "9c74695f4eadb9574d8e8324d7eec1019b29a70ad1e82152cc9f20563917491f",
+      "stored_sha256": "f7aa8eea61c3a426755343513d19c69d6c51a9401f2f08b24ab3e5d84bbaf50a"
+    },
+    "followup-remote/backcompat-regressions/exported_macro_builtin_reexport_reject-relax.log.gz": {
+      "source": "$IMPORT/followup-remote/backcompat-regressions/exported_macro_builtin_reexport_reject-relax.log",
+      "raw_sha256": "3da8e5120d19826c6f444d41439a5474bfbcc81d8d65833078baeb7f3c29bdb2",
+      "stored_sha256": "27f0802ec232a4302164bf89c308f090d1fbaaf3bd71ea9a02dda07083662955"
+    },
+    "followup-remote/backcompat-regressions/exported_macro_builtin_reexport_reject-rustc-compile.log.gz": {
+      "source": "$IMPORT/followup-remote/backcompat-regressions/exported_macro_builtin_reexport_reject-rustc-compile.log",
+      "raw_sha256": "d61c020c41cb727caba287ee2facf8ec6a768e60c97bd7258b38df65cfa949fb",
+      "stored_sha256": "d0ab73895d68ce3d23a05a80952fee1a3c73b6d311a6a954766de6ba136cbcdb"
+    },
+    "followup-remote/backcompat-regressions/macro_expansion_textual_scope-relax.log.gz": {
+      "source": "$IMPORT/followup-remote/backcompat-regressions/macro_expansion_textual_scope-relax.log",
+      "raw_sha256": "74844b6698bf92ec43b2019dfa3e239027c64eb1b4f49e5fb2ca2fc21df90aaa",
+      "stored_sha256": "6ada9a46e893d9f33b587eee459adf1a7c2198b8a17064d8b0a49f1aeb997083"
+    },
+    "followup-remote/backcompat-regressions/macro_expansion_textual_scope-rustc-compile.log.gz": {
+      "source": "$IMPORT/followup-remote/backcompat-regressions/macro_expansion_textual_scope-rustc-compile.log",
+      "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stored_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    "followup-remote/backcompat-regressions/macro_expansion_textual_scope-rustc.log.gz": {
+      "source": "$IMPORT/followup-remote/backcompat-regressions/macro_expansion_textual_scope-rustc.log",
+      "raw_sha256": "43b172e6462e3af6f8e7286278e51a1c85d0e0f31cefec786ae3f6569a037c44",
+      "stored_sha256": "baf04cd85a37ebea93b5962f0a01537b08440a5d906dc312e91c82c0791785b2"
+    },
+    "followup-remote/backcompat-regressions/results.json": {
+      "source": "$IMPORT/followup-remote/backcompat-regressions/results.json",
+      "raw_sha256": "4694fe1a5d41bd8efc649c777e3cc919cbee4be3bc453c4e70e7e52c941ae968",
+      "stored_sha256": "c862563b022313d821229abf4c1de3d051a35ecc749f97b2758a3b57b4452b1d"
+    },
+    "followup-remote/backcompat-regressions/sse2_load_requires_unsafe_reject-relax.log.gz": {
+      "source": "$IMPORT/followup-remote/backcompat-regressions/sse2_load_requires_unsafe_reject-relax.log",
+      "raw_sha256": "637bc30afe0f1fdd612fe9ab12634fec7444b41e6c1c01b206d615d957d1677c",
+      "stored_sha256": "41daf93914a1c7bc865ed3ce115c96ef41228485a8d333eba165fd37354fe575"
+    },
+    "followup-remote/backcompat-regressions/sse2_load_requires_unsafe_reject-rustc-compile.log.gz": {
+      "source": "$IMPORT/followup-remote/backcompat-regressions/sse2_load_requires_unsafe_reject-rustc-compile.log",
+      "raw_sha256": "fd3475b4d802aa5f565991f1bdc1a2229e3f0c99ac7f2f12f619db4a09faeb2f",
+      "stored_sha256": "2a87e4c8cbefea9641e54509dca28f8eab32b254109dbce0f98a8087afdbc9e9"
+    },
+    "followup-remote/backcompat-regressions/sse2_safe_byte_intrinsics-relax.log.gz": {
+      "source": "$IMPORT/followup-remote/backcompat-regressions/sse2_safe_byte_intrinsics-relax.log",
+      "raw_sha256": "5ec280435ab0ddf1888b1967312e9bc1fc5c176533fc417a7315727d1c4219c4",
+      "stored_sha256": "bb20498654f9fa90b9d4d4e21b8f4f099f877c5e310ebba2cfcca05235d79c78"
+    },
+    "followup-remote/backcompat-regressions/sse2_safe_byte_intrinsics-rustc-compile.log.gz": {
+      "source": "$IMPORT/followup-remote/backcompat-regressions/sse2_safe_byte_intrinsics-rustc-compile.log",
+      "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stored_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    "followup-remote/backcompat-regressions/sse2_safe_byte_intrinsics-rustc.log.gz": {
+      "source": "$IMPORT/followup-remote/backcompat-regressions/sse2_safe_byte_intrinsics-rustc.log",
+      "raw_sha256": "f81f11a4b679c81576d30539946504162e94d1f05348904148b9ed56d15a059d",
+      "stored_sha256": "544d14fb858f7cf315b4b3d5a9ba0455130cbb6c52c2579858286bfeb2fbfbc5"
+    },
+    "followup-remote/final-build.log.gz": {
+      "source": "$IMPORT/followup-remote/final-build.log",
+      "raw_sha256": "c386de11563665018ddede96b3273219e5c3f3d4de7a46944d5d1f4155b44ad3",
+      "stored_sha256": "fd310027eea375a6f8ea8115e794e8638c27cfaeb05501130096ea5357056ad6"
+    },
+    "followup-remote/final-components/aizome-config-relax-1.log.gz": {
+      "source": "$IMPORT/followup-remote/final-components/aizome-config-relax-1.log",
+      "raw_sha256": "51e2c8787106a0e7321a3c50c60679994d378578f0d846ea7931cf442984c451",
+      "stored_sha256": "5b0da1bcac00642ad0bccac8d96952633d8e12e1301cb985d5366485b0c03368"
+    },
+    "followup-remote/final-components/aizome-config-rustc-1.log.gz": {
+      "source": "$IMPORT/followup-remote/final-components/aizome-config-rustc-1.log",
+      "raw_sha256": "435b045f39d8b36e931b3c8cfedb8c48347e3a076529ff2be56978345dc9a732",
+      "stored_sha256": "947efdd1dbbd766a26c279b8e15c20f0c08618a56fabdbfc4318e3cdd5abd881"
+    },
+    "followup-remote/final-components/aizome-ipc-relax-1.log.gz": {
+      "source": "$IMPORT/followup-remote/final-components/aizome-ipc-relax-1.log",
+      "raw_sha256": "c050c4bec0b1108ee41d4d02a321e9c9b7c60222c51565aebe98669ed386e31e",
+      "stored_sha256": "bf8eb21507b5e62852d89514d78bb5de7d92f95e012e53050429ee00a2c456f2"
+    },
+    "followup-remote/final-components/aizome-ipc-rustc-1.log.gz": {
+      "source": "$IMPORT/followup-remote/final-components/aizome-ipc-rustc-1.log",
+      "raw_sha256": "3a548acf238b641df208195ce20dfb6a57ea8223f755364e391a7c2853aca1cd",
+      "stored_sha256": "6e96750b80ee2b8681d7541d7ac3b6778a4045c392733c52e85d3773bfa43e5e"
+    },
+    "followup-remote/final-components/aizome-kit-relax-1.log.gz": {
+      "source": "$IMPORT/followup-remote/final-components/aizome-kit-relax-1.log",
+      "raw_sha256": "1e3c05a84f002709003fdb4a4327a5c295672051e9dc59d4efdf9b140431bc1f",
+      "stored_sha256": "6fc147781011f0eade3f8525680d669e65b2eb27466a579cb4d35b1181e38acb"
+    },
+    "followup-remote/final-components/aizome-kit-rustc-1.log.gz": {
+      "source": "$IMPORT/followup-remote/final-components/aizome-kit-rustc-1.log",
+      "raw_sha256": "35d62b0cf4d9982114c5e2c48b3438e40d3f778136f9d803abe6121113b29b80",
+      "stored_sha256": "d20b13b796e49ee64a1317b3d3fbf4bc727e6543d9f55c2dc50ff29faa3f4b2b"
+    },
+    "followup-remote/final-components/aizome-shell-proto-relax-1.log.gz": {
+      "source": "$IMPORT/followup-remote/final-components/aizome-shell-proto-relax-1.log",
+      "raw_sha256": "bd27cf38d0beee4b24bdf48d948f1cf9f1972dae1c3c303140b62dbd521033ae",
+      "stored_sha256": "f5e8a197b0a16cb58870be0481616e0ff033f04764c03b3b8942da3eee0918e5"
+    },
+    "followup-remote/final-components/aizome-shell-proto-rustc-1.log.gz": {
+      "source": "$IMPORT/followup-remote/final-components/aizome-shell-proto-rustc-1.log",
+      "raw_sha256": "9320fd6fd493435553d4a7b5a5b33c45442447844a30fabdf1c47f22b782f7e8",
+      "stored_sha256": "68c52ac10b83751dd5bd6069336b98c2ce90479e264039444bcfbef30aced5a6"
+    },
+    "followup-remote/final-components/aizome-soroban-relax-1.log.gz": {
+      "source": "$IMPORT/followup-remote/final-components/aizome-soroban-relax-1.log",
+      "raw_sha256": "216709fa787a882384dd55fdcbaf846c4d5ba6da1ef7626b8f99202eebfa7756",
+      "stored_sha256": "dd099bfdc7859494d01194f428592bc92ea3716fb700f6ca048da2273299b067"
+    },
+    "followup-remote/final-components/aizome-soroban-rustc-1.log.gz": {
+      "source": "$IMPORT/followup-remote/final-components/aizome-soroban-rustc-1.log",
+      "raw_sha256": "2b120a0c561d453e5e54c7f2fd9b16909b7b50fb291c3d03601566850661634c",
+      "stored_sha256": "114845ebf5554a3e3b53d1c727d0dbcd6e1cd4329196b0026312706c05d007e9"
+    },
+    "followup-remote/final-components/aizome-theme-relax-1.log.gz": {
+      "source": "$IMPORT/followup-remote/final-components/aizome-theme-relax-1.log",
+      "raw_sha256": "1d3bce66f5d7c10614256dbea48c3f67e6fcb5a56d482884d249ec010bc1ced0",
+      "stored_sha256": "80c17e386243a87237eded1459fd7b1d0edd98db35d0d34f32713786118d5950"
+    },
+    "followup-remote/final-components/aizome-theme-rustc-1.log.gz": {
+      "source": "$IMPORT/followup-remote/final-components/aizome-theme-rustc-1.log",
+      "raw_sha256": "4b75530b3ac6a8ca036e17513194c84919c26bf4546a6ce133b0a2f58488a216",
+      "stored_sha256": "e21ea90536dd244ff9d1eb90d23e2dbc770a99d117f5d2212ca53145a60999ba"
+    },
+    "followup-remote/final-components/calamares-session-env-relax-1.log.gz": {
+      "source": "$IMPORT/followup-remote/final-components/calamares-session-env-relax-1.log",
+      "raw_sha256": "ba1290f4725421fd5218516f6612c99e40867d0a5779e29bea850e62091fcdfa",
+      "stored_sha256": "33ac225db0ebd485f394c1401e9e5ce7c032d291f1d3becab28b456a5a3d0343"
+    },
+    "followup-remote/final-components/calamares-session-env-rustc-1.log.gz": {
+      "source": "$IMPORT/followup-remote/final-components/calamares-session-env-rustc-1.log",
+      "raw_sha256": "f258f097262dc9d643f08a13edc27f0bfed1e2bbd45f531558142d15056e1079",
+      "stored_sha256": "081fec3954804c4c4b22efe0ac47b934bce4bdf01ef4b8a4e3d334e74f3a57bf"
+    },
+    "followup-remote/final-components/hotaru-core-relax-1.log.gz": {
+      "source": "$IMPORT/followup-remote/final-components/hotaru-core-relax-1.log",
+      "raw_sha256": "5480ba41d66631f3ded309fd1d2e1fb998dad9f6f365c46cc5ef9ca4fcf89766",
+      "stored_sha256": "76ad61d40b647b3c73d242be8143048a8e7213e84bbb901cf2435a381792880b"
+    },
+    "followup-remote/final-components/hotaru-core-rustc-1.log.gz": {
+      "source": "$IMPORT/followup-remote/final-components/hotaru-core-rustc-1.log",
+      "raw_sha256": "ef35b38cc25497a845b393aa43cd2e2763ae2f4ec7973fa6ab223735da0e037a",
+      "stored_sha256": "813f794923e6b86f5007ffa70ba1954a39af97d1e0767c7db8a590a9d78ed12f"
+    },
+    "followup-remote/final-components/hotaru-io-relax-1.log.gz": {
+      "source": "$IMPORT/followup-remote/final-components/hotaru-io-relax-1.log",
+      "raw_sha256": "31e0b1bba01f7f59c1b8f4fbf9e9932f052fecab1a231dbfe2609be3d615bef6",
+      "stored_sha256": "1259b0dce3c3bd59dd7d99866120db9dd5dc46d10118a276290d98713dee7097"
+    },
+    "followup-remote/final-components/hotaru-io-rustc-1.log.gz": {
+      "source": "$IMPORT/followup-remote/final-components/hotaru-io-rustc-1.log",
+      "raw_sha256": "89f72ee9ec0019db25dbbd86b19078b05c2635fd005b051cf0981325c50d2088",
+      "stored_sha256": "6f5f644408cd610d55ffce86fb2cca531a8743722db4200f937a61d409d3a580"
+    },
+    "followup-remote/final-components/hotaru-link-regex-relax-1.log.gz": {
+      "source": "$IMPORT/followup-remote/final-components/hotaru-link-regex-relax-1.log",
+      "raw_sha256": "3570344168db4ae0c9d2ec82f85c9c54c6562021c07d1e52f094c90601e29acc",
+      "stored_sha256": "76e76d450551bce5da5d9c5b5228068cb9c2f634ba422d6eeb4cd86a4cc48e79"
+    },
+    "followup-remote/final-components/hotaru-link-regex-rustc-1.log.gz": {
+      "source": "$IMPORT/followup-remote/final-components/hotaru-link-regex-rustc-1.log",
+      "raw_sha256": "df1812ec369566f74a8ea5c5dd4e8aefdbeb3b21ab27acab18354388ef7fce2a",
+      "stored_sha256": "1be5a2224f1d4d4d5ce929e88eb537dbf73c5754ec821401b53f866046146ba5"
+    },
+    "followup-remote/final-components/hotaru-sprites-relax-1.log.gz": {
+      "source": "$IMPORT/followup-remote/final-components/hotaru-sprites-relax-1.log",
+      "raw_sha256": "1a468f306bcfc602502641157fdfcb2809538c38f4047f45efd8aadd1d430e9a",
+      "stored_sha256": "36cb5153f88fb503029ff71ff7164711b03c515545862ab764bb165645540268"
+    },
+    "followup-remote/final-components/hotaru-sprites-rustc-1.log.gz": {
+      "source": "$IMPORT/followup-remote/final-components/hotaru-sprites-rustc-1.log",
+      "raw_sha256": "f1894ab36f973710e8657b9c51a01e3471df053e38531b0e340708bcda774efb",
+      "stored_sha256": "70c99fb5ac48b90e5ad6d880e6487214a75ba66d4bd9d04e4f29453e6972c113"
+    },
+    "followup-remote/final-components/respin-tools-relax-1.log.gz": {
+      "source": "$IMPORT/followup-remote/final-components/respin-tools-relax-1.log",
+      "raw_sha256": "7d528a8a3fd64495401d02b652b2f08da3e62533fbb35250b5e82b8b29754d46",
+      "stored_sha256": "d78642c72e51c760e2b3bf5ad3ceffb9a6550b6612dfeba21e61d61b14a542b2"
+    },
+    "followup-remote/final-components/respin-tools-rustc-1.log.gz": {
+      "source": "$IMPORT/followup-remote/final-components/respin-tools-rustc-1.log",
+      "raw_sha256": "0bf97dbb7603ca6629a262df48df5bdcb6c03c407d2b8c21e509ee79e7a69510",
+      "stored_sha256": "b9ed40255467247996a5067ffadcf0f33b13491912c4efec1ad6975d64c60f62"
+    },
+    "followup-remote/final-components/results.json": {
+      "source": "$IMPORT/followup-remote/final-components/results.json",
+      "raw_sha256": "8e0b4109c217a80dc02799b099ab7bc04f0b1679e4b163b67bd30751cbab8166",
+      "stored_sha256": "02fb02c1971959a46911232d5c7b827532a430469084a49ae608a4bc1c25bcdd"
+    },
+    "followup-remote/final-compositor-eager/aizome-comp-relax-1.log.gz": {
+      "source": "$IMPORT/followup-remote/final-compositor-eager/aizome-comp-relax-1.log",
+      "raw_sha256": "34ad6f17954b739bc0393247717b448d36c6fe696c886ef6cee31bc16377d94b",
+      "stored_sha256": "9a4eba328d938eeaf8f6e71d66e3553fbe1d8d2d877486bc3d42b31280815461"
+    },
+    "followup-remote/final-compositor-eager/results.json": {
+      "source": "$IMPORT/followup-remote/final-compositor-eager/results.json",
+      "raw_sha256": "5d0634e4bcc4f4bee2ccbe2a82917688eb9b4dc70383971ab3d8a2f1a879301a",
+      "stored_sha256": "596a4e1e18285e7b5774c377677a5e7f1b083226f9df5385114715728c91683a"
+    },
+    "followup-remote/final-compositor/aizome-comp-relax-1.log.gz": {
+      "source": "$IMPORT/followup-remote/final-compositor/aizome-comp-relax-1.log",
+      "raw_sha256": "676b382d8d903d420b097da55b125446e35e4578a17b79bee9911162cba42825",
+      "stored_sha256": "ffb29de42699848a933ad0ef91a25ebb25cad692b9a303e205a6944db7b67a4a"
+    },
+    "followup-remote/final-compositor/aizome-comp-relax-2.log.gz": {
+      "source": "$IMPORT/followup-remote/final-compositor/aizome-comp-relax-2.log",
+      "raw_sha256": "6b467112c397bdf529545ef4538326ff96a27ef6492a55304e5a2205b54f9ecc",
+      "stored_sha256": "e3fcbeb04d58c5d4e34ff9ef8471d9ccb28d4054b92c1883f71e953e8b5059d0"
+    },
+    "followup-remote/final-compositor/aizome-comp-rustc-1.log.gz": {
+      "source": "$IMPORT/followup-remote/final-compositor/aizome-comp-rustc-1.log",
+      "raw_sha256": "b4ce67f28caac9388935f884766ddacc482027b3a0239535afe20e2adaeda276",
+      "stored_sha256": "9039da2c4f42c5a3247aa884ac5fffbae7e0f1675dd8d8d37452b6859b2c4179"
+    },
+    "followup-remote/final-compositor/aizome-comp-rustc-2.log.gz": {
+      "source": "$IMPORT/followup-remote/final-compositor/aizome-comp-rustc-2.log",
+      "raw_sha256": "0acb0a2bff112598410ca24f63b4158caab27357f014792e2fc332a5208bbbe4",
+      "stored_sha256": "95c935f46ae6675f3f7d72db89173326e09cd04a413cc354b5dcbf54a5220e90"
+    },
+    "followup-remote/final-compositor/results.json": {
+      "source": "$IMPORT/followup-remote/final-compositor/results.json",
+      "raw_sha256": "51ad97717611af8f94ab095ccbcaa0adf2759b0f5d6acca881c1ce656ef89478",
+      "stored_sha256": "2e41cf89520cfbfb9c2b73c3b47482550e24bfb353d42e82abc16d7084b2fa98"
+    },
+    "followup-remote/final-metadata.log.gz": {
+      "source": "$IMPORT/followup-remote/final-metadata.log",
+      "raw_sha256": "7c15f12fecbe6afa74089f86b6545ab1a49e40b0e4f9ba542597d9b874491932",
+      "stored_sha256": "d104a891369dad8b00ec169e3b543d4bf497ff489b79bcda4c9d0bd68f6f71aa"
+    },
+    "followup-remote/final-regressions/attribute-macro-private-module-relax.log.gz": {
+      "source": "$IMPORT/followup-remote/final-regressions/attribute-macro-private-module-relax.log",
+      "raw_sha256": "d7f38f5f24c44234a5e48c625a7093bf5bfeba9319f937f778c3daa2cf15e562",
+      "stored_sha256": "dd73c5ad44605ed0c108aed3d5b7564bbbfe58585ebb95871fd826c9f0edafe1"
+    },
+    "followup-remote/final-regressions/attribute-macro-private-module-rustc.log.gz": {
+      "source": "$IMPORT/followup-remote/final-regressions/attribute-macro-private-module-rustc.log",
+      "raw_sha256": "a1b4965a427d89d8026ae85c11d96df469d3ff14cb62800f5177cf6a8010cb4b",
+      "stored_sha256": "8336a767d5539b1dfbc57af28c830d20e4cbbf4278935c70b2fd2097a2eb903c"
+    },
+    "followup-remote/final-regressions/exported_macro_absolute_import_reject-relax.log.gz": {
+      "source": "$IMPORT/followup-remote/final-regressions/exported_macro_absolute_import_reject-relax.log",
+      "raw_sha256": "3be2f885a672357ce8e9da1ef48200fbeaa48de2d6505805a4c9c56d94d3c1be",
+      "stored_sha256": "59758f3b358f625fb5f5671cbdecc66a5b08cdb52fc256bb9be11b117c2062a8"
+    },
+    "followup-remote/final-regressions/exported_macro_absolute_import_reject-rustc-compile.log.gz": {
+      "source": "$IMPORT/followup-remote/final-regressions/exported_macro_absolute_import_reject-rustc-compile.log",
+      "raw_sha256": "2f9b670cf605586ee6d0c1cceb008e190c3b3819e8c5c1612bae30ab00e63df3",
+      "stored_sha256": "07d1697d4f2ecd2de3ee7a54651a12f1b139a2cddbdba74ea058625c0ae6fcca"
+    },
+    "followup-remote/final-regressions/exported_macro_and_value_reexport-relax.log.gz": {
+      "source": "$IMPORT/followup-remote/final-regressions/exported_macro_and_value_reexport-relax.log",
+      "raw_sha256": "71c5c9aacaeef96ca6d3bd844cc6e58d854eb66c8cab54875b2b4aec407eb8fb",
+      "stored_sha256": "64d1f549292a72534577f7263597c51281894699c78dcbb429ef0c19ae328167"
+    },
+    "followup-remote/final-regressions/exported_macro_and_value_reexport-rustc-compile.log.gz": {
+      "source": "$IMPORT/followup-remote/final-regressions/exported_macro_and_value_reexport-rustc-compile.log",
+      "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stored_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    "followup-remote/final-regressions/exported_macro_and_value_reexport-rustc.log.gz": {
+      "source": "$IMPORT/followup-remote/final-regressions/exported_macro_and_value_reexport-rustc.log",
+      "raw_sha256": "9c74695f4eadb9574d8e8324d7eec1019b29a70ad1e82152cc9f20563917491f",
+      "stored_sha256": "f7aa8eea61c3a426755343513d19c69d6c51a9401f2f08b24ab3e5d84bbaf50a"
+    },
+    "followup-remote/final-regressions/exported_macro_builtin_reexport_reject-relax.log.gz": {
+      "source": "$IMPORT/followup-remote/final-regressions/exported_macro_builtin_reexport_reject-relax.log",
+      "raw_sha256": "f0bec1ab9d562d648b79b4e0d64645de3c7a5cb58da73f3379f5376817f03e49",
+      "stored_sha256": "c877d47b850855953635ad48fb058f8c86756784b6ca0e2dff672f941507799d"
+    },
+    "followup-remote/final-regressions/exported_macro_builtin_reexport_reject-rustc-compile.log.gz": {
+      "source": "$IMPORT/followup-remote/final-regressions/exported_macro_builtin_reexport_reject-rustc-compile.log",
+      "raw_sha256": "aca75316ffccfdd1f899b2e01397f01f71b900ac75777f574a8455c967a8161b",
+      "stored_sha256": "efcc0481adee36e16889dfedf377d52d440b92f38db9a2ec2a51c8e7a0043716"
+    },
+    "followup-remote/final-regressions/macro_expansion_textual_scope-relax.log.gz": {
+      "source": "$IMPORT/followup-remote/final-regressions/macro_expansion_textual_scope-relax.log",
+      "raw_sha256": "8ed95986b67788501f78942166a719edf4d100bf7c78a8f12d7e358e8c2ec8ad",
+      "stored_sha256": "a1b81faa18c969ab564f2ccf3b33997cf4f87e73f507ddf70268d6e864578a8f"
+    },
+    "followup-remote/final-regressions/macro_expansion_textual_scope-rustc-compile.log.gz": {
+      "source": "$IMPORT/followup-remote/final-regressions/macro_expansion_textual_scope-rustc-compile.log",
+      "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stored_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    "followup-remote/final-regressions/macro_expansion_textual_scope-rustc.log.gz": {
+      "source": "$IMPORT/followup-remote/final-regressions/macro_expansion_textual_scope-rustc.log",
+      "raw_sha256": "43b172e6462e3af6f8e7286278e51a1c85d0e0f31cefec786ae3f6569a037c44",
+      "stored_sha256": "baf04cd85a37ebea93b5962f0a01537b08440a5d906dc312e91c82c0791785b2"
+    },
+    "followup-remote/final-regressions/macro_file_before_module_reject-relax.log.gz": {
+      "source": "$IMPORT/followup-remote/final-regressions/macro_file_before_module_reject-relax.log",
+      "raw_sha256": "0246318830cb29f53432b8e3cf7d77f235edb0093104b734dbe8bec6ac599aa4",
+      "stored_sha256": "f976de429ca8104a96b87e18a459224fa41433c90db350345fbb2d45690a27c1"
+    },
+    "followup-remote/final-regressions/macro_file_before_module_reject-rustc-compile.log.gz": {
+      "source": "$IMPORT/followup-remote/final-regressions/macro_file_before_module_reject-rustc-compile.log",
+      "raw_sha256": "ba5e656e6a9dd7200beeba212bc7dfed6c3c892158413335b84637327c0a1d39",
+      "stored_sha256": "fc6823edb2c158bec5e717882b0500b5598e04226c3c995edb5d098972e2724e"
+    },
+    "followup-remote/final-regressions/macro_file_order-relax.log.gz": {
+      "source": "$IMPORT/followup-remote/final-regressions/macro_file_order-relax.log",
+      "raw_sha256": "6633b6daa6ea4a84cea192cafc335a5ecdb9a645b3b3ad81de3106d5222a68a6",
+      "stored_sha256": "53b65e48cb8f61f8226907ca7621166cc3f543a02c27ae445e67c011e234cbf3"
+    },
+    "followup-remote/final-regressions/macro_file_order-rustc-compile.log.gz": {
+      "source": "$IMPORT/followup-remote/final-regressions/macro_file_order-rustc-compile.log",
+      "raw_sha256": "9c56986ad0e80c6d91531012ab092557f5545a0854e2092183c3fa880e8b829a",
+      "stored_sha256": "5851826a1bc07900a3bad12023ce4b52eaa80af2e8d0ddcdf2ad541528937ea7"
+    },
+    "followup-remote/final-regressions/macro_file_order-rustc.log.gz": {
+      "source": "$IMPORT/followup-remote/final-regressions/macro_file_order-rustc.log",
+      "raw_sha256": "5ac83516f8d8101902207ff55d6665e5c840f573fcdd99da8fb7e0ed8e89926b",
+      "stored_sha256": "b47cc9871d227f83c245a936a9a96cdeec52b99189f1cace11b36c3f18cc2634"
+    },
+    "followup-remote/final-regressions/macro_file_shadow-relax.log.gz": {
+      "source": "$IMPORT/followup-remote/final-regressions/macro_file_shadow-relax.log",
+      "raw_sha256": "152551234471a6106fffbcfe9f80f4398b6b05f0597acdb8311bc5faa498ee3a",
+      "stored_sha256": "e9dfaf96d18ce978188e759cf9ec9c3a7a824c8d5a93688bd9f3f1945f6e0b1b"
+    },
+    "followup-remote/final-regressions/macro_file_shadow-rustc-compile.log.gz": {
+      "source": "$IMPORT/followup-remote/final-regressions/macro_file_shadow-rustc-compile.log",
+      "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stored_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    "followup-remote/final-regressions/macro_file_shadow-rustc.log.gz": {
+      "source": "$IMPORT/followup-remote/final-regressions/macro_file_shadow-rustc.log",
+      "raw_sha256": "33c8bb0489ceef5489dbc2ea5d544ac74829aa93582c2c05b84166f65b9c6261",
+      "stored_sha256": "17e87b89c95deafe150e89c715852d9ffd8acf90931e88a1a561fdea42112dd9"
+    },
+    "followup-remote/final-regressions/macro_inner_use-relax.log.gz": {
+      "source": "$IMPORT/followup-remote/final-regressions/macro_inner_use-relax.log",
+      "raw_sha256": "29d207e7aa4ace9c0ae7d92cdbe8993bd4a8fe2a995af29a83b9de93ea929479",
+      "stored_sha256": "df348e8e5e0ef240fd098aeff9362a59d50a6bdfde7ec25fa4aaf3f7da9028c9"
+    },
+    "followup-remote/final-regressions/macro_inner_use-rustc-compile.log.gz": {
+      "source": "$IMPORT/followup-remote/final-regressions/macro_inner_use-rustc-compile.log",
+      "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stored_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    "followup-remote/final-regressions/macro_inner_use-rustc.log.gz": {
+      "source": "$IMPORT/followup-remote/final-regressions/macro_inner_use-rustc.log",
+      "raw_sha256": "9e3d2e5283e2a5631eb7ae21fad691803ccb70bf0ed1221c2d361d4c735386e8",
+      "stored_sha256": "a99746ba08474ea5dd36717fc771e50bc73329ba9c52a49271471c85345d0893"
+    },
+    "followup-remote/final-regressions/macro_inner_use_before_module_reject-relax.log.gz": {
+      "source": "$IMPORT/followup-remote/final-regressions/macro_inner_use_before_module_reject-relax.log",
+      "raw_sha256": "247c3972e36cd80f06d9f618b5eeebf86f2c3dcc271862752af274d91fa6b84c",
+      "stored_sha256": "1f92b3eb8ff63ce7dd3d69ee4efb93114f2535a004b3ed3b0b556cfed6d209e6"
+    },
+    "followup-remote/final-regressions/macro_inner_use_before_module_reject-rustc-compile.log.gz": {
+      "source": "$IMPORT/followup-remote/final-regressions/macro_inner_use_before_module_reject-rustc-compile.log",
+      "raw_sha256": "7b663d56eaecc3b865c87a57530fa4d127bad450698347a30939b2d44670ad43",
+      "stored_sha256": "306744a52387d6c16d619e8804431ce675314e781f20909bd34d6426ec3cc541"
+    },
+    "followup-remote/final-regressions/results.json": {
+      "source": "$IMPORT/followup-remote/final-regressions/results.json",
+      "raw_sha256": "88d3403001e8d3906d643a72dbe9774b7554ad693275e08d225c56d26fe23684",
+      "stored_sha256": "c53b5da2b6f6f13b63e5420bf05173d8304fc4191c50b1a30beab891372653a0"
+    },
+    "followup-remote/final-regressions/sse2_load_requires_unsafe_reject-relax.log.gz": {
+      "source": "$IMPORT/followup-remote/final-regressions/sse2_load_requires_unsafe_reject-relax.log",
+      "raw_sha256": "c7c7d3993bb8b10dfb7800c4b48731e9a2d942f8de307160c6ad31ff0312c939",
+      "stored_sha256": "7f475c5871d398f20ecb43f3e30fb2e3e6ef72ec4ed467a5e6f82b4048dd65ea"
+    },
+    "followup-remote/final-regressions/sse2_load_requires_unsafe_reject-rustc-compile.log.gz": {
+      "source": "$IMPORT/followup-remote/final-regressions/sse2_load_requires_unsafe_reject-rustc-compile.log",
+      "raw_sha256": "68c4331f63f43f7fbda9fe86de723affa85016098ff1dbd63082686d57bea60f",
+      "stored_sha256": "f957df3e6d3bedd2fa62f8eee7087072bf51e7336ab0d04bcf9c4a2e5a45de30"
+    },
+    "followup-remote/final-regressions/sse2_safe_byte_intrinsics-relax.log.gz": {
+      "source": "$IMPORT/followup-remote/final-regressions/sse2_safe_byte_intrinsics-relax.log",
+      "raw_sha256": "4ea20b0b07749cdf30a3945db9f4c54079746fb0ab7f3a9b7a02ed1e4a80379e",
+      "stored_sha256": "3a88147bcdcab1846fa0180a9fbac6bf2e196ef6b3ceed493f43c9474f40139b"
+    },
+    "followup-remote/final-regressions/sse2_safe_byte_intrinsics-rustc-compile.log.gz": {
+      "source": "$IMPORT/followup-remote/final-regressions/sse2_safe_byte_intrinsics-rustc-compile.log",
+      "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stored_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    "followup-remote/final-regressions/sse2_safe_byte_intrinsics-rustc.log.gz": {
+      "source": "$IMPORT/followup-remote/final-regressions/sse2_safe_byte_intrinsics-rustc.log",
+      "raw_sha256": "f81f11a4b679c81576d30539946504162e94d1f05348904148b9ed56d15a059d",
+      "stored_sha256": "544d14fb858f7cf315b4b3d5a9ba0455130cbb6c52c2579858286bfeb2fbfbc5"
+    },
+    "followup-remote/final-workspace.log.gz": {
+      "source": "$IMPORT/followup-remote/final-workspace.log",
+      "raw_sha256": "1fc2c73ade31ed1337eb923f19b69f07ea79f0ff92710479dd562a9f206f128e",
+      "stored_sha256": "d1f0264b0ae5434a322565c1ceaabb345ca5d5e70ef0647788765effe7adbba0"
+    },
+    "followup-remote/initial-logs/atomic-enum-build.log.gz": {
+      "source": "$IMPORT/followup-remote/initial-logs/atomic-enum-build.log",
+      "raw_sha256": "ae43c98faefd382a10fdfe5641258a6b63540c0bd74e0f7b359697cc8149b115",
+      "stored_sha256": "4c79b6eef0aa1633d7152bd39cf9015228f31ae3a4876b4e2623b965aefb2fcb"
+    },
+    "followup-remote/initial-logs/atomic-enum-native-negative.log.gz": {
+      "source": "$IMPORT/followup-remote/initial-logs/atomic-enum-native-negative.log",
+      "raw_sha256": "ea5d89dc67e6af5596f99685ceb57c3b9176935b6f011ea2f48f317869ad583d",
+      "stored_sha256": "a0b142410246aa835b6e6f42fb18916b42ed37af214bf83cbfef40169d113270"
+    },
+    "followup-remote/initial-logs/atomic-enum-native-positive.log.gz": {
+      "source": "$IMPORT/followup-remote/initial-logs/atomic-enum-native-positive.log",
+      "raw_sha256": "ee4a27976b3dcc7edf8a5fbd08e92f49ab0dc45c6c6c7e3b34d1b9d7295696f6",
+      "stored_sha256": "90c21692eda468af845e1b7acfe6e802790be61e67c6c915749b8bf1b3a2d407"
+    },
+    "followup-remote/initial-logs/atomic-enum-relax-fixture.log.gz": {
+      "source": "$IMPORT/followup-remote/initial-logs/atomic-enum-relax-fixture.log",
+      "raw_sha256": "b9750beda415d4befeeb6a439552cd820ffd6d166490d1ca18a9d58aa2560b4d",
+      "stored_sha256": "4c9d276b5b3a859d7e2cae35b4463e621d1ca822b2052f2ba68f82d99499ec58"
+    },
+    "followup-remote/initial-logs/atomic-enum-relax-negative.log.gz": {
+      "source": "$IMPORT/followup-remote/initial-logs/atomic-enum-relax-negative.log",
+      "raw_sha256": "613d10718e1586f2a763699d6883f330f3484e6dcc77d3f89de074e5c0bafc20",
+      "stored_sha256": "b1e8c7a4b578755d12c54e01054fc4ead219c1f062215c40392ce4c86ad89eff"
+    },
+    "followup-remote/initial-logs/atomic-enum-revision.log.gz": {
+      "source": "$IMPORT/followup-remote/initial-logs/atomic-enum-revision.log",
+      "raw_sha256": "3d796f16a50df94698f04b1f20cc01ad83616312bb39b459a186b84d16533f37",
+      "stored_sha256": "759a46955b82c783961612ce38c9a66cc6fcb9288853d6948468213f8312ad80"
+    },
+    "followup-remote/initial-logs/baseline-build-heap.log.gz": {
+      "source": "$IMPORT/followup-remote/initial-logs/baseline-build-heap.log",
+      "raw_sha256": "29ebe99ff1751ddc3ec223b68febbeceaa23eda455d8b9df8f5753122ee1d6b3",
+      "stored_sha256": "2a0a1063248787816eedbfdc202147b520f49139a8424063bafb348ac8e3bcc9"
+    },
+    "followup-remote/initial-logs/heap-diagnostics.log.gz": {
+      "source": "$IMPORT/followup-remote/initial-logs/heap-diagnostics.log",
+      "raw_sha256": "27a435206b0219aa6307c3d97bacd2084b519bcce365bd83d3cb28a1fa1be666",
+      "stored_sha256": "8037a86846a371675d3bc6a6fc92b9e1f56c08403560d71858469a514cecfda4"
+    },
+    "followup-remote/initial-logs/heap-eight-cores.log.gz": {
+      "source": "$IMPORT/followup-remote/initial-logs/heap-eight-cores.log",
+      "raw_sha256": "48f75f4a8e9b671ec45373785642f51ac93eb71a6147bf35e89b1521d8326c89",
+      "stored_sha256": "7b0cfd19ba85fb5804b4b7009f621be70292b043a77f785a548c012bb8a8436c"
+    },
+    "followup-remote/initial-logs/heap-warmup-core-matrix.log.gz": {
+      "source": "$IMPORT/followup-remote/initial-logs/heap-warmup-core-matrix.log",
+      "raw_sha256": "cfa21560f5b9419d126f6228df6b968430d4d5e783234e6c1f25e0e427457efb",
+      "stored_sha256": "7c41d846a3fb89211d9f11d827deac42f2a24b55d0b9883698a677d90404bf7b"
+    },
+    "followup-remote/initial-logs/heap-warmup-validation.log.gz": {
+      "source": "$IMPORT/followup-remote/initial-logs/heap-warmup-validation.log",
+      "raw_sha256": "7976046183b2be2023c7bcd959e1d5c9d4a7fa452ba428981d9d264ed2e99ea8",
+      "stored_sha256": "658951c2b85bafbb7de3cc48ad82f4c366e58ba1680a56b1723590c2896fd46d"
+    },
+    "followup-remote/workspace-summary.json": {
+      "source": "$IMPORT/followup-remote/workspace-summary.json",
+      "raw_sha256": "3ff18671265c7190917894282f6b48c4d4a118c8cab6c7e48523495da1f72c10",
+      "stored_sha256": "3ff18671265c7190917894282f6b48c4d4a118c8cab6c7e48523495da1f72c10"
+    }
+  }
+}

@@ -1,0 +1,108 @@
+{
+  "mode": "regressions",
+  "runs": [
+    {
+      "label": "sse2_safe_byte_intrinsics-rustc-compile",
+      "engine": "rustc",
+      "command": [
+        "rustc",
+        "--edition=2024",
+        "-O",
+        "--test",
+        "$EXPERIMENT/import/relax/libs/relax/compiler/tests/sse2_safe_byte_intrinsics.rs",
+        "-o",
+        "$EXPERIMENT/atomic-sse2-byte-safety/sse2_safe_byte_intrinsics-rustc"
+      ],
+      "exit_code": 0,
+      "seconds": 0.215,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "test_summaries": [],
+      "log": "sse2_safe_byte_intrinsics-rustc-compile.log.gz"
+    },
+    {
+      "label": "sse2_safe_byte_intrinsics-rustc",
+      "engine": "rustc",
+      "command": [
+        "$EXPERIMENT/atomic-sse2-byte-safety/sse2_safe_byte_intrinsics-rustc"
+      ],
+      "exit_code": 0,
+      "seconds": 0.004,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "test_summaries": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ],
+      "log": "sse2_safe_byte_intrinsics-rustc.log.gz"
+    },
+    {
+      "label": "sse2_safe_byte_intrinsics-relax",
+      "engine": "relax",
+      "command": [
+        "$EXPERIMENT/relax/target/release/relax",
+        "test",
+        "$EXPERIMENT/import/relax/libs/relax/compiler/tests/sse2_safe_byte_intrinsics.rs"
+      ],
+      "exit_code": 0,
+      "seconds": 0.215,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": null,
+      "test_summaries": [
+        "test result: 1 passed; 0 failed. compiled 4 fns (1136 bytes, 276 RIR insts): typeck 0.11 ms, lower 0.56 ms, opt 2.15 ms, codegen 3.50 ms"
+      ],
+      "log": "sse2_safe_byte_intrinsics-relax.log.gz"
+    },
+    {
+      "label": "sse2_load_requires_unsafe_reject-rustc-compile",
+      "engine": "rustc",
+      "command": [
+        "rustc",
+        "--edition=2024",
+        "-O",
+        "--test",
+        "$EXPERIMENT/import/relax/libs/relax/compiler/tests/sse2_load_requires_unsafe_reject.rs",
+        "-o",
+        "$EXPERIMENT/atomic-sse2-byte-safety/sse2_load_requires_unsafe_reject-rustc"
+      ],
+      "exit_code": 1,
+      "seconds": 0.065,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": "E0133",
+      "test_summaries": [],
+      "log": "sse2_load_requires_unsafe_reject-rustc-compile.log.gz"
+    },
+    {
+      "label": "sse2_load_requires_unsafe_reject-relax",
+      "engine": "relax",
+      "command": [
+        "$EXPERIMENT/relax/target/release/relax",
+        "test",
+        "$EXPERIMENT/import/relax/libs/relax/compiler/tests/sse2_load_requires_unsafe_reject.rs"
+      ],
+      "exit_code": 101,
+      "seconds": 0.165,
+      "timed_out": false,
+      "passed": true,
+      "expected_diagnostic": "E0133",
+      "test_summaries": [],
+      "log": "sse2_load_requires_unsafe_reject-relax.log.gz"
+    }
+  ],
+  "inputs": {
+    "sekka": {
+      "commit": "7dcf88e3b7f3391ec498a53a28555d02ba8fb14a",
+      "status": " M flake.nix\n"
+    },
+    "relax": {
+      "commit": "2c9103ad96638ad9d4ea1e9a30e2c84212764d92",
+      "status": ""
+    },
+    "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13) (built from a source tarball)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.3\n",
+    "runner_sha256": "1da84c197922d3e2b3981179d36016d47abe919de620e35faec4f210a832b936",
+    "cpu_budget": "8"
+  }
+}

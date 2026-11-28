@@ -1,0 +1,2904 @@
+{
+  "schema": 1,
+  "runs": [
+    {
+      "stage": "cold",
+      "engine": "relax",
+      "repeat": 0,
+      "tree": "/home/callen/sekka-work/relax-experiment-20261111/buck2",
+      "commands": [
+        {
+          "package": "aizome-kit",
+          "command": [
+            "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+            "test",
+            "--no-live",
+            "--allow-c",
+            "--offline",
+            "aizome-kit",
+            "--lib"
+          ],
+          "cwd": "/home/callen/sekka-work/relax-experiment-20261111/buck2/desktop/aizome",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/cold-relax-0-aizome-kit.log",
+          "exit_status": 0,
+          "seconds": 15.122030435999932,
+          "settled_seconds": 15.122107423000216,
+          "orphan_status": []
+        },
+        {
+          "package": "aizome-soroban",
+          "command": [
+            "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+            "test",
+            "--no-live",
+            "--allow-c",
+            "--offline",
+            "aizome-soroban",
+            "--lib"
+          ],
+          "cwd": "/home/callen/sekka-work/relax-experiment-20261111/buck2/desktop/aizome",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/cold-relax-0-aizome-soroban.log",
+          "exit_status": 0,
+          "seconds": 7.326404244000059,
+          "settled_seconds": 7.326619038999979,
+          "orphan_status": []
+        }
+      ],
+      "seconds": 22.44843467999999,
+      "settled_seconds": 22.448726462000195
+    },
+    {
+      "stage": "cold",
+      "engine": "buck2",
+      "repeat": 0,
+      "tree": "/home/callen/sekka-work/relax-experiment-20261111/buck2",
+      "commands": [
+        {
+          "package": "aizome-kit",
+          "command": [
+            "/home/callen/sekka-work/relax-experiment-20261111/buck2/scripts/sekka-buck2",
+            "--isolation-dir",
+            "cache-compare-20261111",
+            "--cache",
+            "cache",
+            "--cache-write",
+            "--config-file",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+            "--local-content-store",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+            "-j",
+            "16",
+            "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/cold-buck2-0-aizome-kit.report.json",
+            "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/cold-buck2-0-aizome-kit.events.json-lines.gz",
+            "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/cold-buck2-0-aizome-kit.build-id",
+            "test",
+            "//desktop/aizome/crates/aizome-kit:aizome_kit-test-test-lib"
+          ],
+          "cwd": "/home/callen/sekka-work/relax-experiment-20261111/buck2",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/cold-buck2-0-aizome-kit.log",
+          "exit_status": 0,
+          "seconds": 48.44373122299976,
+          "settled_seconds": 48.44388885099988,
+          "orphan_status": []
+        },
+        {
+          "package": "aizome-soroban",
+          "command": [
+            "/home/callen/sekka-work/relax-experiment-20261111/buck2/scripts/sekka-buck2",
+            "--isolation-dir",
+            "cache-compare-20261111",
+            "--cache",
+            "cache",
+            "--cache-write",
+            "--config-file",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+            "--local-content-store",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+            "-j",
+            "16",
+            "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/cold-buck2-0-aizome-soroban.report.json",
+            "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/cold-buck2-0-aizome-soroban.events.json-lines.gz",
+            "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/cold-buck2-0-aizome-soroban.build-id",
+            "test",
+            "//desktop/aizome/apps/soroban:aizome_soroban-test-test-lib"
+          ],
+          "cwd": "/home/callen/sekka-work/relax-experiment-20261111/buck2",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/cold-buck2-0-aizome-soroban.log",
+          "exit_status": 0,
+          "seconds": 15.060074066999732,
+          "settled_seconds": 15.060228241000004,
+          "orphan_status": []
+        }
+      ],
+      "seconds": 63.50380528999949,
+      "settled_seconds": 63.50411709199989
+    },
+    {
+      "stage": "warm-a",
+      "engine": "relax",
+      "repeat": 0,
+      "tree": "/home/callen/sekka-work/relax-experiment-20261111/buck2",
+      "commands": [
+        {
+          "package": "aizome-kit",
+          "command": [
+            "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+            "test",
+            "--no-live",
+            "--allow-c",
+            "--offline",
+            "aizome-kit",
+            "--lib"
+          ],
+          "cwd": "/home/callen/sekka-work/relax-experiment-20261111/buck2/desktop/aizome",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-a-relax-0-aizome-kit.log",
+          "exit_status": 0,
+          "seconds": 0.9083213109997814,
+          "settled_seconds": 0.9084054489999289,
+          "orphan_status": []
+        },
+        {
+          "package": "aizome-soroban",
+          "command": [
+            "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+            "test",
+            "--no-live",
+            "--allow-c",
+            "--offline",
+            "aizome-soroban",
+            "--lib"
+          ],
+          "cwd": "/home/callen/sekka-work/relax-experiment-20261111/buck2/desktop/aizome",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-a-relax-0-aizome-soroban.log",
+          "exit_status": 0,
+          "seconds": 0.7807589019998886,
+          "settled_seconds": 0.7808297489996221,
+          "orphan_status": []
+        }
+      ],
+      "seconds": 1.68908021299967,
+      "settled_seconds": 1.689235197999551
+    },
+    {
+      "stage": "warm-a",
+      "engine": "buck2",
+      "repeat": 0,
+      "tree": "/home/callen/sekka-work/relax-experiment-20261111/buck2",
+      "commands": [
+        {
+          "package": "aizome-kit",
+          "command": [
+            "/home/callen/sekka-work/relax-experiment-20261111/buck2/scripts/sekka-buck2",
+            "--isolation-dir",
+            "cache-compare-20261111",
+            "--cache",
+            "cache",
+            "--cache-write",
+            "--config-file",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+            "--local-content-store",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+            "-j",
+            "16",
+            "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-a-buck2-0-aizome-kit.report.json",
+            "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-a-buck2-0-aizome-kit.events.json-lines.gz",
+            "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-a-buck2-0-aizome-kit.build-id",
+            "test",
+            "//desktop/aizome/crates/aizome-kit:aizome_kit-test-test-lib"
+          ],
+          "cwd": "/home/callen/sekka-work/relax-experiment-20261111/buck2",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-a-buck2-0-aizome-kit.log",
+          "exit_status": 0,
+          "seconds": 0.38280583599998863,
+          "settled_seconds": 0.3830397100000482,
+          "orphan_status": []
+        },
+        {
+          "package": "aizome-soroban",
+          "command": [
+            "/home/callen/sekka-work/relax-experiment-20261111/buck2/scripts/sekka-buck2",
+            "--isolation-dir",
+            "cache-compare-20261111",
+            "--cache",
+            "cache",
+            "--cache-write",
+            "--config-file",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+            "--local-content-store",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+            "-j",
+            "16",
+            "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-a-buck2-0-aizome-soroban.report.json",
+            "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-a-buck2-0-aizome-soroban.events.json-lines.gz",
+            "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-a-buck2-0-aizome-soroban.build-id",
+            "test",
+            "//desktop/aizome/apps/soroban:aizome_soroban-test-test-lib"
+          ],
+          "cwd": "/home/callen/sekka-work/relax-experiment-20261111/buck2",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-a-buck2-0-aizome-soroban.log",
+          "exit_status": 0,
+          "seconds": 0.33495139600017865,
+          "settled_seconds": 0.3349827430001824,
+          "orphan_status": []
+        }
+      ],
+      "seconds": 0.7177572320001673,
+      "settled_seconds": 0.7180224530002306
+    },
+    {
+      "stage": "warm-a",
+      "engine": "buck2",
+      "repeat": 1,
+      "tree": "/home/callen/sekka-work/relax-experiment-20261111/buck2",
+      "commands": [
+        {
+          "package": "aizome-kit",
+          "command": [
+            "/home/callen/sekka-work/relax-experiment-20261111/buck2/scripts/sekka-buck2",
+            "--isolation-dir",
+            "cache-compare-20261111",
+            "--cache",
+            "cache",
+            "--cache-write",
+            "--config-file",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+            "--local-content-store",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+            "-j",
+            "16",
+            "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-a-buck2-1-aizome-kit.report.json",
+            "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-a-buck2-1-aizome-kit.events.json-lines.gz",
+            "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-a-buck2-1-aizome-kit.build-id",
+            "test",
+            "//desktop/aizome/crates/aizome-kit:aizome_kit-test-test-lib"
+          ],
+          "cwd": "/home/callen/sekka-work/relax-experiment-20261111/buck2",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-a-buck2-1-aizome-kit.log",
+          "exit_status": 0,
+          "seconds": 0.381337041000279,
+          "settled_seconds": 0.38145937600029356,
+          "orphan_status": []
+        },
+        {
+          "package": "aizome-soroban",
+          "command": [
+            "/home/callen/sekka-work/relax-experiment-20261111/buck2/scripts/sekka-buck2",
+            "--isolation-dir",
+            "cache-compare-20261111",
+            "--cache",
+            "cache",
+            "--cache-write",
+            "--config-file",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+            "--local-content-store",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+            "-j",
+            "16",
+            "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-a-buck2-1-aizome-soroban.report.json",
+            "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-a-buck2-1-aizome-soroban.events.json-lines.gz",
+            "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-a-buck2-1-aizome-soroban.build-id",
+            "test",
+            "//desktop/aizome/apps/soroban:aizome_soroban-test-test-lib"
+          ],
+          "cwd": "/home/callen/sekka-work/relax-experiment-20261111/buck2",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-a-buck2-1-aizome-soroban.log",
+          "exit_status": 0,
+          "seconds": 0.33190186499996344,
+          "settled_seconds": 0.33224983199988856,
+          "orphan_status": []
+        }
+      ],
+      "seconds": 0.7132389060002424,
+      "settled_seconds": 0.7137092080001821
+    },
+    {
+      "stage": "warm-a",
+      "engine": "relax",
+      "repeat": 1,
+      "tree": "/home/callen/sekka-work/relax-experiment-20261111/buck2",
+      "commands": [
+        {
+          "package": "aizome-kit",
+          "command": [
+            "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+            "test",
+            "--no-live",
+            "--allow-c",
+            "--offline",
+            "aizome-kit",
+            "--lib"
+          ],
+          "cwd": "/home/callen/sekka-work/relax-experiment-20261111/buck2/desktop/aizome",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-a-relax-1-aizome-kit.log",
+          "exit_status": 0,
+          "seconds": 0.9057281280001916,
+          "settled_seconds": 0.9058094410002013,
+          "orphan_status": []
+        },
+        {
+          "package": "aizome-soroban",
+          "command": [
+            "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+            "test",
+            "--no-live",
+            "--allow-c",
+            "--offline",
+            "aizome-soroban",
+            "--lib"
+          ],
+          "cwd": "/home/callen/sekka-work/relax-experiment-20261111/buck2/desktop/aizome",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-a-relax-1-aizome-soroban.log",
+          "exit_status": 0,
+          "seconds": 0.72492056100009,
+          "settled_seconds": 0.7251303689999986,
+          "orphan_status": []
+        }
+      ],
+      "seconds": 1.6306486890002816,
+      "settled_seconds": 1.6309398100002
+    },
+    {
+      "stage": "warm-a",
+      "engine": "relax",
+      "repeat": 2,
+      "tree": "/home/callen/sekka-work/relax-experiment-20261111/buck2",
+      "commands": [
+        {
+          "package": "aizome-kit",
+          "command": [
+            "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+            "test",
+            "--no-live",
+            "--allow-c",
+            "--offline",
+            "aizome-kit",
+            "--lib"
+          ],
+          "cwd": "/home/callen/sekka-work/relax-experiment-20261111/buck2/desktop/aizome",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-a-relax-2-aizome-kit.log",
+          "exit_status": 0,
+          "seconds": 0.9219348780002292,
+          "settled_seconds": 0.9220135069999742,
+          "orphan_status": []
+        },
+        {
+          "package": "aizome-soroban",
+          "command": [
+            "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+            "test",
+            "--no-live",
+            "--allow-c",
+            "--offline",
+            "aizome-soroban",
+            "--lib"
+          ],
+          "cwd": "/home/callen/sekka-work/relax-experiment-20261111/buck2/desktop/aizome",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-a-relax-2-aizome-soroban.log",
+          "exit_status": 0,
+          "seconds": 0.7045299470000828,
+          "settled_seconds": 0.7047169299999041,
+          "orphan_status": []
+        }
+      ],
+      "seconds": 1.626464825000312,
+      "settled_seconds": 1.6267304369998783
+    },
+    {
+      "stage": "warm-a",
+      "engine": "buck2",
+      "repeat": 2,
+      "tree": "/home/callen/sekka-work/relax-experiment-20261111/buck2",
+      "commands": [
+        {
+          "package": "aizome-kit",
+          "command": [
+            "/home/callen/sekka-work/relax-experiment-20261111/buck2/scripts/sekka-buck2",
+            "--isolation-dir",
+            "cache-compare-20261111",
+            "--cache",
+            "cache",
+            "--cache-write",
+            "--config-file",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+            "--local-content-store",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+            "-j",
+            "16",
+            "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-a-buck2-2-aizome-kit.report.json",
+            "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-a-buck2-2-aizome-kit.events.json-lines.gz",
+            "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-a-buck2-2-aizome-kit.build-id",
+            "test",
+            "//desktop/aizome/crates/aizome-kit:aizome_kit-test-test-lib"
+          ],
+          "cwd": "/home/callen/sekka-work/relax-experiment-20261111/buck2",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-a-buck2-2-aizome-kit.log",
+          "exit_status": 0,
+          "seconds": 0.38333385300029477,
+          "settled_seconds": 0.38347386500026914,
+          "orphan_status": []
+        },
+        {
+          "package": "aizome-soroban",
+          "command": [
+            "/home/callen/sekka-work/relax-experiment-20261111/buck2/scripts/sekka-buck2",
+            "--isolation-dir",
+            "cache-compare-20261111",
+            "--cache",
+            "cache",
+            "--cache-write",
+            "--config-file",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+            "--local-content-store",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+            "-j",
+            "16",
+            "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-a-buck2-2-aizome-soroban.report.json",
+            "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-a-buck2-2-aizome-soroban.events.json-lines.gz",
+            "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-a-buck2-2-aizome-soroban.build-id",
+            "test",
+            "//desktop/aizome/apps/soroban:aizome_soroban-test-test-lib"
+          ],
+          "cwd": "/home/callen/sekka-work/relax-experiment-20261111/buck2",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-a-buck2-2-aizome-soroban.log",
+          "exit_status": 0,
+          "seconds": 0.32513453999990816,
+          "settled_seconds": 0.3252724290000515,
+          "orphan_status": []
+        }
+      ],
+      "seconds": 0.7084683930002029,
+      "settled_seconds": 0.7087462940003206
+    },
+    {
+      "stage": "identical-b",
+      "engine": "relax",
+      "repeat": 0,
+      "tree": "/home/callen/sekka-work/buck2-final-20261106/repo",
+      "commands": [
+        {
+          "package": "aizome-kit",
+          "command": [
+            "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+            "test",
+            "--no-live",
+            "--allow-c",
+            "--offline",
+            "aizome-kit",
+            "--lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/repo/desktop/aizome",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/identical-b-relax-0-aizome-kit.log",
+          "exit_status": 0,
+          "seconds": 8.802133392000087,
+          "settled_seconds": 8.80231760100014,
+          "orphan_status": []
+        },
+        {
+          "package": "aizome-soroban",
+          "command": [
+            "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+            "test",
+            "--no-live",
+            "--allow-c",
+            "--offline",
+            "aizome-soroban",
+            "--lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/repo/desktop/aizome",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/identical-b-relax-0-aizome-soroban.log",
+          "exit_status": 0,
+          "seconds": 7.714164283000173,
+          "settled_seconds": 7.714348502000121,
+          "orphan_status": []
+        }
+      ],
+      "seconds": 16.51629767500026,
+      "settled_seconds": 16.51666610300026
+    },
+    {
+      "stage": "identical-b",
+      "engine": "buck2",
+      "repeat": 0,
+      "tree": "/home/callen/sekka-work/buck2-final-20261106/repo",
+      "commands": [
+        {
+          "package": "aizome-kit",
+          "command": [
+            "/home/callen/sekka-work/buck2-final-20261106/repo/scripts/sekka-buck2",
+            "--isolation-dir",
+            "cache-compare-20261111",
+            "--cache",
+            "cache",
+            "--cache-write",
+            "--config-file",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+            "--local-content-store",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+            "-j",
+            "16",
+            "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/identical-b-buck2-0-aizome-kit.report.json",
+            "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/identical-b-buck2-0-aizome-kit.events.json-lines.gz",
+            "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/identical-b-buck2-0-aizome-kit.build-id",
+            "test",
+            "//desktop/aizome/crates/aizome-kit:aizome_kit-test-test-lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/repo",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/identical-b-buck2-0-aizome-kit.log",
+          "exit_status": 0,
+          "seconds": 3.2551885620000576,
+          "settled_seconds": 3.25535486400031,
+          "orphan_status": []
+        },
+        {
+          "package": "aizome-soroban",
+          "command": [
+            "/home/callen/sekka-work/buck2-final-20261106/repo/scripts/sekka-buck2",
+            "--isolation-dir",
+            "cache-compare-20261111",
+            "--cache",
+            "cache",
+            "--cache-write",
+            "--config-file",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+            "--local-content-store",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+            "-j",
+            "16",
+            "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/identical-b-buck2-0-aizome-soroban.report.json",
+            "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/identical-b-buck2-0-aizome-soroban.events.json-lines.gz",
+            "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/identical-b-buck2-0-aizome-soroban.build-id",
+            "test",
+            "//desktop/aizome/apps/soroban:aizome_soroban-test-test-lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/repo",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/identical-b-buck2-0-aizome-soroban.log",
+          "exit_status": 0,
+          "seconds": 1.6009805600001528,
+          "settled_seconds": 1.601035062000392,
+          "orphan_status": []
+        }
+      ],
+      "seconds": 4.85616912200021,
+      "settled_seconds": 4.856389926000702
+    },
+    {
+      "stage": "warm-b",
+      "engine": "relax",
+      "repeat": 0,
+      "tree": "/home/callen/sekka-work/buck2-final-20261106/repo",
+      "commands": [
+        {
+          "package": "aizome-kit",
+          "command": [
+            "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+            "test",
+            "--no-live",
+            "--allow-c",
+            "--offline",
+            "aizome-kit",
+            "--lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/repo/desktop/aizome",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-b-relax-0-aizome-kit.log",
+          "exit_status": 0,
+          "seconds": 0.8301458969999658,
+          "settled_seconds": 0.8303408029996717,
+          "orphan_status": []
+        },
+        {
+          "package": "aizome-soroban",
+          "command": [
+            "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+            "test",
+            "--no-live",
+            "--allow-c",
+            "--offline",
+            "aizome-soroban",
+            "--lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/repo/desktop/aizome",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-b-relax-0-aizome-soroban.log",
+          "exit_status": 0,
+          "seconds": 0.7798403460001282,
+          "settled_seconds": 0.7800113550001697,
+          "orphan_status": []
+        }
+      ],
+      "seconds": 1.609986243000094,
+      "settled_seconds": 1.6103521579998414
+    },
+    {
+      "stage": "warm-b",
+      "engine": "buck2",
+      "repeat": 0,
+      "tree": "/home/callen/sekka-work/buck2-final-20261106/repo",
+      "commands": [
+        {
+          "package": "aizome-kit",
+          "command": [
+            "/home/callen/sekka-work/buck2-final-20261106/repo/scripts/sekka-buck2",
+            "--isolation-dir",
+            "cache-compare-20261111",
+            "--cache",
+            "cache",
+            "--cache-write",
+            "--config-file",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+            "--local-content-store",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+            "-j",
+            "16",
+            "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-b-buck2-0-aizome-kit.report.json",
+            "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-b-buck2-0-aizome-kit.events.json-lines.gz",
+            "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-b-buck2-0-aizome-kit.build-id",
+            "test",
+            "//desktop/aizome/crates/aizome-kit:aizome_kit-test-test-lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/repo",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-b-buck2-0-aizome-kit.log",
+          "exit_status": 0,
+          "seconds": 0.3661106619997554,
+          "settled_seconds": 0.3661556299998665,
+          "orphan_status": []
+        },
+        {
+          "package": "aizome-soroban",
+          "command": [
+            "/home/callen/sekka-work/buck2-final-20261106/repo/scripts/sekka-buck2",
+            "--isolation-dir",
+            "cache-compare-20261111",
+            "--cache",
+            "cache",
+            "--cache-write",
+            "--config-file",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+            "--local-content-store",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+            "-j",
+            "16",
+            "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-b-buck2-0-aizome-soroban.report.json",
+            "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-b-buck2-0-aizome-soroban.events.json-lines.gz",
+            "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-b-buck2-0-aizome-soroban.build-id",
+            "test",
+            "//desktop/aizome/apps/soroban:aizome_soroban-test-test-lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/repo",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-b-buck2-0-aizome-soroban.log",
+          "exit_status": 0,
+          "seconds": 0.3214435529998809,
+          "settled_seconds": 0.32159355000021606,
+          "orphan_status": []
+        }
+      ],
+      "seconds": 0.6875542149996363,
+      "settled_seconds": 0.6877491800000826
+    },
+    {
+      "stage": "warm-b",
+      "engine": "buck2",
+      "repeat": 1,
+      "tree": "/home/callen/sekka-work/buck2-final-20261106/repo",
+      "commands": [
+        {
+          "package": "aizome-kit",
+          "command": [
+            "/home/callen/sekka-work/buck2-final-20261106/repo/scripts/sekka-buck2",
+            "--isolation-dir",
+            "cache-compare-20261111",
+            "--cache",
+            "cache",
+            "--cache-write",
+            "--config-file",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+            "--local-content-store",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+            "-j",
+            "16",
+            "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-b-buck2-1-aizome-kit.report.json",
+            "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-b-buck2-1-aizome-kit.events.json-lines.gz",
+            "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-b-buck2-1-aizome-kit.build-id",
+            "test",
+            "//desktop/aizome/crates/aizome-kit:aizome_kit-test-test-lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/repo",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-b-buck2-1-aizome-kit.log",
+          "exit_status": 0,
+          "seconds": 0.3642390370000612,
+          "settled_seconds": 0.36434573799988357,
+          "orphan_status": []
+        },
+        {
+          "package": "aizome-soroban",
+          "command": [
+            "/home/callen/sekka-work/buck2-final-20261106/repo/scripts/sekka-buck2",
+            "--isolation-dir",
+            "cache-compare-20261111",
+            "--cache",
+            "cache",
+            "--cache-write",
+            "--config-file",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+            "--local-content-store",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+            "-j",
+            "16",
+            "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-b-buck2-1-aizome-soroban.report.json",
+            "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-b-buck2-1-aizome-soroban.events.json-lines.gz",
+            "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-b-buck2-1-aizome-soroban.build-id",
+            "test",
+            "//desktop/aizome/apps/soroban:aizome_soroban-test-test-lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/repo",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-b-buck2-1-aizome-soroban.log",
+          "exit_status": 0,
+          "seconds": 0.3211104179999893,
+          "settled_seconds": 0.3212378009998247,
+          "orphan_status": []
+        }
+      ],
+      "seconds": 0.6853494550000505,
+      "settled_seconds": 0.6855835389997083
+    },
+    {
+      "stage": "warm-b",
+      "engine": "relax",
+      "repeat": 1,
+      "tree": "/home/callen/sekka-work/buck2-final-20261106/repo",
+      "commands": [
+        {
+          "package": "aizome-kit",
+          "command": [
+            "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+            "test",
+            "--no-live",
+            "--allow-c",
+            "--offline",
+            "aizome-kit",
+            "--lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/repo/desktop/aizome",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-b-relax-1-aizome-kit.log",
+          "exit_status": 0,
+          "seconds": 0.9496038960000988,
+          "settled_seconds": 0.9497820159999719,
+          "orphan_status": []
+        },
+        {
+          "package": "aizome-soroban",
+          "command": [
+            "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+            "test",
+            "--no-live",
+            "--allow-c",
+            "--offline",
+            "aizome-soroban",
+            "--lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/repo/desktop/aizome",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-b-relax-1-aizome-soroban.log",
+          "exit_status": 0,
+          "seconds": 0.7193515529997967,
+          "settled_seconds": 0.7195169839997106,
+          "orphan_status": []
+        }
+      ],
+      "seconds": 1.6689554489998955,
+      "settled_seconds": 1.6692989999996826
+    },
+    {
+      "stage": "warm-b",
+      "engine": "relax",
+      "repeat": 2,
+      "tree": "/home/callen/sekka-work/buck2-final-20261106/repo",
+      "commands": [
+        {
+          "package": "aizome-kit",
+          "command": [
+            "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+            "test",
+            "--no-live",
+            "--allow-c",
+            "--offline",
+            "aizome-kit",
+            "--lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/repo/desktop/aizome",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-b-relax-2-aizome-kit.log",
+          "exit_status": 0,
+          "seconds": 0.9459194710002521,
+          "settled_seconds": 0.9461120130004019,
+          "orphan_status": []
+        },
+        {
+          "package": "aizome-soroban",
+          "command": [
+            "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+            "test",
+            "--no-live",
+            "--allow-c",
+            "--offline",
+            "aizome-soroban",
+            "--lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/repo/desktop/aizome",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-b-relax-2-aizome-soroban.log",
+          "exit_status": 0,
+          "seconds": 0.7369019389998357,
+          "settled_seconds": 0.7369631920000757,
+          "orphan_status": []
+        }
+      ],
+      "seconds": 1.6828214100000878,
+      "settled_seconds": 1.6830752050004776
+    },
+    {
+      "stage": "warm-b",
+      "engine": "buck2",
+      "repeat": 2,
+      "tree": "/home/callen/sekka-work/buck2-final-20261106/repo",
+      "commands": [
+        {
+          "package": "aizome-kit",
+          "command": [
+            "/home/callen/sekka-work/buck2-final-20261106/repo/scripts/sekka-buck2",
+            "--isolation-dir",
+            "cache-compare-20261111",
+            "--cache",
+            "cache",
+            "--cache-write",
+            "--config-file",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+            "--local-content-store",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+            "-j",
+            "16",
+            "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-b-buck2-2-aizome-kit.report.json",
+            "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-b-buck2-2-aizome-kit.events.json-lines.gz",
+            "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-b-buck2-2-aizome-kit.build-id",
+            "test",
+            "//desktop/aizome/crates/aizome-kit:aizome_kit-test-test-lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/repo",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-b-buck2-2-aizome-kit.log",
+          "exit_status": 0,
+          "seconds": 0.3852857980000408,
+          "settled_seconds": 0.38536439700010305,
+          "orphan_status": []
+        },
+        {
+          "package": "aizome-soroban",
+          "command": [
+            "/home/callen/sekka-work/buck2-final-20261106/repo/scripts/sekka-buck2",
+            "--isolation-dir",
+            "cache-compare-20261111",
+            "--cache",
+            "cache",
+            "--cache-write",
+            "--config-file",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+            "--local-content-store",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+            "-j",
+            "16",
+            "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-b-buck2-2-aizome-soroban.report.json",
+            "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-b-buck2-2-aizome-soroban.events.json-lines.gz",
+            "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-b-buck2-2-aizome-soroban.build-id",
+            "test",
+            "//desktop/aizome/apps/soroban:aizome_soroban-test-test-lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/repo",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-b-buck2-2-aizome-soroban.log",
+          "exit_status": 0,
+          "seconds": 0.3164716280002722,
+          "settled_seconds": 0.31657557500011535,
+          "orphan_status": []
+        }
+      ],
+      "seconds": 0.701757426000313,
+      "settled_seconds": 0.7019399720002184
+    },
+    {
+      "stage": "unrelated-c",
+      "engine": "relax",
+      "repeat": 0,
+      "tree": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+      "commands": [
+        {
+          "package": "aizome-kit",
+          "command": [
+            "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+            "test",
+            "--no-live",
+            "--allow-c",
+            "--offline",
+            "aizome-kit",
+            "--lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/desktop/aizome",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/unrelated-c-relax-0-aizome-kit.log",
+          "exit_status": 0,
+          "seconds": 8.354830376000336,
+          "settled_seconds": 8.354952822000087,
+          "orphan_status": []
+        },
+        {
+          "package": "aizome-soroban",
+          "command": [
+            "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+            "test",
+            "--no-live",
+            "--allow-c",
+            "--offline",
+            "aizome-soroban",
+            "--lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/desktop/aizome",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/unrelated-c-relax-0-aizome-soroban.log",
+          "exit_status": 0,
+          "seconds": 7.377569851999851,
+          "settled_seconds": 7.377669882999726,
+          "orphan_status": []
+        }
+      ],
+      "seconds": 15.732400228000188,
+      "settled_seconds": 15.732622704999812
+    },
+    {
+      "stage": "unrelated-c",
+      "engine": "buck2",
+      "repeat": 0,
+      "tree": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+      "commands": [
+        {
+          "package": "aizome-kit",
+          "command": [
+            "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/scripts/sekka-buck2",
+            "--isolation-dir",
+            "cache-compare-20261111",
+            "--cache",
+            "cache",
+            "--cache-write",
+            "--config-file",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+            "--local-content-store",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+            "-j",
+            "16",
+            "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/unrelated-c-buck2-0-aizome-kit.report.json",
+            "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/unrelated-c-buck2-0-aizome-kit.events.json-lines.gz",
+            "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/unrelated-c-buck2-0-aizome-kit.build-id",
+            "test",
+            "//desktop/aizome/crates/aizome-kit:aizome_kit-test-test-lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/unrelated-c-buck2-0-aizome-kit.log",
+          "exit_status": 0,
+          "seconds": 4.243002420999801,
+          "settled_seconds": 4.243080108999948,
+          "orphan_status": []
+        },
+        {
+          "package": "aizome-soroban",
+          "command": [
+            "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/scripts/sekka-buck2",
+            "--isolation-dir",
+            "cache-compare-20261111",
+            "--cache",
+            "cache",
+            "--cache-write",
+            "--config-file",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+            "--local-content-store",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+            "-j",
+            "16",
+            "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/unrelated-c-buck2-0-aizome-soroban.report.json",
+            "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/unrelated-c-buck2-0-aizome-soroban.events.json-lines.gz",
+            "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/unrelated-c-buck2-0-aizome-soroban.build-id",
+            "test",
+            "//desktop/aizome/apps/soroban:aizome_soroban-test-test-lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/unrelated-c-buck2-0-aizome-soroban.log",
+          "exit_status": 0,
+          "seconds": 1.7916037400000278,
+          "settled_seconds": 1.7916972310003985,
+          "orphan_status": []
+        }
+      ],
+      "seconds": 6.034606160999829,
+      "settled_seconds": 6.034777340000346
+    },
+    {
+      "stage": "warm-c",
+      "engine": "relax",
+      "repeat": 0,
+      "tree": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+      "commands": [
+        {
+          "package": "aizome-kit",
+          "command": [
+            "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+            "test",
+            "--no-live",
+            "--allow-c",
+            "--offline",
+            "aizome-kit",
+            "--lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/desktop/aizome",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-c-relax-0-aizome-kit.log",
+          "exit_status": 0,
+          "seconds": 0.9497150970000803,
+          "settled_seconds": 0.9498395760001586,
+          "orphan_status": []
+        },
+        {
+          "package": "aizome-soroban",
+          "command": [
+            "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+            "test",
+            "--no-live",
+            "--allow-c",
+            "--offline",
+            "aizome-soroban",
+            "--lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/desktop/aizome",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-c-relax-0-aizome-soroban.log",
+          "exit_status": 0,
+          "seconds": 0.6983944799999335,
+          "settled_seconds": 0.6984976260000622,
+          "orphan_status": []
+        }
+      ],
+      "seconds": 1.6481095770000138,
+      "settled_seconds": 1.6483372020002207
+    },
+    {
+      "stage": "warm-c",
+      "engine": "buck2",
+      "repeat": 0,
+      "tree": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+      "commands": [
+        {
+          "package": "aizome-kit",
+          "command": [
+            "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/scripts/sekka-buck2",
+            "--isolation-dir",
+            "cache-compare-20261111",
+            "--cache",
+            "cache",
+            "--cache-write",
+            "--config-file",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+            "--local-content-store",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+            "-j",
+            "16",
+            "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-c-buck2-0-aizome-kit.report.json",
+            "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-c-buck2-0-aizome-kit.events.json-lines.gz",
+            "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-c-buck2-0-aizome-kit.build-id",
+            "test",
+            "//desktop/aizome/crates/aizome-kit:aizome_kit-test-test-lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-c-buck2-0-aizome-kit.log",
+          "exit_status": 0,
+          "seconds": 0.3858999809999659,
+          "settled_seconds": 0.3860604040000908,
+          "orphan_status": []
+        },
+        {
+          "package": "aizome-soroban",
+          "command": [
+            "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/scripts/sekka-buck2",
+            "--isolation-dir",
+            "cache-compare-20261111",
+            "--cache",
+            "cache",
+            "--cache-write",
+            "--config-file",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+            "--local-content-store",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+            "-j",
+            "16",
+            "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-c-buck2-0-aizome-soroban.report.json",
+            "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-c-buck2-0-aizome-soroban.events.json-lines.gz",
+            "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-c-buck2-0-aizome-soroban.build-id",
+            "test",
+            "//desktop/aizome/apps/soroban:aizome_soroban-test-test-lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-c-buck2-0-aizome-soroban.log",
+          "exit_status": 0,
+          "seconds": 0.3467629219999253,
+          "settled_seconds": 0.34695668599988494,
+          "orphan_status": []
+        }
+      ],
+      "seconds": 0.7326629029998912,
+      "settled_seconds": 0.7330170899999757
+    },
+    {
+      "stage": "warm-c",
+      "engine": "buck2",
+      "repeat": 1,
+      "tree": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+      "commands": [
+        {
+          "package": "aizome-kit",
+          "command": [
+            "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/scripts/sekka-buck2",
+            "--isolation-dir",
+            "cache-compare-20261111",
+            "--cache",
+            "cache",
+            "--cache-write",
+            "--config-file",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+            "--local-content-store",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+            "-j",
+            "16",
+            "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-c-buck2-1-aizome-kit.report.json",
+            "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-c-buck2-1-aizome-kit.events.json-lines.gz",
+            "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-c-buck2-1-aizome-kit.build-id",
+            "test",
+            "//desktop/aizome/crates/aizome-kit:aizome_kit-test-test-lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-c-buck2-1-aizome-kit.log",
+          "exit_status": 0,
+          "seconds": 0.3658050579997507,
+          "settled_seconds": 0.36598206600001504,
+          "orphan_status": []
+        },
+        {
+          "package": "aizome-soroban",
+          "command": [
+            "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/scripts/sekka-buck2",
+            "--isolation-dir",
+            "cache-compare-20261111",
+            "--cache",
+            "cache",
+            "--cache-write",
+            "--config-file",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+            "--local-content-store",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+            "-j",
+            "16",
+            "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-c-buck2-1-aizome-soroban.report.json",
+            "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-c-buck2-1-aizome-soroban.events.json-lines.gz",
+            "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-c-buck2-1-aizome-soroban.build-id",
+            "test",
+            "//desktop/aizome/apps/soroban:aizome_soroban-test-test-lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-c-buck2-1-aizome-soroban.log",
+          "exit_status": 0,
+          "seconds": 0.3408841549999124,
+          "settled_seconds": 0.3409574759998577,
+          "orphan_status": []
+        }
+      ],
+      "seconds": 0.7066892129996631,
+      "settled_seconds": 0.7069395419998727
+    },
+    {
+      "stage": "warm-c",
+      "engine": "relax",
+      "repeat": 1,
+      "tree": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+      "commands": [
+        {
+          "package": "aizome-kit",
+          "command": [
+            "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+            "test",
+            "--no-live",
+            "--allow-c",
+            "--offline",
+            "aizome-kit",
+            "--lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/desktop/aizome",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-c-relax-1-aizome-kit.log",
+          "exit_status": 0,
+          "seconds": 0.804554688999815,
+          "settled_seconds": 0.8047622829999455,
+          "orphan_status": []
+        },
+        {
+          "package": "aizome-soroban",
+          "command": [
+            "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+            "test",
+            "--no-live",
+            "--allow-c",
+            "--offline",
+            "aizome-soroban",
+            "--lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/desktop/aizome",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-c-relax-1-aizome-soroban.log",
+          "exit_status": 0,
+          "seconds": 0.6731903449999663,
+          "settled_seconds": 0.6732735909999974,
+          "orphan_status": []
+        }
+      ],
+      "seconds": 1.4777450339997813,
+      "settled_seconds": 1.4780358739999429
+    },
+    {
+      "stage": "warm-c",
+      "engine": "relax",
+      "repeat": 2,
+      "tree": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+      "commands": [
+        {
+          "package": "aizome-kit",
+          "command": [
+            "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+            "test",
+            "--no-live",
+            "--allow-c",
+            "--offline",
+            "aizome-kit",
+            "--lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/desktop/aizome",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-c-relax-2-aizome-kit.log",
+          "exit_status": 0,
+          "seconds": 0.9617209580001145,
+          "settled_seconds": 0.961914471,
+          "orphan_status": []
+        },
+        {
+          "package": "aizome-soroban",
+          "command": [
+            "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+            "test",
+            "--no-live",
+            "--allow-c",
+            "--offline",
+            "aizome-soroban",
+            "--lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/desktop/aizome",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-c-relax-2-aizome-soroban.log",
+          "exit_status": 0,
+          "seconds": 0.6943185089999133,
+          "settled_seconds": 0.6945498289996976,
+          "orphan_status": []
+        }
+      ],
+      "seconds": 1.6560394670000278,
+      "settled_seconds": 1.6564642999996977
+    },
+    {
+      "stage": "warm-c",
+      "engine": "buck2",
+      "repeat": 2,
+      "tree": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+      "commands": [
+        {
+          "package": "aizome-kit",
+          "command": [
+            "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/scripts/sekka-buck2",
+            "--isolation-dir",
+            "cache-compare-20261111",
+            "--cache",
+            "cache",
+            "--cache-write",
+            "--config-file",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+            "--local-content-store",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+            "-j",
+            "16",
+            "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-c-buck2-2-aizome-kit.report.json",
+            "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-c-buck2-2-aizome-kit.events.json-lines.gz",
+            "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-c-buck2-2-aizome-kit.build-id",
+            "test",
+            "//desktop/aizome/crates/aizome-kit:aizome_kit-test-test-lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-c-buck2-2-aizome-kit.log",
+          "exit_status": 0,
+          "seconds": 0.39008065100006206,
+          "settled_seconds": 0.39021591600021566,
+          "orphan_status": []
+        },
+        {
+          "package": "aizome-soroban",
+          "command": [
+            "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/scripts/sekka-buck2",
+            "--isolation-dir",
+            "cache-compare-20261111",
+            "--cache",
+            "cache",
+            "--cache-write",
+            "--config-file",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+            "--local-content-store",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+            "-j",
+            "16",
+            "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-c-buck2-2-aizome-soroban.report.json",
+            "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-c-buck2-2-aizome-soroban.events.json-lines.gz",
+            "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-c-buck2-2-aizome-soroban.build-id",
+            "test",
+            "//desktop/aizome/apps/soroban:aizome_soroban-test-test-lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/warm-c-buck2-2-aizome-soroban.log",
+          "exit_status": 0,
+          "seconds": 0.3367439609996836,
+          "settled_seconds": 0.3368073470001036,
+          "orphan_status": []
+        }
+      ],
+      "seconds": 0.7268246119997457,
+      "settled_seconds": 0.7270232630003193
+    },
+    {
+      "stage": "leaf-edit-c",
+      "engine": "relax",
+      "repeat": 0,
+      "tree": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+      "commands": [
+        {
+          "package": "aizome-kit",
+          "command": [
+            "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+            "test",
+            "--no-live",
+            "--allow-c",
+            "--offline",
+            "aizome-kit",
+            "--lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/desktop/aizome",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/leaf-edit-c-relax-0-aizome-kit.log",
+          "exit_status": 0,
+          "seconds": 0.971584976000031,
+          "settled_seconds": 0.9716832849999264,
+          "orphan_status": []
+        },
+        {
+          "package": "aizome-soroban",
+          "command": [
+            "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+            "test",
+            "--no-live",
+            "--allow-c",
+            "--offline",
+            "aizome-soroban",
+            "--lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/desktop/aizome",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/leaf-edit-c-relax-0-aizome-soroban.log",
+          "exit_status": 0,
+          "seconds": 0.9745462109999607,
+          "settled_seconds": 0.9747630100000606,
+          "orphan_status": []
+        }
+      ],
+      "seconds": 1.9461311869999918,
+      "settled_seconds": 1.946446294999987
+    },
+    {
+      "stage": "leaf-edit-c",
+      "engine": "buck2",
+      "repeat": 0,
+      "tree": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+      "commands": [
+        {
+          "package": "aizome-kit",
+          "command": [
+            "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/scripts/sekka-buck2",
+            "--isolation-dir",
+            "cache-compare-20261111",
+            "--cache",
+            "cache",
+            "--cache-write",
+            "--config-file",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+            "--local-content-store",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+            "-j",
+            "16",
+            "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/leaf-edit-c-buck2-0-aizome-kit.report.json",
+            "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/leaf-edit-c-buck2-0-aizome-kit.events.json-lines.gz",
+            "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/leaf-edit-c-buck2-0-aizome-kit.build-id",
+            "test",
+            "//desktop/aizome/crates/aizome-kit:aizome_kit-test-test-lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/leaf-edit-c-buck2-0-aizome-kit.log",
+          "exit_status": 0,
+          "seconds": 0.376456920000237,
+          "settled_seconds": 0.37663098400025774,
+          "orphan_status": []
+        },
+        {
+          "package": "aizome-soroban",
+          "command": [
+            "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/scripts/sekka-buck2",
+            "--isolation-dir",
+            "cache-compare-20261111",
+            "--cache",
+            "cache",
+            "--cache-write",
+            "--config-file",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+            "--local-content-store",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+            "-j",
+            "16",
+            "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/leaf-edit-c-buck2-0-aizome-soroban.report.json",
+            "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/leaf-edit-c-buck2-0-aizome-soroban.events.json-lines.gz",
+            "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/leaf-edit-c-buck2-0-aizome-soroban.build-id",
+            "test",
+            "//desktop/aizome/apps/soroban:aizome_soroban-test-test-lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/leaf-edit-c-buck2-0-aizome-soroban.log",
+          "exit_status": 0,
+          "seconds": 2.4048360359997787,
+          "settled_seconds": 2.4049087960002,
+          "orphan_status": []
+        }
+      ],
+      "seconds": 2.7812929560000157,
+      "settled_seconds": 2.7815397800004575
+    },
+    {
+      "stage": "leaf-warm-c",
+      "engine": "relax",
+      "repeat": 0,
+      "tree": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+      "commands": [
+        {
+          "package": "aizome-kit",
+          "command": [
+            "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+            "test",
+            "--no-live",
+            "--allow-c",
+            "--offline",
+            "aizome-kit",
+            "--lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/desktop/aizome",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/leaf-warm-c-relax-0-aizome-kit.log",
+          "exit_status": 0,
+          "seconds": 0.925976903999981,
+          "settled_seconds": 0.92608497800029,
+          "orphan_status": []
+        },
+        {
+          "package": "aizome-soroban",
+          "command": [
+            "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+            "test",
+            "--no-live",
+            "--allow-c",
+            "--offline",
+            "aizome-soroban",
+            "--lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/desktop/aizome",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/leaf-warm-c-relax-0-aizome-soroban.log",
+          "exit_status": 0,
+          "seconds": 0.8152842380000038,
+          "settled_seconds": 0.815501377000146,
+          "orphan_status": []
+        }
+      ],
+      "seconds": 1.7412611419999848,
+      "settled_seconds": 1.741586355000436
+    },
+    {
+      "stage": "leaf-warm-c",
+      "engine": "buck2",
+      "repeat": 0,
+      "tree": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+      "commands": [
+        {
+          "package": "aizome-kit",
+          "command": [
+            "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/scripts/sekka-buck2",
+            "--isolation-dir",
+            "cache-compare-20261111",
+            "--cache",
+            "cache",
+            "--cache-write",
+            "--config-file",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+            "--local-content-store",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+            "-j",
+            "16",
+            "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/leaf-warm-c-buck2-0-aizome-kit.report.json",
+            "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/leaf-warm-c-buck2-0-aizome-kit.events.json-lines.gz",
+            "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/leaf-warm-c-buck2-0-aizome-kit.build-id",
+            "test",
+            "//desktop/aizome/crates/aizome-kit:aizome_kit-test-test-lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/leaf-warm-c-buck2-0-aizome-kit.log",
+          "exit_status": 0,
+          "seconds": 0.38197701799981587,
+          "settled_seconds": 0.38211266400003296,
+          "orphan_status": []
+        },
+        {
+          "package": "aizome-soroban",
+          "command": [
+            "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/scripts/sekka-buck2",
+            "--isolation-dir",
+            "cache-compare-20261111",
+            "--cache",
+            "cache",
+            "--cache-write",
+            "--config-file",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+            "--local-content-store",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+            "-j",
+            "16",
+            "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/leaf-warm-c-buck2-0-aizome-soroban.report.json",
+            "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/leaf-warm-c-buck2-0-aizome-soroban.events.json-lines.gz",
+            "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/leaf-warm-c-buck2-0-aizome-soroban.build-id",
+            "test",
+            "//desktop/aizome/apps/soroban:aizome_soroban-test-test-lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/leaf-warm-c-buck2-0-aizome-soroban.log",
+          "exit_status": 0,
+          "seconds": 0.3332262579997405,
+          "settled_seconds": 0.33334707099993466,
+          "orphan_status": []
+        }
+      ],
+      "seconds": 0.7152032759995564,
+      "settled_seconds": 0.7154597349999676
+    },
+    {
+      "stage": "leaf-warm-c",
+      "engine": "buck2",
+      "repeat": 1,
+      "tree": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+      "commands": [
+        {
+          "package": "aizome-kit",
+          "command": [
+            "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/scripts/sekka-buck2",
+            "--isolation-dir",
+            "cache-compare-20261111",
+            "--cache",
+            "cache",
+            "--cache-write",
+            "--config-file",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+            "--local-content-store",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+            "-j",
+            "16",
+            "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/leaf-warm-c-buck2-1-aizome-kit.report.json",
+            "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/leaf-warm-c-buck2-1-aizome-kit.events.json-lines.gz",
+            "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/leaf-warm-c-buck2-1-aizome-kit.build-id",
+            "test",
+            "//desktop/aizome/crates/aizome-kit:aizome_kit-test-test-lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/leaf-warm-c-buck2-1-aizome-kit.log",
+          "exit_status": 0,
+          "seconds": 0.3736300730001858,
+          "settled_seconds": 0.3737190980000378,
+          "orphan_status": []
+        },
+        {
+          "package": "aizome-soroban",
+          "command": [
+            "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/scripts/sekka-buck2",
+            "--isolation-dir",
+            "cache-compare-20261111",
+            "--cache",
+            "cache",
+            "--cache-write",
+            "--config-file",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+            "--local-content-store",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+            "-j",
+            "16",
+            "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/leaf-warm-c-buck2-1-aizome-soroban.report.json",
+            "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/leaf-warm-c-buck2-1-aizome-soroban.events.json-lines.gz",
+            "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/leaf-warm-c-buck2-1-aizome-soroban.build-id",
+            "test",
+            "//desktop/aizome/apps/soroban:aizome_soroban-test-test-lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/leaf-warm-c-buck2-1-aizome-soroban.log",
+          "exit_status": 0,
+          "seconds": 0.32369131199993717,
+          "settled_seconds": 0.323814948999825,
+          "orphan_status": []
+        }
+      ],
+      "seconds": 0.697321385000123,
+      "settled_seconds": 0.6975340469998628
+    },
+    {
+      "stage": "leaf-warm-c",
+      "engine": "relax",
+      "repeat": 1,
+      "tree": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+      "commands": [
+        {
+          "package": "aizome-kit",
+          "command": [
+            "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+            "test",
+            "--no-live",
+            "--allow-c",
+            "--offline",
+            "aizome-kit",
+            "--lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/desktop/aizome",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/leaf-warm-c-relax-1-aizome-kit.log",
+          "exit_status": 0,
+          "seconds": 0.9688744529998985,
+          "settled_seconds": 0.9690827589997753,
+          "orphan_status": []
+        },
+        {
+          "package": "aizome-soroban",
+          "command": [
+            "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+            "test",
+            "--no-live",
+            "--allow-c",
+            "--offline",
+            "aizome-soroban",
+            "--lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/desktop/aizome",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/leaf-warm-c-relax-1-aizome-soroban.log",
+          "exit_status": 0,
+          "seconds": 0.7598182490000909,
+          "settled_seconds": 0.7599242299997968,
+          "orphan_status": []
+        }
+      ],
+      "seconds": 1.7286927019999894,
+      "settled_seconds": 1.729006988999572
+    },
+    {
+      "stage": "leaf-warm-c",
+      "engine": "relax",
+      "repeat": 2,
+      "tree": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+      "commands": [
+        {
+          "package": "aizome-kit",
+          "command": [
+            "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+            "test",
+            "--no-live",
+            "--allow-c",
+            "--offline",
+            "aizome-kit",
+            "--lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/desktop/aizome",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/leaf-warm-c-relax-2-aizome-kit.log",
+          "exit_status": 0,
+          "seconds": 0.9667679110002609,
+          "settled_seconds": 0.9668656990002091,
+          "orphan_status": []
+        },
+        {
+          "package": "aizome-soroban",
+          "command": [
+            "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+            "test",
+            "--no-live",
+            "--allow-c",
+            "--offline",
+            "aizome-soroban",
+            "--lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/desktop/aizome",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/leaf-warm-c-relax-2-aizome-soroban.log",
+          "exit_status": 0,
+          "seconds": 0.7889902689998962,
+          "settled_seconds": 0.7891481279998516,
+          "orphan_status": []
+        }
+      ],
+      "seconds": 1.7557581800001572,
+      "settled_seconds": 1.7560138270000607
+    },
+    {
+      "stage": "leaf-warm-c",
+      "engine": "buck2",
+      "repeat": 2,
+      "tree": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+      "commands": [
+        {
+          "package": "aizome-kit",
+          "command": [
+            "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/scripts/sekka-buck2",
+            "--isolation-dir",
+            "cache-compare-20261111",
+            "--cache",
+            "cache",
+            "--cache-write",
+            "--config-file",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+            "--local-content-store",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+            "-j",
+            "16",
+            "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/leaf-warm-c-buck2-2-aizome-kit.report.json",
+            "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/leaf-warm-c-buck2-2-aizome-kit.events.json-lines.gz",
+            "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/leaf-warm-c-buck2-2-aizome-kit.build-id",
+            "test",
+            "//desktop/aizome/crates/aizome-kit:aizome_kit-test-test-lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/leaf-warm-c-buck2-2-aizome-kit.log",
+          "exit_status": 0,
+          "seconds": 0.39363324299984015,
+          "settled_seconds": 0.3937782929997411,
+          "orphan_status": []
+        },
+        {
+          "package": "aizome-soroban",
+          "command": [
+            "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/scripts/sekka-buck2",
+            "--isolation-dir",
+            "cache-compare-20261111",
+            "--cache",
+            "cache",
+            "--cache-write",
+            "--config-file",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+            "--local-content-store",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+            "-j",
+            "16",
+            "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/leaf-warm-c-buck2-2-aizome-soroban.report.json",
+            "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/leaf-warm-c-buck2-2-aizome-soroban.events.json-lines.gz",
+            "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/leaf-warm-c-buck2-2-aizome-soroban.build-id",
+            "test",
+            "//desktop/aizome/apps/soroban:aizome_soroban-test-test-lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/leaf-warm-c-buck2-2-aizome-soroban.log",
+          "exit_status": 0,
+          "seconds": 0.336451770000167,
+          "settled_seconds": 0.33651635800015356,
+          "orphan_status": []
+        }
+      ],
+      "seconds": 0.7300850130000072,
+      "settled_seconds": 0.7302946509998947
+    },
+    {
+      "stage": "shared-edit-c",
+      "engine": "relax",
+      "repeat": 0,
+      "tree": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+      "commands": [
+        {
+          "package": "aizome-kit",
+          "command": [
+            "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+            "test",
+            "--no-live",
+            "--allow-c",
+            "--offline",
+            "aizome-kit",
+            "--lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/desktop/aizome",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/shared-edit-c-relax-0-aizome-kit.log",
+          "exit_status": 0,
+          "seconds": 1.3957587599998078,
+          "settled_seconds": 1.3958696979998422,
+          "orphan_status": []
+        },
+        {
+          "package": "aizome-soroban",
+          "command": [
+            "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+            "test",
+            "--no-live",
+            "--allow-c",
+            "--offline",
+            "aizome-soroban",
+            "--lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/desktop/aizome",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/shared-edit-c-relax-0-aizome-soroban.log",
+          "exit_status": 0,
+          "seconds": 1.4047549649999382,
+          "settled_seconds": 1.4049291589999484,
+          "orphan_status": []
+        }
+      ],
+      "seconds": 2.800513724999746,
+      "settled_seconds": 2.8007988569997906
+    },
+    {
+      "stage": "shared-edit-c",
+      "engine": "buck2",
+      "repeat": 0,
+      "tree": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+      "commands": [
+        {
+          "package": "aizome-kit",
+          "command": [
+            "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/scripts/sekka-buck2",
+            "--isolation-dir",
+            "cache-compare-20261111",
+            "--cache",
+            "cache",
+            "--cache-write",
+            "--config-file",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+            "--local-content-store",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+            "-j",
+            "16",
+            "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/shared-edit-c-buck2-0-aizome-kit.report.json",
+            "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/shared-edit-c-buck2-0-aizome-kit.events.json-lines.gz",
+            "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/shared-edit-c-buck2-0-aizome-kit.build-id",
+            "test",
+            "//desktop/aizome/crates/aizome-kit:aizome_kit-test-test-lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/shared-edit-c-buck2-0-aizome-kit.log",
+          "exit_status": 0,
+          "seconds": 3.7459658889997627,
+          "settled_seconds": 3.7466102149996914,
+          "orphan_status": []
+        },
+        {
+          "package": "aizome-soroban",
+          "command": [
+            "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/scripts/sekka-buck2",
+            "--isolation-dir",
+            "cache-compare-20261111",
+            "--cache",
+            "cache",
+            "--cache-write",
+            "--config-file",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+            "--local-content-store",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+            "-j",
+            "16",
+            "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/shared-edit-c-buck2-0-aizome-soroban.report.json",
+            "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/shared-edit-c-buck2-0-aizome-soroban.events.json-lines.gz",
+            "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/shared-edit-c-buck2-0-aizome-soroban.build-id",
+            "test",
+            "//desktop/aizome/apps/soroban:aizome_soroban-test-test-lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/shared-edit-c-buck2-0-aizome-soroban.log",
+          "exit_status": 0,
+          "seconds": 4.1035956720002105,
+          "settled_seconds": 4.103731146999962,
+          "orphan_status": []
+        }
+      ],
+      "seconds": 7.849561560999973,
+      "settled_seconds": 7.850341361999654
+    },
+    {
+      "stage": "shared-warm-c",
+      "engine": "relax",
+      "repeat": 0,
+      "tree": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+      "commands": [
+        {
+          "package": "aizome-kit",
+          "command": [
+            "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+            "test",
+            "--no-live",
+            "--allow-c",
+            "--offline",
+            "aizome-kit",
+            "--lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/desktop/aizome",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/shared-warm-c-relax-0-aizome-kit.log",
+          "exit_status": 0,
+          "seconds": 0.957103916000051,
+          "settled_seconds": 0.9571959660001994,
+          "orphan_status": []
+        },
+        {
+          "package": "aizome-soroban",
+          "command": [
+            "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+            "test",
+            "--no-live",
+            "--allow-c",
+            "--offline",
+            "aizome-soroban",
+            "--lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/desktop/aizome",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/shared-warm-c-relax-0-aizome-soroban.log",
+          "exit_status": 0,
+          "seconds": 0.7926174839999476,
+          "settled_seconds": 0.792729664000035,
+          "orphan_status": []
+        }
+      ],
+      "seconds": 1.7497213999999985,
+      "settled_seconds": 1.7499256300002344
+    },
+    {
+      "stage": "shared-warm-c",
+      "engine": "buck2",
+      "repeat": 0,
+      "tree": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+      "commands": [
+        {
+          "package": "aizome-kit",
+          "command": [
+            "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/scripts/sekka-buck2",
+            "--isolation-dir",
+            "cache-compare-20261111",
+            "--cache",
+            "cache",
+            "--cache-write",
+            "--config-file",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+            "--local-content-store",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+            "-j",
+            "16",
+            "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/shared-warm-c-buck2-0-aizome-kit.report.json",
+            "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/shared-warm-c-buck2-0-aizome-kit.events.json-lines.gz",
+            "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/shared-warm-c-buck2-0-aizome-kit.build-id",
+            "test",
+            "//desktop/aizome/crates/aizome-kit:aizome_kit-test-test-lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/shared-warm-c-buck2-0-aizome-kit.log",
+          "exit_status": 0,
+          "seconds": 0.3595072079997408,
+          "settled_seconds": 0.35964653899964105,
+          "orphan_status": []
+        },
+        {
+          "package": "aizome-soroban",
+          "command": [
+            "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/scripts/sekka-buck2",
+            "--isolation-dir",
+            "cache-compare-20261111",
+            "--cache",
+            "cache",
+            "--cache-write",
+            "--config-file",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+            "--local-content-store",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+            "-j",
+            "16",
+            "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/shared-warm-c-buck2-0-aizome-soroban.report.json",
+            "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/shared-warm-c-buck2-0-aizome-soroban.events.json-lines.gz",
+            "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/shared-warm-c-buck2-0-aizome-soroban.build-id",
+            "test",
+            "//desktop/aizome/apps/soroban:aizome_soroban-test-test-lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/shared-warm-c-buck2-0-aizome-soroban.log",
+          "exit_status": 0,
+          "seconds": 0.30138015400007134,
+          "settled_seconds": 0.30151111299983313,
+          "orphan_status": []
+        }
+      ],
+      "seconds": 0.6608873619998121,
+      "settled_seconds": 0.6611576519994742
+    },
+    {
+      "stage": "shared-warm-c",
+      "engine": "buck2",
+      "repeat": 1,
+      "tree": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+      "commands": [
+        {
+          "package": "aizome-kit",
+          "command": [
+            "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/scripts/sekka-buck2",
+            "--isolation-dir",
+            "cache-compare-20261111",
+            "--cache",
+            "cache",
+            "--cache-write",
+            "--config-file",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+            "--local-content-store",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+            "-j",
+            "16",
+            "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/shared-warm-c-buck2-1-aizome-kit.report.json",
+            "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/shared-warm-c-buck2-1-aizome-kit.events.json-lines.gz",
+            "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/shared-warm-c-buck2-1-aizome-kit.build-id",
+            "test",
+            "//desktop/aizome/crates/aizome-kit:aizome_kit-test-test-lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/shared-warm-c-buck2-1-aizome-kit.log",
+          "exit_status": 0,
+          "seconds": 0.3496620230002918,
+          "settled_seconds": 0.3498015340001075,
+          "orphan_status": []
+        },
+        {
+          "package": "aizome-soroban",
+          "command": [
+            "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/scripts/sekka-buck2",
+            "--isolation-dir",
+            "cache-compare-20261111",
+            "--cache",
+            "cache",
+            "--cache-write",
+            "--config-file",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+            "--local-content-store",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+            "-j",
+            "16",
+            "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/shared-warm-c-buck2-1-aizome-soroban.report.json",
+            "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/shared-warm-c-buck2-1-aizome-soroban.events.json-lines.gz",
+            "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/shared-warm-c-buck2-1-aizome-soroban.build-id",
+            "test",
+            "//desktop/aizome/apps/soroban:aizome_soroban-test-test-lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/shared-warm-c-buck2-1-aizome-soroban.log",
+          "exit_status": 0,
+          "seconds": 0.3071079500000451,
+          "settled_seconds": 0.30716471600044315,
+          "orphan_status": []
+        }
+      ],
+      "seconds": 0.6567699730003369,
+      "settled_seconds": 0.6569662500005506
+    },
+    {
+      "stage": "shared-warm-c",
+      "engine": "relax",
+      "repeat": 1,
+      "tree": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+      "commands": [
+        {
+          "package": "aizome-kit",
+          "command": [
+            "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+            "test",
+            "--no-live",
+            "--allow-c",
+            "--offline",
+            "aizome-kit",
+            "--lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/desktop/aizome",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/shared-warm-c-relax-1-aizome-kit.log",
+          "exit_status": 0,
+          "seconds": 0.8185969749997639,
+          "settled_seconds": 0.8188191619997269,
+          "orphan_status": []
+        },
+        {
+          "package": "aizome-soroban",
+          "command": [
+            "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+            "test",
+            "--no-live",
+            "--allow-c",
+            "--offline",
+            "aizome-soroban",
+            "--lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/desktop/aizome",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/shared-warm-c-relax-1-aizome-soroban.log",
+          "exit_status": 0,
+          "seconds": 0.7258620759998848,
+          "settled_seconds": 0.7259441699998206,
+          "orphan_status": []
+        }
+      ],
+      "seconds": 1.5444590509996488,
+      "settled_seconds": 1.5447633319995475
+    },
+    {
+      "stage": "shared-warm-c",
+      "engine": "relax",
+      "repeat": 2,
+      "tree": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+      "commands": [
+        {
+          "package": "aizome-kit",
+          "command": [
+            "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+            "test",
+            "--no-live",
+            "--allow-c",
+            "--offline",
+            "aizome-kit",
+            "--lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/desktop/aizome",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/shared-warm-c-relax-2-aizome-kit.log",
+          "exit_status": 0,
+          "seconds": 0.9472588160001578,
+          "settled_seconds": 0.9473633840002549,
+          "orphan_status": []
+        },
+        {
+          "package": "aizome-soroban",
+          "command": [
+            "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+            "test",
+            "--no-live",
+            "--allow-c",
+            "--offline",
+            "aizome-soroban",
+            "--lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/desktop/aizome",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/shared-warm-c-relax-2-aizome-soroban.log",
+          "exit_status": 0,
+          "seconds": 0.745673744999749,
+          "settled_seconds": 0.7458689810000578,
+          "orphan_status": []
+        }
+      ],
+      "seconds": 1.6929325609999069,
+      "settled_seconds": 1.6932323650003127
+    },
+    {
+      "stage": "shared-warm-c",
+      "engine": "buck2",
+      "repeat": 2,
+      "tree": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+      "commands": [
+        {
+          "package": "aizome-kit",
+          "command": [
+            "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/scripts/sekka-buck2",
+            "--isolation-dir",
+            "cache-compare-20261111",
+            "--cache",
+            "cache",
+            "--cache-write",
+            "--config-file",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+            "--local-content-store",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+            "-j",
+            "16",
+            "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/shared-warm-c-buck2-2-aizome-kit.report.json",
+            "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/shared-warm-c-buck2-2-aizome-kit.events.json-lines.gz",
+            "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/shared-warm-c-buck2-2-aizome-kit.build-id",
+            "test",
+            "//desktop/aizome/crates/aizome-kit:aizome_kit-test-test-lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/shared-warm-c-buck2-2-aizome-kit.log",
+          "exit_status": 0,
+          "seconds": 0.37775197299970387,
+          "settled_seconds": 0.37789760299983755,
+          "orphan_status": []
+        },
+        {
+          "package": "aizome-soroban",
+          "command": [
+            "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/scripts/sekka-buck2",
+            "--isolation-dir",
+            "cache-compare-20261111",
+            "--cache",
+            "cache",
+            "--cache-write",
+            "--config-file",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+            "--local-content-store",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+            "-j",
+            "16",
+            "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/shared-warm-c-buck2-2-aizome-soroban.report.json",
+            "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/shared-warm-c-buck2-2-aizome-soroban.events.json-lines.gz",
+            "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/shared-warm-c-buck2-2-aizome-soroban.build-id",
+            "test",
+            "//desktop/aizome/apps/soroban:aizome_soroban-test-test-lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/shared-warm-c-buck2-2-aizome-soroban.log",
+          "exit_status": 0,
+          "seconds": 0.3593134619995908,
+          "settled_seconds": 0.35945841099965037,
+          "orphan_status": []
+        }
+      ],
+      "seconds": 0.7370654349992947,
+      "settled_seconds": 0.7373560139994879
+    },
+    {
+      "stage": "fresh-leaf-edit-d",
+      "engine": "relax",
+      "repeat": 0,
+      "tree": "/home/callen/sekka-work/buck2-final-20261106/run/trees/release-fresh",
+      "commands": [
+        {
+          "package": "aizome-kit",
+          "command": [
+            "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+            "test",
+            "--no-live",
+            "--allow-c",
+            "--offline",
+            "aizome-kit",
+            "--lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/release-fresh/desktop/aizome",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/fresh-leaf-edit-d-relax-0-aizome-kit.log",
+          "exit_status": 0,
+          "seconds": 7.804397942999913,
+          "settled_seconds": 7.80447520000007,
+          "orphan_status": []
+        },
+        {
+          "package": "aizome-soroban",
+          "command": [
+            "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+            "test",
+            "--no-live",
+            "--allow-c",
+            "--offline",
+            "aizome-soroban",
+            "--lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/release-fresh/desktop/aizome",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/fresh-leaf-edit-d-relax-0-aizome-soroban.log",
+          "exit_status": 0,
+          "seconds": 6.999786047999805,
+          "settled_seconds": 6.99997378199987,
+          "orphan_status": []
+        }
+      ],
+      "seconds": 14.804183990999718,
+      "settled_seconds": 14.80444898199994
+    },
+    {
+      "stage": "fresh-leaf-edit-d",
+      "engine": "buck2",
+      "repeat": 0,
+      "tree": "/home/callen/sekka-work/buck2-final-20261106/run/trees/release-fresh",
+      "commands": [
+        {
+          "package": "aizome-kit",
+          "command": [
+            "/home/callen/sekka-work/buck2-final-20261106/run/trees/release-fresh/scripts/sekka-buck2",
+            "--isolation-dir",
+            "cache-compare-20261111",
+            "--cache",
+            "cache",
+            "--cache-write",
+            "--config-file",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+            "--local-content-store",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+            "-j",
+            "16",
+            "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/fresh-leaf-edit-d-buck2-0-aizome-kit.report.json",
+            "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/fresh-leaf-edit-d-buck2-0-aizome-kit.events.json-lines.gz",
+            "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/fresh-leaf-edit-d-buck2-0-aizome-kit.build-id",
+            "test",
+            "//desktop/aizome/crates/aizome-kit:aizome_kit-test-test-lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/release-fresh",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/fresh-leaf-edit-d-buck2-0-aizome-kit.log",
+          "exit_status": 0,
+          "seconds": 3.9994409569999334,
+          "settled_seconds": 3.9996166329997322,
+          "orphan_status": []
+        },
+        {
+          "package": "aizome-soroban",
+          "command": [
+            "/home/callen/sekka-work/buck2-final-20261106/run/trees/release-fresh/scripts/sekka-buck2",
+            "--isolation-dir",
+            "cache-compare-20261111",
+            "--cache",
+            "cache",
+            "--cache-write",
+            "--config-file",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+            "--local-content-store",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+            "-j",
+            "16",
+            "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/fresh-leaf-edit-d-buck2-0-aizome-soroban.report.json",
+            "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/fresh-leaf-edit-d-buck2-0-aizome-soroban.events.json-lines.gz",
+            "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/fresh-leaf-edit-d-buck2-0-aizome-soroban.build-id",
+            "test",
+            "//desktop/aizome/apps/soroban:aizome_soroban-test-test-lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/release-fresh",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/fresh-leaf-edit-d-buck2-0-aizome-soroban.log",
+          "exit_status": 0,
+          "seconds": 3.7904769199999464,
+          "settled_seconds": 3.790751726000053,
+          "orphan_status": []
+        }
+      ],
+      "seconds": 7.78991787699988,
+      "settled_seconds": 7.790368358999785
+    },
+    {
+      "stage": "fresh-leaf-warm-d",
+      "engine": "relax",
+      "repeat": 0,
+      "tree": "/home/callen/sekka-work/buck2-final-20261106/run/trees/release-fresh",
+      "commands": [
+        {
+          "package": "aizome-kit",
+          "command": [
+            "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+            "test",
+            "--no-live",
+            "--allow-c",
+            "--offline",
+            "aizome-kit",
+            "--lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/release-fresh/desktop/aizome",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/fresh-leaf-warm-d-relax-0-aizome-kit.log",
+          "exit_status": 0,
+          "seconds": 0.9619537529997615,
+          "settled_seconds": 0.9620373600000676,
+          "orphan_status": []
+        },
+        {
+          "package": "aizome-soroban",
+          "command": [
+            "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+            "test",
+            "--no-live",
+            "--allow-c",
+            "--offline",
+            "aizome-soroban",
+            "--lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/release-fresh/desktop/aizome",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/fresh-leaf-warm-d-relax-0-aizome-soroban.log",
+          "exit_status": 0,
+          "seconds": 0.7828825520000464,
+          "settled_seconds": 0.783140253000056,
+          "orphan_status": []
+        }
+      ],
+      "seconds": 1.744836304999808,
+      "settled_seconds": 1.7451776130001235
+    },
+    {
+      "stage": "fresh-leaf-warm-d",
+      "engine": "buck2",
+      "repeat": 0,
+      "tree": "/home/callen/sekka-work/buck2-final-20261106/run/trees/release-fresh",
+      "commands": [
+        {
+          "package": "aizome-kit",
+          "command": [
+            "/home/callen/sekka-work/buck2-final-20261106/run/trees/release-fresh/scripts/sekka-buck2",
+            "--isolation-dir",
+            "cache-compare-20261111",
+            "--cache",
+            "cache",
+            "--cache-write",
+            "--config-file",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+            "--local-content-store",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+            "-j",
+            "16",
+            "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/fresh-leaf-warm-d-buck2-0-aizome-kit.report.json",
+            "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/fresh-leaf-warm-d-buck2-0-aizome-kit.events.json-lines.gz",
+            "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/fresh-leaf-warm-d-buck2-0-aizome-kit.build-id",
+            "test",
+            "//desktop/aizome/crates/aizome-kit:aizome_kit-test-test-lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/release-fresh",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/fresh-leaf-warm-d-buck2-0-aizome-kit.log",
+          "exit_status": 0,
+          "seconds": 0.39051805299959597,
+          "settled_seconds": 0.39063573099974747,
+          "orphan_status": []
+        },
+        {
+          "package": "aizome-soroban",
+          "command": [
+            "/home/callen/sekka-work/buck2-final-20261106/run/trees/release-fresh/scripts/sekka-buck2",
+            "--isolation-dir",
+            "cache-compare-20261111",
+            "--cache",
+            "cache",
+            "--cache-write",
+            "--config-file",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+            "--local-content-store",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+            "-j",
+            "16",
+            "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/fresh-leaf-warm-d-buck2-0-aizome-soroban.report.json",
+            "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/fresh-leaf-warm-d-buck2-0-aizome-soroban.events.json-lines.gz",
+            "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/fresh-leaf-warm-d-buck2-0-aizome-soroban.build-id",
+            "test",
+            "//desktop/aizome/apps/soroban:aizome_soroban-test-test-lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/release-fresh",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/fresh-leaf-warm-d-buck2-0-aizome-soroban.log",
+          "exit_status": 0,
+          "seconds": 0.3426287649999722,
+          "settled_seconds": 0.3427522419997331,
+          "orphan_status": []
+        }
+      ],
+      "seconds": 0.7331468179995682,
+      "settled_seconds": 0.7333879729994806
+    },
+    {
+      "stage": "fresh-leaf-warm-d",
+      "engine": "buck2",
+      "repeat": 1,
+      "tree": "/home/callen/sekka-work/buck2-final-20261106/run/trees/release-fresh",
+      "commands": [
+        {
+          "package": "aizome-kit",
+          "command": [
+            "/home/callen/sekka-work/buck2-final-20261106/run/trees/release-fresh/scripts/sekka-buck2",
+            "--isolation-dir",
+            "cache-compare-20261111",
+            "--cache",
+            "cache",
+            "--cache-write",
+            "--config-file",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+            "--local-content-store",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+            "-j",
+            "16",
+            "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/fresh-leaf-warm-d-buck2-1-aizome-kit.report.json",
+            "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/fresh-leaf-warm-d-buck2-1-aizome-kit.events.json-lines.gz",
+            "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/fresh-leaf-warm-d-buck2-1-aizome-kit.build-id",
+            "test",
+            "//desktop/aizome/crates/aizome-kit:aizome_kit-test-test-lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/release-fresh",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/fresh-leaf-warm-d-buck2-1-aizome-kit.log",
+          "exit_status": 0,
+          "seconds": 0.379615240000021,
+          "settled_seconds": 0.379691234999882,
+          "orphan_status": []
+        },
+        {
+          "package": "aizome-soroban",
+          "command": [
+            "/home/callen/sekka-work/buck2-final-20261106/run/trees/release-fresh/scripts/sekka-buck2",
+            "--isolation-dir",
+            "cache-compare-20261111",
+            "--cache",
+            "cache",
+            "--cache-write",
+            "--config-file",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+            "--local-content-store",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+            "-j",
+            "16",
+            "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/fresh-leaf-warm-d-buck2-1-aizome-soroban.report.json",
+            "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/fresh-leaf-warm-d-buck2-1-aizome-soroban.events.json-lines.gz",
+            "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/fresh-leaf-warm-d-buck2-1-aizome-soroban.build-id",
+            "test",
+            "//desktop/aizome/apps/soroban:aizome_soroban-test-test-lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/release-fresh",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/fresh-leaf-warm-d-buck2-1-aizome-soroban.log",
+          "exit_status": 0,
+          "seconds": 0.33415950900007374,
+          "settled_seconds": 0.33431392200009213,
+          "orphan_status": []
+        }
+      ],
+      "seconds": 0.7137747490000947,
+      "settled_seconds": 0.7140051569999741
+    },
+    {
+      "stage": "fresh-leaf-warm-d",
+      "engine": "relax",
+      "repeat": 1,
+      "tree": "/home/callen/sekka-work/buck2-final-20261106/run/trees/release-fresh",
+      "commands": [
+        {
+          "package": "aizome-kit",
+          "command": [
+            "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+            "test",
+            "--no-live",
+            "--allow-c",
+            "--offline",
+            "aizome-kit",
+            "--lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/release-fresh/desktop/aizome",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/fresh-leaf-warm-d-relax-1-aizome-kit.log",
+          "exit_status": 0,
+          "seconds": 0.9865684380001767,
+          "settled_seconds": 0.9868048960001943,
+          "orphan_status": []
+        },
+        {
+          "package": "aizome-soroban",
+          "command": [
+            "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+            "test",
+            "--no-live",
+            "--allow-c",
+            "--offline",
+            "aizome-soroban",
+            "--lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/release-fresh/desktop/aizome",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/fresh-leaf-warm-d-relax-1-aizome-soroban.log",
+          "exit_status": 0,
+          "seconds": 0.7300579579996338,
+          "settled_seconds": 0.7301538229999096,
+          "orphan_status": []
+        }
+      ],
+      "seconds": 1.7166263959998105,
+      "settled_seconds": 1.7169587190001039
+    },
+    {
+      "stage": "fresh-leaf-warm-d",
+      "engine": "relax",
+      "repeat": 2,
+      "tree": "/home/callen/sekka-work/buck2-final-20261106/run/trees/release-fresh",
+      "commands": [
+        {
+          "package": "aizome-kit",
+          "command": [
+            "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+            "test",
+            "--no-live",
+            "--allow-c",
+            "--offline",
+            "aizome-kit",
+            "--lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/release-fresh/desktop/aizome",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/fresh-leaf-warm-d-relax-2-aizome-kit.log",
+          "exit_status": 0,
+          "seconds": 0.9321270269997513,
+          "settled_seconds": 0.9322433530001035,
+          "orphan_status": []
+        },
+        {
+          "package": "aizome-soroban",
+          "command": [
+            "/home/callen/sekka-work/relax-followup-20261111/relax/target/release/relax",
+            "test",
+            "--no-live",
+            "--allow-c",
+            "--offline",
+            "aizome-soroban",
+            "--lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/release-fresh/desktop/aizome",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/fresh-leaf-warm-d-relax-2-aizome-soroban.log",
+          "exit_status": 0,
+          "seconds": 0.7993906490000882,
+          "settled_seconds": 0.7995593149998967,
+          "orphan_status": []
+        }
+      ],
+      "seconds": 1.7315176759998394,
+      "settled_seconds": 1.7318026680000003
+    },
+    {
+      "stage": "fresh-leaf-warm-d",
+      "engine": "buck2",
+      "repeat": 2,
+      "tree": "/home/callen/sekka-work/buck2-final-20261106/run/trees/release-fresh",
+      "commands": [
+        {
+          "package": "aizome-kit",
+          "command": [
+            "/home/callen/sekka-work/buck2-final-20261106/run/trees/release-fresh/scripts/sekka-buck2",
+            "--isolation-dir",
+            "cache-compare-20261111",
+            "--cache",
+            "cache",
+            "--cache-write",
+            "--config-file",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+            "--local-content-store",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+            "-j",
+            "16",
+            "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/fresh-leaf-warm-d-buck2-2-aizome-kit.report.json",
+            "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/fresh-leaf-warm-d-buck2-2-aizome-kit.events.json-lines.gz",
+            "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/fresh-leaf-warm-d-buck2-2-aizome-kit.build-id",
+            "test",
+            "//desktop/aizome/crates/aizome-kit:aizome_kit-test-test-lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/release-fresh",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/fresh-leaf-warm-d-buck2-2-aizome-kit.log",
+          "exit_status": 0,
+          "seconds": 0.37188681499992526,
+          "settled_seconds": 0.3719440009999744,
+          "orphan_status": []
+        },
+        {
+          "package": "aizome-soroban",
+          "command": [
+            "/home/callen/sekka-work/buck2-final-20261106/run/trees/release-fresh/scripts/sekka-buck2",
+            "--isolation-dir",
+            "cache-compare-20261111",
+            "--cache",
+            "cache",
+            "--cache-write",
+            "--config-file",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/writer.rc",
+            "--local-content-store",
+            "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+            "-j",
+            "16",
+            "--buck-arg=--build-report=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/fresh-leaf-warm-d-buck2-2-aizome-soroban.report.json",
+            "--buck-arg=--event-log=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/fresh-leaf-warm-d-buck2-2-aizome-soroban.events.json-lines.gz",
+            "--buck-arg=--write-build-id=/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/fresh-leaf-warm-d-buck2-2-aizome-soroban.build-id",
+            "test",
+            "//desktop/aizome/apps/soroban:aizome_soroban-test-test-lib"
+          ],
+          "cwd": "/home/callen/sekka-work/buck2-final-20261106/run/trees/release-fresh",
+          "log": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/fresh-leaf-warm-d-buck2-2-aizome-soroban.log",
+          "exit_status": 0,
+          "seconds": 0.3272924670000066,
+          "settled_seconds": 0.32733846699966307,
+          "orphan_status": []
+        }
+      ],
+      "seconds": 0.6991792819999318,
+      "settled_seconds": 0.6992824679996374
+    }
+  ],
+  "snapshots": [
+    {
+      "stage": "cold",
+      "engine": "relax",
+      "roots": [
+        "/home/callen/sekka-work/relax-cache-comparison-20261111/relax-cache"
+      ],
+      "physical_receipt": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/cold-relax-storage.log",
+      "allocated_du": "1263755264\t/home/callen/sekka-work/relax-cache-comparison-20261111/relax-cache\n",
+      "logical_du": "1264434917\t/home/callen/sekka-work/relax-cache-comparison-20261111/relax-cache\n"
+    },
+    {
+      "stage": "cold",
+      "engine": "buck2",
+      "roots": [
+        "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+        "/home/callen/sekka-work/shared-build-service-39107ce52f3b/trusted/data",
+        "/home/callen/sekka-work/relax-experiment-20261111/buck2/buck-out/cache-compare-20261111"
+      ],
+      "physical_receipt": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/cold-buck2-storage.log",
+      "allocated_du": "3346432\t/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store\n1390284800\t/home/callen/sekka-work/shared-build-service-39107ce52f3b/trusted/data\n1270513664\t/home/callen/sekka-work/relax-experiment-20261111/buck2/buck-out/cache-compare-20261111\n",
+      "logical_du": "2851148\t/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store\n1377975104\t/home/callen/sekka-work/shared-build-service-39107ce52f3b/trusted/data\n1259322622\t/home/callen/sekka-work/relax-experiment-20261111/buck2/buck-out/cache-compare-20261111\n"
+    },
+    {
+      "stage": "identical-b",
+      "engine": "relax",
+      "roots": [
+        "/home/callen/sekka-work/relax-cache-comparison-20261111/relax-cache"
+      ],
+      "physical_receipt": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/identical-b-relax-storage.log",
+      "allocated_du": "1767464960\t/home/callen/sekka-work/relax-cache-comparison-20261111/relax-cache\n",
+      "logical_du": "1770911717\t/home/callen/sekka-work/relax-cache-comparison-20261111/relax-cache\n"
+    },
+    {
+      "stage": "identical-b",
+      "engine": "buck2",
+      "roots": [
+        "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+        "/home/callen/sekka-work/shared-build-service-39107ce52f3b/trusted/data",
+        "/home/callen/sekka-work/relax-experiment-20261111/buck2/buck-out/cache-compare-20261111",
+        "/home/callen/sekka-work/buck2-final-20261106/repo/buck-out/cache-compare-20261111"
+      ],
+      "physical_receipt": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/identical-b-buck2-storage.log",
+      "allocated_du": "3936256\t/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store\n1390284800\t/home/callen/sekka-work/shared-build-service-39107ce52f3b/trusted/data\n1270587392\t/home/callen/sekka-work/relax-experiment-20261111/buck2/buck-out/cache-compare-20261111\n499605504\t/home/callen/sekka-work/buck2-final-20261106/repo/buck-out/cache-compare-20261111\n",
+      "logical_du": "3441404\t/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store\n1377975104\t/home/callen/sekka-work/shared-build-service-39107ce52f3b/trusted/data\n1259356442\t/home/callen/sekka-work/relax-experiment-20261111/buck2/buck-out/cache-compare-20261111\n495444934\t/home/callen/sekka-work/buck2-final-20261106/repo/buck-out/cache-compare-20261111\n"
+    },
+    {
+      "stage": "unrelated-c",
+      "engine": "relax",
+      "roots": [
+        "/home/callen/sekka-work/relax-cache-comparison-20261111/relax-cache"
+      ],
+      "physical_receipt": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/unrelated-c-relax-storage.log",
+      "allocated_du": "2269126656\t/home/callen/sekka-work/relax-cache-comparison-20261111/relax-cache\n",
+      "logical_du": "2275697277\t/home/callen/sekka-work/relax-cache-comparison-20261111/relax-cache\n"
+    },
+    {
+      "stage": "unrelated-c",
+      "engine": "buck2",
+      "roots": [
+        "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+        "/home/callen/sekka-work/shared-build-service-39107ce52f3b/trusted/data",
+        "/home/callen/sekka-work/relax-experiment-20261111/buck2/buck-out/cache-compare-20261111",
+        "/home/callen/sekka-work/buck2-final-20261106/repo/buck-out/cache-compare-20261111",
+        "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/buck-out/cache-compare-20261111"
+      ],
+      "physical_receipt": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/unrelated-c-buck2-storage.log",
+      "allocated_du": "4722688\t/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store\n1390284800\t/home/callen/sekka-work/shared-build-service-39107ce52f3b/trusted/data\n1270587392\t/home/callen/sekka-work/relax-experiment-20261111/buck2/buck-out/cache-compare-20261111\n499679232\t/home/callen/sekka-work/buck2-final-20261106/repo/buck-out/cache-compare-20261111\n499695616\t/home/callen/sekka-work/buck2-final-20261106/run/trees/a/buck-out/cache-compare-20261111\n",
+      "logical_du": "4225852\t/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store\n1377975104\t/home/callen/sekka-work/shared-build-service-39107ce52f3b/trusted/data\n1259356442\t/home/callen/sekka-work/relax-experiment-20261111/buck2/buck-out/cache-compare-20261111\n495479092\t/home/callen/sekka-work/buck2-final-20261106/repo/buck-out/cache-compare-20261111\n495534886\t/home/callen/sekka-work/buck2-final-20261106/run/trees/a/buck-out/cache-compare-20261111\n"
+    },
+    {
+      "stage": "leaf-edit-c",
+      "engine": "relax",
+      "roots": [
+        "/home/callen/sekka-work/relax-cache-comparison-20261111/relax-cache"
+      ],
+      "physical_receipt": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/leaf-edit-c-relax-storage.log",
+      "allocated_du": "2441703424\t/home/callen/sekka-work/relax-cache-comparison-20261111/relax-cache\n",
+      "logical_du": "2449514784\t/home/callen/sekka-work/relax-cache-comparison-20261111/relax-cache\n"
+    },
+    {
+      "stage": "leaf-edit-c",
+      "engine": "buck2",
+      "roots": [
+        "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+        "/home/callen/sekka-work/shared-build-service-39107ce52f3b/trusted/data",
+        "/home/callen/sekka-work/relax-experiment-20261111/buck2/buck-out/cache-compare-20261111",
+        "/home/callen/sekka-work/buck2-final-20261106/repo/buck-out/cache-compare-20261111",
+        "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/buck-out/cache-compare-20261111"
+      ],
+      "physical_receipt": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/leaf-edit-c-buck2-storage.log",
+      "allocated_du": "4722688\t/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store\n1407438848\t/home/callen/sekka-work/shared-build-service-39107ce52f3b/trusted/data\n1270587392\t/home/callen/sekka-work/relax-experiment-20261111/buck2/buck-out/cache-compare-20261111\n499679232\t/home/callen/sekka-work/buck2-final-20261106/repo/buck-out/cache-compare-20261111\n518967296\t/home/callen/sekka-work/buck2-final-20261106/run/trees/a/buck-out/cache-compare-20261111\n",
+      "logical_du": "4225852\t/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store\n1395093800\t/home/callen/sekka-work/shared-build-service-39107ce52f3b/trusted/data\n1259356442\t/home/callen/sekka-work/relax-experiment-20261111/buck2/buck-out/cache-compare-20261111\n495479092\t/home/callen/sekka-work/buck2-final-20261106/repo/buck-out/cache-compare-20261111\n514480564\t/home/callen/sekka-work/buck2-final-20261106/run/trees/a/buck-out/cache-compare-20261111\n"
+    },
+    {
+      "stage": "shared-edit-c",
+      "engine": "relax",
+      "roots": [
+        "/home/callen/sekka-work/relax-cache-comparison-20261111/relax-cache"
+      ],
+      "physical_receipt": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/shared-edit-c-relax-storage.log",
+      "allocated_du": "2497409024\t/home/callen/sekka-work/relax-cache-comparison-20261111/relax-cache\n",
+      "logical_du": "2507750533\t/home/callen/sekka-work/relax-cache-comparison-20261111/relax-cache\n"
+    },
+    {
+      "stage": "shared-edit-c",
+      "engine": "buck2",
+      "roots": [
+        "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+        "/home/callen/sekka-work/shared-build-service-39107ce52f3b/trusted/data",
+        "/home/callen/sekka-work/relax-experiment-20261111/buck2/buck-out/cache-compare-20261111",
+        "/home/callen/sekka-work/buck2-final-20261106/repo/buck-out/cache-compare-20261111",
+        "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/buck-out/cache-compare-20261111"
+      ],
+      "physical_receipt": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/shared-edit-c-buck2-storage.log",
+      "allocated_du": "5910528\t/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store\n1561423872\t/home/callen/sekka-work/shared-build-service-39107ce52f3b/trusted/data\n1270587392\t/home/callen/sekka-work/relax-experiment-20261111/buck2/buck-out/cache-compare-20261111\n499679232\t/home/callen/sekka-work/buck2-final-20261106/repo/buck-out/cache-compare-20261111\n765030400\t/home/callen/sekka-work/buck2-final-20261106/run/trees/a/buck-out/cache-compare-20261111\n",
+      "logical_du": "5414748\t/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store\n1548905699\t/home/callen/sekka-work/shared-build-service-39107ce52f3b/trusted/data\n1259356442\t/home/callen/sekka-work/relax-experiment-20261111/buck2/buck-out/cache-compare-20261111\n495479092\t/home/callen/sekka-work/buck2-final-20261106/repo/buck-out/cache-compare-20261111\n758940875\t/home/callen/sekka-work/buck2-final-20261106/run/trees/a/buck-out/cache-compare-20261111\n"
+    },
+    {
+      "stage": "before-fresh-edit-d",
+      "engine": "relax",
+      "roots": [
+        "/home/callen/sekka-work/relax-cache-comparison-20261111/relax-cache"
+      ],
+      "physical_receipt": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/before-fresh-edit-d-relax-storage.log",
+      "allocated_du": "2497282048\t/home/callen/sekka-work/relax-cache-comparison-20261111/relax-cache\n",
+      "logical_du": "2507586346\t/home/callen/sekka-work/relax-cache-comparison-20261111/relax-cache\n"
+    },
+    {
+      "stage": "before-fresh-edit-d",
+      "engine": "buck2",
+      "roots": [
+        "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+        "/home/callen/sekka-work/shared-build-service-39107ce52f3b/trusted/data",
+        "/home/callen/sekka-work/relax-experiment-20261111/buck2/buck-out/cache-compare-20261111",
+        "/home/callen/sekka-work/buck2-final-20261106/repo/buck-out/cache-compare-20261111",
+        "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/buck-out/cache-compare-20261111"
+      ],
+      "physical_receipt": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/before-fresh-edit-d-buck2-storage.log",
+      "allocated_du": "5910528\t/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store\n1561423872\t/home/callen/sekka-work/shared-build-service-39107ce52f3b/trusted/data\n1270362112\t/home/callen/sekka-work/relax-experiment-20261111/buck2/buck-out/cache-compare-20261111\n499679232\t/home/callen/sekka-work/buck2-final-20261106/repo/buck-out/cache-compare-20261111\n766005248\t/home/callen/sekka-work/buck2-final-20261106/run/trees/a/buck-out/cache-compare-20261111\n",
+      "logical_du": "5414748\t/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store\n1548905699\t/home/callen/sekka-work/shared-build-service-39107ce52f3b/trusted/data\n1259096149\t/home/callen/sekka-work/relax-experiment-20261111/buck2/buck-out/cache-compare-20261111\n495479092\t/home/callen/sekka-work/buck2-final-20261106/repo/buck-out/cache-compare-20261111\n759889933\t/home/callen/sekka-work/buck2-final-20261106/run/trees/a/buck-out/cache-compare-20261111\n"
+    },
+    {
+      "stage": "fresh-leaf-edit-d",
+      "engine": "relax",
+      "roots": [
+        "/home/callen/sekka-work/relax-cache-comparison-20261111/relax-cache"
+      ],
+      "physical_receipt": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/fresh-leaf-edit-d-relax-storage.log",
+      "allocated_du": "2999201792\t/home/callen/sekka-work/relax-cache-comparison-20261111/relax-cache\n",
+      "logical_du": "3012699327\t/home/callen/sekka-work/relax-cache-comparison-20261111/relax-cache\n"
+    },
+    {
+      "stage": "fresh-leaf-edit-d",
+      "engine": "buck2",
+      "roots": [
+        "/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store",
+        "/home/callen/sekka-work/shared-build-service-39107ce52f3b/trusted/data",
+        "/home/callen/sekka-work/relax-experiment-20261111/buck2/buck-out/cache-compare-20261111",
+        "/home/callen/sekka-work/buck2-final-20261106/repo/buck-out/cache-compare-20261111",
+        "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/buck-out/cache-compare-20261111",
+        "/home/callen/sekka-work/buck2-final-20261106/run/trees/release-fresh/buck-out/cache-compare-20261111"
+      ],
+      "physical_receipt": "/home/callen/sekka-work/relax-cache-comparison-20261111/evidence/fresh-leaf-edit-d-buck2-storage.log",
+      "allocated_du": "6418432\t/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store\n1578553344\t/home/callen/sekka-work/shared-build-service-39107ce52f3b/trusted/data\n1270362112\t/home/callen/sekka-work/relax-experiment-20261111/buck2/buck-out/cache-compare-20261111\n499679232\t/home/callen/sekka-work/buck2-final-20261106/repo/buck-out/cache-compare-20261111\n766005248\t/home/callen/sekka-work/buck2-final-20261106/run/trees/a/buck-out/cache-compare-20261111\n509452288\t/home/callen/sekka-work/buck2-final-20261106/run/trees/release-fresh/buck-out/cache-compare-20261111\n",
+      "logical_du": "5922652\t/home/callen/sekka-work/relax-cache-comparison-20261111/buck-content-store\n1566004991\t/home/callen/sekka-work/shared-build-service-39107ce52f3b/trusted/data\n1259096149\t/home/callen/sekka-work/relax-experiment-20261111/buck2/buck-out/cache-compare-20261111\n495479092\t/home/callen/sekka-work/buck2-final-20261106/repo/buck-out/cache-compare-20261111\n759889933\t/home/callen/sekka-work/buck2-final-20261106/run/trees/a/buck-out/cache-compare-20261111\n505142498\t/home/callen/sekka-work/buck2-final-20261106/run/trees/release-fresh/buck-out/cache-compare-20261111\n"
+    }
+  ],
+  "trees": [
+    {
+      "path": "/home/callen/sekka-work/relax-experiment-20261111/buck2",
+      "head": "7fef66a8ae5b3f592194dd2104b1afa354ca6dfb",
+      "tracked_status": ""
+    },
+    {
+      "path": "/home/callen/sekka-work/buck2-final-20261106/repo",
+      "head": "7fef66a8ae5b3f592194dd2104b1afa354ca6dfb",
+      "tracked_status": ""
+    },
+    {
+      "path": "/home/callen/sekka-work/buck2-final-20261106/run/trees/a",
+      "head": "7fef66a8ae5b3f592194dd2104b1afa354ca6dfb",
+      "tracked_status": ""
+    },
+    {
+      "path": "/home/callen/sekka-work/buck2-final-20261106/run/trees/release-fresh",
+      "head": "7fef66a8ae5b3f592194dd2104b1afa354ca6dfb",
+      "tracked_status": ""
+    }
+  ],
+  "relax_revision": "d09dcd17fa766b42e2f304fcdecfb489b2d00078",
+  "runner_sha256": "ceacd35f0729c6051838774363f32dee99bb3fe6e142c1d53a9fb54b43c48fd9",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13) (built from a source tarball)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.3\n",
+  "environment": {
+    "CARGO_BUILD_JOBS": "16",
+    "MAKEPAD_CPU_CORES": "16",
+    "MAKEPAD_RUN_STD": "/home/callen/sekka-work/relax-followup-20261111/relax/libs/relax/compiler/std",
+    "MAKEPAD_RUN_CACHE_DIR": "/home/callen/sekka-work/relax-cache-comparison-20261111/relax-cache",
+    "MAKEPAD_RUN_HOME": "/home/callen/sekka-work/relax-cache-comparison-20261111/relax-home",
+    "MAKEPAD_RUN_OFFLINE": "1",
+    "CARGO_NET_OFFLINE": "true",
+    "MAKEPAD_RUN_VERBOSE": "1",
+    "SEKKA_BUCK2_CLIENT_CACHE": "/home/callen/sekka-work/relax-experiment-20261111/buck2-bootstrap"
+  },
+  "status": "passed",
+  "restored_sources": {
+    "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/README.md": "5fc835d8bfe157f0e85a8eb96fb41bd643fd088968db5e50ef5cd22d0c4f5a94",
+    "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/desktop/aizome/apps/soroban/src/lib.rs": "ecd86ba9c00e536243b22404cdf680ea447ad2d4d6282241a489a3f330f19f63",
+    "/home/callen/sekka-work/buck2-final-20261106/run/trees/a/desktop/aizome/crates/aizome-kit/src/lib.rs": "d149e37111316b8caec86d246fb5082808043846b031c1e4bcff4c13983c22c3",
+    "/home/callen/sekka-work/buck2-final-20261106/run/trees/release-fresh/desktop/aizome/apps/soroban/src/lib.rs": "ecd86ba9c00e536243b22404cdf680ea447ad2d4d6282241a489a3f330f19f63"
+  }
+}
