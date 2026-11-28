@@ -27,8 +27,8 @@ something you edit and hope.
 ## What it shows
 
 - **Overview.** The system at a glance: its NixOS version and kernel, how
-  many packages it has, how fresh its Nixpkgs is, how much room the store
-  takes, and what changed most recently.
+  many packages it has, how fresh its Nixpkgs is, the store's uncompressed
+  archive size (NAR), and what changed most recently.
 - **Installed.** Everything installed, grouped by why: added with Yukimi;
   installed just for you with `nix profile`; listed in your configuration by
   hand (`environment.systemPackages`, and your own `users.users.<you>.packages`);
@@ -59,8 +59,9 @@ something you edit and hope.
   So working on a project your system is built from comes down to: push to
   the branch your system follows, open Updates, press Update.
 - **History.** Every generation you can go back to, each older one with the
-  disk space deleting it would give back. Open one to see what changed from
-  the one before: upgrades, downgrades, additions and removals, with sizes.
+  estimated disk space deleting it would give back, alongside its full
+  uncompressed archive (NAR) closure. Shared packages count in every closure.
+  Open one to see what changed from the one before: upgrades, downgrades, additions and removals, with NAR sizes.
   Going back to one also brings back the choices it was built from, so your
   next change starts from there. You can also delete generations you no
   longer need, except the running one, the one the computer started with and
@@ -68,14 +69,17 @@ something you edit and hope.
   several (Shift-click ticks a run, **Select All** every one you can) and
   delete them together, with one password. Any of them can be picked; they
   don't have to be next to each other. Ticked, they show what deleting them
-  together frees, which can be more than the figures beside them added up.
+  together is estimated to free, which can be more than the figures beside
+  them added up.
   Deleted generations leave the boot menu, and their space comes back when
   garbage is collected, right away if you choose **Delete and Clean Up**,
   otherwise at the next clean-up.
 - **Storage.** The Nix store split into what the running system needs, older
-  generations, user profiles, projects and dev shells, and garbage. It lists
-  the heaviest packages and every garbage-collector root, and can clean up
-  with one button, saying first what that gives back on disk.
+  generations, user profiles, projects and dev shells, and potential garbage,
+  using NAR sizes. It lists the heaviest packages and every garbage-collector root, and can clean up
+  with one button, estimating first what that gives back on disk. After
+  collection it reports the observed change in available disk space; other activity and
+  delayed frees can affect that observation.
 
 ## What deleting frees
 
@@ -94,6 +98,8 @@ store, and it can't promise:
   Btrfs, the space that comes back can be less: files are measured before
   compression.
 - Blocks shared with a filesystem snapshot or a reflinked copy stay.
+- Unreadable files, missing roots and a partly optimised store can make the
+  estimate incomplete or count some shared files as freed.
 - A program started, or a build made, from those paths before garbage is
   collected keeps them.
 - Space comes back only when garbage is collected, and collecting also
@@ -166,7 +172,7 @@ Everything is Rust, including the parts that read Nix's own data:
 
 | Crate | What it does |
 | --- | --- |
-| `yukimi-store` | Reads the Nix store database (`/nix/var/nix/db/db.sqlite`) read-only. Handles store paths and name/version splitting, follows Nix's own `compareVersions`, builds the reference graph (closures, sizes, *why is this here*), finds GC roots the same way the garbage collector does, and measures what paths take on disk, hard-linked files counted once. |
+| `yukimi-store` | Reads the Nix store database (`/nix/var/nix/db/db.sqlite`) read-only. Handles store paths and name/version splitting, follows Nix's own `compareVersions`, builds the reference graph (closures, NAR sizes, *why is this here*), finds GC roots the same way the garbage collector does, and measures what paths take on disk, hard-linked files counted once. |
 | `yukimi-config` | Edits Nix files without disturbing them, using a lossless [rnix](https://github.com/nix-community/rnix-parser) syntax tree: string lists, imports, entries of package lists, and `flake.lock`, including checking that a new lock file changes only what it should. |
 | `yukimi-system` | Finds how the system is configured, and reads its generations, profiles, channels and catalogs. Asks sources for their newest versions, builds the package index, diffs closures, and turns Nix's `internal-json` log into progress. |
 | `desktop/aizome/apps/yukimi` | The native interface shared by every desktop. Wayland sessions open it directly; X11 sessions use a nested Wayland window. |
