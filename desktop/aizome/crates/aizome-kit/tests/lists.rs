@@ -240,3 +240,40 @@ fn a_program_reveals_a_row_when_it_names_another() {
     h.send(Msg::Reveal(20));
     assert!(h.texts(w).iter().any(|t| t == "file-00020.txt"), "scrolled back up to it");
 }
+
+#[test]
+fn a_list_of_rows_given_outright_takes_them_off_the_selection_with_the_keyboard() {
+    // Rows given outright stay mounted while their list is laid out again
+    // for the focus, with the room they had: the selected one is laid out
+    // again all the same, in the colours off the selection, before any
+    // view mounts it anew.
+    aizome_kit::fonts::install();
+    struct Two(usize);
+    impl Program for Two {
+        type Msg = usize;
+        fn info(&self) -> AppInfo {
+            AppInfo::new("org.aizome.TwoRows", "Two Rows", "Test")
+        }
+        fn launched(&mut self, cx: &mut Cx<usize>) {
+            cx.open_window(WindowSpec::new("Two").size(400.0, 200.0));
+        }
+        fn update(&mut self, msg: usize, _cx: &mut Cx<usize>) {
+            self.0 = msg;
+        }
+        fn view(&self, _w: WindowKey) -> Element<usize> {
+            let rows = (0..2).map(|n| text(format!("first or second word {n}")).into()).collect();
+            list(rows).selected([self.0]).on_select(|rows| rows[0]).into()
+        }
+    }
+    let mut h = Harness::new(Two(0));
+    let w = h.window();
+    h.focus_window(w, true);
+    h.click(w, Point::new(15.0, 12.0));
+    h.focus_window(w, false);
+    let unfocused = h.render_rgba(w, 1.0);
+    // A view mounts every row anew.
+    h.send(0);
+    let viewed = h.render_rgba(w, 1.0);
+    let differing = unfocused.2.chunks(4).zip(viewed.2.chunks(4)).filter(|(x, y)| x != y).count();
+    assert_eq!(differing, 0, "pixels that differ before and after a view");
+}

@@ -121,8 +121,24 @@ fn constraints(axis: Axis, main: (f64, f64), cross: (f64, f64)) -> Constraints {
     Constraints { min: join(axis, main.0, cross.0), max: join(axis, main.1, cross.1) }
 }
 
+/// A child as a row or a column lays it out.
+#[derive(Clone, Copy)]
+struct FlexChild {
+    size: Size,
+    /// Its shares of the room the others leave, if it takes any.
+    portion: Option<NonZeroU16>,
+    /// Whether it fills across the axis.
+    fills_across: bool,
+}
+
 /// Lay children out along `axis`: fixed and shrinking ones first, then
 /// the fills share what's left by their portions.
+///
+/// Each child is read once, as it's come to: what it is to the row (a
+/// share of the leftover room, a fill across) and then its layout, with
+/// one list for all of it. A window's rows and columns are laid out at
+/// every view, and one with thousands of children is too large to pass
+/// over five times.
 pub(crate) fn flex_layout(
     cx: &mut LayoutCx,
     bc: Constraints,
@@ -136,47 +152,39 @@ pub(crate) fn flex_layout(
     let (max_main, max_cross) = split(axis, inner.max);
     let (min_main, min_cross) = split(axis, inner.min);
     let gaps = spacing * n.saturating_sub(1) as f64;
-    let portions: Vec<Option<NonZeroU16>> = (0..n)
-        .map(|i| {
-            let flex = cx.tree.nodes[cx.tree.nodes[cx.node].children[i]].widget.flex();
-            let c = cx.child_common(i);
-            let len = match axis {
-                Axis::Horizontal => c.width,
-                Axis::Vertical => c.height,
-            };
-            flex.or(len.portion()).filter(|_| max_main.is_finite())
-        })
-        .collect();
-    let cross_fill: Vec<bool> = (0..n)
-        .map(|i| {
-            let c = cx.child_common(i);
-            match axis {
-                Axis::Horizontal => c.height.is_fill(),
-                Axis::Vertical => c.width.is_fill(),
-            }
-        })
-        .collect();
-    let mut sizes = vec![Size::ZERO; n];
+    let mut children: Vec<FlexChild> = Vec::with_capacity(n);
     let mut used = gaps;
     let mut cross = 0.0f64;
+    let mut total = 0u32;
+    let mut any_fills_across = false;
     for i in 0..n {
-        if portions[i].is_some() {
-            continue;
+        let node = &cx.tree.nodes[cx.tree.nodes[cx.node].children[i]];
+        let (along, across) = match axis {
+            Axis::Horizontal => (node.common.width, node.common.height),
+            Axis::Vertical => (node.common.height, node.common.width),
+        };
+        let portion = node.widget.flex().or(along.portion()).filter(|_| max_main.is_finite());
+        let fills_across = across.is_fill();
+        any_fills_across |= fills_across;
+        let mut size = Size::ZERO;
+        match portion {
+            Some(p) => total += u32::from(p.get()),
+            None => {
+                let room = (max_main - used).max(0.0);
+                size = cx.layout_child(i, constraints(axis, (0.0, room), (0.0, max_cross)));
+                let (m, c) = split(axis, size);
+                used += m;
+                cross = cross.max(c);
+            }
         }
-        let room = (max_main - used).max(0.0);
-        let s = cx.layout_child(i, constraints(axis, (0.0, room), (0.0, max_cross)));
-        let (m, c) = split(axis, s);
-        used += m;
-        cross = cross.max(c);
-        sizes[i] = s;
+        children.push(FlexChild { size, portion, fills_across });
     }
-    let total: u32 = portions.iter().flatten().map(|p| u32::from(p.get())).sum();
     if total > 0 {
         let left = (max_main - used).max(0.0);
         let mut given = 0.0;
         let mut seen = 0u32;
-        for i in 0..n {
-            let Some(p) = portions[i] else { continue };
+        for (i, child) in children.iter_mut().enumerate() {
+            let Some(p) = child.portion else { continue };
             seen += u32::from(p.get());
             // Whole points, the last taking what rounding left.
             let end = (left * f64::from(seen) / f64::from(total)).round();
@@ -186,22 +194,24 @@ pub(crate) fn flex_layout(
             let (m, c) = split(axis, s);
             used += m;
             cross = cross.max(c);
-            sizes[i] = s;
+            child.size = s;
         }
     }
     let cross_tight = min_cross >= max_cross && max_cross.is_finite();
     let cross_size = if cross_tight { max_cross } else { cross.max(min_cross) };
     // Children that fill across take the row's height (the column's width).
-    for i in 0..n {
-        let (m, c) = split(axis, sizes[i]);
-        if cross_fill[i] && c != cross_size {
-            sizes[i] = cx.layout_child(i, constraints(axis, (m, m), (cross_size, cross_size)));
+    if any_fills_across {
+        for (i, child) in children.iter_mut().enumerate() {
+            let (m, c) = split(axis, child.size);
+            if child.fills_across && c != cross_size {
+                child.size = cx.layout_child(i, constraints(axis, (m, m), (cross_size, cross_size)));
+            }
         }
     }
     let main_size = used.max(min_main);
     let mut at = 0.0;
-    for (i, s) in sizes.iter().enumerate() {
-        let (m, c) = split(axis, *s);
+    for (i, child) in children.iter().enumerate() {
+        let (m, c) = split(axis, child.size);
         let off = align.offset(c, cross_size);
         let p = match axis {
             Axis::Horizontal => Point::new(padding.left + at, padding.top + off),

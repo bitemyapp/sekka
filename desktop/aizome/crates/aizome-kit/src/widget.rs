@@ -361,6 +361,17 @@ pub trait Widget: std::any::Any {
         None
     }
 
+    /// What the tree does with it as it's mounted, asked of every widget
+    /// once. Not for widgets outside the kit: its type can't be named
+    /// there.
+    #[doc(hidden)]
+    fn at_mount(&mut self) -> crate::lazy::AtMount<'_> {
+        match self.take_popover() {
+            Some(content) => crate::lazy::AtMount::Popover(content),
+            None => crate::lazy::AtMount::Plain,
+        }
+    }
+
     /// The text it holds, for type-select and tests.
     fn text(&self) -> Option<&str> {
         None
@@ -509,13 +520,11 @@ impl LayoutCx<'_, '_> {
     }
 
     /// Lay child `i` out as a selected row: its text and icons take the
-    /// colour on the selection.
+    /// colour on the selection. (A row laid out last on the other side of
+    /// it is laid out again: the layout cache is keyed on it.)
     pub fn layout_child_selected(&mut self, i: usize, bc: Constraints, selected: bool) -> Size {
         let before = std::mem::replace(&mut self.env.on_selection, selected);
         let child = self.tree.nodes[self.node].children[i];
-        if before != selected {
-            self.tree.uncache(child);
-        }
         let s = self.tree.layout(child, bc, self.env);
         self.env.on_selection = before;
         s
