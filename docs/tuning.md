@@ -141,6 +141,15 @@ background slice, preserving arguments, environment, working directory,
 terminal and exit status. It runs directly without a user manager or when
 `calamares.tuning.enable` is off. No AI harness is wrapped in this command.
 
+With rootless Docker, `sekka-background docker run …` puts the client in
+`app-background.slice`. The daemon creates a separate systemd scope for the
+container, so a compiler inside it can still compete with the desktop.
+Embedded BuildKit runs Dockerfile `RUN` steps in the daemon's cgroup.
+A scheduling patch tested with Sekka's locked Docker engine fails to apply
+when the applications input supplies Docker 28.5.2, whose daemon and
+container API use different source paths. A future fix needs to preserve
+independent Docker pins. [VM trial](https://github.com/bitemyapp/sekka/actions/runs/45967850440/job/140400868295) · [Docker 28 daemon](https://github.com/moby/moby/tree/v28.5.2/cmd/dockerd) · [Docker 28 container API](https://github.com/moby/moby/tree/v28.5.2/api/server/router/container)
+
 Nix builders belong to the daemon rather than the calling agent. Sekka sets
 `nix.daemonCPUSchedPolicy = "idle"`, `nix.daemonIOSchedClass = "idle"` and the
 daemon's CPU/IO weights to 20 as overridable defaults. This also covers
@@ -235,6 +244,11 @@ manager, the launcher keeps its direct-spawn behavior.
   zygote children that never exec.
 - Process consecutive execs of the same PID and refresh its identity when
   applying a rule, so NixOS shell wrappers do not hide the real program.
+- Match Proton games by the Windows executable name Wine puts in `argv[0]`.
+  At startup and after exec, ananicy resolves a path such as
+  `C:\Games\World of Warcraft\Wow.exe` to `Wow.exe`. The existing game rule
+  can then change Steam's inherited nice +16 and idle I/O to nice −5 and
+  best-effort I/O.
 - Recognize Chromium's rewritten argv[0], including switches containing paths.
   Use the executable name as a fallback when permission allows, without
   adding ptrace privileges to the daemon.
@@ -255,7 +269,9 @@ all-thread Nix scheduling and I/O, late threads, Chrome retitling and fork-only
 children, wrapper execs, interactive harnesses and isolated jobs, nested
 harnesses, scope stop propagation, and Aizome's launch function with a real
 user manager. The unpatched ananicy binary is the failing control for
-pre-existing Nix worker threads. `tests/test_agent_workloads.py` checks process
+pre-existing Nix worker threads. The VM also checks every thread of a
+WoW stand-in with a Wine-style executable path, both when ananicy starts
+and when a game launches afterwards. `tests/test_agent_workloads.py` checks process
 tree classification and the boundaries on which units the service may manage.
 
 `nix build .#checks.x86_64-linux.aizome-login` additionally logs into the full
