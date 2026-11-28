@@ -1001,22 +1001,7 @@ fn privacy_row(p: &Bluetooth, s: &Status) -> Row<Msg> {
 /// connecting, a Bluetooth keyboard or mouse included: the card says so
 /// before the restart, while there's still a way to type and point.
 fn restart_card(p: &Bluetooth, s: &Status) -> Row<Msg> {
-    let (title, body) = match s.restart {
-        Some(Restart::Choice) if s.restart_turns_on() => (
-            "Restart Bluetooth to turn privacy on",
-            "Devices paired while it was off may stop connecting until they're paired again. If that \
-             includes your keyboard or mouse, keep another one at hand to pair it.",
-        ),
-        Some(Restart::Choice) => (
-            "Restart Bluetooth to change its privacy",
-            "Privacy changes when Bluetooth restarts. Connected devices disconnect for a moment, then reconnect.",
-        ),
-        _ => (
-            "Restart Bluetooth to finish updating",
-            "Bluetooth's settings changed with an update, and apply when it restarts. Connected devices \
-             disconnect for a moment, then reconnect.",
-        ),
-    };
+    let (title, body) = restart_words(s);
     let action: Element<Msg> = if p.restarting {
         spinner(14.0)
     } else {
@@ -1042,6 +1027,27 @@ fn restart_card(p: &Bluetooth, s: &Status) -> Row<Msg> {
         .padding([10.0, 12.0])
         .width(Fill),
     )
+}
+
+/// The restart card's title and words: the warning for whatever turns
+/// privacy on, the switch or an update.
+fn restart_words(s: &Status) -> (&'static str, &'static str) {
+    match s.restart {
+        _ if s.restart_turns_on() => (
+            "Restart Bluetooth to turn privacy on",
+            "Devices paired while it was off may stop connecting until they're paired again. If that \
+             includes your keyboard or mouse, keep another one at hand to pair it.",
+        ),
+        Some(Restart::Choice) => (
+            "Restart Bluetooth to change its privacy",
+            "Privacy changes when Bluetooth restarts. Connected devices disconnect for a moment, then reconnect.",
+        ),
+        _ => (
+            "Restart Bluetooth to finish updating",
+            "Bluetooth's settings changed with an update, and apply when it restarts. Connected devices \
+             disconnect for a moment, then reconnect.",
+        ),
+    }
 }
 
 fn status(d: &Device) -> String {
@@ -1331,6 +1337,37 @@ mod tests {
         assert_eq!(shown_adapter(&state, Some("/org/bluez/hci0")).unwrap().path, "/org/bluez/hci0");
         // Gone: the default again.
         assert_eq!(shown_adapter(&state, Some("/org/bluez/hci9")).unwrap().path, "/org/bluez/hci1");
+    }
+
+    #[test]
+    fn the_restart_card_warns_whatever_turns_privacy_on() {
+        use aizome_sys::bluetooth::privacy::{Choice, Running, Status, Why};
+        const WARN: &str = "Restart Bluetooth to turn privacy on";
+        let title = |s: Status| super::restart_words(&s).0;
+        let off = Running {
+            privacy: false,
+            why: Why::EarlierPairings,
+            choice: Choice::Automatic,
+            main_conf: "/nix/store/old-main.conf".into(),
+        };
+        let on = Running { privacy: true, why: Why::NoPairings, ..off.clone() };
+        let new = || Some("/nix/store/new-main.conf".to_owned());
+        // The switch, or an update that sets Privacy=device.
+        assert_eq!(title(Status::new(Some(off.clone()), Choice::On, None, None)), WARN);
+        assert_eq!(title(Status::new(Some(off.clone()), Choice::Automatic, Some(true), new())), WARN);
+        // On already, or staying off: no warning.
+        assert_eq!(
+            title(Status::new(Some(on.clone()), Choice::Off, None, None)),
+            "Restart Bluetooth to change its privacy"
+        );
+        assert_eq!(
+            title(Status::new(Some(on), Choice::Automatic, Some(true), new())),
+            "Restart Bluetooth to finish updating"
+        );
+        assert_eq!(
+            title(Status::new(Some(off), Choice::Automatic, None, new())),
+            "Restart Bluetooth to finish updating"
+        );
     }
 }
 

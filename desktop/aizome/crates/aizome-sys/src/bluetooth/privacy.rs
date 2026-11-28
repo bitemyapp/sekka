@@ -252,13 +252,6 @@ fn adapters(storage: &Path) -> std::io::Result<Vec<PathBuf>> {
     Ok(dirs)
 }
 
-/// Whether the adapter whose folder is `adapter` has BlueZ's key for this
-/// computer, which BlueZ makes the first time it starts with privacy on.
-pub fn adapter_has_key(adapter: &Path) -> bool {
-    std::fs::read_to_string(adapter.join("identity"))
-        .is_ok_and(|s| s.lines().any(|l| key(l) == Some("IdentityResolvingKey")))
-}
-
 /// FNV-1a over the keys in an `info` file's LE key groups: they're new
 /// whenever the device pairs again.
 fn fingerprint(info: &str) -> u64 {
@@ -328,10 +321,11 @@ pub struct Decision {
 /// Which pairings have the key comes from `before`, what was kept at the
 /// last start: one known then is as it was, and one made since has the key
 /// if bluetoothd started with privacy then. With nothing kept (before
-/// Aizome chose), a pairing has it if its own adapter has BlueZ's key for
-/// this computer, which BlueZ makes only with privacy on: another
-/// adapter's says nothing of it. If BlueZ's storage can't be read, what
-/// was known stays, and automatic is off.
+/// Aizome chose), none is known to have it: BlueZ doesn't record which
+/// devices it gave the key, and the adapter's key for this computer (its
+/// `identity` file) stays after privacy is turned off, so it can't vouch
+/// for a device paired since. If BlueZ's storage can't be read, what was
+/// known stays, and automatic is off.
 pub fn decide(choice: Choice, main_conf: &str, storage: &Path, before: Option<&Pairings>) -> Decision {
     let (keyed, unkeyed, known) = match le_pairings(storage) {
         Ok(found) => {
@@ -341,7 +335,7 @@ pub fn decide(choice: Choice, main_conf: &str, storage: &Path, before: Option<&P
                     Some(b) if b.keyed.contains(&p.id) => true,
                     Some(b) if b.unkeyed.contains(&p.id) => false,
                     Some(b) => b.privacy == Some(true),
-                    None => adapter_has_key(&storage.join(&p.adapter)),
+                    None => false,
                 };
                 if has_key {
                     keyed.insert(p.id)
@@ -469,10 +463,10 @@ impl Status {
 
     /// Whether the restart offered turns privacy on: devices paired while
     /// it was off may then stop connecting until they're paired again.
+    /// For either reason (an update may turn it on), and from off or from
+    /// not known (bluetoothd started before Aizome chose for it).
     pub fn restart_turns_on(&self) -> bool {
-        self.restart == Some(Restart::Choice)
-            && self.running.as_ref().is_some_and(|r| !r.privacy)
-            && self.next() == Some(true)
+        self.restart.is_some() && !self.running.as_ref().is_some_and(|r| r.privacy) && self.next() == Some(true)
     }
 }
 
@@ -631,9 +625,11 @@ mod tests {
         assert!(!decide(Choice::Off, NIXOS, &s.join("none"), None).privacy);
         let system = decide(Choice::On, "[General]\nPrivacy=off\n", &s, None);
         assert_eq!((system.privacy, system.why), (false, Why::System));
-        // Its adapter has BlueZ's key for this computer: privacy was on there.
+        // Its adapter has BlueZ's key for this computer: privacy was on
+        // there once, which says nothing of whether it was when the
+        // keyboard paired (BlueZ keeps the key after it's turned off).
         identity(&s, A);
-        assert_eq!(automatic(&s, None), (true, Why::AllHaveKey));
+        assert_eq!(automatic(&s, None), (false, Why::EarlierPairings));
         let _ = std::fs::remove_dir_all(&s);
     }
 
@@ -647,8 +643,9 @@ mod tests {
         let s2 = storage("static");
         keyboard(&s2, &format!("static-{B}"), "00");
         assert_eq!(automatic(&s2, None), (false, Why::EarlierPairings));
+        // Nor of its own: nothing kept, nothing known.
         identity(&s2, &format!("static-{B}"));
-        assert_eq!(automatic(&s2, None), (true, Why::AllHaveKey));
+        assert_eq!(automatic(&s2, None), (false, Why::EarlierPairings));
         let _ = std::fs::remove_dir_all(&s);
         let _ = std::fs::remove_dir_all(&s2);
     }
@@ -740,9 +737,25 @@ mod tests {
     fn a_restart_that_turns_it_on_is_known_as_one() {
         let off = Some(running(false, Why::EarlierPairings, Choice::Automatic));
         assert!(Status::new(off.clone(), Choice::On, None, None).restart_turns_on());
-        assert!(!Status::new(off, Choice::Off, None, None).restart_turns_on());
+        assert!(!Status::new(off.clone(), Choice::Off, None, None).restart_turns_on());
         let on = Some(running(true, Why::NoPairings, Choice::Automatic));
-        assert!(!Status::new(on, Choice::Off, None, None).restart_turns_on());
+        assert!(!Status::new(on.clone(), Choice::Off, None, None).restart_turns_on());
+        // An update that sets Privacy=device: from off, it turns it on too.
+        let new = Some("/nix/store/new-main.conf".to_owned());
+        let update = Status::new(off.clone(), Choice::Automatic, Some(true), new.clone());
+        assert_eq!((update.restart, update.next()), (Some(Restart::Update), Some(true)));
+        assert!(update.restart_turns_on());
+        // From on, or to off, it doesn't.
+        assert!(!Status::new(on, Choice::Automatic, Some(true), new.clone()).restart_turns_on());
+        assert!(!Status::new(off, Choice::Automatic, Some(false), new.clone()).restart_turns_on());
+        // bluetoothd started before Aizome chose for it (the update that
+        // brings this), and the switch turned on before the first restart:
+        // not known to be on, so it may turn it on.
+        let first = Status::new(None, Choice::On, None, new.clone());
+        assert_eq!((first.restart, first.next()), (Some(Restart::Update), Some(true)));
+        assert!(first.restart_turns_on());
+        // Automatic then decides at the restart, not known here.
+        assert!(!Status::new(None, Choice::Automatic, None, new).restart_turns_on());
     }
 
     #[test]
@@ -768,6 +781,26 @@ mod tests {
         assert_eq!(Choice::read_from(&s.join("choice")), Choice::Automatic);
         assert_eq!(Change::Set(Choice::Off).args(), ["set", "off"]);
         assert_eq!(Change::Restart.args(), ["restart"]);
+        let _ = std::fs::remove_dir_all(&s);
+    }
+
+    #[test]
+    fn with_nothing_kept_no_pairing_is_known_to_have_the_key() {
+        // A keyboard beside BlueZ's key for this computer, the first time
+        // Aizome chooses: it may have paired after privacy was turned off.
+        let s = storage("unknown");
+        keyboard(&s, A, "00");
+        identity(&s, A);
+        let first = decide(Choice::Automatic, NIXOS, &s, None);
+        assert_eq!((first.privacy, first.why), (false, Why::EarlierPairings));
+        assert_eq!((first.pairings.keyed.len(), first.pairings.unkeyed.len()), (0, 1));
+        // main.conf that sets it keeps it on; what was paired before stays
+        // not known, so automatic is off once main.conf stops setting it.
+        let system = decide(Choice::Automatic, "[General]\nPrivacy=device\n", &s, None);
+        assert_eq!((system.privacy, system.why), (true, Why::System));
+        assert_eq!(automatic(&s, Some(&system.pairings)), (false, Why::EarlierPairings));
+        // Chosen on in Settings, it's on.
+        assert!(decide(Choice::On, NIXOS, &s, Some(&first.pairings)).privacy);
         let _ = std::fs::remove_dir_all(&s);
     }
 

@@ -91,7 +91,8 @@ palette. Search filters the sidebar and highlights options.
   pairing with passkey confirmation, connect, disconnect, forget, battery.
   LE privacy, which Xbox Series controllers need: chosen for the computer
   each time bluetoothd starts (on, unless devices were paired over LE
-  while it was off), and a switch, through `aizome-bluetooth` and pkexec.
+  while it was off or before Aizome kept count), and a switch, through
+  `aizome-bluetooth` and pkexec.
   When what bluetoothd runs with isn't what it would start with (the
   switch changed, or an update changed its settings), the pane offers
   Restart Bluetooth, as Yukimi offers a restart; nothing restarts it
