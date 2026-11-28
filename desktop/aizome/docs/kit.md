@@ -887,6 +887,12 @@ after (median, ms): hovering a button 0.009 and 0.009, a switch 0.035 and
 editor 0.251 and 0.244, the list scrolled a notch 0.142 and 0.134, its
 selection moved 0.100 and 0.095.
 
+The [November 10 live-window comparison](../../../docs/test-results/runnymede-2026-11-10-kit-lazy.md)
+records frame intervals, CPU work per frame and peak memory on runnymede.
+The kit ran with rows built outright, individually lazy and grouped in hundreds.
+The zgui and GPUI-CE figures come from the
+[November 9 baseline](https://github.com/bitemyapp/gui-bench/blob/3e75c8f2cbaf158ef7b8ff25cc38c8c411f3c421/results/runnymede-2026-11-09.md).
+
 To drive a running app from outside (the NixOS VM test of Settings clicks
 and types through `aizomectl input`), set `AIZOME_KIT_INSPECT` to a
 directory: each window then writes `<app_id>.<pid>.<window>.json` there
