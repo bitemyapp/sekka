@@ -690,6 +690,7 @@ For focused Rust work, run Cargo inside the development shell:
 ```sh
 cargo test --locked --manifest-path installer/genkan/rust/Cargo.toml
 cargo test --locked --manifest-path installer/genkan/ui/Cargo.toml
+cargo test --locked --manifest-path installer/genkan/rust/system/vpn-guard/Cargo.toml
 cargo test --locked --manifest-path desktop/tatami/tool/Cargo.toml
 cargo test --locked --manifest-path desktop/tatami/displays/Cargo.toml
 cargo test --locked --manifest-path desktop/tatami/network/Cargo.toml
@@ -3160,6 +3161,105 @@ and atomic backend validation failure. The fixture package only retains the
 normal Cargo test executable; the UI uses the production Network package.
 Autologin, software graphics and the private NAT make this component evidence,
 not qualification of an ISO or physical network hardware.
+
+## VPN address families
+
+NetworkManager and WireGuard route each address family independently. A
+single-family full tunnel can leave applications using the physical connection
+for the other family. Sekka enables `calamares.vpnGuard.enable` by default on
+NetworkManager systems. Split tunnels retain their ordinary routing.
+Disconnecting restores normal internet access.
+
+The block lives in NetworkManager. The module in
+`installer/genkan/rust/system/vpn-guard` sets
+`networking.networkmanager.package` to NetworkManager with
+`networkmanager-block-uncarried-family.patch`, a change to its WireGuard
+device, and refuses to build a system whose NetworkManager package lacks it.
+
+For each family whose AllowedIPs include a /0, and whose
+`wireguard.ip4-auto-default-route` / `ip6-auto-default-route` and
+`ipv4.never-default` / `ipv6.never-default` leave it on, NetworkManager
+already puts the tunnel's default route in a table of its own and adds two
+routing rules at an even priority P from 30768 to 31766: `lookup main
+suppress_prefixlength 0`, then at P+1 `not fwmark F lookup F`, where F also
+marks the tunnel's own encrypted packets. The patch adds, for a family left
+at its defaults with no /0 while the other family has that pair:
+
+```
+31800:  from all lookup main suppress_prefixlength 0
+31801:  from all fwmark 0 unreachable
+```
+
+and the same `nm-wg-<iface>` nftables table NetworkManager gives the carried
+family, which copies the tunnel's mark into conntrack on the way out and back
+onto replies.
+
+What follows from that:
+
+- A tunnel counts as full in a family exactly when NetworkManager gives it
+  that family's default route. Halves (`0.0.0.0/1, 128.0.0.0/1`) and lists
+  that leave out private ranges are split tunnels. Setting a family's
+  auto-default-route to `no`, or its never-default, keeps that family on the
+  physical network.
+- Routes more specific than a default still apply in the blocked family, as
+  they do in the carried one: the LAN's on-link prefixes, private or global,
+  VM and container bridges, other tunnels, and routes added by hand or by the
+  network (DHCP option 121, router advertisement route options). The last
+  are the injected-route exposure the carried family already has.
+- Marked packets pass: every WireGuard tunnel's own, so two tunnels that each
+  carry one family work together, and a tunnel's server can be reached over
+  the family it does not carry. Replies to those packets get the mark back
+  from conntrack, and the module sets `net.ipv4.conf.all.src_valid_mark = 1`,
+  as wg-quick does, so the kernel's reverse-path check looks their source up
+  with it. Without that, a reply to an IPv6-only tunnel's IPv4 packets meets
+  `fwmark 0 unreachable` and is dropped.
+- Everything else fails at once with ENETUNREACH. getaddrinfo's destination
+  probe fails too, so address selection puts the blocked family last and a
+  dual-stack name is tried in the carried family first.
+- The rules have no `iif` selector, so forwarded traffic (containers, VMs,
+  a hotspot) goes through them as well. The VM test does not cover that yet.
+- 64:ff9b::/96 and other NAT64 destinations reached through the default
+  route are blocked with the rest of IPv6.
+
+NetworkManager owns the lifecycle. It adds the pair in activation stage 2,
+before IP configuration and the dispatcher's pre-up, so the block is in place
+when `nmcli connection up` returns. It removes the pair in its device cleanup:
+when the tunnel goes down, when it is stopped while still activating, and when
+activation fails. The VM test stops one and fails one after pre-up, the cases
+in which the dispatcher sends no down event; an earlier failure goes through
+the same cleanup. It resyncs the pair on
+`nmcli device reapply`. The patch also fixes an abort the VM test found: a
+reapply that turns a tunnel's default route on (never-default `yes` to `no`)
+kept a mark of 0 and built a rule for table 0. The code that does this is
+unchanged from stock 1.58.1, but the abort was only seen with the patch. Routing rules are not nftables, so `nft flush
+ruleset` and NixOS's nftables service leave them alone. A NetworkManager that
+is paused, or restarted with the tunnel up, keeps the block; on restart it
+takes the tunnel back with its rules and removes them when the tunnel goes
+down. A stock NetworkManager does not know the pair, so the module clears
+priorities 31800 and 31801 before NetworkManager starts in a generation with
+the guard off. NetworkManager's source notes that rules a restarted
+NetworkManager does not take back stay in place; a tunnel deleted while
+NetworkManager is stopped would leave its pair until the next boot. That case
+is not tested.
+
+`calamares.vpnGuard.trustedLanPrefixes` adds `to <prefix> lookup main` at
+priority 31799 for each prefix, from `sekka-vpn-guard-trusted.service`. It is
+needed only for a destination reached through a router; an on-link LAN host
+passes on its own. The list is validated while building the system.
+
+Not covered: tunnels made outside NetworkManager (`wg-quick`, systemd-networkd)
+and NetworkManager's VPN plugins (OpenVPN, IPsec and so on). DNS server
+choice is a separate policy.
+
+From the root flake, run `nix build .#checks.x86_64-linux.vpn-guard-vm`. The
+component VM imports real NetworkManager profiles and checks the address a
+dual-stack web server sees and the order getaddrinfo returns. It runs fresh
+handshakes at two endpoints, two single-family tunnels at once, a profile
+edit applied by reconnecting and by reapply, and a stopped and a failed
+activation after pre-up. It covers nftables flushes, a paused and a restarted
+NetworkManager, and switches between enabled, trusted, disabled and nftables
+generations with a tunnel connected. It uses disposable wired guests and a
+local test VPN.
 
 ## Simulated Wi-Fi
 

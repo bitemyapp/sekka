@@ -825,6 +825,10 @@
           desktopsModule = inputs.calamares.nixosModules.desktops;
           network = self.packages.${system}.network;
         };
+        vpn-guard-vm = import ./nix/vpn-guard-vm-test.nix {
+          inherit pkgs;
+          sekkaModule = inputs.calamares.nixosModules.default;
+        };
         wpa-supplicant-scan = import ./nix/wpa-supplicant-scan-test.nix {
           inherit pkgs;
           # The live session, in each of its boot entries, and an installed
