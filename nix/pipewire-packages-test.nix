@@ -8,6 +8,7 @@
 }:
 let
   inherit (pkgs) lib;
+  maxwell = pkgs.callPackage ./audeze-maxwell.nix { };
   configurations = {
     installed-default = installed.config;
     live-default = installer.config;
@@ -28,6 +29,9 @@ pkgs.writeText "sekka-pipewire-packages.json" (
     lib.mapAttrs (
       _: config:
       assert config.services.pipewire.package.outPath == patched.outPath;
+      assert builtins.elem maxwell.outPath (
+        map (package: package.outPath) config.services.pipewire.wireplumber.configPackages
+      );
       {
         inherit (config.services.pipewire) enable;
         package = config.services.pipewire.package.outPath;

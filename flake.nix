@@ -391,6 +391,7 @@
             ;
           references = referenceSystems;
         };
+        audeze-maxwell = import ./nix/audeze-maxwell-test.nix { inherit pkgs inputs; };
         pipewire-packages = import ./nix/pipewire-packages-test.nix {
           inherit pkgs installer;
           references = referenceSystems;

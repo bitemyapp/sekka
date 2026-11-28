@@ -348,6 +348,9 @@ in
       withUWSM = true;
     };
     services.displayManager.sessionPackages = [ session ];
+    services.pipewire.wireplumber.configPackages = [
+      (pkgs.callPackage ../../nix/audeze-maxwell.nix { })
+    ];
     environment.etc =
       lib.listToAttrs (map etcFile files)
       // lib.listToAttrs (map menuRow menuNames)
