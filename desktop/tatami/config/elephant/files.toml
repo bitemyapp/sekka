@@ -1,0 +1,2 @@
+# Keep file search current after saving, renaming or removing documents.
+watch = true
