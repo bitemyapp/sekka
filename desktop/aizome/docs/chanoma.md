@@ -1256,18 +1256,23 @@ account (Settings' Displays and Sound) has set it up for the TV account
 too. Before the account's own systemd starts, systemd runs
 `aizome-tv-account follow UID` as root (`aizome-tv-follow@UID`, which
 every account's `user@UID` waits for; for any other account it does
-nothing). Its displays become the `outputs` of the account whose
-`settings.toml` changed last among those that have any, when they're set
-up otherwise than they were when the TV account last followed them
-(`~/.local/state/aizome/tv-followed-outputs.toml`): until a grown-up's
-account sets the displays up anew, what was chosen in Chanoma's
-Settings › Display stays. The rest of its own settings stay. Its sound becomes WirePlumber's choices
+nothing). Its displays become the `outputs` of the account that set its
+own up anew last: among the accounts whose `outputs` differ from what
+they were when the TV account last followed (a SHA-256 of each
+account's, kept in `~/.local/state/aizome/tv-followed-outputs.toml`, so
+no other account's displays are copied there), the one whose
+`settings.toml` changed last. Until a grown-up's account sets the
+displays up anew, what was chosen in Chanoma's Settings › Display stays,
+whatever else of that account's settings changes. The rest of its own
+settings stay; settings of its own that are there but can't be read as
+they are (a link, not TOML) stay untouched, and nothing is followed
+until they can be. Its sound becomes WirePlumber's choices
 (`~/.local/state/wireplumber`: `default-nodes`, `default-profile`,
 `default-routes`, each kept with its date) of the account that changed
 its own last, unless the TV account's changed since (in Chanoma's
 Sound). Each app's volume stays its own. The helper reads each account's
 files and writes the TV account's with that account's own file-system
-identity, never through a link. A TV account still logged in (its
+identity, never through a link and never waiting on a pipe. A TV account still logged in (its
 systemd still running, as for a few seconds after logging out) follows
 at its next login.
 

@@ -1476,6 +1476,119 @@ fn display_settings_go_back_unless_a_new_resolution_is_kept() {
     assert_eq!(saved(&file), Some((Some("3840x2160@120".into()), Some(2.0))));
 }
 
+/// A new resolution the compositor made, its list of displays lost after:
+/// the display still goes back as it was.
+#[test]
+fn a_display_change_whose_answer_is_lost_still_goes_back() {
+    use aizome_chanoma::app::grownups::DISPLAY;
+    use aizome_ipc::{Mode, OutputInfo, Request, Response};
+    use std::io::{BufRead, BufReader, Write};
+    use std::os::unix::net::UnixListener;
+    // A compositor of the test's own, at a socket of the test's own.
+    let ours = |p: &std::ffi::OsStr| p.to_string_lossy().contains("chanoma-ipc-");
+    if !std::env::var_os("AIZOME_SOCKET").is_some_and(|p| ours(&p)) {
+        let socket = std::env::temp_dir().join(format!("chanoma-ipc-{}.sock", std::process::id()));
+        let status = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "a_display_change_whose_answer_is_lost_still_goes_back"])
+            .env("AIZOME_SOCKET", &socket)
+            .status()
+            .unwrap();
+        let _ = std::fs::remove_file(&socket);
+        assert!(status.success());
+        return;
+    }
+    let socket = PathBuf::from(std::env::var_os("AIZOME_SOCKET").unwrap());
+    let _ = std::fs::remove_file(&socket);
+    let listener = UnixListener::bind(&socket).unwrap();
+    let mode = |width, height, hz: i32, preferred| Mode { width, height, refresh: hz * 1000, preferred };
+    let tv = OutputInfo {
+        name: "HDMI-A-1".into(),
+        make: "GSM".into(),
+        model: "LG TV SSCR2".into(),
+        enabled: true,
+        current_mode: Some(mode(3840, 2160, 60, true)),
+        modes: vec![mode(3840, 2160, 60, true), mode(3840, 2160, 120, false), mode(1920, 1080, 60, false)],
+        scale: 2.0,
+        ..OutputInfo::default()
+    };
+    // The display as the compositor has it, the changes it was asked for
+    // (a mode and a scale each), and whether it has lost a list yet (the
+    // first after a change).
+    type Asked = (Option<String>, Option<f64>);
+    let shown = Arc::new(Mutex::new(tv));
+    let changes: Arc<Mutex<Vec<Asked>>> = Arc::default();
+    let lost = Arc::new(AtomicBool::new(false));
+    {
+        let (shown, changes, lost) = (shown.clone(), changes.clone(), lost.clone());
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let Ok(stream) = stream else { return };
+                let (shown, changes, lost) = (shown.clone(), changes.clone(), lost.clone());
+                std::thread::spawn(move || {
+                    let mut out = stream.try_clone().unwrap();
+                    let mut changed = false;
+                    for line in BufReader::new(stream).lines() {
+                        let Ok(line) = line else { return };
+                        let answer = match serde_json::from_str::<Request>(&line) {
+                            Ok(Request::Outputs) if changed && !lost.swap(true, Ordering::SeqCst) => return,
+                            Ok(Request::Outputs) => Response::Outputs { outputs: vec![shown.lock().unwrap().clone()] },
+                            Ok(Request::OutputConfig { mode: m, scale, .. }) => {
+                                let mut o = shown.lock().unwrap();
+                                if let Some(m) = &m {
+                                    let (w, h, r) = aizome_config::parse_mode(m).unwrap();
+                                    let found = o.modes.iter().find(|x| {
+                                        (x.width, x.height) == (w, h) && r.is_none_or(|r| (x.refresh - r).abs() < 10)
+                                    });
+                                    o.current_mode = found.cloned();
+                                }
+                                if let Some(s) = scale {
+                                    o.scale = s;
+                                }
+                                changes.lock().unwrap().push((m, scale));
+                                changed = true;
+                                Response::Ok
+                            }
+                            _ => Response::Ok,
+                        };
+                        let text = serde_json::to_string(&answer).unwrap() + "\n";
+                        if out.write_all(text.as_bytes()).is_err() {
+                            return;
+                        }
+                    }
+                });
+            }
+        });
+    }
+    let (dirs, cores) = household("display-lost", |_| {});
+    let mut cfg = config(dirs, cores, ManualClock::at(2026, 10, 31, 17, 0));
+    cfg.compositor = true;
+    let mut h = harness(cfg);
+    into_settings(&mut h);
+    until(&mut h, |a| a.display("HDMI-A-1").is_some());
+    to_section(&mut h, DISPLAY);
+    to_row(&mut h, "Resolution");
+    input(&mut h, Input::Dir(Dir::Left));
+    until(&mut h, |a| !a.displays.busy);
+    assert_eq!(changes.lock().unwrap().first(), Some(&(Some("1920x1080@60".into()), Some(1.0))));
+    assert!(lost.load(Ordering::SeqCst), "the list after the change was lost");
+    // Unanswered as long as a change is kept for, if it hasn't gone back already.
+    if let Some(k) = h.program_mut().displays.keep.as_mut() {
+        k.since -= Duration::from_secs(16);
+    }
+    h.send(Msg::Tick);
+    let back = |c: &[Asked]| c.last() == Some(&(Some("3840x2160@60".into()), Some(2.0)));
+    let end = Instant::now() + Duration::from_secs(10);
+    while !back(&changes.lock().unwrap()) && Instant::now() < end {
+        h.settle(Duration::from_millis(20), |_| false);
+    }
+    let changes = changes.lock().unwrap().clone();
+    eprintln!("asked of the compositor: {changes:?}; keep {:?}", h.program().displays.keep);
+    assert!(back(&changes), "gone back to 3840 × 2160 at 2×: {changes:?}");
+    until(&mut h, |a| !a.displays.busy);
+    assert_eq!(h.program().display("HDMI-A-1").and_then(|o| o.current_mode.clone()), Some(mode(3840, 2160, 60, true)));
+    assert!(h.program().displays.keep.is_none());
+}
+
 /// Holding Home is how a controller switches off: Chanoma stays where it
 /// was. Home pressed and let go goes home.
 #[test]

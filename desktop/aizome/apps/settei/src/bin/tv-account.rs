@@ -298,17 +298,17 @@ fn as_account<T>(a: &Account, work: impl FnOnce() -> T) -> T {
     out
 }
 
-/// A file read as it is: a regular file, never through a link, and not a
-/// large one.
-fn read_plain(path: &Path) -> Option<(Vec<u8>, std::time::SystemTime)> {
-    let file = File::options().read(true).custom_flags(libc::O_NOFOLLOW).open(path).ok()?;
-    let meta = file.metadata().ok()?;
+/// A file read as it is: a regular file, never through a link, never
+/// waited on (a pipe), and not a large one. Not there is `NotFound`.
+fn read_plain(path: &Path) -> std::io::Result<(Vec<u8>, std::time::SystemTime)> {
+    let file = File::options().read(true).custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK).open(path)?;
+    let meta = file.metadata()?;
     if !meta.is_file() || meta.len() > 1 << 20 {
-        return None;
+        return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "not a regular file of 1 MiB or less"));
     }
     let mut bytes = Vec::new();
-    file.take(1 << 20).read_to_end(&mut bytes).ok()?;
-    Some((bytes, meta.modified().ok()?))
+    file.take(1 << 20).read_to_end(&mut bytes)?;
+    Ok((bytes, meta.modified()?))
 }
 
 /// When the file was changed, if it's a regular file.
@@ -353,7 +353,7 @@ const SETTINGS: &str = ".config/aizome/settings.toml";
 /// before its own systemd), if it's the TV account: its sound settings
 /// become those of the account that changed its own last, if that was
 /// after the TV account's own changed (in Chanoma's Sound); and its
-/// displays those of the account whose settings changed last. Nothing of
+/// displays those of the account that set its own up anew last. Nothing of
 /// any other account changes.
 fn follow(uid: &str) -> Result<(), String> {
     let Some(record) = TvAccount::read() else { return Ok(()) };
@@ -385,7 +385,7 @@ fn follow_sound(tv: &Account, others: &[&Account]) -> Result<(), String> {
         return Ok(());
     }
     for name in SOUND_FILES {
-        let read = as_account(from, || read_plain(&from.home.join(SOUND_DIR).join(name)));
+        let read = as_account(from, || read_plain(&from.home.join(SOUND_DIR).join(name))).ok();
         let to = tv.home.join(SOUND_DIR).join(name);
         as_account(tv, || match read {
             // Its date kept: the TV account's is as new as it, no newer.
@@ -400,44 +400,77 @@ fn follow_sound(tv: &Account, others: &[&Account]) -> Result<(), String> {
     Ok(())
 }
 
-/// An account's settings, if it has any.
-fn settings_of(a: &Account) -> Option<(toml::Table, std::time::SystemTime)> {
-    let (bytes, t) = as_account(a, || read_plain(&a.home.join(SETTINGS)))?;
-    Some((std::str::from_utf8(&bytes).ok()?.parse::<toml::Table>().ok()?, t))
+/// An account's settings: none if it has no file, an error if it has one
+/// that can't be read as it is (a link, a pipe, not TOML).
+fn settings_of(a: &Account) -> Result<Option<(toml::Table, std::time::SystemTime)>, String> {
+    let path = a.home.join(SETTINGS);
+    let (bytes, t) = match as_account(a, || read_plain(&path)) {
+        Ok(read) => read,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(format!("{}: {e}", path.display())),
+    };
+    let text = std::str::from_utf8(&bytes).map_err(|e| format!("{}: {e}", path.display()))?;
+    Ok(Some((text.parse::<toml::Table>().map_err(|e| format!("{}: {e}", path.display()))?, t)))
 }
 
 fn follow_displays(tv: &Account, others: &[&Account]) -> Result<(), String> {
-    let newest = others
-        .iter()
-        .filter_map(|a| {
-            let (table, t) = settings_of(a)?;
-            let outputs = table.get("outputs")?.as_array().filter(|o| !o.is_empty())?.clone();
-            Some((*a, outputs, t))
-        })
-        .max_by_key(|(_, _, t)| *t);
-    let Some((from, outputs, _)) = newest else { return Ok(()) };
-    // Set up as they were when last followed: what the TV account chose
-    // since (Chanoma's Settings › Display) stays.
-    let followed = as_account(tv, || read_plain(&tv.home.join(FOLLOWED)))
+    // Each account's displays as they were set up when last followed: one
+    // whose are as they were hasn't set them up since, whatever else of its
+    // settings changed.
+    let seen = as_account(tv, || read_plain(&tv.home.join(FOLLOWED)))
+        .ok()
         .and_then(|(bytes, _)| String::from_utf8(bytes).ok()?.parse::<toml::Table>().ok())
-        .and_then(|t| t.get("outputs")?.as_array().cloned());
-    if followed.as_ref() == Some(&outputs) {
+        .and_then(|t| t.get("accounts")?.as_table().cloned())
+        .unwrap_or_default();
+    let mut now = toml::Table::new();
+    let mut newest: Option<(&Account, toml::Value, std::time::SystemTime)> = None;
+    for a in others {
+        let Some((table, t)) = settings_of(a).ok().flatten() else { continue };
+        let Some(outputs) = table.get("outputs").and_then(toml::Value::as_array).filter(|o| !o.is_empty()) else {
+            continue;
+        };
+        let outputs = toml::Value::Array(outputs.clone());
+        let kept = toml::Value::String(digest(&outputs)?);
+        if seen.get(&a.name) != Some(&kept) && newest.as_ref().is_none_or(|(_, _, n)| t >= *n) {
+            newest = Some((*a, outputs, t));
+        }
+        now.insert(a.name.clone(), kept);
+    }
+    // Set up anew since by none: what the TV account chose (Chanoma's
+    // Settings › Display) stays.
+    if let Some((from, outputs, _)) = newest {
+        // Settings there but not to be read stay as they are, and the
+        // displays are followed once they can be.
+        let mut own = settings_of(tv)
+            .map_err(|e| format!("{e}: left as it is, without the displays {} set up", from.name))?
+            .map(|(t, _)| t)
+            .unwrap_or_default();
+        if own.get("outputs") != Some(&outputs) {
+            own.insert("outputs".into(), outputs);
+            let text = toml::to_string(&own).map_err(|e| e.to_string())?;
+            as_account(tv, || write_plain(&tv.home.join(SETTINGS), text.as_bytes(), None))?;
+            eprintln!("aizome-tv-account: {} follows the displays {} set up", tv.name, from.name);
+        }
+    } else if now == seen {
         return Ok(());
     }
-    let mut own = settings_of(tv).map(|(t, _)| t).unwrap_or_default();
-    if own.get("outputs").and_then(|o| o.as_array()) != Some(&outputs) {
-        own.insert("outputs".into(), toml::Value::Array(outputs.clone()));
-        let text = toml::to_string(&own).map_err(|e| e.to_string())?;
-        as_account(tv, || write_plain(&tv.home.join(SETTINGS), text.as_bytes(), None))?;
-        eprintln!("aizome-tv-account: {} follows the displays {} set up", tv.name, from.name);
-    }
-    let record = toml::to_string(&toml::Table::from_iter([("outputs".to_owned(), toml::Value::Array(outputs))]))
+    let record = toml::to_string(&toml::Table::from_iter([("accounts".to_owned(), toml::Value::Table(now))]))
         .map_err(|e| e.to_string())?;
     as_account(tv, || write_plain(&tv.home.join(FOLLOWED), record.as_bytes(), None))
 }
 
-/// The displays the TV account followed last, as a regular account set
-/// them up.
+/// What the TV account keeps of an account's displays: a SHA-256 of them,
+/// enough to tell whether they were set up anew, so another account's
+/// displays (their names and serial numbers) aren't copied into its home.
+fn digest(outputs: &toml::Value) -> Result<String, String> {
+    use sha2::Digest;
+    let text = toml::to_string(&toml::Table::from_iter([("outputs".to_owned(), outputs.clone())]))
+        .map_err(|e| e.to_string())?;
+    Ok(sha2::Sha256::digest(text.as_bytes()).iter().map(|b| format!("{b:02x}")).collect())
+}
+
+/// Each regular account's displays, as a digest, as it had them set up when
+/// the TV account last followed (`[accounts]`, by name).
 const FOLLOWED: &str = ".local/state/aizome/tv-followed-outputs.toml";
 #[cfg(test)]
 mod tests {
@@ -532,6 +565,140 @@ mod tests {
         write_plain(&sound(&bob, "default-profile"), b"[default-profile]\n", at(60)).unwrap();
         follow_sound(&tv, &[&alice, &bob]).unwrap();
         assert!(!sound(&tv, "default-nodes").exists());
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    /// The TV account's settings, there but not to be read as they are (a
+    /// link, or not TOML), stay as they are, and nothing is followed.
+    #[test]
+    fn the_tv_accounts_settings_stay_when_they_cant_be_read() {
+        use std::time::{Duration, SystemTime};
+        let root = std::env::temp_dir().join(format!("tv-account-unread-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        // SAFETY: getuid and getgid have no preconditions.
+        let (uid, gid) = unsafe { (libc::getuid(), libc::getgid()) };
+        let account = |name: &str| Account { name: name.into(), uid, gid, home: root.join(name) };
+        let (tv, admin) = (account("tv"), account("admin"));
+        let at = |secs: u64| Some(SystemTime::UNIX_EPOCH + Duration::from_secs(1_800_000_000 + secs));
+        let hdmi = b"[[outputs]]\nname = \"HDMI-A-1\"\nscale = 2.0\n";
+        write_plain(&admin.home.join(SETTINGS), hdmi, at(10)).unwrap();
+        let own = tv.home.join(SETTINGS);
+        let marker = tv.home.join(FOLLOWED);
+        let day = "[appearance]\ntheme = \"day\"\n";
+
+        // A link to settings that are fine.
+        let target = root.join("tv-settings.toml");
+        std::fs::write(&target, day).unwrap();
+        std::fs::create_dir_all(own.parent().unwrap()).unwrap();
+        std::os::unix::fs::symlink(&target, &own).unwrap();
+        let result = follow_displays(&tv, &[&admin]);
+        let link = std::fs::symlink_metadata(&own).unwrap().file_type().is_symlink();
+        eprintln!(
+            "link: {result:?}; still a link: {link}; it reads {:?}; the target {:?}; marker there: {}",
+            std::fs::read_to_string(&own).ok(),
+            std::fs::read_to_string(&target).ok(),
+            marker.exists()
+        );
+        assert!(link, "the link stays");
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), day);
+        assert!(!marker.exists(), "nothing followed");
+        assert!(result.is_err());
+
+        // Not TOML.
+        std::fs::remove_file(&own).unwrap();
+        let broken = "[appearance\ntheme = \"day\"\n";
+        std::fs::write(&own, broken).unwrap();
+        let result = follow_displays(&tv, &[&admin]);
+        eprintln!(
+            "malformed: {result:?}; it reads {:?}; marker there: {}",
+            std::fs::read_to_string(&own).ok(),
+            marker.exists()
+        );
+        assert_eq!(std::fs::read_to_string(&own).unwrap(), broken);
+        assert!(!marker.exists(), "nothing followed");
+        assert!(result.is_err());
+
+        // None at all: made, with the displays followed.
+        std::fs::remove_file(&own).unwrap();
+        follow_displays(&tv, &[&admin]).unwrap();
+        let made: toml::Table = std::fs::read_to_string(&own).unwrap().parse().unwrap();
+        assert_eq!(made["outputs"][0]["scale"].as_float(), Some(2.0));
+        assert!(marker.exists());
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    /// Only a change to an account's displays is followed: another change
+    /// of its settings leaves the TV account's own choice.
+    #[test]
+    fn the_tv_account_follows_only_a_change_to_the_displays() {
+        use std::time::{Duration, SystemTime};
+        let root = std::env::temp_dir().join(format!("tv-account-unrelated-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        // SAFETY: getuid and getgid have no preconditions.
+        let (uid, gid) = unsafe { (libc::getuid(), libc::getgid()) };
+        let account = |name: &str| Account { name: name.into(), uid, gid, home: root.join(name) };
+        let (tv, alice, bob) = (account("tv"), account("alice"), account("bob"));
+        let at = |secs: u64| Some(SystemTime::UNIX_EPOCH + Duration::from_secs(1_800_000_000 + secs));
+        let set = |a: &Account, theme: &str, scale: &str, t: u64| {
+            let text =
+                format!("[appearance]\ntheme = \"{theme}\"\n[[outputs]]\nname = \"HDMI-A-1\"\nscale = {scale}\n");
+            write_plain(&a.home.join(SETTINGS), text.as_bytes(), at(t)).unwrap();
+        };
+        let scale_of = |a: &Account| {
+            let t: toml::Table = std::fs::read_to_string(a.home.join(SETTINGS)).unwrap().parse().unwrap();
+            t["outputs"][0]["scale"].as_float()
+        };
+        set(&bob, "night", "1.0", 10);
+        set(&alice, "night", "2.0", 20);
+        follow_displays(&tv, &[&alice, &bob]).unwrap();
+        assert_eq!(scale_of(&tv), Some(2.0), "Alice's, set up last");
+        // What's kept of each account's displays is a digest, not them.
+        let kept = std::fs::read_to_string(tv.home.join(FOLLOWED)).unwrap();
+        assert!(kept.contains("alice") && kept.contains("bob") && !kept.contains("HDMI-A-1"), "{kept}");
+        // Chosen on the TV, then only Bob's theme changes.
+        set(&tv, "day", "1.5", 30);
+        set(&bob, "day", "1.0", 40);
+        follow_displays(&tv, &[&alice, &bob]).unwrap();
+        eprintln!("after Bob's theme: the TV's scale {:?}", scale_of(&tv));
+        assert_eq!(scale_of(&tv), Some(1.5), "the TV's own stays");
+        // Bob sets his displays up anew: his, though Alice's settings change after.
+        set(&bob, "day", "3.0", 50);
+        set(&alice, "day", "2.0", 60);
+        follow_displays(&tv, &[&alice, &bob]).unwrap();
+        assert_eq!(scale_of(&tv), Some(3.0), "Bob's, the displays set up last");
+        // The TV's theme stays its own throughout.
+        let own: toml::Table = std::fs::read_to_string(tv.home.join(SETTINGS)).unwrap().parse().unwrap();
+        assert_eq!(own["appearance"]["theme"].as_str(), Some("day"));
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    /// A pipe among an account's files isn't waited on: it isn't a file to
+    /// follow (and the TV account's systemd waits for this, without end).
+    #[test]
+    fn a_pipe_in_an_accounts_files_is_passed_over() {
+        use std::os::unix::ffi::OsStrExt;
+        use std::time::Duration;
+        let root = std::env::temp_dir().join(format!("tv-account-pipe-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        // SAFETY: getuid and getgid have no preconditions.
+        let (uid, gid) = unsafe { (libc::getuid(), libc::getgid()) };
+        let account = |name: &str| Account { name: name.into(), uid, gid, home: root.join(name) };
+        let (tv, bob) = (account("tv"), account("bob"));
+        let pipe = bob.home.join(SETTINGS);
+        std::fs::create_dir_all(pipe.parent().unwrap()).unwrap();
+        let c = std::ffi::CString::new(pipe.as_os_str().as_bytes()).unwrap();
+        // SAFETY: a valid C string.
+        assert_eq!(unsafe { libc::mkfifo(c.as_ptr(), 0o644) }, 0);
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = tx.send(follow_displays(&tv, &[&bob]));
+        });
+        let done = rx.recv_timeout(Duration::from_secs(5));
+        if done.is_err() {
+            // Let a reader that's waiting go.
+            let _ = File::options().write(true).custom_flags(libc::O_NONBLOCK).open(&pipe);
+        }
+        assert!(matches!(done, Ok(Ok(()))), "{done:?}");
         std::fs::remove_dir_all(&root).unwrap();
     }
 

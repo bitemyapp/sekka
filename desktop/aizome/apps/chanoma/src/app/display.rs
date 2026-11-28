@@ -3,8 +3,9 @@
 //! `output-config`, as Settings' Displays has them on the desktop.
 //!
 //! The size of things applies at once. A new resolution or refresh rate
-//! asks to be kept and goes back by itself after [`KEEP_FOR`] unanswered:
-//! a television that can't show it is dark, and can't be answered. Going
+//! asks to be kept and goes back by itself after [`KEEP_FOR`] unanswered
+//! (at once, if the compositor's answer to it is lost): a television that
+//! can't show it is dark, and can't be answered. Going
 //! back comes first in the question, so presses on a dark screen go back
 //! too. What's kept is written to Aizome's settings (`[[outputs]]`, by the
 //! display's make, model and serial, as Settings writes it), so the
@@ -350,10 +351,13 @@ impl Chanoma {
         match result {
             Err(e) => {
                 log::warn!("chanoma: changing {name}: {e}");
-                if change == Change::Asks {
-                    self.displays.keep = None;
-                }
                 self.toast("Couldn't change the display", cx);
+                // It may have changed all the same (its list asked for after
+                // lost, or the answer): back at once, over a new connection,
+                // and the list comes with that.
+                if change == Change::Asks {
+                    return self.display_back(cx);
+                }
                 self.list_displays(cx);
             }
             Ok(list) => {
