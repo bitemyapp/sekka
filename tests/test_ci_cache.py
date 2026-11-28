@@ -42,8 +42,10 @@ class Retention(unittest.TestCase):
         failed_prs = [self.generation("pr-checks", age, False) for age in (10, 11, 12, 2 * retain.DAY)]
         old_main = self.generation("main-uta", 30 * retain.DAY)
         old_pr = self.generation("pr-uta", 30 * retain.DAY)
+        aizome = [self.generation("main-aizome", age) for age in (1, 2, 3)]
         unrelated = self.generation("unrelated", 30 * retain.DAY)
         retain.prune(self.root, self.now, PLENTY)
+        self.assertEqual([p.exists() for p in aizome], [True, True, False])
         self.assertEqual([p.exists() for p in main], [True, True, False, False])
         self.assertEqual([p.exists() for p in prs], [True, True, True, True, False, False])
         self.assertEqual([p.exists() for p in failed], [True, False, False])
@@ -246,6 +248,13 @@ echo {self.store_path}
         self.assertEqual(result.returncode, 23)
         [generation] = self.generations("main-uta")
         self.assertFalse((generation / "success").exists())
+        self.assertTrue((generation / "result").is_symlink())
+
+    def test_aizomes_vm_checks_have_a_group_of_their_own(self):
+        result = self.run_retain("main", "aizome", "build", "/nix/store/example.drv^out")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        [generation] = self.generations("main-aizome")
+        self.assertTrue((generation / "success").is_file())
         self.assertTrue((generation / "result").is_symlink())
 
     def test_an_input_query_failure_does_not_fail_a_passing_build(self):

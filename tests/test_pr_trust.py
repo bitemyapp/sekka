@@ -168,7 +168,7 @@ class RunnerAdmission(unittest.TestCase):
     def test_every_main_workflow_is_admitted(self):
         # Both runner slots share this policy: it has no slot input.
         for event in ["push", "schedule", "workflow_dispatch"]:
-            for workflow in ["pr", "cache", "nightly", "sites", "release", "yuki"]:
+            for workflow in ["pr", "cache", "nightly", "aizome", "sites", "release", "yuki"]:
                 with self.subTest(event=event, workflow=workflow):
                     self.assertTrue(self.admitted(event, workflow=
                         f"bitemyapp/sekka/.github/workflows/{workflow}.yml@refs/heads/main"))

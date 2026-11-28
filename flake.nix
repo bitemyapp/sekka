@@ -195,7 +195,8 @@
       nixosConfigurations.installer = installer;
       # Aizome's own VM checks (desktop/aizome/nix), under the names its
       # flake gave them: `nix build .#aizome-checks.session`. Not among
-      # `checks`, which CI runs, as they weren't in Aizome's repository.
+      # `checks`, which pull requests and the nightly run: these run on main,
+      # in a workflow of their own (.github/workflows/aizome.yml).
       legacyPackages.${system} = {
         aizome-checks = inputs.aizome.checks.${system};
         # The ISO's own checks, which the manual ISO workflow (and a release)

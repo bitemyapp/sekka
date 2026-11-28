@@ -24,7 +24,7 @@ import tempfile
 import time
 
 
-GROUP = re.compile(r"(main|pr)-(uta|checks|packages|iso)")
+GROUP = re.compile(r"(main|pr)-(uta|checks|packages|iso|aizome)")
 GENERATION = re.compile(r"[0-9]+-[a-z0-9_]+")
 STORE_PATH = re.compile(r"/nix/store/[0-9a-z]{32}-[^/\s]+")
 DAY = 86400
@@ -296,7 +296,7 @@ def main(argv=None):
     parser.add_argument("--retry-failed", action="store_true",
                         help="after a failed fast-build, build the checks that have no result once more")
     parser.add_argument("scope", choices=("main", "pr", "prune"))
-    parser.add_argument("label", nargs="?", choices=("uta", "checks", "packages", "iso"))
+    parser.add_argument("label", nargs="?", choices=("uta", "checks", "packages", "iso", "aizome"))
     parser.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
     command = args.command[1:] if args.command[:1] == ["--"] else args.command
