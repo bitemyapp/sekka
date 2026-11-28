@@ -572,6 +572,14 @@ and daemon-first shutdown. `pipewire-packages` checks service selection in
 the live and installed desktop configurations. These component checks do
 not replace testing session changes on the actual ISO.
 
+Sekka and the standalone Aizome and Tatami modules install a WirePlumber
+profile rule for the Audeze Maxwell dongle with USB ID `3329:4b29`.
+Both playback endpoints are stereo. The stock gaming-headset profile
+uses the Game mixer for both sliders. The override in
+`nix/audeze-maxwell.nix` gives Chat its own mixer path, so Chat controls
+PCM 0 and Game controls PCM 1. The `audeze-maxwell` flake check verifies
+the packaged mappings and their volume and mute controls.
+
 Use x86_64 Linux with Nix and flakes enabled. The full image includes several desktops and an application cache: allow substantial disk space (a dedicated builder with at least 250 GiB free and 32 GiB RAM is a useful starting point). Component builds are much smaller. Never run installer storage tests against host disks.
 
 Run the commands below from the repository root unless a different working directory is specified.

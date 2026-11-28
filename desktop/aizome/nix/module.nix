@@ -1047,6 +1047,7 @@ in
       enable = lib.mkDefault true;
       pulse.enable = lib.mkDefault true;
       wireplumber.enable = lib.mkDefault true;
+      wireplumber.configPackages = [ (pkgs.callPackage ../../../nix/audeze-maxwell.nix { }) ];
       # Streams that ask for long graph cycles get them: Utsushi's music
       # asks for 8192 frames (170 ms), so with nothing else playing the
       # sound card, PipeWire and the player wake about six times a second
