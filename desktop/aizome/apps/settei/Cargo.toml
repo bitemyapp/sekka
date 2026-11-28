@@ -20,6 +20,12 @@ path = "src/main.rs"
 name = "aizome-tv-account"
 path = "src/bin/tv-account.rs"
 
+# bluetoothd's LE privacy, as root: before it starts (systemd), and
+# through pkexec (src/bin/bluetooth.rs).
+[[bin]]
+name = "aizome-bluetooth"
+path = "src/bin/bluetooth.rs"
+
 [dependencies]
 aizome-kit.workspace = true
 aizome-theme.workspace = true

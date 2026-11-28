@@ -9,6 +9,7 @@ use std::time::Duration;
 
 use aizome_kit::layout::Size;
 use aizome_kit::testing::{Harness, assert_golden};
+use aizome_kit::widget::SemanticRole;
 use settei::{AppMsg, Settei, Start};
 
 fn golden(name: &str) -> PathBuf {
@@ -74,6 +75,32 @@ fn network_details() {
 #[test]
 fn bluetooth() {
     check("bluetooth", "bluetooth", "WH-1000XM5");
+}
+
+#[test]
+fn bluetooth_restart() {
+    // Privacy switched off: Restart Bluetooth offered, as Yukimi offers a
+    // restart, and nothing restarted yet.
+    check_after("bluetooth", "bluetooth-restart", "WH-1000XM5", |h| {
+        let w = h.window();
+        let row = h.find(w, "Privacy").expect("the privacy row");
+        let switch = h
+            .semantics(w)
+            .into_iter()
+            .filter(|(s, r)| s.role == SemanticRole::Switch && (r.center().y - row.center().y).abs() < 30.0)
+            .map(|(_, r)| r)
+            .next()
+            .expect("the privacy switch");
+        h.click(w, switch.center());
+        for _ in 0..200 {
+            if h.texts(w).iter().any(|t| t == "Restart Bluetooth") {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+            h.send(AppMsg::Nothing);
+        }
+        assert!(h.texts(w).iter().any(|t| t == "Restart Bluetooth"), "{:?}", h.texts(w));
+    });
 }
 
 #[test]

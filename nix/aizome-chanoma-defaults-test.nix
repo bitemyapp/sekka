@@ -4,8 +4,9 @@
 # unfree packages allowed and refused), the live media, and the installed
 # Aizome system the media carries. The installed system the binary cache
 # publishes allows only unfree packages anyone may redistribute: it has the
-# snes9x and Genesis Plus GX cores, and no Chrome. A configuration check: it
-# builds and runs nothing of Chanoma.
+# snes9x and Genesis Plus GX cores, and no Chrome. The LE privacy Xbox
+# controllers need is chosen for each computer with Aizome either way. A
+# configuration check: it builds and runs nothing of Chanoma.
 {
   pkgs,
   inputs,
@@ -55,6 +56,21 @@ let
       map lib.getName (packages config)
     );
   bluetooth = config: config.hardware.bluetooth.settings.General or { };
+  # What Xbox Series controllers need over Bluetooth LE: privacy, chosen
+  # for each computer when bluetoothd starts (Aizome's module says why),
+  # and so not set in main.conf, where it would be every computer's and
+  # Settings couldn't change it.
+  xboxReady =
+    config:
+    let
+      bt = config.systemd.services.bluetooth.serviceConfig;
+    in
+    !(bluetooth config ? Privacy)
+    && lib.any (lib.hasSuffix "/libexec/aizome-bluetooth prepare") (lib.toList (bt.ExecStartPre or [ ]))
+    && builtins.elem "-/run/aizome-bluetooth/main.conf:/etc/bluetooth/main.conf" (
+      bt.BindReadOnlyPaths or [ ]
+    )
+    && config.environment.etc ? "aizome/bluetooth-privacy.toml";
   # The two cores whose licences forbid selling them, which anyone may
   # redistribute.
   unfreeCores =
@@ -71,6 +87,7 @@ let
     browsers = browsers config;
     unfree = config.nixpkgs.config.allowUnfree;
     pairsAgain = (bluetooth config).JustWorksRepairing or null;
+    xbox = xboxReady config;
   };
 in
 # With Aizome, and with what its services and controllers need.
@@ -80,6 +97,9 @@ assert browsers on == [ "google-chrome" ];
 # decided on purpose (desktop/aizome/docs/chanoma.md, "Decided on
 # purpose"): a change that takes it out is not a fix, and fails here.
 assert (bluetooth on).JustWorksRepairing == "always" && (bluetooth on).FastConnectable;
+# Xbox controllers can pair whether Chanoma comes or not, on the media too.
+assert xboxReady on && xboxReady off && xboxReady free;
+assert xboxReady installer.config && xboxReady media && xboxReady published;
 # The desktop entry uses the catalog's keyring wrapper. The TV keeps
 # its own browser profiles and receives the raw executable by store path.
 assert lib.all (p: toString p != toString on.programs.aizome.chanoma.browser) (packages on);

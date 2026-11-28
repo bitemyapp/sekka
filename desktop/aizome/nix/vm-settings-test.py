@@ -1573,7 +1573,9 @@ def controller_named(alias):
     return None
 
 
-@part("Bluetooth: turning it off and on reaches BlueZ; the controller's name too; discovery runs while open")
+@part(
+    "Bluetooth: turning it off and on reaches BlueZ; the controller's name too; discovery runs while open; privacy waits for Restart Bluetooth"
+)
 def bluetooth():
     S.open("bluetooth")
     # The controller the pane shows (after airplane mode, not always BlueZ's
@@ -1599,8 +1601,48 @@ def bluetooth():
     until("the new alias", lambda: "Alias: Alice's Aizome" in show())
     reopen("bluetooth")
     assert S.wait(name="bluetooth-name").get("value") == "Alice's Aizome"
+    bluetooth_privacy(show)
+    # Another pane: Bluetooth's hides, and undoes the discoverability it
+    # asked for again after the restart.
+    S.press("Sound")
+    until("not discoverable with the pane hidden", lambda: "Discoverable: no" in show(), timeout=20)
     S.quit()
     until("discovery stopped with the pane", lambda: "Discovering: no" in show(), timeout=20)
+    # As it was, for what follows: automatic, which has it on again.
+    policy = machine.succeed("cat /run/current-system/sw/share/polkit-1/actions/org.aizome.Bluetooth.policy")
+    helper = re.search(r'exec\.path">([^<]+)<', policy)
+    assert helper, policy
+    machine.succeed(f"{helper.group(1)} set automatic && systemctl restart bluetooth.service")
+    until("privacy on again", lambda: bluetoothd_privacy() == "true", timeout=30)
+
+
+def bluetoothd_privacy():
+    """What bluetoothd started with, as Aizome prepared it: "true" or "false"."""
+    found = re.search(r"^privacy = (\w+)", machine.succeed("cat /run/aizome-bluetooth/state.toml"), re.M)
+    return found and found.group(1)
+
+
+def bluetoothd_pid():
+    return machine.succeed("systemctl show -p MainPID --value bluetooth.service").strip()
+
+
+def bluetooth_privacy(show):
+    """Privacy off from its switch (alice administers the computer: polkit
+    asks nothing), kept for bluetoothd's next start, which only Restart
+    Bluetooth brings; after it the pane looks for devices again."""
+    assert bluetoothd_privacy() == "true", "nothing paired: on"
+    assert S.checked("bluetooth", "privacy") is True
+    pid = bluetoothd_pid()
+    S.click(S.control("bluetooth", "privacy", role="switch"))
+    until("the choice kept", lambda: machine.succeed("cat /var/lib/aizome/bluetooth-privacy || true").strip() == "off")
+    S.wait(text="Restart Bluetooth to change its privacy")
+    assert bluetoothd_pid() == pid and bluetoothd_privacy() == "true", "Bluetooth restarted unasked"
+    S.press("Restart Bluetooth")
+    until("bluetoothd restarted", lambda: bluetoothd_pid() not in (pid, "0"), timeout=30)
+    until("privacy off", lambda: bluetoothd_privacy() == "false", timeout=30)
+    S.gone("the restart card", text="Restart Bluetooth to change its privacy", timeout=30)
+    assert S.checked("bluetooth", "privacy") is False
+    until("discovery again while open", lambda: "Discovering: yes" in show() and "Discoverable: yes" in show(), timeout=30)
 
 
 def outputs():

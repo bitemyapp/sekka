@@ -967,9 +967,10 @@ in
     # Someone at the computer who administers it (wheel) changes from
     # Settings what a Mac's owner changes there without a password prompt,
     # as GNOME lets them: the time and time zone, the computer's name, the
-    # language and keyboard, and networks (joining, airplane mode, sharing),
-    # which NixOS otherwise leaves to the networkmanager group. Others are
-    # asked as systemd and NetworkManager ask.
+    # language and keyboard, networks (joining, airplane mode, sharing),
+    # which NixOS otherwise leaves to the networkmanager group, and
+    # Bluetooth's privacy and restarting Bluetooth for it. Others are asked
+    # as systemd, NetworkManager and Aizome's polkit actions ask.
     #
     # Nisshi unlocks the system's logs through pkexec, which works only
     # through NixOS's setuid wrapper. Recent NixOS makes that wrapper only
@@ -988,6 +989,7 @@ in
             "org.freedesktop.hostname1.set-machine-info",
             "org.freedesktop.locale1.set-locale",
             "org.freedesktop.locale1.set-keyboard",
+            "org.aizome.Settei.bluetooth",
           ];
           if (subject.local && subject.active && subject.isInGroup("wheel") &&
               (settings.indexOf(action.id) >= 0 ||
@@ -1004,6 +1006,41 @@ in
     # What Settings, the Deskbar's widgets and the apps talk to.
     networking.networkmanager.enable = lib.mkDefault true;
     hardware.bluetooth.enable = lib.mkDefault true;
+    # Bluetooth LE privacy, chosen for each computer each time bluetoothd
+    # starts (aizome-bluetooth prepare, as root, just before it). Xbox
+    # Series controllers need it: BlueZ hands them the computer's identity
+    # key only with it on, and without the key they pair, connect, send
+    # nothing and drop the link after about two and a half minutes
+    # (xpadneo's troubleshooting notes; SteamOS ships it on). Devices
+    # paired over LE while it was off never got the key, though, and some
+    # then stop reconnecting until they're paired again. So it's on unless
+    # a device paired over LE may not have the key (prepare keeps which
+    # have it in /var/lib/aizome/bluetooth-pairings.toml), and Settings ›
+    # Bluetooth turns it on or off, and restarts bluetoothd for it when the
+    # person says so (NixOS doesn't restart bluetoothd on a switch).
+    # aizome-sys's bluetooth::privacy says more. bluetoothd reads the
+    # main.conf prepare writes, the system's with Privacy in it, in the
+    # system's place, or the system's if prepare failed. A system that sets
+    # hardware.bluetooth.settings.General.Privacy keeps it, and Settings
+    # says so. The LE connection intervals SteamOS shortens for its
+    # controllers stay BlueZ's: they would bound every LE device's.
+    systemd.services.bluetooth = lib.mkIf config.hardware.bluetooth.enable {
+      serviceConfig = {
+        # "+": as root, outside the service's sandbox; "-": Bluetooth
+        # starts though it fails.
+        ExecStartPre = [ "-+${cfg.package}/libexec/aizome-bluetooth prepare" ];
+        RuntimeDirectory = [ "aizome-bluetooth" ];
+        RuntimeDirectoryMode = "0755";
+        BindReadOnlyPaths = [ "-/run/aizome-bluetooth/main.conf:/etc/bluetooth/main.conf" ];
+      };
+    };
+    # How Settings knows Aizome chooses (aizome-sys's privacy::MANAGED).
+    environment.etc."aizome/bluetooth-privacy.toml" = lib.mkIf config.hardware.bluetooth.enable {
+      text = ''
+        # bluetoothd's LE privacy is chosen each time it starts
+        # (aizome-bluetooth prepare), and changed in Settings › Bluetooth.
+      '';
+    };
     services.upower.enable = lib.mkDefault true;
     services.power-profiles-daemon.enable = lib.mkDefault true;
     services.udisks2.enable = lib.mkDefault true;
