@@ -1467,11 +1467,27 @@ Snapshot, migration and update fetches stream Nix's structured activities and
 Git's carriage-return progress to the GUI while the commands run. The helper
 also retains stderr for diagnostics; only the dry-run command uses plain logs,
 whose build-plan headings the check reads before classifying derivations.
-Uncached package builds are named in a separate confirmation: they are
-unverified, not necessarily incompatible. This would flag an uncached
+Uncached package builds that compile are named in a separate confirmation:
+they are unverified, not necessarily incompatible. This would flag an uncached
 cargo-geiger before attempting its build, but cannot predict its compiler or
-native-library errors. Generated configuration derivations marked
-`preferLocalBuild` and fixed-output downloads do not trigger that warning.
+native-library errors. The check sorts the planned builds as the nightly's
+coverage gate does (`kind` in `preflight.rs` and in
+`scripts/check_cache_coverage.py`; the cases in
+`apps/yukimi/crates/yukimi-system/data/build-kinds.json` run in both tests, so
+the two rules change together), and three kinds do not trigger that warning:
+generated configuration (`preferLocalBuild`, or `allowSubstitutes` off),
+fixed-output downloads, and what is put together without a C compiler
+(`stdenvNoCC`) or any other compiler or build tool among its inputs. Every
+system has builds of that last kind that no cache can hold, such as its own
+initrd, its SSH server's checked configuration, and Determinate Nixd assembled
+from its download. A compiler's runtime libraries alone are not a compiler:
+an input wanted only for its `lib` or `libgcc` output does not count. Chrome,
+Superluminal and the runtime roots Steam and Discord run in are put together
+beside GCC's (libstdc++, in the `lib` output of `gcc`), so they are of that
+last kind too. One kind of build that compiles nothing is still named: an
+unfree application Sekka's cache may not carry, when its package unpacks its
+maker's download with Nixpkgs' full `stdenv` (VS Code, Discord, ChatGPT). Its
+derivation does not say that nothing is compiled.
 The check uses the user's configured caches; a cache introduced by the update
 may therefore cause a conservative warning until the root build reads it.
 
@@ -3737,6 +3753,8 @@ succeeded:
    as a system with an empty store would. It fails if any of it would be
    compiled rather than written locally (configuration), copied into place
    without a compiler (as Determinate Nixd is from its download) or fetched.
+   A compiler's runtime libraries alone (the `lib` and `libgcc` outputs,
+   which hold GCC's) are not a compiler.
    Unfree applications whose licences forbid redistribution (Chrome, VS
    Code and the like) aren't covered: they can't be published, so systems
    that have them repackage their vendors' downloads.

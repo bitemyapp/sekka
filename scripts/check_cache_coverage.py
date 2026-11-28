@@ -13,7 +13,8 @@ inputs. The derivations that would be built are listed in four kinds:
 - downloads: fixed-output derivations, which fetch their sources;
 - copies: built without a C compiler (stdenvNoCC) or any other compiler or
   build tool among their inputs, such as Determinate Nixd put in place from
-  its download;
+  its download. A compiler's runtime libraries alone are not a compiler:
+  GCC's `lib` output beside a program built elsewhere;
 - compiles: everything else.
 
 Cached outputs' runtime references are checked across these caches, including
@@ -236,9 +237,40 @@ def settings(info):
     return env
 
 
-# Inputs that mean a derivation compiles (by name, without the hash).
+# Yukimi's update check sorts an update's builds the same way (`kind` in
+# apps/yukimi/crates/yukimi-system/src/preflight.rs) and asks before one that
+# compiles. That crate's data/build-kinds.json holds the two to one rule: its
+# cases run in both tests, so change `settings`, COMPILERS, RUNTIME_LIBRARIES,
+# `compiler` or `kind` together with Yukimi's.
+
+# Inputs that mean a derivation compiles (by name, without the hash). Nixpkgs
+# builds .NET projects with stdenvNoCC, so its SDK is named here: wrapped or
+# not, and several combined into one. Its runtime alone, which runs a program
+# built elsewhere, is not. Bun, Mono, Dart, Flutter, Swift, Deno, Gradle,
+# Maven, Mill and sbt are wanted only to build something, so they are named
+# too, before a builder of theirs moves to stdenvNoCC.
+#
+# Decided on purpose: a derivation put together with stdenvNoCC whose
+# toolchain isn't named here counts as a copy. A toolchain found missing is
+# added here and to Yukimi's list, with a case in build-kinds.json.
 COMPILERS = ('rustc-', 'cargo-', 'go-', 'gcc-', 'clang-', 'llvm-', 'cmake-', 'meson-', 'ninja-', 'ghc-',
-             'zig-', 'openjdk-', 'jdk-', 'nodejs-', 'stdenv-linux.drv')
+             'zig-', 'openjdk-', 'jdk-', 'nodejs-', 'bun-', 'dotnet-sdk-', 'dotnet-wrapped-combined',
+             'mono-', 'dart-', 'flutter-', 'swift-', 'deno-', 'gradle-', 'maven-', 'mill-', 'sbt-',
+             'stdenv-linux.drv')
+
+# The outputs that hold a compiler's runtime libraries and not the compiler.
+# GCC keeps libstdc++ in `lib` and libgcc_s in `libgcc`, and a program built
+# elsewhere is packaged beside them: Chrome from its maker's download, the
+# runtime root Steam runs in. Decided on purpose: an input wanted for these
+# alone compiles nothing, so it does not make its derivation a compile.
+RUNTIME_LIBRARIES = {'lib', 'libgcc'}
+
+
+def compiler(name, want):
+    """Whether an input is a compiler or build tool, wanted for more than its runtime libraries."""
+    outs = set(want.get('outputs', ()) if isinstance(want, dict) else want)
+    # No outputs named says nothing about what is wanted, so it counts.
+    return name.startswith(COMPILERS) and not (outs and outs <= RUNTIME_LIBRARIES)
 
 
 def kind(info):
@@ -249,9 +281,9 @@ def kind(info):
     no_substitutes = 'allowSubstitutes' in env and env['allowSubstitutes'] in ('', '0', False)
     if local or no_substitutes:
         return 'local'
-    inputs = [name.removeprefix(STORE)[33:] for name in info['inputs']['drvs']]
-    if any(name.startswith('stdenv-linux-no-cc') for name in inputs) and not any(
-            name.startswith(COMPILERS) for name in inputs):
+    inputs = [(name.removeprefix(STORE)[33:], want) for name, want in info['inputs']['drvs'].items()]
+    if any(name.startswith('stdenv-linux-no-cc') for name, _ in inputs) and not any(
+            compiler(name, want) for name, want in inputs):
         return 'copies'
     return 'compiles'
 

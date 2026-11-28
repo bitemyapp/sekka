@@ -1,0 +1,733 @@
+{
+  "about": [
+    "What building a derivation amounts to, as two programs must agree:",
+    "Yukimi's update check (kind in crates/yukimi-system/src/preflight.rs), which asks before an update that compiles,",
+    "and the nightly's coverage gate (kind in scripts/check_cache_coverage.py), which keeps such an update off nightly.",
+    "Both run every case here, and each checks that every compiler and every runtime-library output it knows",
+    "has a case, so neither changes alone.",
+    "The first cases are `nix derivation show` on Determinate Nix 3.24.2 for a Sekka system's update on 2026-11-24,",
+    "each derivation reduced to the fields read and a few of its inputs. The cases after them are made up."
+  ],
+  "cases": [
+    {
+      "what": "generated configuration, its settings in env",
+      "kind": "local",
+      "derivation": {
+        "name": "etc",
+        "env": {"allowSubstitutes": "", "name": "etc", "out": "/nix/store/j5rp69zj41y2zyinimbz6ccal4rp4cwk-etc", "preferLocalBuild": "1"},
+        "outputs": {"out": {"path": "j5rp69zj41y2zyinimbz6ccal4rp4cwk-etc"}},
+        "inputs": {"drvs": {
+          "524j5cnaqxqkpqs29hk818hfjba89xvi-nvidia-x11-615.78.08.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "9k2radvbny2prs6r0l215zy4r5wd2cyp-stdenv-linux-no-cc.drv": {"dynamicOutputs": {}, "outputs": ["out"]}
+        }}
+      }
+    },
+    {
+      "what": "generated configuration, its settings among structured attributes",
+      "kind": "local",
+      "derivation": {
+        "name": "unit-sshd.service",
+        "env": {"out": "/nix/store/3qj7b92ah0zq6a1wkwxslk6m5iw6zw0j-unit-sshd.service"},
+        "structuredAttrs": {"allowSubstitutes": false, "name": "unit-sshd.service", "preferLocalBuild": true},
+        "outputs": {"out": {"path": "3qj7b92ah0zq6a1wkwxslk6m5iw6zw0j-unit-sshd.service"}},
+        "inputs": {"drvs": {
+          "96f1vkmnfm5zd8gli12w37h8i1ppx9wm-openssh-10.6p1.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "9k2radvbny2prs6r0l215zy4r5wd2cyp-stdenv-linux-no-cc.drv": {"dynamicOutputs": {}, "outputs": ["out"]}
+        }}
+      }
+    },
+    {
+      "what": "a download, by its output's hash, though it is also marked local",
+      "kind": "downloads",
+      "derivation": {
+        "name": "google-chrome-stable_158.0.8127.36-1_amd64.deb",
+        "env": {"out": "/nix/store/qgcfygx7ifh335d0slpnz21c40nmhpyj-google-chrome-stable_158.0.8127.36-1_amd64.deb"},
+        "structuredAttrs": {"name": "google-chrome-stable_158.0.8127.36-1_amd64.deb", "preferLocalBuild": true},
+        "outputs": {"out": {"hash": "sha256-Rpa84AsSjzhahwui627t5haY8iN06g2OCa+KHGVD05c=", "method": "flat"}},
+        "inputs": {"drvs": {
+          "9k2radvbny2prs6r0l215zy4r5wd2cyp-stdenv-linux-no-cc.drv": {"dynamicOutputs": {}, "outputs": ["out"]}
+        }}
+      }
+    },
+    {
+      "what": "this computer's initrd, with structured attributes",
+      "kind": "copies",
+      "derivation": {
+        "name": "initrd-linux-7.3.5",
+        "env": {"out": "/nix/store/65hd4h647rz0wvz1x80c6zxxy7w41gcb-initrd-linux-7.3.5"},
+        "structuredAttrs": {"name": "initrd-linux-7.3.5"},
+        "outputs": {"out": {"path": "65hd4h647rz0wvz1x80c6zxxy7w41gcb-initrd-linux-7.3.5"}},
+        "inputs": {"drvs": {
+          "13l06q7szzfnsgjryas5068haqgwp4c1-kbd-2.9.0.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "6li9yipl7zq7mcal1ygb4adxw62d3qh0-plymouth-initrd-fonts.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "9k2radvbny2prs6r0l215zy4r5wd2cyp-stdenv-linux-no-cc.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "chx9ymlffkmlk4jqpvkvyjhgrkskrcax-glibc-2.44-57.drv": {"dynamicOutputs": {}, "outputs": ["out"]}
+        }}
+      }
+    },
+    {
+      "what": "the kernel modules that initrd carries",
+      "kind": "copies",
+      "derivation": {
+        "name": "linux-7.3.5-modules-shrunk",
+        "env": {"name": "linux-7.3.5-modules-shrunk", "out": "/nix/store/qwbsh9g1c85a22c8bchm0kb7h2rj20c4-linux-7.3.5-modules-shrunk"},
+        "outputs": {"out": {"path": "qwbsh9g1c85a22c8bchm0kb7h2rj20c4-linux-7.3.5-modules-shrunk"}},
+        "inputs": {"drvs": {
+          "9a50dcrr7761l3777rfsvsiczl1y4s7x-linux-7.3.5-modules.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "9k2radvbny2prs6r0l215zy4r5wd2cyp-stdenv-linux-no-cc.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "am0l8glph9glbh8lij2ja8gmvwh0ky9a-kmod-31.drv": {"dynamicOutputs": {}, "outputs": ["out"]}
+        }}
+      }
+    },
+    {
+      "what": "Determinate Nixd, put in place from Determinate's download",
+      "kind": "copies",
+      "derivation": {
+        "name": "determinate-nixd-3.24.3",
+        "env": {"name": "determinate-nixd-3.24.3", "out": "/nix/store/9p8xp2zzah8ksdipp0vpncp18f5l8h1m-determinate-nixd-3.24.3"},
+        "outputs": {"out": {"path": "9p8xp2zzah8ksdipp0vpncp18f5l8h1m-determinate-nixd-3.24.3"}},
+        "inputs": {"drvs": {
+          "8cbzc4rx73ijf65b2rwagxac9mbpv4sz-install-shell-files.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "9k2radvbny2prs6r0l215zy4r5wd2cyp-stdenv-linux-no-cc.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "kbpcpb1ps9sxn55ng7yifk6zmncrjifx-bash-5.3p20.drv": {"dynamicOutputs": {}, "outputs": ["out"]}
+        }}
+      }
+    },
+    {
+      "what": "the SSH server's configuration, checked with sshd",
+      "kind": "copies",
+      "derivation": {
+        "name": "check-sshd-config",
+        "env": {"name": "check-sshd-config", "out": "/nix/store/8a562h22a8kpc1dvgqb648j9z8gnv6a3-check-sshd-config"},
+        "outputs": {"out": {"path": "8a562h22a8kpc1dvgqb648j9z8gnv6a3-check-sshd-config"}},
+        "inputs": {"drvs": {
+          "96f1vkmnfm5zd8gli12w37h8i1ppx9wm-openssh-10.6p1.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "9k2radvbny2prs6r0l215zy4r5wd2cyp-stdenv-linux-no-cc.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "vk4qg1nj9q0bw5vq5p33hqw14hj1fc4w-sshd.conf-final.drv": {"dynamicOutputs": {}, "outputs": ["out"]}
+        }}
+      }
+    },
+    {
+      "what": "Steam's runtime root: of GCC only its runtime libraries (its lib output), for both architectures",
+      "kind": "copies",
+      "derivation": {
+        "name": "steam-1.0.0.87-fhsenv-rootfs",
+        "env": {"out": "/nix/store/xmqsjka6y6x842ymxaaqgjsj6jz8r36g-steam-1.0.0.87-fhsenv-rootfs"},
+        "structuredAttrs": {"name": "steam-1.0.0.87-fhsenv-rootfs"},
+        "outputs": {"out": {"path": "xmqsjka6y6x842ymxaaqgjsj6jz8r36g-steam-1.0.0.87-fhsenv-rootfs"}},
+        "inputs": {"drvs": {
+          "524j5cnaqxqkpqs29hk818hfjba89xvi-nvidia-x11-615.78.08.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "9k2radvbny2prs6r0l215zy4r5wd2cyp-stdenv-linux-no-cc.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "c8ykhpf0mk51n7zpnms0fr4gnnsbvds1-steam-unwrapped-1.0.0.87.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "n4lbdlpnkqgvl5x2mbvxmjl14sbcl4l0-gcc-16.2.0.drv": {"dynamicOutputs": {}, "outputs": ["lib"]},
+          "xh30kd4gzn69ja1za8v3ncss97lqxy3x-gcc-16.2.0.drv": {"dynamicOutputs": {}, "outputs": ["lib"]}
+        }}
+      }
+    },
+    {
+      "what": "Chrome, unpacked from its maker's download beside GCC's runtime libraries",
+      "kind": "copies",
+      "derivation": {
+        "name": "google-chrome-158.0.8127.36",
+        "env": {
+          "name": "google-chrome-158.0.8127.36",
+          "out": "/nix/store/j9qqw07a7m1hv8crybil19bw5msy09mp-google-chrome-158.0.8127.36"
+        },
+        "outputs": {"out": {"path": "j9qqw07a7m1hv8crybil19bw5msy09mp-google-chrome-158.0.8127.36"}},
+        "inputs": {"drvs": {
+          "9k2radvbny2prs6r0l215zy4r5wd2cyp-stdenv-linux-no-cc.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "n4lbdlpnkqgvl5x2mbvxmjl14sbcl4l0-gcc-16.2.0.drv": {"dynamicOutputs": {}, "outputs": ["lib"]},
+          "px9qif64ayv5yff12bqlw45kcdf0lzvj-google-chrome-stable_158.0.8127.36-1_amd64.deb.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "vqds8qd1igqvx3cy616mbbz9cjmmkn14-patchelf-0.15.2.drv": {"dynamicOutputs": {}, "outputs": ["out"]}
+        }}
+      }
+    },
+    {
+      "what": "VS Code, unpacked from its maker's download with Nixpkgs' full stdenv",
+      "kind": "compiles",
+      "derivation": {
+        "name": "vscode-1.147.0",
+        "env": {"out": "/nix/store/fh5q1rp538hi1jcncz6ryx8x9bksm8xn-vscode-1.147.0"},
+        "structuredAttrs": {"name": "vscode-1.147.0"},
+        "outputs": {"out": {"path": "fh5q1rp538hi1jcncz6ryx8x9bksm8xn-vscode-1.147.0"}},
+        "inputs": {"drvs": {
+          "08grahh6i022hkpbaz3yix4wvrcrpyks-stdenv-linux.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "kbpcpb1ps9sxn55ng7yifk6zmncrjifx-bash-5.3p20.drv": {"dynamicOutputs": {}, "outputs": ["out"]}
+        }}
+      }
+    },
+    {
+      "what": "settings in env's __json, where older Nix kept structured attributes",
+      "kind": "local",
+      "derivation": {
+        "name": "system-path",
+        "env": {"__json": "{\"name\":\"system-path\",\"preferLocalBuild\":true}", "preferLocalBuild": ""},
+        "outputs": {"out": {"path": "00000000000000000000000000000000-system-path"}},
+        "inputs": {"drvs": {}}
+      }
+    },
+    {
+      "what": "structured attributes over env",
+      "kind": "compiles",
+      "derivation": {
+        "name": "hello-2.12.3",
+        "env": {"allowSubstitutes": "", "preferLocalBuild": "1"},
+        "structuredAttrs": {"allowSubstitutes": true, "name": "hello-2.12.3", "preferLocalBuild": false},
+        "outputs": {"out": {"path": "00000000000000000000000000000000-hello-2.12.3"}},
+        "inputs": {"drvs": {"00000000000000000000000000000000-stdenv-linux.drv": {"dynamicOutputs": {}, "outputs": ["out"]}}}
+      }
+    },
+    {
+      "what": "substitution refused in env, and nothing else said",
+      "kind": "local",
+      "derivation": {
+        "name": "fixture",
+        "env": {"allowSubstitutes": "", "name": "fixture"},
+        "outputs": {"out": {"path": "00000000000000000000000000000000-fixture"}},
+        "inputs": {"drvs": {}}
+      }
+    },
+    {
+      "what": "substitution refused in env as 0",
+      "kind": "local",
+      "derivation": {
+        "name": "fixture",
+        "env": {"allowSubstitutes": "0", "name": "fixture"},
+        "outputs": {"out": {"path": "00000000000000000000000000000000-fixture"}},
+        "inputs": {"drvs": {}}
+      }
+    },
+    {
+      "what": "substitution refused among structured attributes, and nothing else said",
+      "kind": "local",
+      "derivation": {
+        "name": "fixture",
+        "env": {},
+        "structuredAttrs": {"allowSubstitutes": false, "name": "fixture"},
+        "outputs": {"out": {"path": "00000000000000000000000000000000-fixture"}},
+        "inputs": {"drvs": {}}
+      }
+    },
+    {
+      "what": "settings given as numbers",
+      "kind": "local",
+      "derivation": {
+        "name": "fixture",
+        "env": {},
+        "structuredAttrs": {"allowSubstitutes": 1, "name": "fixture", "preferLocalBuild": 1},
+        "outputs": {"out": {"path": "00000000000000000000000000000000-fixture"}},
+        "inputs": {"drvs": {}}
+      }
+    },
+    {
+      "what": "substitution refused as the number 0",
+      "kind": "local",
+      "derivation": {
+        "name": "fixture",
+        "env": {},
+        "structuredAttrs": {"allowSubstitutes": 0, "name": "fixture"},
+        "outputs": {"out": {"path": "00000000000000000000000000000000-fixture"}},
+        "inputs": {"drvs": {}}
+      }
+    },
+    {
+      "what": "not marked local and substitution allowed, both said outright",
+      "kind": "copies",
+      "derivation": {
+        "name": "fixture",
+        "env": {"allowSubstitutes": "1", "name": "fixture", "preferLocalBuild": ""},
+        "outputs": {"out": {"path": "00000000000000000000000000000000-fixture"}},
+        "inputs": {"drvs": {"00000000000000000000000000000000-stdenv-linux-no-cc.drv": {"dynamicOutputs": {}, "outputs": ["out"]}}}
+      }
+    },
+    {
+      "what": "no inputs at all, which says nothing about how it is built",
+      "kind": "compiles",
+      "derivation": {
+        "name": "fixture",
+        "env": {"name": "fixture"},
+        "outputs": {"out": {"path": "00000000000000000000000000000000-fixture"}},
+        "inputs": {"drvs": {}}
+      }
+    },
+    {
+      "what": "inputs, but no stdenv among them",
+      "kind": "compiles",
+      "derivation": {
+        "name": "fixture",
+        "env": {"name": "fixture"},
+        "outputs": {"out": {"path": "00000000000000000000000000000000-fixture"}},
+        "inputs": {"drvs": {"00000000000000000000000000000000-bash-5.3p20.drv": {"dynamicOutputs": {}, "outputs": ["out"]}}}
+      }
+    },
+    {
+      "what": "inputs given as store paths",
+      "kind": "copies",
+      "derivation": {
+        "name": "fixture",
+        "env": {"name": "fixture"},
+        "outputs": {"out": {"path": "/nix/store/00000000000000000000000000000000-fixture"}},
+        "inputs": {"drvs": {"/nix/store/00000000000000000000000000000000-stdenv-linux-no-cc.drv": ["out"]}}
+      }
+    },
+    {
+      "what": "a tool whose name only contains a compiler's",
+      "kind": "copies",
+      "derivation": {
+        "name": "fixture",
+        "env": {"name": "fixture"},
+        "outputs": {"out": {"path": "00000000000000000000000000000000-fixture"}},
+        "inputs": {"drvs": {
+          "00000000000000000000000000000000-stdenv-linux-no-cc.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "00000000000000000000000000000000-libgcc-15.2.0.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "00000000000000000000000000000000-rust-script-0.36.0.drv": {"dynamicOutputs": {}, "outputs": ["out"]}
+        }}
+      }
+    },
+    {
+      "what": "GCC's runtime libraries beside GCC itself",
+      "kind": "compiles",
+      "derivation": {
+        "name": "fixture",
+        "env": {"name": "fixture"},
+        "outputs": {"out": {"path": "00000000000000000000000000000000-fixture"}},
+        "inputs": {"drvs": {
+          "00000000000000000000000000000000-stdenv-linux-no-cc.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "00000000000000000000000000000000-gcc-15.2.0.drv": {"dynamicOutputs": {}, "outputs": ["lib", "out"]}
+        }}
+      }
+    },
+    {
+      "what": "only libgcc_s, which GCC keeps in an output of its own",
+      "kind": "copies",
+      "derivation": {
+        "name": "fixture",
+        "env": {"name": "fixture"},
+        "outputs": {"out": {"path": "00000000000000000000000000000000-fixture"}},
+        "inputs": {"drvs": {
+          "00000000000000000000000000000000-stdenv-linux-no-cc.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "00000000000000000000000000000000-gcc-15.2.0.drv": {"dynamicOutputs": {}, "outputs": ["libgcc"]}
+        }}
+      }
+    },
+    {
+      "what": "both of GCC's runtime library outputs and nothing else of it",
+      "kind": "copies",
+      "derivation": {
+        "name": "fixture",
+        "env": {"name": "fixture"},
+        "outputs": {"out": {"path": "00000000000000000000000000000000-fixture"}},
+        "inputs": {"drvs": {
+          "00000000000000000000000000000000-stdenv-linux-no-cc.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "00000000000000000000000000000000-gcc-15.2.0.drv": {"dynamicOutputs": {}, "outputs": ["lib", "libgcc"]}
+        }}
+      }
+    },
+    {
+      "what": "LLVM's libraries with its headers, which are wanted to compile against",
+      "kind": "compiles",
+      "derivation": {
+        "name": "fixture",
+        "env": {"name": "fixture"},
+        "outputs": {"out": {"path": "00000000000000000000000000000000-fixture"}},
+        "inputs": {"drvs": {
+          "00000000000000000000000000000000-stdenv-linux-no-cc.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "00000000000000000000000000000000-llvm-21.1.8.drv": {"dynamicOutputs": {}, "outputs": ["dev", "lib"]}
+        }}
+      }
+    },
+    {
+      "what": "a compiler with no outputs named, which says nothing about what is wanted of it",
+      "kind": "compiles",
+      "derivation": {
+        "name": "fixture",
+        "env": {"name": "fixture"},
+        "outputs": {"out": {"path": "00000000000000000000000000000000-fixture"}},
+        "inputs": {"drvs": {
+          "00000000000000000000000000000000-stdenv-linux-no-cc.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "00000000000000000000000000000000-gcc-15.2.0.drv": {"dynamicOutputs": {}, "outputs": []}
+        }}
+      }
+    },
+    {
+      "what": "GCC's runtime libraries alone, the wanted outputs given as a bare list",
+      "kind": "copies",
+      "derivation": {
+        "name": "fixture",
+        "env": {"name": "fixture"},
+        "outputs": {"out": {"path": "/nix/store/00000000000000000000000000000000-fixture"}},
+        "inputs": {"drvs": {
+          "/nix/store/00000000000000000000000000000000-stdenv-linux-no-cc.drv": ["out"],
+          "/nix/store/00000000000000000000000000000000-gcc-15.2.0.drv": ["lib"]
+        }}
+      }
+    },
+    {
+      "what": "no C compiler, but rustc",
+      "kind": "compiles",
+      "derivation": {
+        "name": "fixture",
+        "env": {"name": "fixture"},
+        "outputs": {"out": {"path": "00000000000000000000000000000000-fixture"}},
+        "inputs": {"drvs": {
+          "00000000000000000000000000000000-stdenv-linux-no-cc.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "00000000000000000000000000000000-rustc-1.95.0.drv": {"dynamicOutputs": {}, "outputs": ["out"]}
+        }}
+      }
+    },
+    {
+      "what": "no C compiler, but Cargo",
+      "kind": "compiles",
+      "derivation": {
+        "name": "fixture",
+        "env": {"name": "fixture"},
+        "outputs": {"out": {"path": "00000000000000000000000000000000-fixture"}},
+        "inputs": {"drvs": {
+          "00000000000000000000000000000000-stdenv-linux-no-cc.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "00000000000000000000000000000000-cargo-1.95.0.drv": {"dynamicOutputs": {}, "outputs": ["out"]}
+        }}
+      }
+    },
+    {
+      "what": "no C compiler, but Go",
+      "kind": "compiles",
+      "derivation": {
+        "name": "fixture",
+        "env": {"name": "fixture"},
+        "outputs": {"out": {"path": "00000000000000000000000000000000-fixture"}},
+        "inputs": {"drvs": {
+          "00000000000000000000000000000000-stdenv-linux-no-cc.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "00000000000000000000000000000000-go-1.26.3.drv": {"dynamicOutputs": {}, "outputs": ["out"]}
+        }}
+      }
+    },
+    {
+      "what": "stdenvNoCC, but GCC's wrapper all the same",
+      "kind": "compiles",
+      "derivation": {
+        "name": "fixture",
+        "env": {"name": "fixture"},
+        "outputs": {"out": {"path": "00000000000000000000000000000000-fixture"}},
+        "inputs": {"drvs": {
+          "00000000000000000000000000000000-stdenv-linux-no-cc.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "00000000000000000000000000000000-gcc-wrapper-15.2.0.drv": {"dynamicOutputs": {}, "outputs": ["out"]}
+        }}
+      }
+    },
+    {
+      "what": "stdenvNoCC, but Clang's wrapper all the same",
+      "kind": "compiles",
+      "derivation": {
+        "name": "fixture",
+        "env": {"name": "fixture"},
+        "outputs": {"out": {"path": "00000000000000000000000000000000-fixture"}},
+        "inputs": {"drvs": {
+          "00000000000000000000000000000000-stdenv-linux-no-cc.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "00000000000000000000000000000000-clang-wrapper-21.1.8.drv": {"dynamicOutputs": {}, "outputs": ["out"]}
+        }}
+      }
+    },
+    {
+      "what": "no C compiler, but LLVM",
+      "kind": "compiles",
+      "derivation": {
+        "name": "fixture",
+        "env": {"name": "fixture"},
+        "outputs": {"out": {"path": "00000000000000000000000000000000-fixture"}},
+        "inputs": {"drvs": {
+          "00000000000000000000000000000000-stdenv-linux-no-cc.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "00000000000000000000000000000000-llvm-21.1.8.drv": {"dynamicOutputs": {}, "outputs": ["out"]}
+        }}
+      }
+    },
+    {
+      "what": "no C compiler, but CMake",
+      "kind": "compiles",
+      "derivation": {
+        "name": "fixture",
+        "env": {"name": "fixture"},
+        "outputs": {"out": {"path": "00000000000000000000000000000000-fixture"}},
+        "inputs": {"drvs": {
+          "00000000000000000000000000000000-stdenv-linux-no-cc.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "00000000000000000000000000000000-cmake-4.1.2.drv": {"dynamicOutputs": {}, "outputs": ["out"]}
+        }}
+      }
+    },
+    {
+      "what": "no C compiler, but Meson",
+      "kind": "compiles",
+      "derivation": {
+        "name": "fixture",
+        "env": {"name": "fixture"},
+        "outputs": {"out": {"path": "00000000000000000000000000000000-fixture"}},
+        "inputs": {"drvs": {
+          "00000000000000000000000000000000-stdenv-linux-no-cc.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "00000000000000000000000000000000-meson-1.10.1.drv": {"dynamicOutputs": {}, "outputs": ["out"]}
+        }}
+      }
+    },
+    {
+      "what": "no C compiler, but Ninja",
+      "kind": "compiles",
+      "derivation": {
+        "name": "fixture",
+        "env": {"name": "fixture"},
+        "outputs": {"out": {"path": "00000000000000000000000000000000-fixture"}},
+        "inputs": {"drvs": {
+          "00000000000000000000000000000000-stdenv-linux-no-cc.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "00000000000000000000000000000000-ninja-1.13.2.drv": {"dynamicOutputs": {}, "outputs": ["out"]}
+        }}
+      }
+    },
+    {
+      "what": "no C compiler, but GHC",
+      "kind": "compiles",
+      "derivation": {
+        "name": "fixture",
+        "env": {"name": "fixture"},
+        "outputs": {"out": {"path": "00000000000000000000000000000000-fixture"}},
+        "inputs": {"drvs": {
+          "00000000000000000000000000000000-stdenv-linux-no-cc.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "00000000000000000000000000000000-ghc-9.12.3.drv": {"dynamicOutputs": {}, "outputs": ["out"]}
+        }}
+      }
+    },
+    {
+      "what": "no C compiler, but Zig",
+      "kind": "compiles",
+      "derivation": {
+        "name": "fixture",
+        "env": {"name": "fixture"},
+        "outputs": {"out": {"path": "00000000000000000000000000000000-fixture"}},
+        "inputs": {"drvs": {
+          "00000000000000000000000000000000-stdenv-linux-no-cc.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "00000000000000000000000000000000-zig-0.15.2.drv": {"dynamicOutputs": {}, "outputs": ["out"]}
+        }}
+      }
+    },
+    {
+      "what": "no C compiler, but OpenJDK",
+      "kind": "compiles",
+      "derivation": {
+        "name": "fixture",
+        "env": {"name": "fixture"},
+        "outputs": {"out": {"path": "00000000000000000000000000000000-fixture"}},
+        "inputs": {"drvs": {
+          "00000000000000000000000000000000-stdenv-linux-no-cc.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "00000000000000000000000000000000-openjdk-25.0.1+8.drv": {"dynamicOutputs": {}, "outputs": ["out"]}
+        }}
+      }
+    },
+    {
+      "what": "no C compiler, but a JDK",
+      "kind": "compiles",
+      "derivation": {
+        "name": "fixture",
+        "env": {"name": "fixture"},
+        "outputs": {"out": {"path": "00000000000000000000000000000000-fixture"}},
+        "inputs": {"drvs": {
+          "00000000000000000000000000000000-stdenv-linux-no-cc.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "00000000000000000000000000000000-jdk-25.0.1.drv": {"dynamicOutputs": {}, "outputs": ["out"]}
+        }}
+      }
+    },
+    {
+      "what": "no C compiler, but Node.js",
+      "kind": "compiles",
+      "derivation": {
+        "name": "fixture",
+        "env": {"name": "fixture"},
+        "outputs": {"out": {"path": "00000000000000000000000000000000-fixture"}},
+        "inputs": {"drvs": {
+          "00000000000000000000000000000000-stdenv-linux-no-cc.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "00000000000000000000000000000000-nodejs-24.11.1.drv": {"dynamicOutputs": {}, "outputs": ["out"]}
+        }}
+      }
+    },
+    {
+      "what": "no C compiler, but Bun, as models.dev's SDK runs its build script",
+      "kind": "compiles",
+      "derivation": {
+        "name": "fixture",
+        "env": {"name": "fixture"},
+        "outputs": {"out": {"path": "00000000000000000000000000000000-fixture"}},
+        "inputs": {"drvs": {
+          "00000000000000000000000000000000-stdenv-linux-no-cc.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "00000000000000000000000000000000-bun-1.4.4.drv": {"dynamicOutputs": {}, "outputs": ["out"]}
+        }}
+      }
+    },
+    {
+      "what": "no C compiler, but the .NET SDK, as ilspycmd 9.1 builds its C# project (Nixpkgs 93a9ed0a)",
+      "kind": "compiles",
+      "derivation": {
+        "name": "ilspycmd-9.1",
+        "env": {"name": "ilspycmd-9.1"},
+        "outputs": {"out": {"path": "00000000000000000000000000000000-ilspycmd-9.1"}},
+        "inputs": {"drvs": {
+          "00000000000000000000000000000000-Mono.Cecil-0.11.6.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "00000000000000000000000000000000-dotnet-hook.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "00000000000000000000000000000000-dotnet-sdk-wrapped-8.0.428.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "00000000000000000000000000000000-stdenv-linux-no-cc.drv": {"dynamicOutputs": {}, "outputs": ["out"]}
+        }}
+      }
+    },
+    {
+      "what": "no C compiler, but .NET SDKs combined into one",
+      "kind": "compiles",
+      "derivation": {
+        "name": "fixture",
+        "env": {"name": "fixture"},
+        "outputs": {"out": {"path": "00000000000000000000000000000000-fixture"}},
+        "inputs": {"drvs": {
+          "00000000000000000000000000000000-stdenv-linux-no-cc.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "00000000000000000000000000000000-dotnet-wrapped-combined.drv": {"dynamicOutputs": {}, "outputs": ["out"]}
+        }}
+      }
+    },
+    {
+      "what": "a .NET program built elsewhere, run with the .NET runtimes alone",
+      "kind": "copies",
+      "derivation": {
+        "name": "fixture",
+        "env": {"name": "fixture"},
+        "outputs": {"out": {"path": "00000000000000000000000000000000-fixture"}},
+        "inputs": {"drvs": {
+          "00000000000000000000000000000000-stdenv-linux-no-cc.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "00000000000000000000000000000000-dotnet-runtime-wrapped-8.0.34.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "00000000000000000000000000000000-dotnet-aspnetcore-runtime-wrapped-10.0.15.drv": {"dynamicOutputs": {}, "outputs": ["out"]}
+        }}
+      }
+    },
+    {
+      "what": "no C compiler, but Mono (mono-6.14.1 in Nixpkgs)",
+      "kind": "compiles",
+      "derivation": {
+        "name": "fixture",
+        "env": {"name": "fixture"},
+        "outputs": {"out": {"path": "00000000000000000000000000000000-fixture"}},
+        "inputs": {"drvs": {
+          "00000000000000000000000000000000-stdenv-linux-no-cc.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "00000000000000000000000000000000-mono-6.14.1.drv": {"dynamicOutputs": {}, "outputs": ["out"]}
+        }}
+      }
+    },
+    {
+      "what": "no C compiler, but Dart (dart-3.14.0 in Nixpkgs)",
+      "kind": "compiles",
+      "derivation": {
+        "name": "fixture",
+        "env": {"name": "fixture"},
+        "outputs": {"out": {"path": "00000000000000000000000000000000-fixture"}},
+        "inputs": {"drvs": {
+          "00000000000000000000000000000000-stdenv-linux-no-cc.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "00000000000000000000000000000000-dart-3.14.0.drv": {"dynamicOutputs": {}, "outputs": ["out"]}
+        }}
+      }
+    },
+    {
+      "what": "no C compiler, but Flutter (flutter-wrapped-3.50.1-sdk-links in Nixpkgs)",
+      "kind": "compiles",
+      "derivation": {
+        "name": "fixture",
+        "env": {"name": "fixture"},
+        "outputs": {"out": {"path": "00000000000000000000000000000000-fixture"}},
+        "inputs": {"drvs": {
+          "00000000000000000000000000000000-stdenv-linux-no-cc.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "00000000000000000000000000000000-flutter-wrapped-3.50.1-sdk-links.drv": {"dynamicOutputs": {}, "outputs": ["out"]}
+        }}
+      }
+    },
+    {
+      "what": "no C compiler, but Swift (swift-6.4.0 in Nixpkgs)",
+      "kind": "compiles",
+      "derivation": {
+        "name": "fixture",
+        "env": {"name": "fixture"},
+        "outputs": {"out": {"path": "00000000000000000000000000000000-fixture"}},
+        "inputs": {"drvs": {
+          "00000000000000000000000000000000-stdenv-linux-no-cc.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "00000000000000000000000000000000-swift-6.4.0.drv": {"dynamicOutputs": {}, "outputs": ["out"]}
+        }}
+      }
+    },
+    {
+      "what": "no C compiler, but Deno (deno-2.9.8 in Nixpkgs)",
+      "kind": "compiles",
+      "derivation": {
+        "name": "fixture",
+        "env": {"name": "fixture"},
+        "outputs": {"out": {"path": "00000000000000000000000000000000-fixture"}},
+        "inputs": {"drvs": {
+          "00000000000000000000000000000000-stdenv-linux-no-cc.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "00000000000000000000000000000000-deno-2.9.8.drv": {"dynamicOutputs": {}, "outputs": ["out"]}
+        }}
+      }
+    },
+    {
+      "what": "no C compiler, but Gradle (gradle-8.14.8 in Nixpkgs)",
+      "kind": "compiles",
+      "derivation": {
+        "name": "fixture",
+        "env": {"name": "fixture"},
+        "outputs": {"out": {"path": "00000000000000000000000000000000-fixture"}},
+        "inputs": {"drvs": {
+          "00000000000000000000000000000000-stdenv-linux-no-cc.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "00000000000000000000000000000000-gradle-8.14.8.drv": {"dynamicOutputs": {}, "outputs": ["out"]}
+        }}
+      }
+    },
+    {
+      "what": "no C compiler, but Maven (maven-3.10.1 in Nixpkgs)",
+      "kind": "compiles",
+      "derivation": {
+        "name": "fixture",
+        "env": {"name": "fixture"},
+        "outputs": {"out": {"path": "00000000000000000000000000000000-fixture"}},
+        "inputs": {"drvs": {
+          "00000000000000000000000000000000-stdenv-linux-no-cc.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "00000000000000000000000000000000-maven-3.10.1.drv": {"dynamicOutputs": {}, "outputs": ["out"]}
+        }}
+      }
+    },
+    {
+      "what": "no C compiler, but Mill (mill-1.3.1 in Nixpkgs)",
+      "kind": "compiles",
+      "derivation": {
+        "name": "fixture",
+        "env": {"name": "fixture"},
+        "outputs": {"out": {"path": "00000000000000000000000000000000-fixture"}},
+        "inputs": {"drvs": {
+          "00000000000000000000000000000000-stdenv-linux-no-cc.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "00000000000000000000000000000000-mill-1.3.1.drv": {"dynamicOutputs": {}, "outputs": ["out"]}
+        }}
+      }
+    },
+    {
+      "what": "no C compiler, but sbt (sbt-2.0.12 in Nixpkgs)",
+      "kind": "compiles",
+      "derivation": {
+        "name": "fixture",
+        "env": {"name": "fixture"},
+        "outputs": {"out": {"path": "00000000000000000000000000000000-fixture"}},
+        "inputs": {"drvs": {
+          "00000000000000000000000000000000-stdenv-linux-no-cc.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "00000000000000000000000000000000-sbt-2.0.12.drv": {"dynamicOutputs": {}, "outputs": ["out"]}
+        }}
+      }
+    },
+    {
+      "what": "stdenvNoCC beside Nixpkgs' full stdenv",
+      "kind": "compiles",
+      "derivation": {
+        "name": "fixture",
+        "env": {"name": "fixture"},
+        "outputs": {"out": {"path": "00000000000000000000000000000000-fixture"}},
+        "inputs": {"drvs": {
+          "00000000000000000000000000000000-stdenv-linux-no-cc.drv": {"dynamicOutputs": {}, "outputs": ["out"]},
+          "00000000000000000000000000000000-stdenv-linux.drv": {"dynamicOutputs": {}, "outputs": ["out"]}
+        }}
+      }
+    }
+  ]
+}

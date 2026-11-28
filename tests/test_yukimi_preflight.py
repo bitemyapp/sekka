@@ -53,6 +53,27 @@ DEPENDENCY = '''{
 '''
 
 
+# A build put together without a compiler, as an initrd is: stdenvNoCC among
+# its inputs. Nothing in the fixture's store is cached, so its inputs are
+# marked local, which leaves only this build in question. Each has a `lib`
+# output beside `out`, as GCC keeps its runtime libraries apart from itself.
+ASSEMBLY = '''package = let
+        tool = name: derivation {
+          inherit name;
+          system = "x86_64-linux";
+          builder = "/builder";
+          outputs = [ "out" "lib" ];
+          preferLocalBuild = true;
+        };
+      in derivation {
+        name = "initrd-fixture";
+        system = "x86_64-linux";
+        builder = "/builder";
+        stdenv = tool "stdenv-linux-no-cc";
+        EXTRA
+      };'''
+
+
 class Preflight(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(prefix='yukimi-preflight-test-')
@@ -242,6 +263,35 @@ class Preflight(unittest.TestCase):
             FLAKE.replace('package = dependency.package;', '__structuredAttrs = true;'))
         self.before = self.configuration()
         self.assertEqual(self.check()['builds'], [])
+
+    def test_a_build_without_a_compiler_does_not_warn(self):
+        # What real Nix prints for a derivation's inputs is read here, whichever
+        # way this Nix lists them.
+        (self.config / 'flake.nix').write_text(
+            FLAKE.replace('package = dependency.package;', ASSEMBLY.replace('EXTRA', '')))
+        self.before = self.configuration()
+        self.assertEqual(self.check()['builds'], [])
+
+    def test_a_build_with_a_compiler_among_its_inputs_is_named(self):
+        (self.config / 'flake.nix').write_text(FLAKE.replace(
+            'package = dependency.package;', ASSEMBLY.replace('EXTRA', 'compiler = tool "rustc-1.95.0";')))
+        self.before = self.configuration()
+        self.assertEqual(self.check()['builds'], ['initrd-fixture'])
+
+    def test_a_compilers_runtime_libraries_alone_do_not_warn(self):
+        # Which of an input's outputs real Nix says are wanted is read here:
+        # Chrome is unpacked beside GCC's libraries, and compiles nothing.
+        (self.config / 'flake.nix').write_text(FLAKE.replace(
+            'package = dependency.package;', ASSEMBLY.replace('EXTRA', 'libraries = (tool "gcc-16.2.0").lib;')))
+        self.before = self.configuration()
+        self.assertEqual(self.check()['builds'], [])
+
+    def test_a_compiler_beside_its_runtime_libraries_is_named(self):
+        gcc = 'libraries = (tool "gcc-16.2.0").lib; compiler = (tool "gcc-16.2.0").out;'
+        (self.config / 'flake.nix').write_text(
+            FLAKE.replace('package = dependency.package;', ASSEMBLY.replace('EXTRA', gcc)))
+        self.before = self.configuration()
+        self.assertEqual(self.check()['builds'], ['initrd-fixture'])
 
     def prepare_git_source(self, migrate):
         """Sekka as a local Git remote, which real Nix fetches with real Git."""
