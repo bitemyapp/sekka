@@ -218,6 +218,24 @@ pkgs.testers.runNixOSTest {
         wrapped = machine.succeed("systemctl show -P MainPID chrome-wrapper").strip()
         all_threads(wrapped, nice=-4)
 
+    with subtest("Proton games receive their game rule at startup and on exec"):
+        def launch_game(unit, windows_path):
+            # Steam's launcher runs at nice 16 with idle I/O. Proton exposes
+            # the game's Windows path in argv[0] and a different Linux exe.
+            machine.succeed(
+                f"systemd-run --unit={unit} -p Nice=16 -p IOSchedulingClass=idle "
+                + "${pkgs.coreutils}/bin/env --argv0=" + shlex.quote(windows_path) + " ${probe}/bin/probe"
+            )
+            return machine.succeed(f"systemctl show -P MainPID {unit}").strip()
+
+        machine.succeed("systemctl stop ananicy-cpp")
+        wow = launch_game("wow-retail", r"C:\Program Files (x86)\World of Warcraft\_retail_\Wow.exe")
+        all_threads(wow, policy=0, nice=16, io="idle")
+        machine.succeed("systemctl start ananicy-cpp")
+        all_threads(wow, policy=0, nice=-5, io="best-effort: prio 0")
+        classic = launch_game("wow-classic", r"C:\Games\World of Warcraft\_classic_\WowClassic.exe")
+        all_threads(classic, policy=0, nice=-5, io="best-effort: prio 0")
+
     with subtest("interpreted harnesses override the generic Node idle rule"):
         machine.succeed("systemd-run --unit=node-harness ${probe}/bin/node /tmp/node_modules/@google/gemini-cli/cli.js")
         node = machine.succeed("systemctl show -P MainPID node-harness").strip()

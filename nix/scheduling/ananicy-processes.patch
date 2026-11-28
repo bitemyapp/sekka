@@ -102,7 +102,15 @@
  bool set_oom_score_adjust(pid_t pid, std::int32_t value) {
 --- a/src/platform/linux/process.cpp
 +++ b/src/platform/linux/process.cpp
-@@ -28,13 +28,15 @@
+@@ -14,6 +14,7 @@
+ #include <filesystem> // for path
+ #include <fstream>    // for ifstream
+ #include <thread>     // for jthread
++#include <strings.h>  // for strcasecmp
+ #include <unistd.h>
+ 
+ #include <fmt/format.h>
+@@ -29,13 +30,15 @@
  
  void ProcessQueue::init() noexcept {
    g_process_queue = &this->process_queue;
@@ -119,7 +127,7 @@
  }
  
  extern "C" void handle_event(void *ctx, int32_t cpu, void *data,
-@@ -50,10 +52,9 @@
+@@ -51,19 +54,13 @@
  
    auto *e = static_cast<struct event *>(data);
  
@@ -133,7 +141,16 @@
      return;
    }
  
-@@ -140,16 +141,10 @@
+   std::string &&command = get_command_from_pid(e->pid);
+-  if (command.ends_with(".exe")) {
+-    std::replace(command.begin(), command.end(), '\\', '/');
+-    fs::path cmd_path{command.c_str()};
+-    command = cmd_path.filename().string();
+-  }
+ 
+   Process process{
+       .delta_us = e->delta_us, .pid = e->pid, .name = std::move(command)};
+@@ -141,16 +138,10 @@
        return EXIT_FAILURE;
      }
  
@@ -151,7 +168,7 @@
  
      Process process{.pid = pid, .name = get_command_from_pid(pid)};
      spdlog::trace("Pushing new process: pid = {}", pid);
-@@ -160,13 +155,13 @@
+@@ -161,13 +152,13 @@
  }
  
  void ProcessQueue::init() noexcept {
@@ -167,10 +184,11 @@
  }
  
  void ProcessQueue::start() {
-@@ -198,6 +193,33 @@
+@@ -199,7 +190,39 @@
    try {
      std::vector<std::string> cmdline = process_info::get_cmdline_from_pid(pid);
      if (!cmdline.empty()) {
+-      auto exe_name_begin = cmdline[0].find_last_of('/');
 +      // Interpreted harnesses must not inherit the generic Node/Bun idle
 +      // rule. Keep this identification in sync with agent-workloads.py.
 +      auto runtime = fs::path(cmdline[0]).filename().string();
@@ -198,9 +216,15 @@
 +            browser == "chromium-browser")
 +          return browser;
 +      }
-       auto exe_name_begin = cmdline[0].find_last_of('/');
++      // Wine supplies a Windows executable path in argv[0]. Resolve its
++      // basename here for both the initial scan and the post-exec refresh.
++      const auto &program = cmdline[0];
++      const bool windows_exe = program.size() >= 4 &&
++          strcasecmp(program.c_str() + program.size() - 4, ".exe") == 0;
++      const auto exe_name_begin = program.find_last_of(windows_exe ? "/\\" : "/");
  
        spdlog::trace(fmt::format("{}: exe_name_begin: {}, cmdline: {}", __func__,
+                                 exe_name_begin, cmdline));
 --- a/libananicycpp_bpf/src/ananicy_cpp.bpf.c
 +++ b/libananicycpp_bpf/src/ananicy_cpp.bpf.c
 @@ -98,8 +98,9 @@
